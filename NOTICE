@@ -1,0 +1,21 @@
+Zendure Energy Controller
+Copyright (c) 2026 Eduard Fuchs <info@eduardfuchs.de>
+
+Original author: Eduard Fuchs
+Original project name: Zendure Energy Controller
+
+This software was created as a private open-source project for local MQTT-based
+control and diagnostics of a Zendure SolarFlow battery system in combination
+with a Shelly-/Uni-Meter-compatible measurement source and optional
+second-battery telemetry via MQTT/EVCC.
+
+Redistributions, modified versions and derivative works must preserve this
+notice, the copyright notice, the license text and a reference to the original
+project and original author.
+
+Trademark notice:
+All product names, trademarks and registered trademarks used in this project
+are used solely to identify the products, applications and systems involved.
+All trademarks and registered trademarks remain the property of their respective
+owners. This project is not affiliated with, endorsed by or sponsored by the
+respective trademark owners unless explicitly stated otherwise.
