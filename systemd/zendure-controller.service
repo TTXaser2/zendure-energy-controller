@@ -1,0 +1,26 @@
+[Unit]
+Description=Zendure Energy Controller
+Wants=network-online.target mosquitto.service
+After=network-online.target mosquitto.service
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/opt/zendure-controller
+ExecStart=/usr/bin/python3 /opt/zendure-controller/ZendureController.py
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+KillSignal=SIGINT
+Environment=PYTHONUNBUFFERED=1
+
+# NoNewPrivileges must remain false if the optional web-triggered restart is used
+# through sudo /usr/local/sbin/zendure-controller-restart.
+NoNewPrivileges=false
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/opt/zendure-controller
+
+[Install]
+WantedBy=multi-user.target

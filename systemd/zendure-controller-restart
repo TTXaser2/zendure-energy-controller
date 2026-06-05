@@ -1,0 +1,3 @@
+#!/bin/bash
+set -euo pipefail
+/bin/systemctl restart zendure-controller.service

@@ -1,0 +1,5 @@
+# Allow the pi user to restart only the Zendure Energy Controller service via a
+# root-owned helper script. Install with:
+# sudo cp /opt/zendure-controller/systemd/zendure-controller-sudoers /etc/sudoers.d/zendure-controller
+# sudo chmod 440 /etc/sudoers.d/zendure-controller
+pi ALL=(root) NOPASSWD: /usr/local/sbin/zendure-controller-restart
