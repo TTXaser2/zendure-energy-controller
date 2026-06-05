@@ -3,17 +3,23 @@
 # Optional separate web UI for Zendure Energy Controller CSV analysis.
 
 import argparse
+import csv
 import html
 import json
 import os
+import shutil
 import sys
+import tempfile
+import threading
+import time
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 from urllib.parse import urlencode
 
 import uvicorn
 from fastapi import FastAPI, Query, Request
-from fastapi.responses import HTMLResponse, PlainTextResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 
 # Running this file directly from /opt/zendure-controller/tools should still
 # allow imports from the project root and from tools/.
@@ -27,7 +33,6 @@ if str(TOOLS_DIR) not in sys.path:
 from replay_core import (  # noqa: E402
     CSV_SCHEMA,
     AnalysisLimits,
-    analyze_file,
     analyze_files,
     summary_csv,
 )
@@ -45,6 +50,7 @@ from replay_report import (  # noqa: E402
     mode_quality_table,
     oscillation_table,
     overview_table,
+    overall_verdict_html,
     recommendations_table,
     summary_cards,
     text_report,
@@ -54,7 +60,15 @@ from replay_report import (  # noqa: E402
 try:
     from version import APP_VERSION as REPLAY_VERSION  # noqa: E402
 except Exception:  # pragma: no cover
-    REPLAY_VERSION = "12.8.4"
+    REPLAY_VERSION = "12.8.5"
+
+SAFE_DEFAULTS = AnalysisLimits(max_files=4, max_total_bytes=12 * 1024 * 1024, max_rows=40_000)
+EXTENDED_DEFAULTS = AnalysisLimits(max_files=5, max_total_bytes=18 * 1024 * 1024, max_rows=70_000)
+CACHE_TTL_SECONDS = 15 * 60
+
+_job_lock = threading.RLock()
+_current_job: Optional[Dict[str, Any]] = None
+_result_cache: Dict[str, Dict[str, Any]] = {}
 
 
 def load_config() -> Dict[str, Any]:
@@ -65,6 +79,13 @@ def load_config() -> Dict[str, Any]:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return {}
+
+
+def _int_cfg(cfg: Dict[str, Any], key: str, default: int) -> int:
+    try:
+        return int(float(cfg.get(key, default)))
+    except Exception:
+        return int(default)
 
 
 def log_dir_from_config(cfg: Dict[str, Any]) -> Path:
@@ -111,6 +132,8 @@ def selected_files_from_query(files: Optional[List[str]], file: str, available: 
     selected = [f for f in (files or []) if f]
     if file and file not in selected:
         selected.append(file)
+    # V12.8.5: keine automatische Analyse mehr. Für Bedienbarkeit wird nur eine
+    # Vorauswahl angezeigt; analysiert wird erst per explizitem Button/POST.
     if not selected and available:
         selected = [available[0].name]
     return selected
@@ -126,28 +149,235 @@ def url_for_request_port(request: Request, port: int) -> str:
     return f"{scheme}://{host}:{int(port)}"
 
 
-def query_for_files(selected: Sequence[str]) -> str:
-    return urlencode([("files", item) for item in selected])
-
-
-def safe_limits() -> AnalysisLimits:
-    return AnalysisLimits(max_files=20, max_total_bytes=50 * 1024 * 1024, max_rows=500_000)
-
-
-def analyze_selected(base: Path, selected: Sequence[str], cfg: Dict[str, Any]) -> Dict[str, Any]:
-    paths = resolve_csv_files(base, selected)
-    return analyze_files(
-        [str(p) for p in paths],
-        min_soc_percent=int(cfg.get("MIN_SOC_PERCENT", 15)),
-        max_soc_percent=int(cfg.get("MAX_SOC_PERCENT", 99)),
-        limits=safe_limits(),
-        target_band_w=float(cfg.get("DEADBAND_W", 100) or 100),
-        significant_grid_w=200.0,
-        cross_discharge_threshold_w=float(cfg.get("SMA_DISCHARGE_BLOCK_W", 80) or 80),
-        zendure_charge_threshold_w=float(cfg.get("MIN_EFFECTIVE_SURPLUS_FOR_CHARGE_W", 150) or 100),
-        max_charge_power_w=float(cfg.get("MAX_CHARGE_POWER_W", 2100) or 2100),
-        max_discharge_power_w=float(cfg.get("MAX_DISCHARGE_POWER_W", 2100) or 2100),
+def safe_limits(cfg: Optional[Dict[str, Any]] = None) -> AnalysisLimits:
+    cfg = cfg or {}
+    return AnalysisLimits(
+        max_files=_int_cfg(cfg, "ANALYSIS_MAX_FILES", SAFE_DEFAULTS.max_files),
+        max_total_bytes=_int_cfg(cfg, "ANALYSIS_MAX_TOTAL_BYTES", SAFE_DEFAULTS.max_total_bytes),
+        max_rows=_int_cfg(cfg, "ANALYSIS_MAX_ROWS", SAFE_DEFAULTS.max_rows),
     )
+
+
+def extended_limits(cfg: Optional[Dict[str, Any]] = None) -> AnalysisLimits:
+    cfg = cfg or {}
+    return AnalysisLimits(
+        max_files=_int_cfg(cfg, "ANALYSIS_EXTENDED_MAX_FILES", EXTENDED_DEFAULTS.max_files),
+        max_total_bytes=_int_cfg(cfg, "ANALYSIS_EXTENDED_MAX_TOTAL_BYTES", EXTENDED_DEFAULTS.max_total_bytes),
+        max_rows=_int_cfg(cfg, "ANALYSIS_EXTENDED_MAX_ROWS", EXTENDED_DEFAULTS.max_rows),
+    )
+
+
+def _bytes_text(value: int) -> str:
+    if value >= 1024 * 1024:
+        return f"{value / 1024 / 1024:.1f} MiB".replace(".", ",")
+    return f"{value / 1024:.1f} KiB".replace(".", ",")
+
+
+def _scan_csv_profile(paths: Sequence[Path], max_scan_rows: int = 100_000) -> Dict[str, Any]:
+    rows = 0
+    first_ts = "-"
+    last_ts = "-"
+    schema_errors: List[str] = []
+    for path in paths:
+        try:
+            with open(path, "r", encoding="utf-8", newline="") as f:
+                sample = f.read(4096)
+                f.seek(0)
+                first_line = sample.splitlines()[0] if sample.splitlines() else ""
+                if ";" not in first_line:
+                    schema_errors.append(f"{path.name}: kein Semikolon-CSV")
+                    continue
+                reader = csv.DictReader(f, delimiter=";")
+                if not reader.fieldnames or "schema" not in reader.fieldnames:
+                    schema_errors.append(f"{path.name}: Spalte 'schema' fehlt")
+                    continue
+                for row in reader:
+                    if not any((v or "").strip() for v in row.values()):
+                        continue
+                    if rows < max_scan_rows:
+                        schema = (row.get("schema") or "").strip()
+                        if schema and schema != CSV_SCHEMA:
+                            schema_errors.append(f"{path.name}: Schema {schema}")
+                            break
+                        label = str(row.get("datetime_local") or (str(row.get("date", "")) + " " + str(row.get("timestamp", ""))).strip() or row.get("timestamp") or "-")
+                        if first_ts == "-":
+                            first_ts = label
+                        last_ts = label
+                    rows += 1
+        except Exception as exc:
+            schema_errors.append(f"{path.name}: {exc}")
+    return {"estimated_rows": rows, "period_start": first_ts, "period_end": last_ts, "schema_errors": schema_errors[:5]}
+
+
+def selection_profile(paths: Sequence[Path], cfg: Dict[str, Any]) -> Dict[str, Any]:
+    total_size = sum(p.stat().st_size for p in paths)
+    scan = _scan_csv_profile(paths)
+    rows = int(scan.get("estimated_rows") or 0)
+    safe = safe_limits(cfg)
+    ext = extended_limits(cfg)
+    if len(paths) <= safe.max_files and total_size <= safe.max_total_bytes and rows <= safe.max_rows and not scan.get("schema_errors"):
+        risk = "pi-safe"
+        text = "Pi-Safe: lokale Analyse mit konservativen Grenzen."
+        needs_confirm = False
+        rejected = False
+    elif len(paths) <= ext.max_files and total_size <= ext.max_total_bytes and rows <= ext.max_rows and not scan.get("schema_errors"):
+        risk = "extended"
+        text = "Große Analyse: nur bewusst starten; sie kann länger dauern."
+        needs_confirm = True
+        rejected = False
+    else:
+        risk = "rejected"
+        text = "Nicht empfohlen: lokale Analyse auf dem Raspberry Pi wird abgelehnt. Bitte auf PC/offline analysieren oder später DB-/Aggregationsanalyse nutzen."
+        needs_confirm = False
+        rejected = True
+    return {
+        "file_count": len(paths),
+        "total_size_bytes": total_size,
+        "total_size_text": _bytes_text(total_size),
+        "estimated_rows": rows,
+        "period_start": scan.get("period_start", "-"),
+        "period_end": scan.get("period_end", "-"),
+        "risk": risk,
+        "risk_text": text,
+        "needs_confirmation": needs_confirm,
+        "rejected": rejected,
+        "schema_errors": scan.get("schema_errors") or [],
+        "safe_limits": safe,
+        "extended_limits": ext,
+    }
+
+
+def _analysis_key(paths: Sequence[Path], extended: bool) -> str:
+    parts = []
+    for path in paths:
+        st = path.stat()
+        parts.append(f"{path.name}:{st.st_size}:{int(st.st_mtime)}")
+    return json.dumps({"files": parts, "extended": bool(extended), "version": REPLAY_VERSION}, sort_keys=True)
+
+
+def _cache_put(key: str, result: Dict[str, Any]) -> None:
+    _result_cache[key] = {"time": time.time(), "result": result}
+    # Bounded cache: the analysis is local and single-user; two entries are enough.
+    for old_key, item in list(_result_cache.items()):
+        if time.time() - float(item.get("time", 0)) > CACHE_TTL_SECONDS or len(_result_cache) > 2:
+            _result_cache.pop(old_key, None)
+
+
+def _cache_get(key: str) -> Optional[Dict[str, Any]]:
+    item = _result_cache.get(key)
+    if not item:
+        return None
+    if time.time() - float(item.get("time", 0)) > CACHE_TTL_SECONDS:
+        _result_cache.pop(key, None)
+        return None
+    return item.get("result")
+
+
+def _make_snapshot(paths: Sequence[Path]) -> Tuple[Path, List[Path]]:
+    tmpdir = Path(tempfile.mkdtemp(prefix="zec-analysis-"))
+    copied: List[Path] = []
+    for index, src in enumerate(paths, start=1):
+        safe_name = f"{index:02d}_{src.name}"
+        dest = tmpdir / safe_name
+        shutil.copy2(src, dest)
+        copied.append(dest)
+    return tmpdir, copied
+
+
+def analyze_snapshot(paths: Sequence[Path], cfg: Dict[str, Any], extended: bool, cancel_event: threading.Event, job: Dict[str, Any]) -> Dict[str, Any]:
+    limits = extended_limits(cfg) if extended else safe_limits(cfg)
+    tmpdir: Optional[Path] = None
+    try:
+        job.update({"phase": "Snapshot wird erstellt", "percent": 20})
+        tmpdir, snapshot_paths = _make_snapshot(paths)
+        if cancel_event.is_set():
+            raise RuntimeError("Analyse abgebrochen.")
+        job.update({"phase": "CSV wird gelesen", "percent": 35})
+        result = analyze_files(
+            [str(p) for p in snapshot_paths],
+            min_soc_percent=int(cfg.get("MIN_SOC_PERCENT", 15)),
+            max_soc_percent=int(cfg.get("MAX_SOC_PERCENT", 99)),
+            limits=limits,
+            target_band_w=float(cfg.get("DEADBAND_W", 100) or 100),
+            significant_grid_w=200.0,
+            cross_discharge_threshold_w=float(cfg.get("SMA_DISCHARGE_BLOCK_W", 80) or 80),
+            zendure_charge_threshold_w=float(cfg.get("MIN_EFFECTIVE_SURPLUS_FOR_CHARGE_W", 150) or 100),
+            max_charge_power_w=float(cfg.get("MAX_CHARGE_POWER_W", 2100) or 2100),
+            max_discharge_power_w=float(cfg.get("MAX_DISCHARGE_POWER_W", 2100) or 2100),
+            cancel_check=cancel_event.is_set,
+        )
+        # Report should show original source names, not temp snapshot prefixes.
+        result["filenames"] = [p.name for p in paths]
+        result["paths"] = [str(p) for p in paths]
+        result["total_size_bytes"] = sum(p.stat().st_size for p in paths)
+        job.update({"phase": "Report wird erzeugt", "percent": 85})
+        return result
+    finally:
+        if tmpdir and tmpdir.exists():
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def render_result_html(result: Dict[str, Any], job_id: str) -> str:
+    download_job = html.escape(job_id, quote=True)
+    return f"""
+    <div class="toc" id="top">
+        <b>Navigation:</b>
+        <a href="#kurzfazit">Kurzfazit</a><a href="#empfehlungen">Empfehlungen</a><a href="#diagramme">Diagramme</a>
+        <a href="#datenqualitaet">Datenqualität</a><a href="#regler">Reglerqualität</a><a href="#stellreserve">Stellreserve</a>
+        <a href="#tracking">Soll/Ist</a><a href="#deadband">Deadband</a><a href="#mqtt">MQTT</a>
+        <a href="#cross">Cross-Charge</a><a href="#matrix">Matrix</a><a href="#ereignisse">Ereignisse</a>
+    </div>
+    <h2 id="kurzfazit">Kurzfazit</h2>
+    <p class="section-intro">Dieser Block verdichtet den analysierten Zeitraum zu einem Gesamturteil. Er zeigt, ob akuter Handlungsdruck besteht oder ob Abweichungen überwiegend durch Randbedingungen wie SOC-, Leistungs- oder Datenlimits erklärbar sind.</p>
+    {overall_verdict_html(result)}
+    <div class="cards">{summary_cards(result)}</div>
+    <h2 id="empfehlungen">Handlungsempfehlungen</h2>
+    <p class="section-intro">Hier stehen konkrete, priorisierte Hinweise. Sie sind Diagnosehinweise und sollten nur mit ausreichender Datenqualität und passenden Logzeiträumen in Parameteränderungen übersetzt werden.</p>
+    <table>{recommendations_table(result)}</table>
+    <p class="notice">Die Analyse liefert Hinweise auf wahrscheinliche Ursachen. Parameteränderungen sollten immer mit ausreichender Datenqualität und mehreren passenden Logzeiträumen gegengeprüft werden.</p>
+    <h2 id="diagramme">Diagramme</h2>
+    <p class="section-intro">Die Diagramme sind verdichtete Balkendarstellungen. „MQTT verbessert“ bedeutet: Einige Zyklen nach einem Kommando wurde die absolute Netzabweichung kleiner. Diese Aussage ist grob, weil Last und PV parallel schwanken können.</p>
+    {charts_html(result)}
+    <h2 id="ueberblick">Überblick</h2><p class="section-intro">Basisdaten der Analyse: Dateien, Zeitraum, Messpunktanzahl und zeitliche Qualität der Daten.</p><table>{overview_table(result)}</table>
+    <h2 id="datenqualitaet">Datenqualität</h2><p class="section-intro">Bewertet, ob die Datenbasis für belastbare Schlüsse ausreicht. Fehlende Netz-, SOC- oder Istwerte können die Aussagekraft einzelner Blöcke deutlich reduzieren.</p><table>{data_quality_table(result)}</table>
+    <h2 id="energie">Energiefluss der ausgewählten Dateien</h2><p class="section-intro">Integrierte Energieflüsse im ausgewählten Zeitraum. Vorzeichen: Netz + Bezug/- Einspeisung, Speicher + Laden/- Entladen.</p><table>{energy_table(result)}</table>
+    <h2 id="regler">Faire Reglerqualität</h2><p class="section-intro">Bewertet nur den Anteil, den der Regler tatsächlich beeinflussen konnte. Volle Batterie, Leistungsgrenzen und Safe-State werden getrennt betrachtet.</p><table>{fair_regulator_table(result)}</table>
+    <h2 id="stellreserve">Stellreserve / Sättigung</h2><p class="section-intro">Zeigt, wie oft Zendure am Lade- oder Entladelimit war. Hohe Sättigung bedeutet: Mehr Regleraggressivität hilft wenig; eher Kapazität/Leistungsgrenzen prüfen.</p><table>{actuator_table(result)}</table>
+    <h2 id="tracking">Zendure Soll-/Ist-Folge</h2><p class="section-intro">Vergleicht angeforderte Zendure-Sollleistung mit tatsächlich erreichter Istleistung. Große Abweichungen können durch Zendure-Firmware, SOC, Temperatur, Telemetriealter oder Limits entstehen.</p><table>{tracking_table(result)}</table>
+    <h2 id="deadband">Deadband-Erfolg</h2><p class="section-intro">Bewertet, ob die Totzone sinnvoll Ruhe erzeugt oder ob der Regler trotz vorhandener Reserve zu oft außerhalb des Zielbands bleibt.</p><table>{deadband_table(result)}</table>
+    <h2 id="mqtt">MQTT-Kommandowirkung</h2><p class="section-intro">Bewertet grob, ob gesendete MQTT-Kommandos anschließend eine erkennbare Verringerung der Netzabweichung bewirken. Nicht bewertbar bedeutet meist: Safe-State, fehlende Folgedaten oder überlagerte Last-/PV-Sprünge.</p><table>{command_efficiency_table(result)}</table>
+    <h2 id="oszillation">Oszillation / Richtungswechsel</h2><p class="section-intro">Sucht nach unruhiger Regelung: häufige Vorzeichenwechsel, schnelle Gegenbefehle, große Sollwertsprünge und Moduswechsel.</p><table>{oscillation_table(result)}</table>
+    <h2 id="cross">Cross-Charge-Analyse</h2><p class="section-intro">Bewertet, ob die Zusatzbatterie entlädt, während Zendure gleichzeitig lädt. Kritische Überschneidungen deuten auf unerwünschtes Umladen zwischen Speichern hin.</p><table>{cross_charge_table(result)}</table>
+    <h2 id="highsoc">Nachtentladung und High-SOC</h2><p class="section-intro">Zeigt Zeitanteile bei SOC-Grenzen und eine leichte High-SOC-Ladeannahme-Diagnose. Schwerpunkt dieser Version bleibt die Regler- und Cross-Charge-Bewertung.</p><table>{high_soc_table(result)}</table>
+    <h2 id="matrix">Betriebszustandsmatrix</h2><p class="section-intro">Verdichtet die Analyse nach abgeleiteten Betriebszuständen. So sieht man, ob Abweichungen eher in AUTO, Nachtentladung, Safe-State oder Limit-Situationen auftreten.</p><table>{mode_quality_table(result)}</table>
+    <h2 id="ereignisse">Ereignisprotokoll</h2><p class="section-intro">Chronologische Auswahl erkannter Auffälligkeiten und Zustandswechsel. Die Liste ist begrenzt, damit große Analysen die Oberfläche nicht überladen.</p><table>{events_table(result)}</table>
+    <p class="downloads">
+        <a href="/report.txt?job_id={download_job}">Text-Report</a>
+        <a href="/report.json?job_id={download_job}">JSON-Report</a>
+        <a href="/summary.csv?job_id={download_job}">CSV-Summary</a>
+        <a href="#top">nach oben</a>
+    </p>
+    """
+
+
+def _current_job_snapshot() -> Optional[Dict[str, Any]]:
+    with _job_lock:
+        if not _current_job:
+            return None
+        job = dict(_current_job)
+        job.pop("cancel_event", None)
+        return job
+
+
+def _get_result_from_job(job_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    with _job_lock:
+        if _current_job and _current_job.get("id") == job_id:
+            return _current_job.get("result"), _current_job.get("cache_key")
+        for item in _result_cache.values():
+            result = item.get("result")
+            if result and result.get("_job_id") == job_id:
+                return result, result.get("_cache_key")
+    return None, None
 
 
 def build_app() -> FastAPI:
@@ -163,54 +393,42 @@ def build_app() -> FastAPI:
         replay_port = int(cfg.get("REPLAY_WEB_PORT", 8090) or 8090)
         controller_url = url_for_request_port(request, controller_port)
         replay_url = url_for_request_port(request, replay_port)
+        dark = bool(cfg.get("UI_DARK_MODE", False))
+        ui_mode = str(cfg.get("UI_MODE", "standard") or "standard")
         options = "".join(
-            f'<option value="{html.escape(p.name, quote=True)}" {"selected" if p.name in selected else ""}>{html.escape(p.name)} ({p.stat().st_size / 1024:.1f} KiB)</option>'
+            f'<option value="{html.escape(p.name, quote=True)}" data-size="{p.stat().st_size}" {"selected" if p.name in selected else ""}>{html.escape(p.name)} ({_bytes_text(p.stat().st_size)})</option>'
             for p in available
         )
-        result_html = ""
-        download_query = query_for_files(selected)
-        if selected:
-            try:
-                result = analyze_selected(base, selected, cfg)
-                result_html = f"""
-                <div class="toc" id="top">
-                    <b>Navigation:</b>
-                    <a href="#kurzfazit">Kurzfazit</a><a href="#empfehlungen">Empfehlungen</a><a href="#diagramme">Diagramme</a>
-                    <a href="#datenqualitaet">Datenqualität</a><a href="#regler">Reglerqualität</a><a href="#stellreserve">Stellreserve</a>
-                    <a href="#tracking">Soll/Ist</a><a href="#deadband">Deadband</a><a href="#mqtt">MQTT</a>
-                    <a href="#cross">Cross-Charge</a><a href="#matrix">Matrix</a><a href="#ereignisse">Ereignisse</a>
+        profile_html = ""
+        try:
+            paths = resolve_csv_files(base, selected) if selected else []
+            if paths:
+                profile = selection_profile(paths, cfg)
+                badge_cls = {"pi-safe": "ok", "extended": "warn", "rejected": "bad"}.get(profile["risk"], "neutral")
+                errors = "".join(f"<li>{html.escape(e)}</li>" for e in profile.get("schema_errors") or [])
+                profile_html = f"""
+                <div class="analysis-profile {badge_cls}">
+                    <b>Auswahl:</b> {profile['file_count']} Datei(en), {profile['total_size_text']}, ca. {profile['estimated_rows']} Messpunkte<br>
+                    <b>Zeitraum:</b> {html.escape(str(profile['period_start']))} bis {html.escape(str(profile['period_end']))}<br>
+                    <b>Risiko:</b> {html.escape(profile['risk_text'])}
+                    {('<ul>' + errors + '</ul>') if errors else ''}
                 </div>
-                <h2 id="kurzfazit">Kurzfazit</h2>
-                <div class="cards">{summary_cards(result)}</div>
-                <h2 id="empfehlungen">Handlungsempfehlungen</h2><table>{recommendations_table(result)}</table>
-                <p class="notice">Die Analyse liefert Hinweise auf wahrscheinliche Ursachen. Parameteränderungen sollten immer mit ausreichender Datenqualität und mehreren passenden Logzeiträumen gegengeprüft werden.</p>
-                <h2 id="diagramme">Diagramme</h2>{charts_html(result)}
-                <h2 id="ueberblick">Überblick</h2><table>{overview_table(result)}</table>
-                <h2 id="datenqualitaet">Datenqualität</h2><table>{data_quality_table(result)}</table>
-                <h2 id="energie">Energiefluss der ausgewählten Dateien</h2><table>{energy_table(result)}</table>
-                <h2 id="regler">Faire Reglerqualität</h2><table>{fair_regulator_table(result)}</table>
-                <h2 id="stellreserve">Stellreserve / Sättigung</h2><table>{actuator_table(result)}</table>
-                <h2 id="tracking">Zendure Soll-/Ist-Folge</h2><table>{tracking_table(result)}</table>
-                <h2 id="deadband">Deadband-Erfolg</h2><table>{deadband_table(result)}</table>
-                <h2 id="mqtt">MQTT-Kommandowirkung</h2><table>{command_efficiency_table(result)}</table>
-                <h2 id="oszillation">Oszillation / Richtungswechsel</h2><table>{oscillation_table(result)}</table>
-                <h2 id="cross">Cross-Charge-Analyse</h2><table>{cross_charge_table(result)}</table>
-                <h2 id="highsoc">Nachtentladung und High-SOC</h2><table>{high_soc_table(result)}</table>
-                <h2 id="matrix">Betriebszustandsmatrix</h2><table>{mode_quality_table(result)}</table>
-                <h2 id="ereignisse">Ereignisprotokoll</h2><table>{events_table(result)}</table>
-                <p class="downloads">
-                    <a href="/report.txt?{html.escape(download_query, quote=True)}">Text-Report</a>
-                    <a href="/report.json?{html.escape(download_query, quote=True)}">JSON-Report</a>
-                    <a href="/summary.csv?{html.escape(download_query, quote=True)}">CSV-Summary</a>
-                    <a href="#top">nach oben</a>
-                </p>
                 """
-            except Exception as exc:
-                result_html = f"<div class='error'>Analysefehler: {html.escape(str(exc))}</div>"
-        else:
-            result_html = "<div class='error'>Keine CSV-Dateien im Logverzeichnis gefunden.</div>"
+        except Exception as exc:
+            profile_html = f"<div class='error'>Auswahl konnte nicht geprüft werden: {html.escape(str(exc))}</div>"
 
-        selected_count = len(selected)
+        initial_job = _current_job_snapshot()
+        initial_running = bool(initial_job and initial_job.get("status") == "running")
+        initial_status = html.escape(str(initial_job.get("phase"))) if initial_running and initial_job else "Bereit. Analyse startet erst nach Klick auf „Analyse starten“."
+        dark_css = """
+        body{background:#0f172a;color:#e5e7eb}.section{background:#111827;box-shadow:0 2px 10px rgba(0,0,0,.55)}
+        table th{background:#263244;color:#e5e7eb} th,td{border-color:#475569}.toc{background:#111827;border-color:#334155}
+        .card{background:#1f2937;border-color:#374151}.notice{background:#10233d;border-color:#2563eb;color:#dbeafe}.analysis-profile{background:#1f2937}
+        select{background:#0b1220;color:#e5e7eb;border:1px solid #64748b}button{background:#243244;color:#e5e7eb;border:1px solid #64748b}
+        .progressbox{background:#334155}.progressbar{background:#60a5fa}a{color:#7dd3fc}.section-intro{color:#cbd5e1}
+        .term-info div{color:#cbd5e1}.ok{background:#064e3b}.warn{background:#78350f}.bad{background:#7f1d1d}.neutral{background:#374151}
+        """ if dark else """
+        """
         return f"""
         <html><head><title>Zendure Replay Analyse</title><meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
@@ -219,8 +437,8 @@ def build_app() -> FastAPI:
         table{{border-collapse:collapse;width:100%;margin-bottom:16px}} th,td{{border:1px solid #ddd;padding:8px;text-align:left;vertical-align:top}} th{{background:#f1f5f9;width:34%}}
         .error{{background:#fee2e2;border:1px solid #f87171;padding:12px;border-radius:8px}}
         .notice{{background:#eef6ff;border:1px solid #bfdbfe;padding:10px;border-radius:8px}}
-        .small{{font-size:0.92em;color:#4b5563}} select{{min-width:320px;max-width:100%}} button{{padding:7px 12px}}
-        .topnav{{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:10px}} .downloads a{{display:inline-block;margin-right:14px}}
+        .small{{font-size:0.92em;color:#64748b}} select{{min-width:320px;max-width:100%}} button{{padding:7px 12px;border-radius:6px;cursor:pointer}}
+        button:disabled{{opacity:.55;cursor:not-allowed}} .topnav{{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:10px}} .downloads a{{display:inline-block;margin-right:14px}}
         .badge{{display:inline-block;padding:3px 8px;border-radius:999px;font-weight:bold}} .ok{{background:#dcfce7}} .warn{{background:#fef3c7}} .bad{{background:#fee2e2}} .neutral{{background:#e5e7eb}}
         .term-info{{display:inline-block;margin-left:6px}}.term-info summary{{display:inline;color:#1565c0;cursor:pointer;font-weight:normal}}.term-info div{{margin-top:6px;color:#374151;font-weight:normal;line-height:1.35}}
         .toc{{position:sticky;top:0;background:#fff;border:1px solid #dbe4ef;padding:10px;border-radius:10px;margin-bottom:14px;z-index:5}}
@@ -228,60 +446,177 @@ def build_app() -> FastAPI:
         .card{{border:1px solid #dbe4ef;border-radius:10px;padding:12px;background:#f8fafc;display:flex;justify-content:space-between;gap:8px;align-items:center}}
         .chartgrid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}} .barrow{{display:grid;grid-template-columns:120px 1fr 70px;gap:8px;align-items:center;margin:6px 0}}
         .barbox{{height:14px;background:#e5e7eb;border-radius:999px;overflow:hidden}} .bar{{height:14px;background:#93c5fd;border-radius:999px}}
-        h2{{scroll-margin-top:70px;border-bottom:1px solid #e5e7eb;padding-bottom:4px}}
-        </style></head><body>
+        h2{{scroll-margin-top:70px;border-bottom:1px solid #e5e7eb;padding-bottom:4px}} .section-intro{{margin-top:-4px;color:#475569;line-height:1.45}}
+        .analysis-profile{{padding:10px;border-radius:8px;margin:12px 0;border:1px solid #cbd5e1}} .analysis-profile.ok{{border-color:#22c55e}} .analysis-profile.warn{{border-color:#f59e0b}} .analysis-profile.bad{{border-color:#ef4444}}
+        .statusline{{padding:10px;border-radius:8px;margin:12px 0;background:#eef6ff;border:1px solid #bfdbfe}} .progressbox{{height:14px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin-top:8px}} .progressbar{{height:14px;background:#93c5fd;width:0%}}
+        .verdict{{display:block;border:1px solid #dbe4ef;border-radius:10px;padding:14px;background:#f8fafc;margin:8px 0 14px}} .verdict h3{{margin:0 0 6px}}
+        {dark_css}
+        </style></head><body class="mode-{html.escape(ui_mode, quote=True)}">
         <div class="topnav"><a href="{html.escape(controller_url, quote=True)}">← Zurück zum Zendure Controller</a><span class="small">Analyse-Dienst: {html.escape(replay_url)}</span></div>
         <div class="section"><h1>Zendure Replay Analyse V{REPLAY_VERSION}</h1>
         <p>Separater Analyse-Dienst für CSV-Dateien im Schema <code>{CSV_SCHEMA}</code>. Der Live-Controller wird hiervon nicht importiert oder beeinflusst.</p>
-        <form method="get">
+        <p class="notice">V12.8.5 startet Analysen nicht mehr automatisch beim Seitenaufruf. Große Analysen werden vorher geprüft; Downloads verwenden das gecachte Analyseergebnis.</p>
+        <form id="analysisForm">
             <label>CSV-Dateien:</label><br>
             <select name="files" multiple size="8">{options}</select><br><br>
-            <button type="submit">Analyse starten</button>
+            {profile_html}
+            <button id="startBtn" type="button" onclick="startAnalysis()" {'disabled' if initial_running else ''}>Analyse starten</button>
+            <button id="cancelBtn" type="button" onclick="cancelAnalysis()" style="display:{'inline-block' if initial_running else 'none'}">Analyse abbrechen</button>
         </form>
-        <p class="small">Mehrfachauswahl ist möglich. Schutzgrenzen: maximal 20 Dateien, 50 MB Gesamtgröße und 500.000 Messpunkte je Analyselauf. Ausgewählt: {selected_count} Datei(en).</p>
-        <p class="small">Logverzeichnis: <code>{html.escape(str(base))}</code></p></div>
-        <div class="section">{result_html}</div>
-</body></html>
+        <div id="analysisStatus" class="statusline">{initial_status}<div class="progressbox"><div id="progressBar" class="progressbar" style="width:{int(initial_job.get('percent',0)) if initial_job else 0}%"></div></div></div>
+        <noscript><div class="error">Für Start-/Fortschrittsanzeige der Analyse ist JavaScript erforderlich.</div></noscript>
+        </div>
+        <div class="section" id="result"><h2>Analyseergebnis</h2><p class="section-intro">Noch kein Ergebnis in dieser Sitzung. Wähle Dateien aus und starte die Analyse explizit.</p></div>
+        <script>
+        let currentJobId = {json.dumps(initial_job.get('id') if initial_job else None)};
+        let pollTimer = null;
+        function setBusy(busy){{document.getElementById('startBtn').disabled=busy;document.getElementById('cancelBtn').style.display=busy?'inline-block':'none';}}
+        function setStatus(text, percent){{document.getElementById('analysisStatus').firstChild.nodeValue=text;document.getElementById('progressBar').style.width=(percent||0)+'%';}}
+        async function startAnalysis(confirmExtended=false){{
+          const form=document.getElementById('analysisForm'); const data=new FormData(form);
+          if(confirmExtended) data.append('extended_confirm','1');
+          setBusy(true); setStatus('Analyse wird angefordert...', 5);
+          try{{
+            const res=await fetch('/start-analysis',{{method:'POST',body:data}}); const js=await res.json();
+            if(js.requires_confirmation){{
+              setBusy(false); setStatus(js.message||'Große Analyse erfordert Bestätigung.',0);
+              if(confirm((js.message||'Große Analyse starten?')+'\n\nWeiter?')) startAnalysis(true);
+              return;
+            }}
+            if(!res.ok){{setBusy(false); setStatus(js.error||'Analyse konnte nicht gestartet werden.',0); return;}}
+            currentJobId=js.job_id; setStatus(js.phase||'Analyse gestartet', js.percent||10); if(js.status==='done'){{setBusy(false); loadResult(); return;}} pollStatus();
+          }}catch(e){{setBusy(false); setStatus('Fehler beim Start: '+e,0);}}
+        }}
+        async function pollStatus(){{
+          if(!currentJobId) return;
+          try{{
+            const res=await fetch('/analysis-status?job_id='+encodeURIComponent(currentJobId)); const js=await res.json();
+            setStatus((js.phase||js.status||'-'), js.percent||0);
+            if(js.status==='done'){{setBusy(false); clearTimeout(pollTimer); loadResult(); return;}}
+            if(js.status==='error'||js.status==='cancelled'){{setBusy(false); clearTimeout(pollTimer); document.getElementById('result').innerHTML='<h2>Analyseergebnis</h2><div class="error">'+(js.error||js.phase||'Analyse beendet')+'</div>'; return;}}
+            setBusy(true); pollTimer=setTimeout(pollStatus, 1500);
+          }}catch(e){{setStatus('Warte auf Analyse-Status...',20); pollTimer=setTimeout(pollStatus,2500);}}
+        }}
+        async function loadResult(){{
+          const res=await fetch('/analysis-result?job_id='+encodeURIComponent(currentJobId));
+          document.getElementById('result').innerHTML=await res.text();
+        }}
+        async function cancelAnalysis(){{
+          if(!currentJobId) return; await fetch('/cancel-analysis?job_id='+encodeURIComponent(currentJobId),{{method:'POST'}}); setStatus('Abbruch angefordert...',50);
+        }}
+        if(currentJobId) pollStatus();
+        </script>
+        </body></html>
         """
 
-    @app.get("/report.txt")
-    def report_txt(files: Optional[List[str]] = Query(default=None), file: str = Query(default="")):
+    @app.post("/start-analysis")
+    async def start_analysis(request: Request):
+        global _current_job
         cfg = load_config()
         base = log_dir_from_config(cfg)
-        selected = selected_files_from_query(files, file, [])
+        form = await request.form()
+        selected = [str(x) for x in form.getlist("files") if str(x)]
+        extended_confirm = str(form.get("extended_confirm", "")) == "1"
         try:
-            result = analyze_selected(base, selected, cfg)
-            return PlainTextResponse(text_report(result), media_type="text/plain; charset=utf-8")
+            paths = resolve_csv_files(base, selected)
+            profile = selection_profile(paths, cfg)
+            if profile["rejected"]:
+                return JSONResponse({"error": profile["risk_text"], "profile": profile}, status_code=400)
+            if profile["needs_confirmation"] and not extended_confirm:
+                return JSONResponse({"requires_confirmation": True, "message": profile["risk_text"], "profile": profile}, status_code=409)
+            extended = bool(profile["needs_confirmation"])
+            key = _analysis_key(paths, extended)
+            cached = _cache_get(key)
+            if cached:
+                job_id = str(cached.get("_job_id") or uuid.uuid4())
+                cached["_job_id"] = job_id
+                return {"job_id": job_id, "status": "done", "phase": "Gecachtes Ergebnis verfügbar", "percent": 100}
+            with _job_lock:
+                if _current_job and _current_job.get("status") == "running":
+                    return JSONResponse({"error": "Es läuft bereits eine Analyse. Bitte warten oder abbrechen.", "job_id": _current_job.get("id")}, status_code=409)
+                job_id = uuid.uuid4().hex
+                cancel_event = threading.Event()
+                _current_job = {
+                    "id": job_id, "status": "running", "phase": "Analyse wird vorbereitet", "percent": 10,
+                    "error": "", "result": None, "html": "", "started": time.time(), "finished": None,
+                    "selected": [p.name for p in paths], "cache_key": key, "cancel_event": cancel_event,
+                }
+                job = _current_job
+
+            def worker() -> None:
+                try:
+                    result = analyze_snapshot(paths, cfg, extended, cancel_event, job)
+                    if cancel_event.is_set():
+                        raise RuntimeError("Analyse abgebrochen.")
+                    result["_job_id"] = job_id
+                    result["_cache_key"] = key
+                    html_result = render_result_html(result, job_id)
+                    _cache_put(key, result)
+                    with _job_lock:
+                        job.update({"status": "done", "phase": "Analyse abgeschlossen", "percent": 100, "result": result, "html": html_result, "finished": time.time()})
+                except Exception as exc:
+                    with _job_lock:
+                        job.update({"status": "cancelled" if cancel_event.is_set() else "error", "phase": "Analyse abgebrochen" if cancel_event.is_set() else "Analysefehler", "percent": 100, "error": str(exc), "finished": time.time()})
+
+            threading.Thread(target=worker, name="zec-analysis", daemon=True).start()
+            return {"job_id": job_id, "status": "running", "phase": "Analyse gestartet", "percent": 10, "profile": profile}
         except Exception as exc:
-            return PlainTextResponse(f"Analysefehler: {exc}\n", status_code=400)
+            return JSONResponse({"error": str(exc)}, status_code=400)
+
+    @app.get("/analysis-status")
+    def analysis_status(job_id: str = Query(default="")):
+        job = _current_job_snapshot()
+        if not job or (job_id and job.get("id") != job_id):
+            return {"status": "none", "phase": "Keine laufende Analyse", "percent": 0}
+        return {k: v for k, v in job.items() if k not in {"result", "html", "cache_key"}}
+
+    @app.get("/analysis-result", response_class=HTMLResponse)
+    def analysis_result(job_id: str = Query(default="")):
+        job = _current_job_snapshot()
+        if job and job.get("id") == job_id and job.get("status") == "done":
+            with _job_lock:
+                return HTMLResponse(str((_current_job or {}).get("html") or "<div class='error'>Kein Ergebnis.</div>"))
+        result, _ = _get_result_from_job(job_id)
+        if result:
+            return HTMLResponse(render_result_html(result, job_id))
+        return HTMLResponse("<div class='error'>Kein gecachtes Ergebnis für diese Analyse-ID gefunden.</div>", status_code=404)
+
+    @app.post("/cancel-analysis")
+    def cancel_analysis(job_id: str = Query(default="")):
+        with _job_lock:
+            if not _current_job or _current_job.get("id") != job_id or _current_job.get("status") != "running":
+                return {"status": "none", "phase": "Keine passende laufende Analyse"}
+            cancel_event = _current_job.get("cancel_event")
+            if cancel_event:
+                cancel_event.set()
+            _current_job["phase"] = "Abbruch angefordert"
+            return {"status": "cancelling", "phase": "Abbruch angefordert"}
+
+    @app.get("/report.txt")
+    def report_txt(job_id: str = Query(default="")):
+        result, _ = _get_result_from_job(job_id)
+        if not result:
+            return PlainTextResponse("Kein gecachtes Analyseergebnis vorhanden. Bitte Analyse zuerst über die Weboberfläche starten.\n", status_code=409)
+        return PlainTextResponse(text_report(result), media_type="text/plain; charset=utf-8")
 
     @app.get("/report.json")
-    def report_json(files: Optional[List[str]] = Query(default=None), file: str = Query(default="")):
-        cfg = load_config()
-        base = log_dir_from_config(cfg)
-        selected = selected_files_from_query(files, file, [])
-        try:
-            result = analyze_selected(base, selected, cfg)
-            # Do not leak absolute paths by default in the JSON download.
-            result.pop("paths", None)
-            return Response(json.dumps(result, indent=2, ensure_ascii=False), media_type="application/json; charset=utf-8")
-        except Exception as exc:
-            return Response(json.dumps({"error": str(exc)}, ensure_ascii=False), status_code=400, media_type="application/json; charset=utf-8")
+    def report_json(job_id: str = Query(default="")):
+        result, _ = _get_result_from_job(job_id)
+        if not result:
+            return Response(json.dumps({"error": "Kein gecachtes Analyseergebnis vorhanden. Bitte Analyse zuerst starten."}, ensure_ascii=False), status_code=409, media_type="application/json; charset=utf-8")
+        return Response(json.dumps(result, indent=2, ensure_ascii=False), media_type="application/json; charset=utf-8")
 
     @app.get("/summary.csv")
-    def report_summary_csv(files: Optional[List[str]] = Query(default=None), file: str = Query(default="")):
-        cfg = load_config()
-        base = log_dir_from_config(cfg)
-        selected = selected_files_from_query(files, file, [])
-        try:
-            result = analyze_selected(base, selected, cfg)
-            return PlainTextResponse(summary_csv(result), media_type="text/csv; charset=utf-8")
-        except Exception as exc:
-            return PlainTextResponse(f"metric;value\nerror;{str(exc).replace(';', ',')}\n", status_code=400, media_type="text/csv; charset=utf-8")
+    def report_summary_csv(job_id: str = Query(default="")):
+        result, _ = _get_result_from_job(job_id)
+        if not result:
+            return PlainTextResponse("metric;value\nerror;Kein gecachtes Analyseergebnis vorhanden. Bitte Analyse zuerst starten.\n", status_code=409, media_type="text/csv; charset=utf-8")
+        return PlainTextResponse(summary_csv(result), media_type="text/csv; charset=utf-8")
 
     @app.get("/health")
     def health():
-        return {"status": "ok", "schema": CSV_SCHEMA, "version": REPLAY_VERSION}
+        job = _current_job_snapshot()
+        return {"status": "ok", "schema": CSV_SCHEMA, "version": REPLAY_VERSION, "analysis_job": {"status": job.get("status"), "phase": job.get("phase")} if job else None}
 
     return app
 

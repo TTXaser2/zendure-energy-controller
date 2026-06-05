@@ -10,13 +10,13 @@ import statistics
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 CSV_SCHEMA = "ZEC-MEASUREMENT-V2"
 
-DEFAULT_MAX_FILES = 20
-DEFAULT_MAX_TOTAL_BYTES = 50 * 1024 * 1024
-DEFAULT_MAX_ROWS = 500_000
+DEFAULT_MAX_FILES = 4
+DEFAULT_MAX_TOTAL_BYTES = 12 * 1024 * 1024
+DEFAULT_MAX_ROWS = 40_000
 DEFAULT_TARGET_BAND_W = 100.0
 DEFAULT_SIGNIFICANT_GRID_W = 200.0
 DEFAULT_CROSS_DISCHARGE_W = 80.0
@@ -154,6 +154,10 @@ def _is_safe_state(row: Dict[str, Any]) -> bool:
 
 
 def _event(events: List[Dict[str, Any]], row: Dict[str, Any], severity: str, kind: str, text: str, details: Optional[Dict[str, Any]] = None) -> None:
+    # Events are diagnostic UI data, not the source of truth. Bound the list to
+    # avoid runaway memory consumption during noisy analyses.
+    if len(events) >= 500:
+        return
     events.append({
         "time": _row_time_label(row),
         "severity": severity,
@@ -163,7 +167,7 @@ def _event(events: List[Dict[str, Any]], row: Dict[str, Any], severity: str, kin
     })
 
 
-def read_measurement_csv(path: str) -> CsvMeasurementFile:
+def read_measurement_csv(path: str, max_rows: Optional[int] = None, cancel_check: Optional[Callable[[], bool]] = None) -> CsvMeasurementFile:
     """Read a ZEC-MEASUREMENT-V2 CSV file.
 
     Legacy CSV formats are intentionally unsupported. The schema column must be
@@ -183,16 +187,20 @@ def read_measurement_csv(path: str) -> CsvMeasurementFile:
         if not reader.fieldnames or "schema" not in reader.fieldnames:
             raise ValueError("Nicht unterstütztes CSV-Format: Spalte 'schema' fehlt.")
         for row in reader:
+            if cancel_check and cancel_check():
+                raise RuntimeError("Analyse abgebrochen.")
             if not any((v or "").strip() for v in row.values()):
                 continue
             schema = (row.get("schema") or "").strip()
             if schema != CSV_SCHEMA:
                 raise ValueError(f"Nicht unterstütztes CSV-Schema: {schema or 'leer'}")
             rows.append(dict(row))
+            if max_rows is not None and len(rows) > max_rows:
+                raise ValueError(f"Zu viele Messpunkte: maximal {max_rows:,} Zeilen pro Analyselauf.".replace(",", "."))
     return CsvMeasurementFile(path=path, rows=rows, size_bytes=size_bytes)
 
 
-def read_measurement_csv_files(paths: Sequence[str], limits: Optional[AnalysisLimits] = None) -> Tuple[List[CsvMeasurementFile], List[str]]:
+def read_measurement_csv_files(paths: Sequence[str], limits: Optional[AnalysisLimits] = None, cancel_check: Optional[Callable[[], bool]] = None) -> Tuple[List[CsvMeasurementFile], List[str]]:
     limits = limits or AnalysisLimits()
     unique_paths: List[str] = []
     seen = set()
@@ -221,7 +229,8 @@ def read_measurement_csv_files(paths: Sequence[str], limits: Optional[AnalysisLi
                 f"Die ausgewählten Dateien sind zu groß ({total_size / 1024 / 1024:.1f} MB). "
                 f"Limit: {limits.max_total_bytes / 1024 / 1024:.0f} MB."
             )
-        mf = read_measurement_csv(path)
+        remaining_rows = max(0, limits.max_rows - total_rows)
+        mf = read_measurement_csv(path, max_rows=remaining_rows, cancel_check=cancel_check)
         files.append(mf)
         total_rows += len(mf.rows)
         if total_rows > limits.max_rows:
@@ -379,6 +388,7 @@ def analyze_rows(
     zendure_charge_threshold_w: float = DEFAULT_ZENDURE_CHARGE_W,
     max_charge_power_w: float = 2100.0,
     max_discharge_power_w: float = 2100.0,
+    cancel_check: Optional[Callable[[], bool]] = None,
 ) -> Dict[str, Any]:
     rows_list = list(rows)
     total_dt = 0.0
@@ -439,9 +449,14 @@ def analyze_rows(
     was_cross_blocked = was_cross_critical = was_safe_state = False
     first_time = _row_time_label(rows_list[0]) if rows_list else "-"
     last_time = _row_time_label(rows_list[-1]) if rows_list else "-"
+    # Minimal rolling diagnostic rows for command-effect analysis. Do not keep
+    # complete source row dictionaries here; they are already present in the
+    # main rows list and would multiply memory consumption.
     per_row: List[Dict[str, Any]] = []
 
-    for row in rows_list:
+    for row_index, row in enumerate(rows_list):
+        if cancel_check and row_index % 1000 == 0 and cancel_check():
+            raise RuntimeError("Analyse abgebrochen.")
         dt = _row_dt_s(row, previous_epoch)
         epoch = _row_epoch(row)
         if epoch is not None:
@@ -640,7 +655,7 @@ def analyze_rows(
         stat["controllable_error_ws"] += controllable_part * dt
         stat["non_controllable_error_ws"] += non_controllable_part * dt
 
-        per_row.append({"row": row, "dt": dt, "grid_abs": abs_grid, "epoch": epoch, "state": state, "controllable_part": controllable_part, "safe": safe_state, "charge_reserve": charge_reserve, "discharge_reserve": discharge_reserve, "commands": commands_in_cycle})
+        per_row.append({"dt": dt, "grid_abs": abs_grid, "safe": safe_state, "commands": commands_in_cycle})
 
     # Command effect: compare absolute grid error with the value two samples later.
     for i, item in enumerate(per_row):
@@ -947,9 +962,12 @@ def analyze_files(
     zendure_charge_threshold_w: float = DEFAULT_ZENDURE_CHARGE_W,
     max_charge_power_w: float = 2100.0,
     max_discharge_power_w: float = 2100.0,
+    cancel_check: Optional[Callable[[], bool]] = None,
 ) -> Dict[str, Any]:
-    files, warnings = read_measurement_csv_files(paths, limits=limits)
+    files, warnings = read_measurement_csv_files(paths, limits=limits, cancel_check=cancel_check)
     merged, duplicates = _merge_rows(files)
+    if cancel_check and cancel_check():
+        raise RuntimeError("Analyse abgebrochen.")
     result = analyze_rows(
         merged,
         min_soc_percent=min_soc_percent,
@@ -964,6 +982,7 @@ def analyze_files(
         zendure_charge_threshold_w=zendure_charge_threshold_w,
         max_charge_power_w=max_charge_power_w,
         max_discharge_power_w=max_discharge_power_w,
+        cancel_check=cancel_check,
     )
     result["paths"] = [f.path for f in files]
     result["total_size_bytes"] = sum(f.size_bytes for f in files)

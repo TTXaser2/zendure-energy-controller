@@ -10,8 +10,23 @@ Group=pi
 WorkingDirectory=/opt/zendure-controller
 ExecStart=/usr/bin/python3 /opt/zendure-controller/tools/replay_web.py --host 0.0.0.0 --port 8090
 Restart=on-failure
-RestartSec=5
+RestartSec=10
+StartLimitIntervalSec=300
+StartLimitBurst=3
 Environment=PYTHONUNBUFFERED=1
+
+# V12.8.5: Ressourcenschutz für Raspberry-Pi-Betrieb.
+# Eine zu große Analyse soll im Fehlerfall den Replay-Dienst beenden oder drosseln,
+# aber nicht EVCC, MQTT oder den Live-Regler mit in Swap-/I/O-Stress ziehen.
+MemoryAccounting=yes
+CPUAccounting=yes
+IOAccounting=yes
+MemoryHigh=200M
+MemoryMax=300M
+CPUQuota=50%
+Nice=10
+IOSchedulingClass=idle
+IOSchedulingPriority=7
 
 # Der Replay-Dienst ist bewusst von der Live-Regelung getrennt und wird nicht automatisch aktiviert.
 NoNewPrivileges=true

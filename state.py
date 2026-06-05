@@ -374,6 +374,8 @@ class ControllerState:
                 output_home=self.actual_zendure_discharge_power,
                 grid_input=self.actual_zendure_grid_input_power,
                 output_pack=self.actual_zendure_output_pack_power,
+                requested_input_limit=self.last_input_power,
+                requested_output_limit=self.last_output_power,
             )
             self.actual_zendure_system_charge_power = derived["charge_power_w"]
             self.actual_zendure_system_discharge_power = derived["discharge_power_w"]

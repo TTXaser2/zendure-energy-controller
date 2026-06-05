@@ -74,10 +74,31 @@ TERM_HELP: Dict[str, str] = {
     "Ereignis": "Lesbare Beschreibung der erkannten Auffälligkeit oder Zustandsänderung.",
 }
 
+TERM_HELP.update({
+    "Ampel": "Verdichtete Ampelbewertung des jeweiligen Analyseblocks. Die Bedeutung hängt vom Block ab: Bei Reglerqualität geht es um beeinflussbare Netzabweichung, bei MQTT um erkennbare Kommandowirkung, bei Cross-Charge um kritische Überschneidungen zwischen Zusatzbatterie und Zendure.",
+    "Kurzfazit": "Gesamturteil über den ausgewählten Analysezeitraum. Es soll zuerst beantworten, ob Handlungsdruck besteht oder ob das System weitgehend unauffällig arbeitet.",
+    "Handlungsdruck": "Abgestufte Einschätzung, ob aus der Analyse konkrete Maßnahmen folgen sollten. Hoher Handlungsdruck entsteht vor allem durch schlechte Datenqualität, ineffiziente Regelung oder kritisches Cross-Charge-Verhalten.",
+    "Soll/Ist": "Vergleich zwischen angeforderter Zendure-Leistung und tatsächlich gemessener Zendure-Leistung. Große Abweichungen können durch SOC, Temperatur, Zendure-interne Limits oder veraltete Telemetrie entstehen.",
+    "Deadband": "Totzone um 0 W Netzleistung. Innerhalb dieser Zone soll der Regler bewusst ruhig bleiben, damit kleine Mess- und Lastschwankungen nicht ständig neue MQTT-Kommandos auslösen.",
+    "MQTT-Wirkung": "Grobe Diagnose, ob gesendete Leistungsbefehle wenige Messzyklen später eine kleinere absolute Netzabweichung bewirken. Die Bewertung ist nicht kausal beweisend, weil PV und Hauslast gleichzeitig schwanken können.",
+    "Nicht bewertbar": "Der Effekt konnte nicht belastbar beurteilt werden, z. B. wegen Safe-State, fehlenden Folgemesspunkten, Datenlücken oder stark überlagernden Last-/PV-Sprüngen.",
+    "Ø / Median / max dt_s": "Zeitabstand der Messpunkte. Der Median beschreibt den typischen Takt, der Maximalwert zeigt Datenlücken oder Hänger. Große dt_s-Werte reduzieren die Belastbarkeit der Analyse.",
+    "95%-Perzentil |Netz|": "95 Prozent der betrachteten Werte liegen unterhalb dieses Betrags. Robuster als der Maximalwert, weil einzelne Ausreißer weniger dominieren.",
+    "Kritische Überschneidungszeit": "Gesamtdauer, in der die Zusatzbatterie entlädt und Zendure gleichzeitig lädt. Das ist im Systemkontext unerwünscht, weil Energie zwischen Speichern umgeladen werden kann.",
+    "Max. SMA-Entladung während Überschneidung": "Höchste erkannte Entladeleistung der Zusatzbatterie während gleichzeitiger Zendure-Ladung.",
+    "Ø SMA-Entladung während Überschneidung": "Durchschnittliche Entladeleistung der Zusatzbatterie während kritischer Cross-Charge-Phasen.",
+    "Max. Zendure-Ladung während Überschneidung": "Höchste Zendure-Ladeleistung während die Zusatzbatterie gleichzeitig entlädt.",
+    "Verhinderte/reduzierte Ladeenergie grob": "Grob integrierte Energie, die durch Cross-Charge-Begrenzung nicht oder reduziert in Zendure geladen wurde. Der Wert hilft, den Nutzen des Schutzes einzuordnen.",
+    "Moduswechsel": "Anzahl der Wechsel zwischen technischen Betriebsmodi. Viele Wechsel pro Stunde können auf instabile Randbedingungen oder zu aggressive Parameter hindeuten.",
+    "Beeinflussbar Ø": "Mittlere Restabweichung, die in diesem Zustand theoretisch durch Zendure-Stellleistung beeinflussbar war.",
+    "Nicht beeinflussbar Ø": "Mittlere Abweichung, die wegen SOC-, Leistungs-, Safe-State- oder Datenlimits nicht sinnvoll dem Regler zugerechnet werden sollte.",
+    "Hinweise": "Datenqualitäts- und Analysehinweise. Diese Meldungen erklären, warum bestimmte Kennzahlen nur eingeschränkt belastbar sind.",
+})
+
 try:
     from version import APP_VERSION as REPORT_VERSION
 except Exception:  # pragma: no cover
-    REPORT_VERSION = "12.8.4"
+    REPORT_VERSION = "12.8.5"
 
 
 def _duration(seconds: float) -> str:
@@ -170,6 +191,64 @@ def _bars(items: List[Tuple[str, float]], css: str = "bar") -> SafeHtml:
         return SafeHtml("<p>Keine Diagrammdaten.</p>")
     max_value = max([abs(float(v or 0)) for _, v in items] + [1.0])
     return SafeHtml("".join(str(_bar(label, float(value or 0), max_value, css)) for label, value in items))
+
+
+def _rating_score(value: str) -> int:
+    return {"green": 0, "ok": 0, "yellow": 1, "warning": 1, "red": 2, "error": 2}.get(str(value), 1)
+
+
+def overall_verdict(result: Dict[str, Any]) -> Dict[str, str]:
+    ratings = result.get("summary_ratings") or {}
+    dq = (result.get("data_quality") or {}).get("status", "ok")
+    recs = result.get("recommendations") or []
+    scores = [_rating_score(v) for v in ratings.values()] or [1]
+    red_count = sum(1 for score in scores if score >= 2)
+    yellow_count = sum(1 for score in scores if score == 1)
+    non_controllable = float((result.get("fair_regulator_quality") or {}).get("non_controllable_percent", 0) or 0)
+    controllable_avg = float((result.get("fair_regulator_quality") or {}).get("controllable_active_avg_abs_grid_w", 0) or 0)
+    cross_rating = str((result.get("cross_charge") or {}).get("rating", "green"))
+
+    if dq != "ok":
+        title = "Datenbasis zuerst prüfen"
+        pressure = "mittlerer bis hoher Handlungsdruck"
+        text = "Die ausgewählten Messdaten enthalten Lücken oder fehlende Werte. Bevor Parameter angepasst werden, sollte zuerst die Datenqualität verbessert oder ein belastbarerer Zeitraum analysiert werden."
+        rating = "yellow"
+    elif red_count >= 2 or cross_rating == "red":
+        title = "Dringender Handlungsbedarf"
+        pressure = "hoch"
+        text = "Mehrere Kernbereiche sind kritisch oder Cross-Charge ist deutlich auffällig. Die Regelung bzw. Randbedingungen sollten gezielt geprüft werden."
+        rating = "red"
+    elif red_count == 1 or yellow_count >= 3 or controllable_avg > 300:
+        title = "Mittlerer Handlungsbedarf"
+        pressure = "mittel"
+        text = "Die Anlage arbeitet nicht grundsätzlich falsch, aber die Analyse zeigt relevante Ansatzpunkte. Priorisiere die Handlungsempfehlungen und prüfe die betroffenen Zeiträume genauer."
+        rating = "yellow"
+    elif non_controllable > 60:
+        title = "Geringer Regler-Handlungsbedarf"
+        pressure = "gering"
+        text = "Ein großer Teil der Abweichungen war systembedingt nicht beeinflussbar. Mehr Reglerfeintuning bringt wahrscheinlich wenig; eher SOC-/Leistungsgrenzen und Kapazität betrachten."
+        rating = "green"
+    else:
+        title = "Läuft sehr gut / unauffällig"
+        pressure = "gering"
+        text = "Die ausgewählten Daten zeigen keine gravierenden Auffälligkeiten. Beobachten reicht; Parameteränderungen sind aus diesem Zeitraum nicht zwingend ableitbar."
+        rating = "green"
+
+    if recs:
+        first = recs[0]
+        text += " Wichtigster Hinweis: " + str(first.get("topic", "-")) + " – " + str(first.get("text", "-"))
+    return {"title": title, "pressure": pressure, "text": text, "rating": rating}
+
+
+def overall_verdict_html(result: Dict[str, Any]) -> SafeHtml:
+    verdict = overall_verdict(result)
+    return SafeHtml(
+        "<div class='verdict'>"
+        f"<h3>{html.escape(verdict['title'])} {_rating_badge(verdict['rating'])}</h3>"
+        f"<p><b>Handlungsdruck:</b> {html.escape(verdict['pressure'])}</p>"
+        f"<p>{html.escape(verdict['text'])}</p>"
+        "</div>"
+    )
 
 
 def summary_cards(result: Dict[str, Any]) -> str:
@@ -339,7 +418,7 @@ def high_soc_table(result: Dict[str, Any]) -> str:
         ("Zeit bei MIN_SOC", _duration(result.get("time_at_min_soc_seconds", 0))),
         ("Zeit bei MAX_SOC", _duration(result.get("time_at_max_soc_seconds", 0))),
         ("High-SOC-Ladeannahme", _states_summary(states)),
-        ("Einordnung", "V12.8.4 zählt High-SOC nur leichtgewichtig; Schwerpunkt sind faire Reglerqualität, Stellreserve und Cross-Charge."),
+        ("Einordnung", "V12.8.5 zählt High-SOC weiterhin leichtgewichtig; Schwerpunkt sind faire Reglerqualität, Stellreserve und Cross-Charge."),
     ])
 
 

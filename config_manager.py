@@ -30,6 +30,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 
     # Weboberfläche / Darstellung
     "UI_DARK_MODE": False,
+    "UI_MODE": "standard",
     "WEB_SERVICE_RESTART_ENABLED": False,
     "SERVICE_RESTART_COMMAND": "sudo /usr/local/sbin/zendure-controller-restart",
 
@@ -117,6 +118,14 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "CSV_LOG_MAX_BYTES": 2_000_000,
     "CSV_LOG_BACKUP_COUNT": 5,
 
+    # Analyse-/Replay-Service Schutzlimits
+    "ANALYSIS_MAX_FILES": 4,
+    "ANALYSIS_MAX_TOTAL_BYTES": 12 * 1024 * 1024,
+    "ANALYSIS_MAX_ROWS": 40_000,
+    "ANALYSIS_EXTENDED_MAX_FILES": 5,
+    "ANALYSIS_EXTENDED_MAX_TOTAL_BYTES": 18 * 1024 * 1024,
+    "ANALYSIS_EXTENDED_MAX_ROWS": 70_000,
+
     # Logging
     "FILE_LOG_ENABLED": False,
     "FILE_LOG_DIR": "logs",
@@ -146,7 +155,8 @@ CONFIG_SCHEMA: Dict[str, Dict[str, Any]] = {
     "REPLAY_WEB_PORT": {"group": "Weboberfläche", "label": "Analyse-Web Port", "type": "int", "min": 1, "max": 65535, "description": "Port des optionalen separaten Analyse-/Replay-Webdienstes. Der Dienst wird mitgeliefert, aber nicht automatisch aktiviert."},
     "HEADLESS_MODE": {"group": "Netzwerk", "label": "Headless Mode", "type": "bool", "description": "Schaltet die Weboberflächen ab. Beim Aufruf der Web-URLs wird nur noch eine Hinweisseite angezeigt. Die Regelung läuft weiter; Änderungen sind dann ausschließlich über die config.json und den regulären Config-Reload möglich. Ein Neustart ist zum Beenden des Headless Mode nicht erforderlich, wenn die config.json während des laufenden Programms angepasst wird."},
 
-    "UI_DARK_MODE": {"group": "Weboberfläche", "label": "Dark Mode aktiv", "type": "bool", "description": "Aktiviert ein dunkles Farbschema für Statusseite, Settings, Graph, Diagnose und Headless-Hinweisseite. Die Änderung wird nach dem Speichern sofort bei neu geladenen Webseiten sichtbar."},
+    "UI_DARK_MODE": {"group": "Weboberfläche", "label": "Dark Mode aktiv", "type": "bool", "description": "Aktiviert ein dunkles Farbschema für Statusseite, Settings, Graph, Diagnose, Analyse-Linkseiten und Headless-Hinweisseite. Die Änderung wird nach dem Speichern sofort bei neu geladenen Webseiten sichtbar."},
+    "UI_MODE": {"group": "Weboberfläche", "label": "Oberflächenmodus", "type": "select", "options": {"standard": "Standard", "expert": "Experte"}, "description": "Vorbereitung für eine reduzierte Standardansicht und eine vollständige Expertenansicht. Expertenmodus ist fachlich ein Superset des Standardmodus: Kernstatus und Warnungen bleiben immer sichtbar, Expert-only-Details kommen zusätzlich hinzu."},
     "WEB_SERVICE_RESTART_ENABLED": {"group": "Weboberfläche", "label": "Service-Neustart aus Weboberfläche erlauben", "type": "bool", "description": "Erlaubt der Weboberfläche, nach dem Speichern neustartrelevanter Einstellungen den systemd-Dienst kontrolliert neu zu starten. Aus Sicherheitsgründen ist diese Funktion standardmäßig deaktiviert und benötigt zusätzlich ein freigegebenes Restart-Hilfsscript mit sudoers-Regel."},
     "SERVICE_RESTART_COMMAND": {"group": "Weboberfläche", "label": "Service-Neustart Befehl", "type": "str", "description": "Befehl, den die Weboberfläche für einen kontrollierten Dienstneustart ausführen darf, z. B. sudo /usr/local/sbin/zendure-controller-restart. Dieser Befehl sollte auf ein root-geschütztes Hilfsscript zeigen und nicht frei editierbar für untrusted Benutzer sein."},
     "ZENDURE_LOCAL_API_ENABLED": {"group": "Netzwerk", "label": "Zendure lokale API Diagnose aktiv", "type": "bool", "description": "Aktiviert den Diagnose-Endpunkt /zendure-properties. Diese Option steuert die Web-Diagnoseseite; die Telemetrie-Fallback-Nutzung wird separat über die folgenden Optionen gesteuert."},
@@ -224,6 +234,13 @@ CONFIG_SCHEMA: Dict[str, Dict[str, Any]] = {
     "CSV_LOG_FILE": {"group": "Historie / CSV", "label": "CSV Log Datei", "type": "str", "description": "Dateiname der aktuellen CSV-Messdaten-Datei, standardmäßig zendure_measurements.csv."},
     "CSV_LOG_MAX_BYTES": {"group": "Historie / CSV", "label": "Max CSV Dateigröße", "type": "int", "min": 100_000, "max": 100_000_000, "unit": "Bytes", "description": "Bei Überschreitung wird rotiert. Alte Dateien werden nach dem Schema zendure_measurements_1.csv, zendure_measurements_2.csv usw. gehalten."},
     "CSV_LOG_BACKUP_COUNT": {"group": "Historie / CSV", "label": "CSV Backup-Dateien", "type": "int", "min": 1, "max": 20, "description": "Anzahl alter CSV-Dateien, die behalten werden. Höhere Werte verlängern die analysierbare Historie, benötigen aber mehr Speicherplatz."},
+
+    "ANALYSIS_MAX_FILES": {"group": "Analyse / Replay", "label": "Analyse Pi-Safe Dateien", "type": "int", "min": 1, "max": 20, "description": "Maximale Dateianzahl für normale lokale Analysen auf dem Raspberry Pi. Standard ist bewusst konservativ, um EVCC, MQTT und Live-Regler zu schützen."},
+    "ANALYSIS_MAX_TOTAL_BYTES": {"group": "Analyse / Replay", "label": "Analyse Pi-Safe Gesamtgröße", "type": "int", "min": 1_000_000, "max": 100_000_000, "unit": "Bytes", "description": "Maximale Gesamtgröße der ausgewählten CSV-Dateien für normale lokale Analysen. Standard: ca. 12 MiB."},
+    "ANALYSIS_MAX_ROWS": {"group": "Analyse / Replay", "label": "Analyse Pi-Safe Messpunkte", "type": "int", "min": 1_000, "max": 500_000, "description": "Maximale Messpunktzahl für normale lokale Analysen. Das Limit wird jetzt bereits beim Lesen geprüft, nicht erst nach vollständigem Laden."},
+    "ANALYSIS_EXTENDED_MAX_FILES": {"group": "Analyse / Replay", "label": "Analyse Extended Dateien", "type": "int", "min": 1, "max": 20, "description": "Erweiterte Dateianzahl für bewusst bestätigte große Analysen. Auf dem Raspberry Pi nur mit Warnung verwenden."},
+    "ANALYSIS_EXTENDED_MAX_TOTAL_BYTES": {"group": "Analyse / Replay", "label": "Analyse Extended Gesamtgröße", "type": "int", "min": 1_000_000, "max": 100_000_000, "unit": "Bytes", "description": "Erweiterte Gesamtgröße für bewusst bestätigte große Analysen. Standard: ca. 18 MiB."},
+    "ANALYSIS_EXTENDED_MAX_ROWS": {"group": "Analyse / Replay", "label": "Analyse Extended Messpunkte", "type": "int", "min": 1_000, "max": 500_000, "description": "Erweiterte Messpunktzahl für bewusst bestätigte große Analysen. Alles darüber sollte lokal abgelehnt und offline/auf dem PC analysiert werden."},
 
     "FILE_LOG_ENABLED": {"group": "Logging", "label": "Datei-Logging aktiv", "type": "bool", "description": "Schreibt Betriebs-, Fehler- und Diagnosemeldungen zusätzlich rollierend in eine Text-Logdatei. Das ersetzt nicht das CSV-Datenlogging."},
     "FILE_LOG_DIR": {"group": "Logging", "label": "Datei-Log Verzeichnis", "type": "str", "description": "Relatives oder absolutes Verzeichnis für die Text-Logdatei."},

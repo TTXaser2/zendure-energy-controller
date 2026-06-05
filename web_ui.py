@@ -41,6 +41,7 @@ GROUP_ORDER = [
     "Nachtmodus",
     "Sicherheit / Fallback",
     "Historie / CSV",
+    "Analyse / Replay",
     "Logging",
 ]
 
@@ -915,7 +916,7 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
                 f'Angefordertes Lade-Limit: {s["last_input_power"]} W / Entlade-Limit: {s["last_output_power"]} W<br>'
                 f'Darstellung: positiv = Ladung, negativ = Entladung',
                 zendure_setpoint_class,
-                'Diese Karte unterscheidet zwischen der vom Controller angeforderten Sollleistung und der tatsächlich an der Zendure-Headunit erreichten Systemleistung. Abweichungen sind normal: inputLimit/outputLimit sind nur Vorgaben; die reale Leistung hängt von Zendure-Firmware, Ladezustand, Temperatur, internen Grenzen, AC/DC-Pfad und Reaktionszeit ab.',
+                'Diese Karte unterscheidet zwischen der vom Controller angeforderten Sollleistung und der tatsächlich an der Zendure-Headunit erreichten Systemleistung. Positive Werte bedeuten Laden, negative Werte Entladen. Bei aktiver Entladeanforderung werden mehrdeutige positive Pack-Rohwerte als interner Pack-zu-Headunit-Fluss und damit systemisch als Entladung interpretiert. Abweichungen sind normal: inputLimit/outputLimit sind nur Vorgaben; die reale Leistung hängt von Zendure-Firmware, Ladezustand, Temperatur, internen Grenzen, AC/DC-Pfad und Reaktionszeit ab.',
                 settings_group='Regelung'
             )}
             {status_card(
@@ -960,7 +961,7 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
                 'Interne Verteilung',
                 pack_power_text,
                 'gray',
-                'Diese Karte zeigt die interne Leistungsaufteilung auf die erkannten Zendure-Akkupacks, sofern der Wert per MQTT oder lokaler API verfügbar ist. Die Vorzeichenlogik folgt der Systemdarstellung: positiv = Laden, negativ = Entladen. Dadurch ist die Anzeige besser mit Zendure Systemleistung und CSV/Graph vergleichbar.',
+                'Diese Karte zeigt die interne Leistungsaufteilung auf die erkannten Zendure-Akkupacks, sofern der Wert per MQTT oder lokaler API verfügbar ist. Die Vorzeichenlogik folgt der Systemdarstellung: positiv = Laden, negativ = Entladen. Im Nachtmodus bedeutet eine negative Pack-Zeile fachlich: Akkupack liefert Leistung an die Headunit; die Headunit speist anschließend ins Hausnetz ein.',
                 settings_group='Netzwerk'
             )}
             {status_card(
@@ -1144,8 +1145,8 @@ def build_graph_page(cfg: Dict[str, Any]) -> str:
             <li><b>Netzleistung (Watt)</b>: Geglättete Netzleistung am Hausanschlusspunkt in Watt. Positive Werte bedeuten Netzbezug, negative Werte Einspeisung.</li>
             <li><b>Netzleistung Rohwert (Watt)</b>: Ungefilterter Shelly-/Uni-Meter-Messwert in Watt. Hilfreich, um Lastsprünge und Filterwirkung zu beurteilen.</li>
             <li><b>Zendure Sollleistung (Watt)</b>: Vom Controller angeforderte signierte Leistung. Positive Werte bedeuten Laden, negative Werte Entladen.</li>
-            <li><b>Zendure Istleistung (Watt)</b>: Aus den Headunit-Sensoren abgeleitete reale signierte Systemleistung. <code>gridInputPower</code>/<code>packInputPower</code> zählen positiv, <code>outputHomePower</code>/<code>outputPackPower</code> negativ.</li>
-            <li><b>Pack/DC Leistung (Watt)</b>: Zendure-MQTT-Sensor <code>packInputPower</code>. Batterie-/DC-seitige Leistung am Pack bzw. Hub.</li>
+            <li><b>Zendure Istleistung (Watt)</b>: Aus den Headunit-Sensoren abgeleitete reale signierte Systemleistung. Positive Werte bedeuten Laden, negative Werte Entladen. Bei aktiver Entladeanforderung wird eine positive interne Pack-&gt;Headunit-Leistung als Entladung interpretiert, damit Nachtentladung nicht fälschlich als Ladung erscheint.</li>
+            <li><b>Pack/DC Rohleistung (Watt)</b>: Zendure-Rohsensor <code>packInputPower</code> bzw. Pack-<code>power</code>. Dieser Wert beschreibt interne DC-/Pack-Flüsse und ist nicht immer identisch mit der externen Systemleistung. Im Nachtmodus kann ein positiver Rohwert bedeuten: Pack liefert Leistung an die Headunit.</li>
             <li><b>AC Haus Ausgang (Watt)</b>: Zendure-MQTT-Sensor <code>outputHomePower</code>. Leistung, die Zendure AC-seitig ins Haus liefert. Bei Entladung können Pack/DC und AC Haus fast gleich groß sein; das ist normal.</li>
             {evcc_legend}
             <li><b>Zielwert nach Rampe (Watt)</b>: Interner Zielwert nach Glättung und Rampenbegrenzung.</li>

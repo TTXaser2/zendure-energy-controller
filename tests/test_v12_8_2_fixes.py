@@ -35,11 +35,13 @@ class V1282FixTests(unittest.TestCase):
         self.assertIn("24,0859 kWh", report)
         self.assertIn("12,5 W", report)
 
-    def test_analysis_file_limit_is_20_and_version_is_shared(self):
-        self.assertEqual(DEFAULT_MAX_FILES, 20)
-        self.assertEqual(safe_limits().max_files, 20)
-        self.assertEqual(REPLAY_VERSION, "12.8.4")
-        self.assertEqual(version.__version__, "12.8.4")
+    def test_analysis_file_limit_is_pi_safe_and_version_is_shared(self):
+        self.assertEqual(DEFAULT_MAX_FILES, 4)
+        self.assertEqual(safe_limits().max_files, 4)
+        self.assertEqual(safe_limits().max_total_bytes, 12 * 1024 * 1024)
+        self.assertEqual(safe_limits().max_rows, 40_000)
+        self.assertEqual(REPLAY_VERSION, "12.8.5")
+        self.assertEqual(version.__version__, "12.8.5")
 
 
 if __name__ == "__main__":
