@@ -1,0 +1,53 @@
+# Produktive Konfiguration / Zugangsdaten
+config.json
+config.local.json
+*.secret.json
+*.secrets.json
+.env
+.env.*
+
+# Logs
+*.log
+logs/
+journal/
+diagnostics/
+diagnostic/
+*_diagnostic*/
+*_diagnostics*/
+
+# Messdaten / CSV-Historien
+measurement_history.csv
+zendure_measurements*.csv
+*.csv.backup
+*.csv.bak
+
+# Backups
+backup/
+backups/
+*.bak
+*.backup
+*.old
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtuelle Python-Umgebungen
+.venv/
+venv/
+env/
+
+# Betriebssystem / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Temporäre Dateien
+tmp/
+temp/
+*.tmp
+
+# ZIP-Artefakte
+*.zip
