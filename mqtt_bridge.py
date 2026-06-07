@@ -177,17 +177,20 @@ class MqttBridge:
                     if topic == second_topics.get("power"):
                         value = parse_second_battery_value("power", payload, cfg)
                         if value is not None:
-                            self.state.sma_battery_power = float(value)
+                            with self.state.lock:
+                                self.state.sma_battery_power = float(value)
                             updated_second_battery = True
                     if topic == second_topics.get("soc"):
                         value = parse_second_battery_value("soc", payload, cfg)
                         if value is not None:
-                            self.state.sma_battery_soc = float(value)
+                            with self.state.lock:
+                                self.state.sma_battery_soc = float(value)
                             updated_second_battery = True
                     if topic == second_topics.get("capacity"):
                         value = parse_second_battery_value("capacity", payload, cfg)
                         if value is not None:
-                            self.state.sma_battery_capacity_kwh = float(value)
+                            with self.state.lock:
+                                self.state.sma_battery_capacity_kwh = float(value)
                             updated_second_battery = True
                     if updated_second_battery:
                         self._mark_evcc(now, now_text)
@@ -197,9 +200,10 @@ class MqttBridge:
             self.log(f"[MQTT] Fehler auf {topic}: {exc}")
 
     def _mark_evcc(self, now: float, now_text: str) -> None:
-        self.state.evcc_data_available = True
-        self.state.last_sma_battery_update_epoch = now
-        self.state.last_sma_battery_update_time = now_text
+        with self.state.lock:
+            self.state.evcc_data_available = True
+            self.state.last_sma_battery_update_epoch = now
+            self.state.last_sma_battery_update_time = now_text
 
     def publish(self, topic: str, value: Any, force: bool = False, numeric: bool = True) -> bool:
         cfg = self.config_getter()

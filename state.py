@@ -44,6 +44,10 @@ class ControllerState:
     grid_power: float = 0.0
     current_rule_deviation: float = 0.0
     effective_export_power: int = 0
+    effective_export_power_valid: bool = False
+    grid_power_valid: bool = False
+    grid_power_used_for_control: bool = False
+    grid_power_age_seconds: Optional[int] = None
     last_input_power: int = 0
     last_output_power: int = 0
     # Zendure Headunit/System-Istleistung. Historisch wurden packInputPower
@@ -125,6 +129,9 @@ class ControllerState:
     sma_battery_soc: Optional[float] = None
     sma_battery_capacity_kwh: Optional[float] = None
     sma_battery_discharge_power: float = 0.0
+    second_battery_data_fresh: bool = False
+    second_battery_data_used_for_control: bool = False
+    second_battery_data_age_seconds: Optional[int] = None
     evcc_data_available: bool = False
 
     # Zendure Akkutemperaturen
@@ -369,21 +376,34 @@ class ControllerState:
             if op is not None:
                 self.actual_zendure_output_pack_power = op
 
-            derived = derive_zendure_actual_power(
-                pack_input=self.actual_zendure_charge_power,
-                output_home=self.actual_zendure_discharge_power,
-                grid_input=self.actual_zendure_grid_input_power,
-                output_pack=self.actual_zendure_output_pack_power,
-                requested_input_limit=self.last_input_power,
-                requested_output_limit=self.last_output_power,
-            )
-            self.actual_zendure_system_charge_power = derived["charge_power_w"]
-            self.actual_zendure_system_discharge_power = derived["discharge_power_w"]
-            self.actual_zendure_system_signed_power = derived["signed_power_w"]
+            self._refresh_zendure_headunit_power_locked()
 
             now = time.time()
             self.last_zendure_power_update_epoch = now
             self.last_zendure_power_update_time = datetime.now().strftime("%H:%M:%S")
+
+    def _refresh_zendure_headunit_power_locked(self) -> None:
+        derived = derive_zendure_actual_power(
+            pack_input=self.actual_zendure_charge_power,
+            output_home=self.actual_zendure_discharge_power,
+            grid_input=self.actual_zendure_grid_input_power,
+            output_pack=self.actual_zendure_output_pack_power,
+            requested_input_limit=self.last_input_power,
+            requested_output_limit=self.last_output_power,
+        )
+        self.actual_zendure_system_charge_power = derived["charge_power_w"]
+        self.actual_zendure_system_discharge_power = derived["discharge_power_w"]
+        self.actual_zendure_system_signed_power = derived["signed_power_w"]
+
+    def refresh_zendure_headunit_power(self) -> None:
+        """Recalculate Zendure actual power from the latest raw sensors and limits.
+
+        MQTT/API raw sensors can arrive before a later control decision changes
+        requested input/output limits. Recalculate once per control cycle so UI,
+        graph and CSV do not show a stale sign after mode changes.
+        """
+        with self.lock:
+            self._refresh_zendure_headunit_power_locked()
 
     def reset_active_limiters(self) -> None:
         with self.lock:
@@ -439,6 +459,9 @@ class ControllerState:
                 "raw_grid_power_meaning": power_flow_meaning(self.raw_grid_power, "Netzbezug", "Einspeisung"),
                 "grid_power_w": round(self.grid_power, 1),
                 "grid_power_meaning": power_flow_meaning(self.grid_power, "Netzbezug", "Einspeisung"),
+                "grid_power_valid": self.grid_power_valid,
+                "grid_power_used_for_control": self.grid_power_used_for_control,
+                "grid_power_age_s": self.grid_power_age_seconds,
                 "zendure_target_power_w": target_signed,
                 "zendure_actual_power_w": self.actual_zendure_system_signed_power,
                 "second_battery_power_w": round(self.sma_battery_display_power, 1),
@@ -473,12 +496,16 @@ class ControllerState:
                 # Zweitbatterie / Cross-Charge
                 "second_battery_raw_power_w": round(self.sma_battery_power, 1),
                 "second_battery_discharge_power_w": round(self.sma_battery_discharge_power, 1),
+                "second_battery_data_fresh": self.second_battery_data_fresh,
+                "second_battery_used_for_control": self.second_battery_data_used_for_control,
+                "second_battery_age_s": self.second_battery_data_age_seconds,
                 "second_battery_soc_percent": self.sma_battery_soc,
                 "second_battery_capacity_kwh": self.sma_battery_capacity_kwh,
                 "sma_battery_power_meaning": sma_power_meaning(self.sma_battery_display_power),
                 "sma_battery_discharge_power": round(self.sma_battery_discharge_power, 1),
                 "effective_export_power_w": self.effective_export_power,
                 "effective_export_power": self.effective_export_power,
+                "effective_export_power_valid": self.effective_export_power_valid,
                 "effective_export_meaning": "Für Zendure-Ladung verfügbarer Überschuss nach Zusatzbatterie-Abzug und Sicherheitsreserve",
 
                 # SOC / Modus / Reglerpfad
@@ -534,6 +561,10 @@ class ControllerState:
                 "grid_power": self.grid_power,
                 "current_rule_deviation": self.current_rule_deviation,
                 "effective_export_power": self.effective_export_power,
+                "effective_export_power_valid": self.effective_export_power_valid,
+                "grid_power_valid": self.grid_power_valid,
+                "grid_power_used_for_control": self.grid_power_used_for_control,
+                "grid_power_age_seconds": self.grid_power_age_seconds,
                 "last_input_power": self.last_input_power,
                 "last_output_power": self.last_output_power,
                 "actual_zendure_charge_power": self.actual_zendure_charge_power,
@@ -604,6 +635,9 @@ class ControllerState:
                 "sma_battery_soc": self.sma_battery_soc,
                 "sma_battery_capacity_kwh": self.sma_battery_capacity_kwh,
                 "sma_battery_discharge_power": self.sma_battery_discharge_power,
+                "second_battery_data_fresh": self.second_battery_data_fresh,
+                "second_battery_data_used_for_control": self.second_battery_data_used_for_control,
+                "second_battery_data_age_seconds": self.second_battery_data_age_seconds,
                 "evcc_data_available": self.evcc_data_available,
                 "graph_history": list(self.graph_history),
                 "event_history": list(self.event_history),

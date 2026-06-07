@@ -60,7 +60,7 @@ from replay_report import (  # noqa: E402
 try:
     from version import APP_VERSION as REPLAY_VERSION  # noqa: E402
 except Exception:  # pragma: no cover
-    REPLAY_VERSION = "12.8.5"
+    REPLAY_VERSION = "12.8.6"
 
 SAFE_DEFAULTS = AnalysisLimits(max_files=4, max_total_bytes=12 * 1024 * 1024, max_rows=40_000)
 EXTENDED_DEFAULTS = AnalysisLimits(max_files=5, max_total_bytes=18 * 1024 * 1024, max_rows=70_000)
@@ -455,7 +455,7 @@ def build_app() -> FastAPI:
         <div class="topnav"><a href="{html.escape(controller_url, quote=True)}">← Zurück zum Zendure Controller</a><span class="small">Analyse-Dienst: {html.escape(replay_url)}</span></div>
         <div class="section"><h1>Zendure Replay Analyse V{REPLAY_VERSION}</h1>
         <p>Separater Analyse-Dienst für CSV-Dateien im Schema <code>{CSV_SCHEMA}</code>. Der Live-Controller wird hiervon nicht importiert oder beeinflusst.</p>
-        <p class="notice">V12.8.5 startet Analysen nicht mehr automatisch beim Seitenaufruf. Große Analysen werden vorher geprüft; Downloads verwenden das gecachte Analyseergebnis.</p>
+        <p class="notice">V12.8.6 startet Analysen nicht mehr automatisch beim Seitenaufruf. Große Analysen werden vorher geprüft; Downloads verwenden das gecachte Analyseergebnis.</p>
         <form id="analysisForm">
             <label>CSV-Dateien:</label><br>
             <select name="files" multiple size="8">{options}</select><br><br>

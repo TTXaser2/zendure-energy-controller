@@ -98,7 +98,7 @@ TERM_HELP.update({
 try:
     from version import APP_VERSION as REPORT_VERSION
 except Exception:  # pragma: no cover
-    REPORT_VERSION = "12.8.5"
+    REPORT_VERSION = "12.8.6"
 
 
 def _duration(seconds: float) -> str:

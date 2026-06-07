@@ -1,4 +1,4 @@
-# Zendure Energy Controller V12.8.5 - Installation und Betrieb
+# Zendure Energy Controller V12.8.6 - Installation und Betrieb
 
 Diese Version ist für den Betrieb unter `/opt/zendure-controller` vorbereitet.
 
@@ -13,19 +13,19 @@ ln -sfn /opt/zendure-controller /home/pi/zendure-controller
 
 Danach kann bequem mit `cd ~/zendure-controller` gearbeitet werden, obwohl die Anwendung sauber unter `/opt` liegt.
 
-## Update auf V12.8.5 installieren
+## Update auf V12.8.6 installieren
 
 Ab V12.7 liegt das Update-Script ausschließlich unter `tools/`.
 
 ```bash
 cp /opt/zendure-controller/tools/update_zendure_controller.sh /home/pi/update_zendure_controller.sh
 chmod +x /home/pi/update_zendure_controller.sh
-/home/pi/update_zendure_controller.sh v12_8_5
+/home/pi/update_zendure_controller.sh v12_8_6
 ```
 
 Das Update-Script erhält die vorhandene `config.json`, sichert das Installationsverzeichnis, bereinigt alte Dopplungen (`Tools/`, `zendureController.py`) und installiert die systemd-Dateien für Live-Controller und optionalen Replay-Dienst.
 
-Hinweis: Der CSV-Schemawechsel erfolgte bereits mit V12.7. Beim Update auf V12.8.5 werden CSV-Dateien daher nicht erneut automatisch verschoben.
+Hinweis: Der CSV-Schemawechsel erfolgte bereits mit V12.7. Beim Update auf V12.8.6 werden CSV-Dateien daher nicht erneut automatisch verschoben.
 
 ## Syntaxcheck
 
@@ -60,7 +60,7 @@ journalctl -u zendure-controller.service -f
 
 ## Optionaler Analyse-/Replay-Dienst
 
-V12.8.5 liefert einen separaten Analyse-Webdienst. Er wird nicht automatisch aktiviert und beeinflusst den Live-Regler nicht. Der Dienst enthält zusätzliche systemd-Ressourcengrenzen, damit eine zu große Analyse nicht den gesamten Raspberry Pi blockieren soll.
+V12.8.6 liefert einen separaten Analyse-Webdienst. Er wird nicht automatisch aktiviert und beeinflusst den Live-Regler nicht. Der Dienst enthält zusätzliche systemd-Ressourcengrenzen, damit eine zu große Analyse nicht den gesamten Raspberry Pi blockieren soll.
 
 Einmalig installieren, falls das Update-Script nicht verwendet wurde:
 

@@ -1,6 +1,6 @@
-Zendure Energy Controller Version 12.8.5
+Zendure Energy Controller Version 12.8.6
 
-# Zendure Energy Controller V12.8.5
+# Zendure Energy Controller V12.8.6
 
 Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, CSV-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
@@ -8,6 +8,17 @@ Copyright (c) 2026 Eduard Fuchs <info@eduardfuchs.de>
 
 Lizenziert unter AGPL-3.0-or-later. Siehe `LICENSE`, `NOTICE` und `DISCLAIMER.md`.
 
+
+## Wichtige Änderungen in V12.8.6
+
+V12.8.6 ist eine gezielte Hotfix-Version für Housekeeping und Ablaufkonsistenz im Live-Controller:
+
+- Zweitbatterie-/SMA-Anzeigewerte werden nun auch in Nachtentladung, Stop/Hold und festen Modi aktualisiert.
+- `update_sma_metrics()` wurde fachlich getrennt: Anzeige-/CSV-Ableitung läuft unabhängig von AUTO, Cross-Charge-Regelmetriken nur nach gültiger Grid-Messung im AUTO-Zweig.
+- Zendure-Istleistung wird am Zyklusende erneut aus Rohsensoren und aktuellen Soll-Limits abgeleitet, damit Vorzeichen nach Moduswechseln nicht stale bleiben.
+- Neue Freshness-/Validitätsfelder für Grid, Zweitbatterie und effective export helfen, Anzeige/CSV/Analyse sauberer zu interpretieren.
+- Zweitbatterie-MQTT-Rohwerte werden unter `state.lock` aktualisiert.
+- Zusätzliche Tests sichern frühe Return-Pfade und per-cycle Housekeeping ab.
 
 ## Wichtige Änderungen in V12.8.5
 

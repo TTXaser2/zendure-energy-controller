@@ -87,6 +87,12 @@ class ZendureController:
         # Festladung/-entladung und Stop/Hold sollen bei fehlender Netzmessung nicht
         # unnötig in den Safe-State fallen.
         self.update_zendure_telemetry_from_local_api(cfg)
+        # Per-cycle housekeeping: display/CSV metrics that are derived from
+        # asynchronous MQTT/API raw values must be refreshed before any early
+        # return path (manual modes, night mode, safe-state). Cross-charge
+        # control metrics remain AUTO/grid-dependent and are refreshed later
+        # after a valid grid measurement.
+        self.update_cycle_display_metrics(cfg)
 
         manual_mode = str(cfg.get("MANUAL_MODE", "AUTO"))
         if manual_mode != "AUTO":
@@ -108,7 +114,8 @@ class ZendureController:
 
         if not self.read_grid_power(cfg):
             return
-        self.update_sma_metrics(cfg)
+        self.update_cycle_display_metrics(cfg)
+        self.update_cross_charge_control_metrics(cfg)
 
         grid_power = self.state.grid_power
 
@@ -137,11 +144,18 @@ class ZendureController:
                 self.state.current_rule_deviation = round(smoothed, 1)
                 self.state.last_shelly_update_epoch = now
                 self.state.last_shelly_update_time = now_text
+                self.state.grid_power_valid = True
+                self.state.grid_power_used_for_control = True
+                self.state.grid_power_age_seconds = 0
             if cfg.get("LOG_VALUES", False):
                 self.log(f"[GRID] Rohwert: {raw:.1f} W | Mittelwert: {smoothed:.1f} W")
             return True
         except Exception as exc:
             self.state.set_error(f"Shelly/Uni-Meter Fehler: {exc}")
+            with self.state.lock:
+                self.state.grid_power_used_for_control = False
+                if self.state.last_shelly_update_epoch is not None:
+                    self.state.grid_power_age_seconds = max(0, int(time.time() - self.state.last_shelly_update_epoch))
             with self.state.lock:
                 last_update = self.state.last_shelly_update_epoch
             if cfg.get("SAFE_STATE_ON_SHELLY_ERROR", True):
@@ -276,44 +290,96 @@ class ZendureController:
         except Exception:
             return None
 
-    def update_sma_metrics(self, cfg: Dict[str, Any]) -> None:
+    def second_battery_data_is_fresh(self, cfg: Dict[str, Any]) -> bool:
+        """Return True when the latest second-battery MQTT values are fresh."""
+        with self.state.lock:
+            last_evcc = self.state.last_sma_battery_update_epoch
+        timeout = cfg.get("SECOND_BATTERY_STALE_TIMEOUT_SECONDS", cfg.get("EVCC_STALE_TIMEOUT_SECONDS", 30))
+        return last_evcc is not None and (time.time() - last_evcc) <= timeout
+
+    def update_second_battery_display_metrics(self, cfg: Dict[str, Any]) -> None:
+        """Normalize second-battery values for UI/CSV/graph independent of AUTO.
+
+        This method intentionally does not calculate Cross-Charge control values.
+        It is safe to run in NIGHT_DISCHARGE, FIXED_CHARGE, FIXED_DISCHARGE,
+        STOP_HOLD and Safe-State paths because it only derives display values
+        from the most recent MQTT raw values.
+        """
+        if not cross_charge_enabled(cfg):
+            with self.state.lock:
+                self.state.sma_battery_discharge_power = 0.0
+                self.state.sma_battery_display_power = 0.0
+                self.state.second_battery_data_fresh = False
+                self.state.second_battery_data_used_for_control = False
+            return
+
+        sign = cfg.get("SECOND_BATTERY_DISCHARGE_SIGN", cfg.get("EVCC_SMA_DISCHARGE_SIGN", 1))
         with self.state.lock:
             sma_power = self.state.sma_battery_power
             last_evcc = self.state.last_sma_battery_update_epoch
-            grid_power = self.state.grid_power
 
-        evcc_stale = False
-        if cross_charge_enabled(cfg):
-            if last_evcc is None or time.time() - last_evcc > cfg.get("SECOND_BATTERY_STALE_TIMEOUT_SECONDS", cfg.get("EVCC_STALE_TIMEOUT_SECONDS", 30)):
-                evcc_stale = True
-                self.state.add_limiter("EVCC_STALE")
-
-        if not cross_charge_enabled(cfg):
-            sma_discharge = 0.0
-            effective = max(0, int(-grid_power))
-        else:
-            sign = cfg.get("SECOND_BATTERY_DISCHARGE_SIGN", cfg.get("EVCC_SMA_DISCHARGE_SIGN", 1))
-            sma_discharge = normalize_discharge_power_w(sma_power, sign)
-            export_power = max(0.0, -grid_power)
-
-            if evcc_stale and cfg.get("SECOND_BATTERY_STALE_BLOCK_CHARGE", cfg.get("EVCC_STALE_BLOCK_CHARGE", True)):
-                effective = 0
-            else:
-                effective = max(0, int(export_power - sma_discharge - cfg.get("CROSS_CHARGE_RESERVE_W", 100)))
-
-        # Für Anzeigen und CSV wird die zweite Batterie konsistent zu Zendure dargestellt:
-        # positiv = Laden, negativ = Entladen. Die Guard-Logik nutzt weiterhin
-        # sma_battery_discharge_power als positiven Entladewert.
-        if not cross_charge_enabled(cfg):
-            sma_display_power = 0.0
-        else:
-            sign = cfg.get("SECOND_BATTERY_DISCHARGE_SIGN", cfg.get("EVCC_SMA_DISCHARGE_SIGN", 1))
-            sma_display_power = display_power_w(sma_power, sign)
+        fresh = self.second_battery_data_is_fresh(cfg)
+        sma_discharge = normalize_discharge_power_w(sma_power, sign)
+        sma_display_power = display_power_w(sma_power, sign)
+        age_s = None if last_evcc is None else max(0, int(time.time() - last_evcc))
 
         with self.state.lock:
             self.state.sma_battery_discharge_power = sma_discharge
             self.state.sma_battery_display_power = sma_display_power
+            self.state.second_battery_data_fresh = fresh
+            self.state.second_battery_data_age_seconds = age_s
+            # This method only updates display metrics. AUTO/Grid-dependent
+            # Cross-Charge code sets this flag to True when it actually uses
+            # the values for a control decision.
+            self.state.second_battery_data_used_for_control = False
+
+    def update_cross_charge_control_metrics(self, cfg: Dict[str, Any]) -> None:
+        """Update AUTO/grid-dependent Cross-Charge metrics.
+
+        Requires a current grid measurement. It must not be called from fixed
+        modes or night mode, because those modes deliberately do not depend on
+        Shelly/UniMeter data.
+        """
+        with self.state.lock:
+            grid_power = self.state.grid_power
+            sma_discharge = self.state.sma_battery_discharge_power
+
+        if not cross_charge_enabled(cfg):
+            effective = max(0, int(-grid_power))
+            with self.state.lock:
+                self.state.effective_export_power = effective
+                self.state.effective_export_power_valid = True
+                self.state.second_battery_data_used_for_control = False
+            return
+
+        evcc_stale = not self.second_battery_data_is_fresh(cfg)
+        if evcc_stale:
+            self.state.add_limiter("EVCC_STALE")
+
+        export_power = max(0.0, -grid_power)
+        if evcc_stale and cfg.get("SECOND_BATTERY_STALE_BLOCK_CHARGE", cfg.get("EVCC_STALE_BLOCK_CHARGE", True)):
+            effective = 0
+        else:
+            effective = max(0, int(export_power - sma_discharge - cfg.get("CROSS_CHARGE_RESERVE_W", 100)))
+
+        with self.state.lock:
             self.state.effective_export_power = effective
+            self.state.effective_export_power_valid = True
+            self.state.second_battery_data_used_for_control = True
+
+    def update_sma_metrics(self, cfg: Dict[str, Any]) -> None:
+        """Backward-compatible wrapper for AUTO/Cross-Charge updates."""
+        self.update_second_battery_display_metrics(cfg)
+        self.update_cross_charge_control_metrics(cfg)
+
+    def update_cycle_display_metrics(self, cfg: Dict[str, Any]) -> None:
+        """Housekeeping for values that must be current on every cycle path."""
+        self.update_second_battery_display_metrics(cfg)
+        self.state.refresh_zendure_headunit_power()
+
+    def mark_grid_not_used_for_control(self) -> None:
+        with self.state.lock:
+            self.state.grid_power_used_for_control = False
 
     def soc_is_fresh(self, cfg: Dict[str, Any]) -> bool:
         with self.state.lock:
@@ -715,6 +781,10 @@ class ZendureController:
         with self.state.lock:
             self.state.last_loop_duration_ms = int((time.time() - loop_start) * 1000)
             self.state.last_limit_reason = ", ".join(self.state.active_limiters) if self.state.active_limiters else "none"
+            self.state.grid_power_used_for_control = self.state.technical_control_path.startswith("GRID")
+            if self.state.last_shelly_update_epoch is not None:
+                self.state.grid_power_age_seconds = max(0, int(time.time() - self.state.last_shelly_update_epoch))
+        self.update_cycle_display_metrics(cfg)
         self.update_charge_acceptance_diagnostic(cfg)
         self.state.record_graph_point(int(cfg.get("GRAPH_HISTORY_LIMIT", 300)))
         try:
