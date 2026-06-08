@@ -1,6 +1,6 @@
-Zendure Energy Controller Version 12.8.9
+Zendure Energy Controller Version 12.8.10
 
-# Zendure Energy Controller V12.8.9
+# Zendure Energy Controller V12.8.10
 
 Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, CSV-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
@@ -8,6 +8,16 @@ Copyright (c) 2026 Eduard Fuchs <info@eduardfuchs.de>
 
 Lizenziert unter AGPL-3.0-or-later. Siehe `LICENSE`, `NOTICE` und `DISCLAIMER.md`.
 
+
+## Wichtige Änderungen in V12.8.10
+
+V12.8.10 ist ein kleiner Analyse-Webseiten-Hotfix ohne Änderung am Live-Regelalgorithmus:
+
+- Info-Aufklapper im Diagramm-Bereich nutzen beim Öffnen die volle Breite des jeweiligen Diagramm-Elements. Dadurch bleiben Label, Balken und Werte stabil und die Erklärungstexte sind besser lesbar.
+- Der Button `Analyse starten` wird sofort gesperrt, sobald sich die CSV-Auswahl ändert.
+- Während die Auswahl-/Risikobox neu berechnet wird, zeigt der Button `Aktualisiere Dateiauswahl…`.
+- Eine Analyse kann erst gestartet werden, wenn die Informationen zu den ausgewählten Dateien vollständig aktualisiert und gültig sind.
+- Race-Condition-Schutz für schnelle Mehrfachänderungen der Dateiauswahl: veraltete Profilantworten werden ignoriert.
 
 ## Wichtige Änderungen in V12.8.9
 

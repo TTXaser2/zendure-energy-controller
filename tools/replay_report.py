@@ -475,11 +475,14 @@ def _bar_value(label: str, value_text: str, width_value: float, max_value: float
     help_html = ""
     help_text = TERM_HELP.get(help_key or label)
     if help_text:
+        # The details element intentionally sits on the chart row grid itself, not inside
+        # the label span. This lets the opened text use the full chart width and keeps
+        # label/bar/value columns stable.
         help_html = f"<details class='term-info'><summary>info</summary><div>{html.escape(help_text)}</div></details>"
     return SafeHtml(
-        f"<div class='barrow'><span>{html.escape(label)}{help_html}</span>"
+        f"<div class='barrow'><span class='barlabel'>{html.escape(label)}</span>"
         f"<div class='barbox'><div class='{css}' style='width:{width:.1f}%'></div></div>"
-        f"<b>{html.escape(value_text)}</b></div>"
+        f"<b>{html.escape(value_text)}</b>{help_html}</div>"
     )
 
 

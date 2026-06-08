@@ -474,6 +474,7 @@ def build_app() -> FastAPI:
         .toc a{{display:inline-block;margin:3px 8px 3px 0}} .cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0 16px}}
         .card{{border:1px solid #dbe4ef;border-radius:10px;padding:12px;background:#f8fafc;display:flex;justify-content:space-between;gap:8px;align-items:center}}
         .chartgrid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px}} .chart-card{{min-width:0}} .barrow{{display:grid;grid-template-columns:minmax(130px,1fr) 1.3fr minmax(150px,auto);gap:8px;align-items:start;margin:8px 0}}
+        .barrow .term-info{{grid-column:1 / -1;margin:2px 0 10px 0;max-width:none}} .barrow .term-info div{{max-width:none;width:100%;box-sizing:border-box}}
         .barbox{{height:14px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin-top:3px}} .bar{{height:14px;background:#93c5fd;border-radius:999px}} .chart-info{{margin:0 0 8px 0}} .chart-info summary{{color:#1565c0;cursor:pointer}} .chart-info div{{margin-top:6px;color:#475569;line-height:1.35}}
         h2{{scroll-margin-top:70px;border-bottom:1px solid #e5e7eb;padding-bottom:4px}} .section-intro{{margin-top:-4px;color:#475569;line-height:1.45}}
         .analysis-profile{{padding:10px;border-radius:8px;margin:12px 0;border:1px solid #cbd5e1}} .analysis-profile.ok{{border-color:#22c55e}} .analysis-profile.warn{{border-color:#f59e0b}} .analysis-profile.bad{{border-color:#ef4444}}
@@ -499,11 +500,27 @@ def build_app() -> FastAPI:
         <script>
         let currentJobId = {json.dumps(initial_job.get('id') if initial_job else None)};
         let pollTimer = null;
+        let analysisBusy = !!currentJobId;
+        let profileUpdating = false;
+        let profileReady = false;
+        let profileRejected = true;
+        let profileRequestSeq = 0;
+        const START_LABEL = 'Analyse starten';
         function byId(id){{return document.getElementById(id);}}
+        function refreshStartButton(){{
+          const start=byId('startBtn');
+          if(!start) return;
+          if(analysisBusy){{start.disabled=true; start.textContent=START_LABEL; return;}}
+          if(profileUpdating){{start.disabled=true; start.textContent='Aktualisiere Dateiauswahl…'; return;}}
+          if(!profileReady){{start.disabled=true; start.textContent='Dateiauswahl prüfen'; return;}}
+          if(profileRejected){{start.disabled=true; start.textContent='Analyse nicht möglich'; return;}}
+          start.disabled=false; start.textContent=START_LABEL;
+        }}
         function setBusy(busy){{
-          const start=byId('startBtn'); const cancel=byId('cancelBtn');
-          if(start) start.disabled=busy;
+          analysisBusy = !!busy;
+          const cancel=byId('cancelBtn');
           if(cancel) cancel.style.display=busy?'inline-block':'none';
+          refreshStartButton();
         }}
         function setStatus(text, percent, kind='info'){{
           const box=byId('analysisStatus'); const bar=byId('progressBar'); const textNode=byId('statusText');
@@ -518,7 +535,11 @@ def build_app() -> FastAPI:
         function escapeHtml(value){{return String(value).replace(/[&<>'"]/g, ch => ({{'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}}[ch]));}}
         function renderProfile(profile){{
           const box=byId('profileBox'); if(!box) return;
-          if(!profile){{box.innerHTML='<div class="analysis-profile bad"><div class="profile-title">Informationen zu den ausgewählten Dateien</div><div class="profile-explain">Bitte mindestens eine CSV-Datei auswählen.</div><b>Auswahl:</b> Keine gültige Auswahl.</div>'; return;}}
+          if(!profile){{
+            profileReady=false; profileRejected=true;
+            box.innerHTML='<div class="analysis-profile bad"><div class="profile-title">Informationen zu den ausgewählten Dateien</div><div class="profile-explain">Bitte mindestens eine CSV-Datei auswählen.</div><b>Auswahl:</b> Keine gültige Auswahl.</div>';
+            refreshStartButton(); return;
+          }}
           const cls = profile.risk==='pi-safe' ? 'ok' : (profile.risk==='extended' ? 'warn' : 'bad');
           const errors = (profile.schema_errors||[]).map(e=>'<li>'+escapeHtml(e)+'</li>').join('');
           box.innerHTML = '<div class="analysis-profile '+cls+'">'
@@ -528,23 +549,36 @@ def build_app() -> FastAPI:
             + '<b>Zeitraum:</b> '+escapeHtml(profile.period_start||'-')+' bis '+escapeHtml(profile.period_end||'-')+'<br>'
             + '<b>Risiko:</b> '+escapeHtml(profile.risk_text||'-')
             + (errors ? '<ul>'+errors+'</ul>' : '') + '</div>';
-          const start=byId('startBtn'); if(start) start.disabled=!!profile.rejected || profile.file_count < 1;
+          profileReady=true; profileRejected=!!profile.rejected || profile.file_count < 1; refreshStartButton();
         }}
         async function updateProfile(){{
+          const seq=++profileRequestSeq;
           const files=selectedFiles();
-          if(files.length<1){{renderProfile(null); return;}}
+          profileUpdating=true; profileReady=false; profileRejected=true; refreshStartButton();
+          if(files.length<1){{profileUpdating=false; renderProfile(null); return;}}
+          const box=byId('profileBox');
+          if(box) box.innerHTML='<div class="analysis-profile"><div class="profile-title">Informationen zu den ausgewählten Dateien</div><div class="profile-explain">Dateiauswahl wird aktualisiert. Der Analyse-Start wird erst freigegeben, wenn diese Prüfung abgeschlossen ist.</div><b>Status:</b> Auswahl wird geprüft…</div>';
           const params=new URLSearchParams(); files.forEach(f=>params.append('files', f));
           try{{
             const res=await fetch('/selection-profile?'+params.toString(), {{cache:'no-store'}});
             const js=await res.json();
+            if(seq !== profileRequestSeq) return;
             if(!res.ok){{throw new Error(js.error||'Auswahl konnte nicht geprüft werden.');}}
+            profileUpdating=false;
             renderProfile(js.profile);
           }}catch(e){{
+            if(seq !== profileRequestSeq) return;
+            profileUpdating=false; profileReady=false; profileRejected=true;
             byId('profileBox').innerHTML='<div class="error">Auswahl konnte nicht geprüft werden: '+escapeHtml(e.message||e)+'</div>';
-            const start=byId('startBtn'); if(start) start.disabled=true;
+            refreshStartButton();
           }}
         }}
         async function startAnalysis(confirmExtended=false){{
+          if(profileUpdating || !profileReady || profileRejected){{
+            setStatus('Bitte warten: Die Informationen zu den ausgewählten Dateien werden noch aktualisiert oder die Auswahl ist nicht gültig.', 0, 'info');
+            refreshStartButton();
+            return;
+          }}
           const form=byId('analysisForm'); const data=new FormData(form);
           if(confirmExtended) data.append('extended_confirm','1');
           setBusy(true); setStatus('Analyse wird angefordert...', 5, 'info');
@@ -612,6 +646,7 @@ def build_app() -> FastAPI:
           const sel=byId('filesSelect'); if(sel) sel.addEventListener('change', updateProfile);
           const start=byId('startBtn'); if(start) start.addEventListener('click', function(){{startAnalysis(false);}});
           const cancel=byId('cancelBtn'); if(cancel) cancel.addEventListener('click', cancelAnalysis);
+          refreshStartButton();
           updateProfile();
           if(currentJobId) pollStatus();
         }});
