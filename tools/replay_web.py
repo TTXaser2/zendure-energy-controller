@@ -60,7 +60,7 @@ from replay_report import (  # noqa: E402
 try:
     from version import APP_VERSION as REPLAY_VERSION  # noqa: E402
 except Exception:  # pragma: no cover
-    REPLAY_VERSION = "12.8.6"
+    REPLAY_VERSION = "12.8.9"
 
 SAFE_DEFAULTS = AnalysisLimits(max_files=4, max_total_bytes=12 * 1024 * 1024, max_rows=40_000)
 EXTENDED_DEFAULTS = AnalysisLimits(max_files=5, max_total_bytes=18 * 1024 * 1024, max_rows=70_000)
@@ -209,6 +209,14 @@ def _scan_csv_profile(paths: Sequence[Path], max_scan_rows: int = 100_000) -> Di
     return {"estimated_rows": rows, "period_start": first_ts, "period_end": last_ts, "schema_errors": schema_errors[:5]}
 
 
+
+def _limits_to_dict(limits: AnalysisLimits) -> Dict[str, int]:
+    return {
+        "max_files": int(limits.max_files),
+        "max_total_bytes": int(limits.max_total_bytes),
+        "max_rows": int(limits.max_rows),
+    }
+
 def selection_profile(paths: Sequence[Path], cfg: Dict[str, Any]) -> Dict[str, Any]:
     total_size = sum(p.stat().st_size for p in paths)
     scan = _scan_csv_profile(paths)
@@ -242,8 +250,8 @@ def selection_profile(paths: Sequence[Path], cfg: Dict[str, Any]) -> Dict[str, A
         "needs_confirmation": needs_confirm,
         "rejected": rejected,
         "schema_errors": scan.get("schema_errors") or [],
-        "safe_limits": safe,
-        "extended_limits": ext,
+        "safe_limits": _limits_to_dict(safe),
+        "extended_limits": _limits_to_dict(ext),
     }
 
 
@@ -320,7 +328,7 @@ def analyze_snapshot(paths: Sequence[Path], cfg: Dict[str, Any], extended: bool,
 def render_result_html(result: Dict[str, Any], job_id: str) -> str:
     download_job = html.escape(job_id, quote=True)
     return f"""
-    <div class="toc" id="top">
+    <div class="toc" id="analysis-nav">
         <b>Navigation:</b>
         <a href="#kurzfazit">Kurzfazit</a><a href="#empfehlungen">Empfehlungen</a><a href="#diagramme">Diagramme</a>
         <a href="#datenqualitaet">Datenqualität</a><a href="#regler">Reglerqualität</a><a href="#stellreserve">Stellreserve</a>
@@ -336,7 +344,7 @@ def render_result_html(result: Dict[str, Any], job_id: str) -> str:
     <table>{recommendations_table(result)}</table>
     <p class="notice">Die Analyse liefert Hinweise auf wahrscheinliche Ursachen. Parameteränderungen sollten immer mit ausreichender Datenqualität und mehreren passenden Logzeiträumen gegengeprüft werden.</p>
     <h2 id="diagramme">Diagramme</h2>
-    <p class="section-intro">Die Diagramme sind verdichtete Balkendarstellungen. „MQTT verbessert“ bedeutet: Einige Zyklen nach einem Kommando wurde die absolute Netzabweichung kleiner. Diese Aussage ist grob, weil Last und PV parallel schwanken können.</p>
+    <p class="section-intro">Die Diagramme verdichten den analysierten Zeitraum. Sie zeigen je nach Diagramm Prozentanteile, Anzahl von Ereignissen oder aufsummierte Zeitdauer. Die Einheit steht direkt am jeweiligen Wert; Info-Texte erläutern Begriff, Basis und Interpretation.</p>
     {charts_html(result)}
     <h2 id="ueberblick">Überblick</h2><p class="section-intro">Basisdaten der Analyse: Dateien, Zeitraum, Messpunktanzahl und zeitliche Qualität der Daten.</p><table>{overview_table(result)}</table>
     <h2 id="datenqualitaet">Datenqualität</h2><p class="section-intro">Bewertet, ob die Datenbasis für belastbare Schlüsse ausreicht. Fehlende Netz-, SOC- oder Istwerte können die Aussagekraft einzelner Blöcke deutlich reduzieren.</p><table>{data_quality_table(result)}</table>
@@ -383,6 +391,19 @@ def _get_result_from_job(job_id: str) -> Tuple[Optional[Dict[str, Any]], Optiona
 def build_app() -> FastAPI:
     app = FastAPI(title="Zendure Replay Analyse", version=REPLAY_VERSION)
 
+    @app.get("/selection-profile")
+    def selection_profile_endpoint(files: Optional[List[str]] = Query(default=None), file: str = Query(default="")):
+        cfg = load_config()
+        base = log_dir_from_config(cfg)
+        selected = [f for f in (files or []) if f]
+        if file and file not in selected:
+            selected.append(file)
+        try:
+            paths = resolve_csv_files(base, selected)
+            return {"profile": selection_profile(paths, cfg)}
+        except Exception as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request, files: Optional[List[str]] = Query(default=None), file: str = Query(default="")):
         cfg = load_config()
@@ -408,6 +429,8 @@ def build_app() -> FastAPI:
                 errors = "".join(f"<li>{html.escape(e)}</li>" for e in profile.get("schema_errors") or [])
                 profile_html = f"""
                 <div class="analysis-profile {badge_cls}">
+                    <div class="profile-title">Informationen zu den ausgewählten Dateien</div>
+                    <div class="profile-explain">Diese Box zeigt Dateianzahl, Gesamtgröße, abgedeckten Zeitraum, geschätzte Messpunkte und das Auslastungsrisiko des Raspberry Pi für diese Analyseauswahl.</div>
                     <b>Auswahl:</b> {profile['file_count']} Datei(en), {profile['total_size_text']}, ca. {profile['estimated_rows']} Messpunkte<br>
                     <b>Zeitraum:</b> {html.escape(str(profile['period_start']))} bis {html.escape(str(profile['period_end']))}<br>
                     <b>Risiko:</b> {html.escape(profile['risk_text'])}
@@ -423,10 +446,15 @@ def build_app() -> FastAPI:
         dark_css = """
         body{background:#0f172a;color:#e5e7eb}.section{background:#111827;box-shadow:0 2px 10px rgba(0,0,0,.55)}
         table th{background:#263244;color:#e5e7eb} th,td{border-color:#475569}.toc{background:#111827;border-color:#334155}
-        .card{background:#1f2937;border-color:#374151}.notice{background:#10233d;border-color:#2563eb;color:#dbeafe}.analysis-profile{background:#1f2937}
+        .card{background:#1f2937;border-color:#374151}.notice{background:#10233d;border-color:#2563eb;color:#dbeafe}.analysis-profile{background:#1f2937;color:#e5e7eb}
+        .analysis-profile.ok{background:#064e3b;border-color:#22c55e;color:#dcfce7}.analysis-profile.warn{background:#713f12;border-color:#facc15;color:#fef9c3}.analysis-profile.bad{background:#7f1d1d;border-color:#ef4444;color:#fee2e2}
         select{background:#0b1220;color:#e5e7eb;border:1px solid #64748b}button{background:#243244;color:#e5e7eb;border:1px solid #64748b}
+        button:hover:not(:disabled){background:#334155}.statusline{background:#10233d;border-color:#2563eb;color:#dbeafe}.statusline.error{background:#7f1d1d;border-color:#ef4444;color:#fee2e2}.statusline.done{background:#064e3b;border-color:#22c55e;color:#dcfce7}
         .progressbox{background:#334155}.progressbar{background:#60a5fa}a{color:#7dd3fc}.section-intro{color:#cbd5e1}
-        .term-info div{color:#cbd5e1}.ok{background:#064e3b}.warn{background:#78350f}.bad{background:#7f1d1d}.neutral{background:#374151}
+        .term-info div{color:#cbd5e1}.ok{background:#065f46;color:#dcfce7}.warn{background:#facc15;color:#1f2937}.bad{background:#991b1b;color:#fee2e2}.neutral{background:#475569;color:#e5e7eb}
+        .badge.ok{background:#22c55e;color:#052e16}.badge.warn{background:#facc15;color:#1f2937}.badge.bad{background:#ef4444;color:#450a0a}.badge.neutral{background:#64748b;color:#f8fafc}
+        .verdict{background:#1f2937;border-color:#475569;color:#e5e7eb}.verdict h3,.verdict p{color:#e5e7eb}
+        .profile-title{color:#e5e7eb}.profile-explain{color:#cbd5e1}.chart-info div{color:#cbd5e1}.chart-info summary{color:#7dd3fc}
         """ if dark else """
         """
         return f"""
@@ -439,72 +467,154 @@ def build_app() -> FastAPI:
         .notice{{background:#eef6ff;border:1px solid #bfdbfe;padding:10px;border-radius:8px}}
         .small{{font-size:0.92em;color:#64748b}} select{{min-width:320px;max-width:100%}} button{{padding:7px 12px;border-radius:6px;cursor:pointer}}
         button:disabled{{opacity:.55;cursor:not-allowed}} .topnav{{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:10px}} .downloads a{{display:inline-block;margin-right:14px}}
-        .badge{{display:inline-block;padding:3px 8px;border-radius:999px;font-weight:bold}} .ok{{background:#dcfce7}} .warn{{background:#fef3c7}} .bad{{background:#fee2e2}} .neutral{{background:#e5e7eb}}
-        .term-info{{display:inline-block;margin-left:6px}}.term-info summary{{display:inline;color:#1565c0;cursor:pointer;font-weight:normal}}.term-info div{{margin-top:6px;color:#374151;font-weight:normal;line-height:1.35}}
+        .badge{{display:inline-block;padding:3px 8px;border-radius:999px;font-weight:bold}} .ok{{background:#dcfce7;color:#14532d}} .warn{{background:#fde68a;color:#78350f}} .bad{{background:#fee2e2;color:#7f1d1d}} .neutral{{background:#e5e7eb;color:#374151}}
+        .badge.ok{{background:#22c55e;color:#052e16}}.badge.warn{{background:#facc15;color:#1f2937}}.badge.bad{{background:#ef4444;color:#450a0a}}.badge.neutral{{background:#94a3b8;color:#0f172a}}
+        .term-info{{display:block;margin:3px 0 0 0}}.term-info summary{{display:inline-block;color:#1565c0;cursor:pointer;font-weight:normal}}.term-info div{{margin-top:6px;color:#374151;font-weight:normal;line-height:1.35}} .label-main{{font-weight:bold}}
         .toc{{position:sticky;top:0;background:#fff;border:1px solid #dbe4ef;padding:10px;border-radius:10px;margin-bottom:14px;z-index:5}}
         .toc a{{display:inline-block;margin:3px 8px 3px 0}} .cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0 16px}}
         .card{{border:1px solid #dbe4ef;border-radius:10px;padding:12px;background:#f8fafc;display:flex;justify-content:space-between;gap:8px;align-items:center}}
-        .chartgrid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}} .barrow{{display:grid;grid-template-columns:120px 1fr 70px;gap:8px;align-items:center;margin:6px 0}}
-        .barbox{{height:14px;background:#e5e7eb;border-radius:999px;overflow:hidden}} .bar{{height:14px;background:#93c5fd;border-radius:999px}}
+        .chartgrid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px}} .chart-card{{min-width:0}} .barrow{{display:grid;grid-template-columns:minmax(130px,1fr) 1.3fr minmax(150px,auto);gap:8px;align-items:start;margin:8px 0}}
+        .barbox{{height:14px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin-top:3px}} .bar{{height:14px;background:#93c5fd;border-radius:999px}} .chart-info{{margin:0 0 8px 0}} .chart-info summary{{color:#1565c0;cursor:pointer}} .chart-info div{{margin-top:6px;color:#475569;line-height:1.35}}
         h2{{scroll-margin-top:70px;border-bottom:1px solid #e5e7eb;padding-bottom:4px}} .section-intro{{margin-top:-4px;color:#475569;line-height:1.45}}
         .analysis-profile{{padding:10px;border-radius:8px;margin:12px 0;border:1px solid #cbd5e1}} .analysis-profile.ok{{border-color:#22c55e}} .analysis-profile.warn{{border-color:#f59e0b}} .analysis-profile.bad{{border-color:#ef4444}}
-        .statusline{{padding:10px;border-radius:8px;margin:12px 0;background:#eef6ff;border:1px solid #bfdbfe}} .progressbox{{height:14px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin-top:8px}} .progressbar{{height:14px;background:#93c5fd;width:0%}}
+        .profile-title{{font-weight:bold;font-size:1.05em;margin-bottom:4px}}.profile-explain{{font-size:.92em;color:#475569;margin-bottom:8px;line-height:1.35}}
+        .statusline{{padding:10px;border-radius:8px;margin:12px 0;background:#eef6ff;border:1px solid #bfdbfe;color:#1e3a8a;min-height:38px}} .statusline.error{{background:#fee2e2;border-color:#f87171;color:#7f1d1d}} .statusline.done{{background:#dcfce7;border-color:#22c55e;color:#064e3b}} .progressbox{{height:14px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin-top:8px}} .progressbar{{height:14px;background:#93c5fd;width:0%;transition:width .25s ease}}
         .verdict{{display:block;border:1px solid #dbe4ef;border-radius:10px;padding:14px;background:#f8fafc;margin:8px 0 14px}} .verdict h3{{margin:0 0 6px}}
         {dark_css}
-        </style></head><body class="mode-{html.escape(ui_mode, quote=True)}">
+        </style></head><body id="top" class="mode-{html.escape(ui_mode, quote=True)}">
         <div class="topnav"><a href="{html.escape(controller_url, quote=True)}">← Zurück zum Zendure Controller</a><span class="small">Analyse-Dienst: {html.escape(replay_url)}</span></div>
         <div class="section"><h1>Zendure Replay Analyse V{REPLAY_VERSION}</h1>
         <p>Separater Analyse-Dienst für CSV-Dateien im Schema <code>{CSV_SCHEMA}</code>. Der Live-Controller wird hiervon nicht importiert oder beeinflusst.</p>
-        <p class="notice">V12.8.6 startet Analysen nicht mehr automatisch beim Seitenaufruf. Große Analysen werden vorher geprüft; Downloads verwenden das gecachte Analyseergebnis.</p>
         <form id="analysisForm">
             <label>CSV-Dateien:</label><br>
-            <select name="files" multiple size="8">{options}</select><br><br>
-            {profile_html}
-            <button id="startBtn" type="button" onclick="startAnalysis()" {'disabled' if initial_running else ''}>Analyse starten</button>
-            <button id="cancelBtn" type="button" onclick="cancelAnalysis()" style="display:{'inline-block' if initial_running else 'none'}">Analyse abbrechen</button>
+            <select id="filesSelect" name="files" multiple size="8">{options}</select><br><br>
+            <div id="profileBox">{profile_html}</div>
+            <button id="startBtn" type="button" {'disabled' if initial_running else ''}>Analyse starten</button>
+            <button id="cancelBtn" type="button" style="display:{'inline-block' if initial_running else 'none'}">Analyse abbrechen</button>
         </form>
-        <div id="analysisStatus" class="statusline">{initial_status}<div class="progressbox"><div id="progressBar" class="progressbar" style="width:{int(initial_job.get('percent',0)) if initial_job else 0}%"></div></div></div>
+        <div id="analysisStatus" class="statusline"><span id="statusText">{initial_status}</span><div class="progressbox"><div id="progressBar" class="progressbar" style="width:{int(initial_job.get('percent',0)) if initial_job else 0}%"></div></div></div>
         <noscript><div class="error">Für Start-/Fortschrittsanzeige der Analyse ist JavaScript erforderlich.</div></noscript>
         </div>
         <div class="section" id="result"><h2>Analyseergebnis</h2><p class="section-intro">Noch kein Ergebnis in dieser Sitzung. Wähle Dateien aus und starte die Analyse explizit.</p></div>
         <script>
         let currentJobId = {json.dumps(initial_job.get('id') if initial_job else None)};
         let pollTimer = null;
-        function setBusy(busy){{document.getElementById('startBtn').disabled=busy;document.getElementById('cancelBtn').style.display=busy?'inline-block':'none';}}
-        function setStatus(text, percent){{document.getElementById('analysisStatus').firstChild.nodeValue=text;document.getElementById('progressBar').style.width=(percent||0)+'%';}}
-        async function startAnalysis(confirmExtended=false){{
-          const form=document.getElementById('analysisForm'); const data=new FormData(form);
-          if(confirmExtended) data.append('extended_confirm','1');
-          setBusy(true); setStatus('Analyse wird angefordert...', 5);
+        function byId(id){{return document.getElementById(id);}}
+        function setBusy(busy){{
+          const start=byId('startBtn'); const cancel=byId('cancelBtn');
+          if(start) start.disabled=busy;
+          if(cancel) cancel.style.display=busy?'inline-block':'none';
+        }}
+        function setStatus(text, percent, kind='info'){{
+          const box=byId('analysisStatus'); const bar=byId('progressBar'); const textNode=byId('statusText');
+          if(textNode) textNode.textContent=text||'';
+          if(box){{box.classList.remove('error','done'); if(kind==='error') box.classList.add('error'); if(kind==='done') box.classList.add('done');}}
+          if(bar) bar.style.width=Math.max(0, Math.min(100, Number(percent)||0))+'%';
+        }}
+        function selectedFiles(){{
+          const sel=byId('filesSelect'); if(!sel) return [];
+          return Array.from(sel.selectedOptions).map(o=>o.value).filter(Boolean);
+        }}
+        function escapeHtml(value){{return String(value).replace(/[&<>'"]/g, ch => ({{'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}}[ch]));}}
+        function renderProfile(profile){{
+          const box=byId('profileBox'); if(!box) return;
+          if(!profile){{box.innerHTML='<div class="analysis-profile bad"><div class="profile-title">Informationen zu den ausgewählten Dateien</div><div class="profile-explain">Bitte mindestens eine CSV-Datei auswählen.</div><b>Auswahl:</b> Keine gültige Auswahl.</div>'; return;}}
+          const cls = profile.risk==='pi-safe' ? 'ok' : (profile.risk==='extended' ? 'warn' : 'bad');
+          const errors = (profile.schema_errors||[]).map(e=>'<li>'+escapeHtml(e)+'</li>').join('');
+          box.innerHTML = '<div class="analysis-profile '+cls+'">'
+            + '<div class="profile-title">Informationen zu den ausgewählten Dateien</div>'
+            + '<div class="profile-explain">Diese Box zeigt Dateianzahl, Gesamtgröße, abgedeckten Zeitraum, geschätzte Messpunkte und das Auslastungsrisiko des Raspberry Pi für diese Analyseauswahl.</div>'
+            + '<b>Auswahl:</b> '+profile.file_count+' Datei(en), '+profile.total_size_text+', ca. '+profile.estimated_rows+' Messpunkte<br>'
+            + '<b>Zeitraum:</b> '+escapeHtml(profile.period_start||'-')+' bis '+escapeHtml(profile.period_end||'-')+'<br>'
+            + '<b>Risiko:</b> '+escapeHtml(profile.risk_text||'-')
+            + (errors ? '<ul>'+errors+'</ul>' : '') + '</div>';
+          const start=byId('startBtn'); if(start) start.disabled=!!profile.rejected || profile.file_count < 1;
+        }}
+        async function updateProfile(){{
+          const files=selectedFiles();
+          if(files.length<1){{renderProfile(null); return;}}
+          const params=new URLSearchParams(); files.forEach(f=>params.append('files', f));
           try{{
-            const res=await fetch('/start-analysis',{{method:'POST',body:data}}); const js=await res.json();
+            const res=await fetch('/selection-profile?'+params.toString(), {{cache:'no-store'}});
+            const js=await res.json();
+            if(!res.ok){{throw new Error(js.error||'Auswahl konnte nicht geprüft werden.');}}
+            renderProfile(js.profile);
+          }}catch(e){{
+            byId('profileBox').innerHTML='<div class="error">Auswahl konnte nicht geprüft werden: '+escapeHtml(e.message||e)+'</div>';
+            const start=byId('startBtn'); if(start) start.disabled=true;
+          }}
+        }}
+        async function startAnalysis(confirmExtended=false){{
+          const form=byId('analysisForm'); const data=new FormData(form);
+          if(confirmExtended) data.append('extended_confirm','1');
+          setBusy(true); setStatus('Analyse wird angefordert...', 5, 'info');
+          byId('result').innerHTML='<h2>Analyseergebnis</h2><p class="section-intro">Analyse wurde gestartet. Ergebnis erscheint nach Abschluss automatisch.</p>';
+          try{{
+            const res=await fetch('/start-analysis',{{method:'POST',body:data}});
+            const js=await res.json().catch(()=>({{error:'Ungültige Serverantwort'}}));
+            if(js.profile) renderProfile(js.profile);
             if(js.requires_confirmation){{
-              setBusy(false); setStatus(js.message||'Große Analyse erfordert Bestätigung.',0);
-              if(confirm((js.message||'Große Analyse starten?')+'\n\nWeiter?')) startAnalysis(true);
+              setBusy(false); setStatus(js.message||'Große Analyse erfordert Bestätigung.',0,'info');
+              if(confirm((js.message||'Große Analyse starten?')+'\\n\\nWeiter?')) startAnalysis(true);
               return;
             }}
-            if(!res.ok){{setBusy(false); setStatus(js.error||'Analyse konnte nicht gestartet werden.',0); return;}}
-            currentJobId=js.job_id; setStatus(js.phase||'Analyse gestartet', js.percent||10); if(js.status==='done'){{setBusy(false); loadResult(); return;}} pollStatus();
-          }}catch(e){{setBusy(false); setStatus('Fehler beim Start: '+e,0);}}
+            if(!res.ok){{
+              setBusy(false); setStatus(js.error||'Analyse konnte nicht gestartet werden.',0,'error');
+              byId('result').innerHTML='<h2>Analyseergebnis</h2><div class="error">'+escapeHtml(js.error||'Analyse konnte nicht gestartet werden.')+'</div>';
+              return;
+            }}
+            currentJobId=js.job_id; setStatus(js.phase||'Analyse gestartet', js.percent||10, 'info');
+            if(js.status==='done'){{setBusy(false); setStatus(js.phase||'Analyse abgeschlossen',100,'done'); loadResult(); return;}}
+            pollStatus();
+          }}catch(e){{
+            setBusy(false); setStatus('Fehler beim Start: '+(e.message||e),0,'error');
+            byId('result').innerHTML='<h2>Analyseergebnis</h2><div class="error">Fehler beim Start: '+escapeHtml(e.message||e)+'</div>';
+          }}
         }}
         async function pollStatus(){{
           if(!currentJobId) return;
           try{{
-            const res=await fetch('/analysis-status?job_id='+encodeURIComponent(currentJobId)); const js=await res.json();
-            setStatus((js.phase||js.status||'-'), js.percent||0);
-            if(js.status==='done'){{setBusy(false); clearTimeout(pollTimer); loadResult(); return;}}
-            if(js.status==='error'||js.status==='cancelled'){{setBusy(false); clearTimeout(pollTimer); document.getElementById('result').innerHTML='<h2>Analyseergebnis</h2><div class="error">'+(js.error||js.phase||'Analyse beendet')+'</div>'; return;}}
+            const res=await fetch('/analysis-status?job_id='+encodeURIComponent(currentJobId), {{cache:'no-store'}}); const js=await res.json();
+            const status=js.status||'none';
+            if(status==='done'){{
+              setBusy(false); clearTimeout(pollTimer); setStatus(js.phase||'Analyse abgeschlossen',100,'done'); loadResult(); return;
+            }}
+            if(status==='cancelled'||status==='canceled'){{
+              setBusy(false); clearTimeout(pollTimer); setStatus(js.phase||'Analyse wurde abgebrochen. Bereit für neue Analyse.',100,'done');
+              byId('result').innerHTML='<h2>Analyseergebnis</h2><p class="section-intro">Analyse wurde abgebrochen. Es läuft keine Analyse mehr; du kannst jetzt eine neue Analyse starten.</p>'; return;
+            }}
+            if(status==='error'){{
+              setBusy(false); clearTimeout(pollTimer); setStatus(js.error||js.phase||'Analysefehler',100,'error');
+              byId('result').innerHTML='<h2>Analyseergebnis</h2><div class="error">'+escapeHtml(js.error||js.phase||'Analysefehler')+'</div>'; return;
+            }}
+            setStatus((js.phase||status||'-'), js.percent||0, 'info');
             setBusy(true); pollTimer=setTimeout(pollStatus, 1500);
-          }}catch(e){{setStatus('Warte auf Analyse-Status...',20); pollTimer=setTimeout(pollStatus,2500);}}
+          }}catch(e){{setStatus('Warte auf Analyse-Status...',20,'info'); pollTimer=setTimeout(pollStatus,2500);}}
         }}
         async function loadResult(){{
-          const res=await fetch('/analysis-result?job_id='+encodeURIComponent(currentJobId));
-          document.getElementById('result').innerHTML=await res.text();
+          try{{
+            const res=await fetch('/analysis-result?job_id='+encodeURIComponent(currentJobId), {{cache:'no-store'}});
+            const text=await res.text();
+            byId('result').innerHTML=text;
+            if(!res.ok) setStatus('Analyse abgeschlossen, aber Ergebnis konnte nicht geladen werden.',100,'error');
+          }}catch(e){{setStatus('Analyse abgeschlossen, Ergebnisabruf fehlgeschlagen: '+(e.message||e),100,'error');}}
         }}
         async function cancelAnalysis(){{
-          if(!currentJobId) return; await fetch('/cancel-analysis?job_id='+encodeURIComponent(currentJobId),{{method:'POST'}}); setStatus('Abbruch angefordert...',50);
+          if(!currentJobId) return;
+          try{{
+            const res=await fetch('/cancel-analysis?job_id='+encodeURIComponent(currentJobId),{{method:'POST'}});
+            const js=await res.json().catch(()=>({{phase:'Abbruch angefordert'}}));
+            setStatus(js.phase||'Abbruch angefordert...',50,'info');
+            pollStatus();
+          }}catch(e){{setStatus('Abbruch konnte nicht angefordert werden: '+(e.message||e),0,'error');}}
         }}
-        if(currentJobId) pollStatus();
+        document.addEventListener('DOMContentLoaded', function(){{
+          const sel=byId('filesSelect'); if(sel) sel.addEventListener('change', updateProfile);
+          const start=byId('startBtn'); if(start) start.addEventListener('click', function(){{startAnalysis(false);}});
+          const cancel=byId('cancelBtn'); if(cancel) cancel.addEventListener('click', cancelAnalysis);
+          updateProfile();
+          if(currentJobId) pollStatus();
+        }});
         </script>
         </body></html>
         """
@@ -556,7 +666,10 @@ def build_app() -> FastAPI:
                         job.update({"status": "done", "phase": "Analyse abgeschlossen", "percent": 100, "result": result, "html": html_result, "finished": time.time()})
                 except Exception as exc:
                     with _job_lock:
-                        job.update({"status": "cancelled" if cancel_event.is_set() else "error", "phase": "Analyse abgebrochen" if cancel_event.is_set() else "Analysefehler", "percent": 100, "error": str(exc), "finished": time.time()})
+                        if cancel_event.is_set():
+                            job.update({"status": "cancelled", "phase": "Analyse wurde abgebrochen. Bereit für neue Analyse.", "percent": 100, "error": "", "finished": time.time()})
+                        else:
+                            job.update({"status": "error", "phase": "Analysefehler", "percent": 100, "error": str(exc), "finished": time.time()})
 
             threading.Thread(target=worker, name="zec-analysis", daemon=True).start()
             return {"job_id": job_id, "status": "running", "phase": "Analyse gestartet", "percent": 10, "profile": profile}
@@ -590,7 +703,7 @@ def build_app() -> FastAPI:
             if cancel_event:
                 cancel_event.set()
             _current_job["phase"] = "Abbruch angefordert"
-            return {"status": "cancelling", "phase": "Abbruch angefordert"}
+            return {"status": "cancelling", "phase": "Abbruch angefordert. Bitte warten, bis die Analyse beendet wurde."}
 
     @app.get("/report.txt")
     def report_txt(job_id: str = Query(default="")):

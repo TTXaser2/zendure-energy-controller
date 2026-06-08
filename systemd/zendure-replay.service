@@ -2,6 +2,8 @@
 Description=Zendure Energy Controller Replay/CSV Analyse
 Wants=network-online.target
 After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=3
 
 [Service]
 Type=simple
@@ -11,8 +13,6 @@ WorkingDirectory=/opt/zendure-controller
 ExecStart=/usr/bin/python3 /opt/zendure-controller/tools/replay_web.py --host 0.0.0.0 --port 8090
 Restart=on-failure
 RestartSec=10
-StartLimitIntervalSec=300
-StartLimitBurst=3
 Environment=PYTHONUNBUFFERED=1
 
 # V12.8.5: Ressourcenschutz für Raspberry-Pi-Betrieb.
@@ -28,7 +28,8 @@ Nice=10
 IOSchedulingClass=idle
 IOSchedulingPriority=7
 
-# Der Replay-Dienst ist bewusst von der Live-Regelung getrennt und wird nicht automatisch aktiviert.
+# Der Replay-Dienst ist bewusst von der Live-Regelung getrennt.
+# Er kann dauerhaft aktiviert oder bei Bedarf manuell gestartet werden.
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full

@@ -83,7 +83,7 @@ TERM_HELP.update({
     "MQTT-Wirkung": "Grobe Diagnose, ob gesendete Leistungsbefehle wenige Messzyklen später eine kleinere absolute Netzabweichung bewirken. Die Bewertung ist nicht kausal beweisend, weil PV und Hauslast gleichzeitig schwanken können.",
     "Nicht bewertbar": "Der Effekt konnte nicht belastbar beurteilt werden, z. B. wegen Safe-State, fehlenden Folgemesspunkten, Datenlücken oder stark überlagernden Last-/PV-Sprüngen.",
     "Ø / Median / max dt_s": "Zeitabstand der Messpunkte. Der Median beschreibt den typischen Takt, der Maximalwert zeigt Datenlücken oder Hänger. Große dt_s-Werte reduzieren die Belastbarkeit der Analyse.",
-    "95%-Perzentil |Netz|": "95 Prozent der betrachteten Werte liegen unterhalb dieses Betrags. Robuster als der Maximalwert, weil einzelne Ausreißer weniger dominieren.",
+    "95%-Perzentil Soll/Ist-Abweichung": "95 Prozent der betrachteten Soll-/Ist-Abweichungen liegen unterhalb dieses Betrags. Robuster als der Maximalwert, weil einzelne Ausreißer weniger dominieren.",
     "Kritische Überschneidungszeit": "Gesamtdauer, in der die Zusatzbatterie entlädt und Zendure gleichzeitig lädt. Das ist im Systemkontext unerwünscht, weil Energie zwischen Speichern umgeladen werden kann.",
     "Max. SMA-Entladung während Überschneidung": "Höchste erkannte Entladeleistung der Zusatzbatterie während gleichzeitiger Zendure-Ladung.",
     "Ø SMA-Entladung während Überschneidung": "Durchschnittliche Entladeleistung der Zusatzbatterie während kritischer Cross-Charge-Phasen.",
@@ -95,10 +95,26 @@ TERM_HELP.update({
     "Hinweise": "Datenqualitäts- und Analysehinweise. Diese Meldungen erklären, warum bestimmte Kennzahlen nur eingeschränkt belastbar sind.",
 })
 
+TERM_HELP.update({
+    "Abweichungsursachen": "Dieses Diagramm klassifiziert gewichtete Netzabweichungen danach, ob der Controller im jeweiligen Zustand theoretisch gegensteuern konnte. Die Werte werden als Prozentanteil der gewichteten Abweichung angezeigt.",
+    "Beeinflussbar": "Im Controller-Kontext bedeutet das: Zendure hatte im jeweiligen Zustand grundsätzlich Stellmöglichkeit und hätte die Netzabweichung theoretisch reduzieren können. Es heißt nicht automatisch, dass der Benutzer nur einen Parameter ändern muss.",
+    "Nicht beeinflussbar": "Abweichungen, die wegen SOC-Grenze, Leistungsgrenze, Safe-State, fehlender Daten oder anderer Randbedingungen nicht sinnvoll dem Regleralgorithmus zugerechnet werden sollten.",
+    "Betriebszustände": "Dieses Diagramm zeigt, wie lange der Controller in den wichtigsten abgeleiteten Betriebszuständen war. Angezeigt wird Dauer plus Prozentanteil am analysierten Zeitraum.",
+    "SAFE_STATE": "Sicherheitszustand. Der Controller begrenzt oder stoppt Stellbefehle, weil eine erforderliche Datenquelle oder Bedingung nicht belastbar ist.",
+    "HOLD_DEADBAND": "Haltezustand im Deadband. Die Netzabweichung liegt im Toleranzbereich, daher vermeidet der Controller unnötige neue Kommandos.",
+    "AUTO_DISCHARGE": "Automatikbetrieb mit Entladeanforderung an Zendure, um Netzbezug zu reduzieren.",
+    "AUTO_CHARGE": "Automatikbetrieb mit Ladeanforderung an Zendure, um Einspeisung zu reduzieren.",
+    "Verbessert": "Einige Messzyklen nach einem MQTT-Kommando war die absolute Netzabweichung kleiner. Das ist ein Hinweis auf wirksame Regelung, aber kein harter Kausalbeweis, weil PV und Hauslast parallel schwanken können.",
+    "Neutral": "Nach dem MQTT-Kommando war keine eindeutige Verbesserung oder Verschlechterung erkennbar.",
+    "Verschlechtert": "Einige Messzyklen nach einem MQTT-Kommando war die absolute Netzabweichung größer. Einzelne Fälle können durch Last-/PV-Sprünge entstehen; Häufung wäre auffällig.",
+    "Anzahl": "Absolute Anzahl von Messpunkten, Kommandos oder Ereignissen. Für die Interpretation ist die jeweilige Basis wichtig.",
+    "Anteil": "Prozentanteil bezogen auf die im jeweiligen Block genannte Basis, z. B. bewertbare Kommandos oder analysierte Zeitdauer.",
+})
+
 try:
     from version import APP_VERSION as REPORT_VERSION
 except Exception:  # pragma: no cover
-    REPORT_VERSION = "12.8.6"
+    REPORT_VERSION = "12.8.9"
 
 
 def _duration(seconds: float) -> str:
@@ -134,6 +150,24 @@ def _w(value: Any) -> str: return _num(value, " W", 1, trim=True)
 def _pct(value: Any) -> str: return _num(value, " %", 1, trim=True)
 def _per_hour(value: Any) -> str: return _num(value, " / h", 1, trim=True)
 
+def _count(value: Any, label: str = "") -> str:
+    try:
+        number = int(round(float(value or 0)))
+    except Exception:
+        number = 0
+    suffix = f" {label}" if label else ""
+    return f"{_format_de_number(number, 0)}{suffix}"
+
+def _pct_with_basis(percent: Any, basis: Any = None) -> str:
+    if basis not in (None, ""):
+        return f"{_pct(percent)} von {_format_de_number(basis, 0)}"
+    return _pct(percent)
+
+def _duration_with_percent(seconds: Any, percent: Any = None) -> str:
+    if percent is None:
+        return _duration(seconds)
+    return f"{_duration(seconds)} ({_pct(percent)})"
+
 
 def _states_summary(states: Dict[str, Any]) -> str:
     order = ["ok", "suspect", "limited", "not_accepting"]
@@ -154,8 +188,8 @@ def _label_cell(label: str) -> SafeHtml:
     help_text = TERM_HELP.get(label_text)
     escaped = html.escape(label_text)
     if not help_text:
-        return SafeHtml(escaped)
-    return SafeHtml(f"<span>{escaped}</span> <details class='term-info'><summary>info</summary><div>{html.escape(help_text)}</div></details>")
+        return SafeHtml(f"<div class='label-main'>{escaped}</div>")
+    return SafeHtml(f"<div class='label-main'>{escaped}</div><details class='term-info'><summary>info</summary><div>{html.escape(help_text)}</div></details>")
 
 
 def _cell(value: Any) -> str:
@@ -176,8 +210,8 @@ def _th(label: str) -> str: return str(_label_cell(label))
 
 
 def _rating_badge(value: str) -> SafeHtml:
-    cls = {"green": "ok", "yellow": "warn", "red": "bad", "ok": "ok", "warning": "warn", "error": "bad"}.get(value, "neutral")
-    label = {"green": "grün", "yellow": "gelb", "red": "rot", "ok": "ok", "warning": "Warnung", "error": "Fehler"}.get(value, value)
+    cls = {"green": "ok", "yellow": "warn", "amber": "warn", "red": "bad", "ok": "ok", "warning": "warn", "error": "bad", "gray": "neutral", "grey": "neutral", "-": "neutral"}.get(str(value), "neutral")
+    label = {"green": "grün", "yellow": "gelb", "amber": "gelb", "red": "rot", "ok": "ok", "warning": "Warnung", "error": "Fehler", "gray": "nicht bewertbar", "grey": "nicht bewertbar", "-": "nicht bewertbar"}.get(str(value), str(value))
     return SafeHtml(f"<span class='badge {cls}'>{html.escape(label)}</span>")
 
 
@@ -338,7 +372,7 @@ def tracking_table(result: Dict[str, Any]) -> str:
     return _table([
         ("Ampel", _rating_badge(str(tr.get("rating", "-")))),
         ("Ø Soll/Ist-Abweichung", _w(tr.get("avg_error_w", 0))),
-        ("95%-Perzentil |Netz|", _w(tr.get("p95_error_w", 0))),
+        ("95%-Perzentil Soll/Ist-Abweichung", _w(tr.get("p95_error_w", 0))),
         ("Ziel gut erreicht", _pct(tr.get("good_tracking_percent", 0))),
         ("Ziel deutlich verfehlt", _pct(tr.get("bad_tracking_percent", 0))),
         ("Anforderung ohne Reaktion", _duration(tr.get("target_without_actual_seconds", 0))),
@@ -361,7 +395,7 @@ def deadband_table(result: Dict[str, Any]) -> str:
     return _table([
         ("Ampel", _rating_badge(str(db.get("rating", "-")))),
         ("Zeit im Deadband", f"{_duration(db.get('inside_deadband_seconds', 0))} ({_pct(db.get('inside_deadband_percent', 0))})"),
-        ("Zeit im erweiterten Zielband", _pct(db.get("inside_extended_band_percent", 0))),
+        ("Zeit im erweiterten Zielband", f"{_duration(db.get('inside_extended_band_seconds', 0))} ({_pct(db.get('inside_extended_band_percent', 0))})"),
         ("HOLD korrekt im Deadband", _pct(db.get("hold_inside_deadband_percent", 0))),
         ("Außerhalb Deadband mit Reserve", f"{_duration(db.get('outside_deadband_with_reserve_seconds', 0))} ({_pct(db.get('outside_deadband_with_reserve_percent', 0))})"),
         ("Kommandos im Deadband", db.get("commands_inside_deadband", 0)),
@@ -375,9 +409,9 @@ def command_efficiency_table(result: Dict[str, Any]) -> str:
         ("MQTT-Kommandos gesamt", ce.get("commands_total", 0)),
         ("Kommandos pro aktiver Regelstunde", _per_hour(ce.get("commands_per_active_hour", 0))),
         ("Ø / max Sollwertsprung", f"{_w(ce.get('avg_target_step_w', 0))} / {_w(ce.get('max_target_step_w', 0))}"),
-        ("Erkennbare Verbesserung", f"{ce.get('improved_count', 0)} ({_pct(ce.get('improved_percent', 0))})"),
-        ("Keine erkennbare Wirkung", f"{ce.get('neutral_count', 0)} ({_pct(ce.get('no_effect_percent', 0))})"),
-        ("Nicht bewertbar", ce.get("unknown_count", 0)),
+        ("Erkennbare Verbesserung", f"{_count(ce.get('improved_count', 0), 'Kommandos')} ({_pct(ce.get('improved_percent', 0))} der bewertbaren Kommandos)"),
+        ("Keine erkennbare Wirkung", f"{_count(ce.get('neutral_count', 0), 'Kommandos')} ({_pct(ce.get('no_effect_percent', 0))} der bewertbaren Kommandos)"),
+        ("Nicht bewertbar", f"{_count(ce.get('unknown_count', 0), 'Kommandos')}"),
     ])
 
 
@@ -418,7 +452,7 @@ def high_soc_table(result: Dict[str, Any]) -> str:
         ("Zeit bei MIN_SOC", _duration(result.get("time_at_min_soc_seconds", 0))),
         ("Zeit bei MAX_SOC", _duration(result.get("time_at_max_soc_seconds", 0))),
         ("High-SOC-Ladeannahme", _states_summary(states)),
-        ("Einordnung", "V12.8.5 zählt High-SOC weiterhin leichtgewichtig; Schwerpunkt sind faire Reglerqualität, Stellreserve und Cross-Charge."),
+        ("Einordnung", "V12.8.9 zählt High-SOC weiterhin leichtgewichtig; Schwerpunkt sind faire Reglerqualität, Stellreserve und Cross-Charge."),
     ])
 
 
@@ -432,21 +466,76 @@ def events_table(result: Dict[str, Any], limit: int = 120) -> str:
     return rows
 
 
+def _chart_info(title: str, text: str) -> str:
+    return f"<details class='chart-info'><summary>info</summary><div>{html.escape(text)}</div></details>"
+
+
+def _bar_value(label: str, value_text: str, width_value: float, max_value: float, help_key: str = "", css: str = "bar") -> SafeHtml:
+    width = 0 if max_value <= 0 else max(0.0, min(100.0, float(width_value or 0) / max_value * 100.0))
+    help_html = ""
+    help_text = TERM_HELP.get(help_key or label)
+    if help_text:
+        help_html = f"<details class='term-info'><summary>info</summary><div>{html.escape(help_text)}</div></details>"
+    return SafeHtml(
+        f"<div class='barrow'><span>{html.escape(label)}{help_html}</span>"
+        f"<div class='barbox'><div class='{css}' style='width:{width:.1f}%'></div></div>"
+        f"<b>{html.escape(value_text)}</b></div>"
+    )
+
+
+def _bars_text(items: List[Tuple[str, str, float, str]], css: str = "bar") -> SafeHtml:
+    if not items:
+        return SafeHtml("<p>Keine Diagrammdaten.</p>")
+    max_value = max([abs(float(v or 0)) for _, _, v, _ in items] + [1.0])
+    return SafeHtml("".join(str(_bar_value(label, text, width, max_value, help_key, css)) for label, text, width, help_key in items))
+
+
 def charts_html(result: Dict[str, Any]) -> str:
     fq = result.get("fair_regulator_quality") or {}
     db = result.get("deadband") or {}
     ce = result.get("command_efficiency") or {}
-    state_items = [(str(i.get("mode")), float(i.get("seconds", 0))) for i in (result.get("operating_state_matrix") or [])[:8]]
-    html_parts = [
-        "<div class='chartgrid'>",
-        "<div><h4>Abweichungsursachen</h4>" + str(_bars([("beeinflussbar", fq.get("controllable_percent", 0)), ("nicht beeinflussbar", fq.get("non_controllable_percent", 0))], "bar")) + "</div>",
-        "<div><h4>Deadband</h4>" + str(_bars([("Deadband", db.get("inside_deadband_percent", 0)), ("erweitert", db.get("inside_extended_band_percent", 0)), ("außerhalb mit Reserve", db.get("outside_deadband_with_reserve_percent", 0))], "bar")) + "</div>",
-        "<div><h4>Betriebszustände</h4>" + str(_bars(state_items, "bar")) + "</div>",
-        "<div><h4>MQTT-Wirkung</h4>" + str(_bars([("verbessert", ce.get("improved_count", 0)), ("neutral", ce.get("neutral_count", 0)), ("verschlechtert", ce.get("worse_count", 0)), ("nicht bewertbar", ce.get("unknown_count", 0))], "bar")) + "</div>",
-        "</div>",
-    ]
+    state_items = []
+    for item in (result.get("operating_state_matrix") or [])[:8]:
+        seconds = float(item.get("seconds", 0) or 0)
+        percent = item.get("percent", 0)
+        state_items.append((str(item.get("mode")), f"{_duration(seconds)} / {_pct(percent)}", seconds, str(item.get("mode"))))
+    command_basis = int((ce.get("improved_count", 0) or 0) + (ce.get("neutral_count", 0) or 0) + (ce.get("worse_count", 0) or 0))
+    html_parts = ["<div class='chartgrid'>"]
+    html_parts.append(
+        "<div class='chart-card'><h4>Abweichungsursachen</h4>"
+        + _chart_info("Abweichungsursachen", "Prozentanteile der gewichteten Netzabweichung. Beeinflussbar bedeutet: Der Controller hatte in diesem Zustand grundsätzlich Stellmöglichkeit; nicht beeinflussbar umfasst z. B. SOC-, Leistungs-, Safe-State- oder Datenlimits.")
+        + str(_bars_text([
+            ("beeinflussbar", f"{_pct(fq.get('controllable_percent', 0))} der gewichteten Abweichung", fq.get("controllable_percent", 0), "Beeinflussbar"),
+            ("nicht beeinflussbar", f"{_pct(fq.get('non_controllable_percent', 0))} der gewichteten Abweichung", fq.get("non_controllable_percent", 0), "Nicht beeinflussbar"),
+        ])) + "</div>"
+    )
+    html_parts.append(
+        "<div class='chart-card'><h4>Deadband</h4>"
+        + _chart_info("Deadband", "Zeitanteile bezogen auf den analysierten Zeitraum. Deadband heißt: Der Regler soll bewusst ruhig bleiben, damit kleine Schwankungen nicht ständig neue MQTT-Kommandos auslösen.")
+        + str(_bars_text([
+            ("Deadband", f"{_duration(db.get('inside_deadband_seconds', 0))} / {_pct(db.get('inside_deadband_percent', 0))}", db.get("inside_deadband_percent", 0), "Deadband"),
+            ("erweitert", f"{_duration(db.get('inside_extended_band_seconds', 0))} / {_pct(db.get('inside_extended_band_percent', 0))}", db.get("inside_extended_band_percent", 0), "Zeit im erweiterten Zielband"),
+            ("außerhalb mit Reserve", f"{_duration(db.get('outside_deadband_with_reserve_seconds', 0))} / {_pct(db.get('outside_deadband_with_reserve_percent', 0))}", db.get("outside_deadband_with_reserve_percent", 0), "Außerhalb Deadband mit Reserve"),
+        ])) + "</div>"
+    )
+    html_parts.append(
+        "<div class='chart-card'><h4>Betriebszustände</h4>"
+        + _chart_info("Betriebszustände", "Aufsummierte Zeit je abgeleitetem Betriebszustand. Die menschenlesbare Dauer und der Prozentanteil zeigen, wo der Controller den ausgewählten Zeitraum überwiegend verbracht hat.")
+        + str(_bars_text(state_items)) + "</div>"
+    )
+    html_parts.append(
+        "<div class='chart-card'><h4>MQTT-Wirkung</h4>"
+        + _chart_info("MQTT-Wirkung", "Anzahl der MQTT-Kommandos nach grober Wirkung. Verbessert bedeutet: einige Zyklen später war die absolute Netzabweichung kleiner. Die Aussage ist ein Hinweis, kein Kausalbeweis, weil PV und Hauslast parallel schwanken können.")
+        + str(_bars_text([
+            ("verbessert", f"{_count(ce.get('improved_count', 0), 'Kommandos')} / {_pct(ce.get('improved_percent', 0))} der bewertbaren", ce.get("improved_count", 0), "Verbessert"),
+            ("neutral", f"{_count(ce.get('neutral_count', 0), 'Kommandos')} / {_pct(ce.get('no_effect_percent', 0))} der bewertbaren", ce.get("neutral_count", 0), "Neutral"),
+            ("verschlechtert", f"{_count(ce.get('worse_count', 0), 'Kommandos')}", ce.get("worse_count", 0), "Verschlechtert"),
+            ("nicht bewertbar", f"{_count(ce.get('unknown_count', 0), 'Kommandos')}", ce.get("unknown_count", 0), "Nicht bewertbar"),
+        ]))
+        + f"<p class='small'>Bewertbare Basis: {_count(command_basis, 'Kommandos')}.</p></div>"
+    )
+    html_parts.append("</div>")
     return "".join(html_parts)
-
 
 def text_report(result: Dict[str, Any]) -> str:
     fq = result.get("fair_regulator_quality") or {}; ce = result.get("command_efficiency") or {}; db = result.get("deadband") or {}

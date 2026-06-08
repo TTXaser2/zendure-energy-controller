@@ -1,6 +1,6 @@
-Zendure Energy Controller Version 12.8.6
+Zendure Energy Controller Version 12.8.9
 
-# Zendure Energy Controller V12.8.6
+# Zendure Energy Controller V12.8.9
 
 Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, CSV-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
@@ -8,6 +8,42 @@ Copyright (c) 2026 Eduard Fuchs <info@eduardfuchs.de>
 
 Lizenziert unter AGPL-3.0-or-later. Siehe `LICENSE`, `NOTICE` und `DISCLAIMER.md`.
 
+
+## Wichtige Änderungen in V12.8.9
+
+V12.8.9 ist eine Analyse-Webseiten-Version mit Schwerpunkt Verständlichkeit, Bedienrückmeldung und Dark-Mode-Lesbarkeit:
+
+- Extended-/Warn-Analysen geben wieder JSON-serialisierbare Auswahlprofile zurück; der Fehler `Object of type AnalysisLimits is not JSON serializable` ist behoben.
+- Die Release-Hinweisbox wurde von der Analyse-Webseite entfernt; Release-Details stehen in README/Technical Notes.
+- Auswahl-/Risikobox mit Überschrift und Erklärung ergänzt.
+- Abbruch einer Analyse bestätigt nun klar, dass die Analyse abgebrochen wurde und eine neue Analyse gestartet werden kann.
+- Kurzfazit-/Bewertungsboxen, Ampel-Badges und Statusbereiche wurden im Dark Mode kontrastreicher gestaltet.
+- Ampelfarben sind systematischer: grün = ok, gelb/amber = prüfen, rot = kritisch, grau = nicht bewertbar.
+- Info-Aufklapper sind layout-stabiler, damit Labels/Überschriften beim Öffnen nicht verrutschen.
+- Diagrammblock semantisch überarbeitet: Abschnittserklärung, Info-Texte je Diagramm, Einheiten/Basiswerte direkt an den Balken, menschenlesbare Betriebszustandsdauer.
+- Label `95%-Perzentil |Netz|` in der Soll-/Ist-Folge zu `95%-Perzentil Soll/Ist-Abweichung` korrigiert.
+- Link `nach oben` führt wieder an den Seitenanfang.
+- `zendure-replay.service`: `StartLimitIntervalSec`/`StartLimitBurst` stehen nun korrekt im `[Unit]`-Abschnitt; Kommentar zum optionalen Betrieb präzisiert.
+- Keine Änderung am Live-Regelalgorithmus.
+
+## Wichtige Änderungen in V12.8.8
+
+V12.8.8 ist ein kleiner Hotfix für die Analyse-/Replay-Weboberfläche und korrigiert einen JavaScript-Syntaxfehler aus V12.8.7:
+
+- Analyse-Button reagiert wieder zuverlässig.
+- Status-/Fortschrittsanzeige und dynamische Auswahlprüfung initialisieren wieder korrekt.
+- Dark-Mode-Kontrastkorrekturen aus V12.8.7 bleiben erhalten.
+
+## Wichtige Änderungen in V12.8.7
+
+V12.8.7 ist ein kleiner Hotfix für die Analyse-/Replay-Weboberfläche:
+
+- Analyse-Startbutton wird robuster per JavaScript-Event angebunden.
+- Status-/Fortschrittsbox ist im Dark Mode wieder gut lesbar.
+- Fehler, Startstatus und Abschlussstatus werden deutlich sichtbar angezeigt.
+- Änderung der CSV-Auswahl aktualisiert die Auswahl-/Risikobox dynamisch über `/selection-profile`.
+- Der Startbutton wird abhängig von der gültigen Auswahl aktiviert bzw. deaktiviert.
+- Keine Änderung am Live-Regelalgorithmus.
 
 ## Wichtige Änderungen in V12.8.6
 
