@@ -42,8 +42,9 @@ class ValidationUiTests(unittest.TestCase):
 
     def test_restart_page_uses_absolute_redirect_to_new_port(self):
         cfg = dict(DEFAULT_CONFIG)
-        html = build_restart_service_page(cfg, enabled=True, redirect_url="http://192.168.0.40:8085/status")
-        self.assertIn("http://192.168.0.40:8085/status", html)
+        html = build_restart_service_page(cfg, enabled=True, redirect_url="http://192.168.0.40:8085/")
+        self.assertIn("http://192.168.0.40:8085/", html)
+        self.assertIn("Hauptseite öffnen", html)
         self.assertNotIn("window.location.href='/status'", html)
 
 

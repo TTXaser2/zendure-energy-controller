@@ -223,6 +223,13 @@ class ControllerState:
                 "diagnostic_filter_matched": bool(diagnostic_filter_matched),
             })
 
+    def clear_mqtt_diagnostics(self) -> int:
+        """Clear buffered MQTT diagnostic rows and return the removed row count."""
+        with self.lock:
+            removed = len(self.mqtt_topic_diagnostics)
+            self.mqtt_topic_diagnostics.clear()
+            return removed
+
     def set_error(self, message: str) -> None:
         with self.lock:
             self.last_error = message

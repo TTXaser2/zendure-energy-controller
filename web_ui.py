@@ -133,11 +133,12 @@ def second_battery_name(cfg: Dict[str, Any]) -> str:
 
 
 def status_url_after_restart(request: Request, cfg: Dict[str, Any]) -> str:
-    """Build an absolute status URL using the new configured WEB_PORT.
+    """Build an absolute root URL using the new configured WEB_PORT.
 
     This is important after changing WEB_PORT: the response is still served by
     the old process/port, but the browser must poll the restarted service on the
-    new port.
+    new port. The main page is used intentionally instead of /status, because
+    the controller UI lives at /.
     """
     scheme = request.url.scheme or "http"
     host = request.url.hostname or "127.0.0.1"
@@ -148,8 +149,8 @@ def status_url_after_restart(request: Request, cfg: Dict[str, Any]) -> str:
     except Exception:
         port = 8080
     if (scheme == "http" and port == 80) or (scheme == "https" and port == 443):
-        return f"{scheme}://{host}/status"
-    return f"{scheme}://{host}:{port}/status"
+        return f"{scheme}://{host}/"
+    return f"{scheme}://{host}:{port}/"
 
 
 FAVICON_SVG = """<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>
@@ -334,8 +335,9 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
         return FileResponse(path, media_type="text/csv", filename=os.path.basename(path))
 
     @app.get("/mqtt-diagnostics", response_class=HTMLResponse)
-    def mqtt_diagnostics_page():
-        return html_or_headless(build_mqtt_diagnostics_page, config_manager.get(), state.snapshot().get("mqtt_topic_diagnostics", []))
+    def mqtt_diagnostics_page(request: Request):
+        cfg = config_manager.get()
+        return html_or_headless(build_mqtt_diagnostics_page(cfg, state.snapshot().get("mqtt_topic_diagnostics", []), cleared=request.query_params.get("cleared") == "1"))
 
     @app.get("/mqtt-diagnostics.csv")
     def mqtt_diagnostics_csv():
@@ -346,6 +348,14 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
             media_type="text/csv; charset=utf-8",
             headers={"Content-Disposition": "attachment; filename=mqtt-diagnostics.csv"},
         )
+
+    @app.post("/mqtt-diagnostics/clear")
+    def mqtt_diagnostics_clear():
+        cfg = config_manager.get()
+        if cfg.get("HEADLESS_MODE", False):
+            return HTMLResponse(build_headless_page(cfg), status_code=403)
+        state.clear_mqtt_diagnostics()
+        return RedirectResponse(url="/mqtt-diagnostics?cleared=1", status_code=303)
 
     @app.get("/favicon.svg")
     def favicon_svg():
@@ -1439,7 +1449,7 @@ def build_save_result_message(cfg: Dict[str, Any], saved: bool = False, restart_
     return "<div class='info-box'><b>Konfiguration gespeichert.</b> Die Änderungen wurden übernommen.</div>"
 
 
-def build_restart_service_page(cfg: Dict[str, Any], enabled: bool = True, error: str = "", redirect_url: str = "/status") -> str:
+def build_restart_service_page(cfg: Dict[str, Any], enabled: bool = True, error: str = "", redirect_url: str = "/") -> str:
     page = build_base_header("Zendure Service Neustart", cfg=cfg)
     if error:
         body = (
@@ -1461,9 +1471,9 @@ def build_restart_service_page(cfg: Dict[str, Any], enabled: bool = True, error:
         body = (
             "<h1>Dienstneustart wird ausgeführt</h1>"
             "<div class='info-box'>Der Neustart wurde ausgelöst. Die Verbindung zur Weboberfläche kann für einige Sekunden unterbrochen werden.</div>"
-            "<p>Die Statusseite wird nach kurzer Wartezeit automatisch geöffnet.</p>"
+            "<p>Die Hauptseite wird nach kurzer Wartezeit automatisch geöffnet.</p>"
             f"<script>setTimeout(function(){{ window.location.href='{html.escape(redirect_url, quote=True)}'; }}, 10000);</script>"
-            f"<p><a href='{html.escape(redirect_url, quote=True)}'>Statusseite öffnen</a></p>"
+            f"<p><a href='{html.escape(redirect_url, quote=True)}'>Hauptseite öffnen</a></p>"
         )
     page += f"<div class='section'>{body}</div>"
     page += build_footer()
@@ -1592,12 +1602,14 @@ def build_input(key: str, meta: Dict[str, Any], value: Any) -> str:
     return f'<input type="text" name="{safe_key}" value="{safe_value}">'
 
 
-def build_mqtt_diagnostics_page(cfg: Dict[str, Any], rows: List[Dict[str, Any]]) -> str:
+def build_mqtt_diagnostics_page(cfg: Dict[str, Any], rows: List[Dict[str, Any]], cleared: bool = False) -> str:
     page = build_base_header("MQTT Diagnose", cfg=cfg)
     enabled = bool(cfg.get("MQTT_TOPIC_DIAGNOSTIC_ENABLED", False))
+    cleared_html = "<div class='info-box'>Die MQTT-Diagnosetabelle wurde geleert. Neue empfangene Diagnosewerte erscheinen ab jetzt wieder in der Tabelle.</div>" if cleared else ""
     page += f"""
     <div class="section">
         {section_title('MQTT Topic-Diagnose', 1, True)}
+        {cleared_html}
         <div class="small">
             Status: <b>{'aktiv' if enabled else 'deaktiviert'}</b><br>
             Filter: <code>{html.escape(str(cfg.get('MQTT_TOPIC_DIAGNOSTIC_FILTER', 'Zendure/#')))}</code><br>
@@ -1606,6 +1618,9 @@ def build_mqtt_diagnostics_page(cfg: Dict[str, Any], rows: List[Dict[str, Any]])
             Diese Seite zeigt die zuletzt mitgeschnittenen MQTT-Nachrichten. Für längere Mitschnitte bitte nur zeitweise aktivieren.
             <br><a href="/mqtt-diagnostics.csv">MQTT-Diagnose als CSV herunterladen</a>
         </div>
+        <form method="post" action="/mqtt-diagnostics/clear" onsubmit="return confirm('MQTT-Diagnosetabelle wirklich leeren? Die Live-Diagnose läuft danach weiter und neue Werte erscheinen wieder.');">
+            <button class="save save-small" type="submit">Diagnosetabelle leeren</button>
+        </form>
     </div>
     <div class="section"><table>
         <tr><th>Datum</th><th>Zeit</th><th>Topic</th><th>Filter</th><th>Payload</th></tr>
