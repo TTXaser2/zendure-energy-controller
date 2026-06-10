@@ -14,6 +14,7 @@ from state import ControllerState
 from app_logger import RotatingAppLogger
 from zendure_local_api import zendure_temp_to_celsius
 from cross_charge import cross_charge_enabled, parse_second_battery_value, second_battery_subscription_topics, second_battery_topics
+from mqtt_topic_filter import mqtt_diagnostic_should_capture, mqtt_topic_matches_filter
 
 
 class MqttBridge:
@@ -108,10 +109,19 @@ class MqttBridge:
         now = time.time()
         now_text = datetime.now().strftime("%H:%M:%S")
 
-        if cfg.get("MQTT_TOPIC_DIAGNOSTIC_ENABLED", False):
+        if mqtt_diagnostic_should_capture(cfg, topic):
             try:
                 limit = int(cfg.get("MQTT_TOPIC_DIAGNOSTIC_HISTORY_LIMIT", 200))
-                self.state.add_mqtt_diagnostic(topic, payload, limit)
+                diagnostic_filter = str(cfg.get("MQTT_TOPIC_DIAGNOSTIC_FILTER", "Zendure/#")).strip()
+                view_mode = str(cfg.get("MQTT_TOPIC_DIAGNOSTIC_VIEW_MODE", "filtered")).strip().lower()
+                self.state.add_mqtt_diagnostic(
+                    topic,
+                    payload,
+                    limit,
+                    diagnostic_filter=diagnostic_filter,
+                    diagnostic_view_mode=view_mode,
+                    diagnostic_filter_matched=mqtt_topic_matches_filter(diagnostic_filter, topic),
+                )
             except Exception:
                 pass
 

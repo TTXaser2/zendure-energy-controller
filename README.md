@@ -1,6 +1,6 @@
-Zendure Energy Controller Version 12.8.10
+Zendure Energy Controller Version 12.8.11
 
-# Zendure Energy Controller V12.8.10
+# Zendure Energy Controller V12.8.11
 
 Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, CSV-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
@@ -8,6 +8,20 @@ Copyright (c) 2026 Eduard Fuchs <info@eduardfuchs.de>
 
 Lizenziert unter AGPL-3.0-or-later. Siehe `LICENSE`, `NOTICE` und `DISCLAIMER.md`.
 
+
+## Wichtige Änderungen in V12.8.11
+
+V12.8.11 ist ein vorsichtiger Controller-Housekeeping-/Diagnose-Build mit Schwerpunkt Ablaufvertrag, Freshness-/Validitätsmodell und MQTT-Diagnosefilter. Der bestehende Regelalgorithmus bleibt fachlich erhalten; die Änderungen machen die Regelentscheidungen besser prüfbar und verhindern stale Diagnose-/CSV-Aussagen.
+
+- Neuer schlanker Freshness-/Validitätsvertrag für externe Datenquellen: Grid/Shelly-UniMeter, Zendure-SOC, MQTT-Kommandopfad und Zweitbatterie/EVCC werden pro Zyklus mit `available`, `fresh`, `valid`, `used_for_control`, Alter und Grund bewertet.
+- Zentrale `finish_cycle()`-/Housekeeping-Phase dokumentiert nun, welche Quellen ein Modus tatsächlich benötigt und welche davon fehlen oder stale sind. Nachtentladung bleibt dabei bewusst ohne Grid-Abhängigkeit.
+- CSV-/Graph-Datensatz enthält zusätzliche Diagnosefelder für Datenqualität, genutzte Quellen und Missing-/Stale-Gründe.
+- `effective_export_power_valid` wird in Modi ohne Grid-Regelpfad nicht mehr stale aus einem früheren AUTO-Zyklus weitergeführt.
+- MQTT-Topic-Diagnosefilter korrigiert: Im Standardmodus `filtered` werden nur noch Nachrichten gespeichert/angezeigt, die wirklich zum konfigurierten MQTT-Filter passen.
+- Neuer MQTT-Diagnose-Anzeigemodus `MQTT_TOPIC_DIAGNOSTIC_VIEW_MODE`: `filtered` oder `all`. `all` zeigt bewusst alle empfangenen Controller-Topics für kurze Fehlersuche.
+- MQTT-Wildcards `#` und `+` werden inklusive case-sensitiver Topic-Prüfung getestet; die Diagnose-Webseite weist auf Groß-/Kleinschreibung hin.
+- Finale Excel-Lernsimulation `zendure_regelung_lernwerkzeug_v4_2_7_final.xlsx` wird unverändert unter `tools/` mit ausgeliefert.
+- Neue Tests sichern Mode-/Datenquellen-Vertrag, Freshness-Felder, CSV-Diagnosefelder und MQTT-Diagnosefilter ab.
 
 ## Wichtige Änderungen in V12.8.10
 

@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Any, Deque, Dict, List, Optional
 
 from measurement import derive_zendure_actual_power, signed_zendure_target_w
+from freshness import boolean_status, timestamp_status
 from translations import limiter_text, mode_label, path_label, technical_limiter_text
 from version import APP_VERSION, CSV_SCHEMA
 
@@ -45,9 +46,13 @@ class ControllerState:
     current_rule_deviation: float = 0.0
     effective_export_power: int = 0
     effective_export_power_valid: bool = False
+    effective_export_power_used_for_control: bool = False
+    grid_power_available: bool = False
+    grid_power_fresh: bool = False
     grid_power_valid: bool = False
     grid_power_used_for_control: bool = False
     grid_power_age_seconds: Optional[int] = None
+    grid_power_validity_reason: str = "GRID_MISSING"
     last_input_power: int = 0
     last_output_power: int = 0
     # Zendure Headunit/System-Istleistung. Historisch wurden packInputPower
@@ -129,10 +134,33 @@ class ControllerState:
     sma_battery_soc: Optional[float] = None
     sma_battery_capacity_kwh: Optional[float] = None
     sma_battery_discharge_power: float = 0.0
+    second_battery_data_available: bool = False
     second_battery_data_fresh: bool = False
+    second_battery_data_valid: bool = False
     second_battery_data_used_for_control: bool = False
     second_battery_data_age_seconds: Optional[int] = None
+    second_battery_validity_reason: str = "SECOND_BATTERY_MISSING"
     evcc_data_available: bool = False
+
+    # Einheitliches Freshness-/Validitätsmodell pro Regelzyklus.
+    # Diese Felder ändern nicht die Regellogik selbst, sondern machen sichtbar,
+    # welche externen Daten vorhanden, frisch, gültig und tatsächlich für die
+    # Regelentscheidung genutzt wurden.
+    soc_available: bool = False
+    soc_fresh: bool = False
+    soc_valid: bool = False
+    soc_used_for_control: bool = False
+    soc_age_seconds: Optional[int] = None
+    soc_validity_reason: str = "SOC_MISSING"
+    mqtt_command_path_available: bool = True
+    mqtt_command_path_fresh: bool = False
+    mqtt_command_path_valid: bool = False
+    mqtt_command_path_used_for_control: bool = False
+    mqtt_command_path_age_seconds: Optional[int] = None
+    mqtt_command_path_validity_reason: str = "MQTT_DISCONNECTED"
+    control_required_sources: List[str] = field(default_factory=list)
+    control_missing_required_sources: List[str] = field(default_factory=list)
+    control_data_quality: str = "not_evaluated"
 
     # Zendure Akkutemperaturen
     current_battery_temperature_c: Optional[float] = None
@@ -172,7 +200,16 @@ class ControllerState:
                 return
             self.event_history.append({"time": timestamp, "text": text, "count": 1})
 
-    def add_mqtt_diagnostic(self, topic: str, payload: str, limit: int = 200) -> None:
+    def add_mqtt_diagnostic(
+        self,
+        topic: str,
+        payload: str,
+        limit: int = 200,
+        *,
+        diagnostic_filter: str = "",
+        diagnostic_view_mode: str = "filtered",
+        diagnostic_filter_matched: bool = False,
+    ) -> None:
         with self.lock:
             if self.mqtt_topic_diagnostics.maxlen != limit:
                 self.mqtt_topic_diagnostics = deque(self.mqtt_topic_diagnostics, maxlen=limit)
@@ -181,6 +218,9 @@ class ControllerState:
                 "timestamp": datetime.now().strftime("%H:%M:%S"),
                 "topic": topic,
                 "payload": payload[:500],
+                "diagnostic_filter": diagnostic_filter,
+                "diagnostic_view_mode": diagnostic_view_mode,
+                "diagnostic_filter_matched": bool(diagnostic_filter_matched),
             })
 
     def set_error(self, message: str) -> None:
@@ -416,6 +456,98 @@ class ControllerState:
                 self.active_limiters.append(limiter)
             self.last_limit_reason = ", ".join(self.active_limiters) if self.active_limiters else "none"
 
+    def set_control_source_requirements(self, required_sources: List[str]) -> None:
+        """Store the data sources required by the selected mode/path."""
+        with self.lock:
+            ordered: List[str] = []
+            for source in required_sources:
+                source_name = str(source).strip()
+                if source_name and source_name not in ordered:
+                    ordered.append(source_name)
+            self.control_required_sources = ordered
+
+    def update_data_validity_model(self, cfg: Dict[str, Any]) -> None:
+        """Refresh per-cycle freshness/validity fields for external data.
+
+        This is intentionally diagnostic/contract logic: existing mode handlers
+        still decide whether to Safe-State, hold, charge or discharge. The model
+        makes those decisions auditable for UI, graph, CSV and tests.
+        """
+        now_epoch = time.time()
+        with self.lock:
+            grid_status = timestamp_status(
+                "grid",
+                self.last_shelly_update_epoch,
+                cfg.get("SHELLY_STALE_TIMEOUT_SECONDS", 15),
+                has_value=self.last_shelly_update_epoch is not None,
+                used_for_control=self.grid_power_used_for_control,
+                now_epoch=now_epoch,
+                missing_reason="GRID_MISSING",
+                stale_reason="GRID_STALE",
+            )
+            soc_status = timestamp_status(
+                "soc",
+                self.last_soc_update_epoch,
+                cfg.get("SOC_STALE_TIMEOUT_SECONDS", 90),
+                has_value=self.battery_soc is not None,
+                used_for_control=self.soc_used_for_control,
+                now_epoch=now_epoch,
+                missing_reason="SOC_MISSING",
+                stale_reason="SOC_STALE",
+            )
+            mqtt_status = boolean_status(
+                "mqtt_command_path",
+                self.mqtt_connected,
+                used_for_control=self.mqtt_command_path_used_for_control,
+                false_reason="MQTT_DISCONNECTED",
+            )
+            second_status = timestamp_status(
+                "second_battery",
+                self.last_sma_battery_update_epoch,
+                cfg.get("SECOND_BATTERY_STALE_TIMEOUT_SECONDS", cfg.get("EVCC_STALE_TIMEOUT_SECONDS", 30)),
+                has_value=self.evcc_data_available and self.last_sma_battery_update_epoch is not None,
+                used_for_control=self.second_battery_data_used_for_control,
+                now_epoch=now_epoch,
+                missing_reason="SECOND_BATTERY_MISSING",
+                stale_reason="SECOND_BATTERY_STALE",
+            )
+
+            self.grid_power_available = grid_status.available
+            self.grid_power_fresh = grid_status.fresh
+            self.grid_power_valid = grid_status.valid
+            self.grid_power_age_seconds = grid_status.age_s
+            self.grid_power_validity_reason = grid_status.reason
+
+            self.soc_available = soc_status.available
+            self.soc_fresh = soc_status.fresh
+            self.soc_valid = soc_status.valid
+            self.soc_age_seconds = soc_status.age_s
+            self.soc_validity_reason = soc_status.reason
+
+            self.mqtt_command_path_available = mqtt_status.available
+            self.mqtt_command_path_fresh = mqtt_status.fresh
+            self.mqtt_command_path_valid = mqtt_status.valid
+            self.mqtt_command_path_age_seconds = mqtt_status.age_s
+            self.mqtt_command_path_validity_reason = mqtt_status.reason
+
+            self.second_battery_data_available = second_status.available
+            self.second_battery_data_fresh = second_status.fresh
+            self.second_battery_data_valid = second_status.valid
+            self.second_battery_data_age_seconds = second_status.age_s
+            self.second_battery_validity_reason = second_status.reason
+
+            source_status = {
+                "grid": grid_status,
+                "soc": soc_status,
+                "mqtt_command_path": mqtt_status,
+                "second_battery": second_status,
+            }
+            self.control_missing_required_sources = [
+                source for source in self.control_required_sources
+                if source_status.get(source) is not None and not source_status[source].valid
+            ]
+            self.control_data_quality = "ok" if not self.control_missing_required_sources else "missing_required_data"
+
     def update_power_history(self, value: float, samples: int) -> float:
         with self.lock:
             if self.power_history.maxlen != samples:
@@ -459,9 +591,12 @@ class ControllerState:
                 "raw_grid_power_meaning": power_flow_meaning(self.raw_grid_power, "Netzbezug", "Einspeisung"),
                 "grid_power_w": round(self.grid_power, 1),
                 "grid_power_meaning": power_flow_meaning(self.grid_power, "Netzbezug", "Einspeisung"),
+                "grid_power_available": self.grid_power_available,
+                "grid_power_fresh": self.grid_power_fresh,
                 "grid_power_valid": self.grid_power_valid,
                 "grid_power_used_for_control": self.grid_power_used_for_control,
                 "grid_power_age_s": self.grid_power_age_seconds,
+                "grid_power_validity_reason": self.grid_power_validity_reason,
                 "zendure_target_power_w": target_signed,
                 "zendure_actual_power_w": self.actual_zendure_system_signed_power,
                 "second_battery_power_w": round(self.sma_battery_display_power, 1),
@@ -496,9 +631,12 @@ class ControllerState:
                 # Zweitbatterie / Cross-Charge
                 "second_battery_raw_power_w": round(self.sma_battery_power, 1),
                 "second_battery_discharge_power_w": round(self.sma_battery_discharge_power, 1),
+                "second_battery_data_available": self.second_battery_data_available,
                 "second_battery_data_fresh": self.second_battery_data_fresh,
+                "second_battery_data_valid": self.second_battery_data_valid,
                 "second_battery_used_for_control": self.second_battery_data_used_for_control,
                 "second_battery_age_s": self.second_battery_data_age_seconds,
+                "second_battery_validity_reason": self.second_battery_validity_reason,
                 "second_battery_soc_percent": self.sma_battery_soc,
                 "second_battery_capacity_kwh": self.sma_battery_capacity_kwh,
                 "sma_battery_power_meaning": sma_power_meaning(self.sma_battery_display_power),
@@ -506,10 +644,23 @@ class ControllerState:
                 "effective_export_power_w": self.effective_export_power,
                 "effective_export_power": self.effective_export_power,
                 "effective_export_power_valid": self.effective_export_power_valid,
+                "effective_export_power_used_for_control": self.effective_export_power_used_for_control,
                 "effective_export_meaning": "Für Zendure-Ladung verfügbarer Überschuss nach Zusatzbatterie-Abzug und Sicherheitsreserve",
 
                 # SOC / Modus / Reglerpfad
                 "zendure_soc_percent": self.battery_soc,
+                "soc_available": self.soc_available,
+                "soc_fresh": self.soc_fresh,
+                "soc_valid": self.soc_valid,
+                "soc_used_for_control": self.soc_used_for_control,
+                "soc_age_s": self.soc_age_seconds,
+                "soc_validity_reason": self.soc_validity_reason,
+                "mqtt_command_path_valid": self.mqtt_command_path_valid,
+                "mqtt_command_path_used_for_control": self.mqtt_command_path_used_for_control,
+                "mqtt_command_path_validity_reason": self.mqtt_command_path_validity_reason,
+                "control_required_sources": ",".join(self.control_required_sources),
+                "control_missing_required_sources": ",".join(self.control_missing_required_sources),
+                "control_data_quality": self.control_data_quality,
                 "soc": self.battery_soc,
                 "sma_soc": self.sma_battery_soc,
                 "mode": self.current_mode,
@@ -562,9 +713,13 @@ class ControllerState:
                 "current_rule_deviation": self.current_rule_deviation,
                 "effective_export_power": self.effective_export_power,
                 "effective_export_power_valid": self.effective_export_power_valid,
+                "effective_export_power_used_for_control": self.effective_export_power_used_for_control,
+                "grid_power_available": self.grid_power_available,
+                "grid_power_fresh": self.grid_power_fresh,
                 "grid_power_valid": self.grid_power_valid,
                 "grid_power_used_for_control": self.grid_power_used_for_control,
                 "grid_power_age_seconds": self.grid_power_age_seconds,
+                "grid_power_validity_reason": self.grid_power_validity_reason,
                 "last_input_power": self.last_input_power,
                 "last_output_power": self.last_output_power,
                 "actual_zendure_charge_power": self.actual_zendure_charge_power,
@@ -617,6 +772,21 @@ class ControllerState:
                 "last_zendure_power_update_time": self.last_zendure_power_update_time,
                 "last_zendure_power_update_age_seconds": age_seconds(self.last_zendure_power_update_epoch),
                 "battery_soc": self.battery_soc,
+                "soc_available": self.soc_available,
+                "soc_fresh": self.soc_fresh,
+                "soc_valid": self.soc_valid,
+                "soc_used_for_control": self.soc_used_for_control,
+                "soc_age_seconds": self.soc_age_seconds,
+                "soc_validity_reason": self.soc_validity_reason,
+                "mqtt_command_path_available": self.mqtt_command_path_available,
+                "mqtt_command_path_fresh": self.mqtt_command_path_fresh,
+                "mqtt_command_path_valid": self.mqtt_command_path_valid,
+                "mqtt_command_path_used_for_control": self.mqtt_command_path_used_for_control,
+                "mqtt_command_path_age_seconds": self.mqtt_command_path_age_seconds,
+                "mqtt_command_path_validity_reason": self.mqtt_command_path_validity_reason,
+                "control_required_sources": list(self.control_required_sources),
+                "control_missing_required_sources": list(self.control_missing_required_sources),
+                "control_data_quality": self.control_data_quality,
                 "mqtt_battery_soc": self.mqtt_battery_soc,
                 "local_api_soc": self.local_api_soc,
                 "local_api_electric_level": self.local_api_electric_level,
@@ -635,9 +805,12 @@ class ControllerState:
                 "sma_battery_soc": self.sma_battery_soc,
                 "sma_battery_capacity_kwh": self.sma_battery_capacity_kwh,
                 "sma_battery_discharge_power": self.sma_battery_discharge_power,
+                "second_battery_data_available": self.second_battery_data_available,
                 "second_battery_data_fresh": self.second_battery_data_fresh,
+                "second_battery_data_valid": self.second_battery_data_valid,
                 "second_battery_data_used_for_control": self.second_battery_data_used_for_control,
                 "second_battery_data_age_seconds": self.second_battery_data_age_seconds,
+                "second_battery_validity_reason": self.second_battery_validity_reason,
                 "evcc_data_available": self.evcc_data_available,
                 "graph_history": list(self.graph_history),
                 "event_history": list(self.event_history),

@@ -75,6 +75,17 @@ class ZendureController:
             self.state.loop_counter += 1
             self.state.reset_active_limiters()
             self.state.update_mode_duration()
+            # Per-cycle contract flags are recalculated in finish_cycle().
+            # Reset them here so early-return paths cannot keep stale
+            # "used_for_control" information from the previous cycle.
+            self.state.grid_power_used_for_control = False
+            self.state.effective_export_power_used_for_control = False
+            self.state.soc_used_for_control = False
+            self.state.mqtt_command_path_used_for_control = False
+            self.state.second_battery_data_used_for_control = False
+            self.state.control_required_sources = []
+            self.state.control_missing_required_sources = []
+            self.state.control_data_quality = "not_evaluated"
 
         if cfg.get("MQTT_DISCONNECTED_SAFE_STATE", False) and not self.state.mqtt_connected:
             self.state.add_limiter("MQTT_DISCONNECTED")
@@ -309,7 +320,10 @@ class ZendureController:
             with self.state.lock:
                 self.state.sma_battery_discharge_power = 0.0
                 self.state.sma_battery_display_power = 0.0
+                self.state.second_battery_data_available = False
                 self.state.second_battery_data_fresh = False
+                self.state.second_battery_data_valid = False
+                self.state.second_battery_validity_reason = "SECOND_BATTERY_DISABLED"
                 self.state.second_battery_data_used_for_control = False
             return
 
@@ -326,8 +340,16 @@ class ZendureController:
         with self.state.lock:
             self.state.sma_battery_discharge_power = sma_discharge
             self.state.sma_battery_display_power = sma_display_power
+            self.state.second_battery_data_available = last_evcc is not None
             self.state.second_battery_data_fresh = fresh
+            self.state.second_battery_data_valid = fresh
             self.state.second_battery_data_age_seconds = age_s
+            if last_evcc is None:
+                self.state.second_battery_validity_reason = "SECOND_BATTERY_MISSING"
+            elif fresh:
+                self.state.second_battery_validity_reason = "OK"
+            else:
+                self.state.second_battery_validity_reason = "SECOND_BATTERY_STALE"
             # This method only updates display metrics. AUTO/Grid-dependent
             # Cross-Charge code sets this flag to True when it actually uses
             # the values for a control decision.
@@ -349,6 +371,7 @@ class ZendureController:
             with self.state.lock:
                 self.state.effective_export_power = effective
                 self.state.effective_export_power_valid = True
+                self.state.effective_export_power_used_for_control = True
                 self.state.second_battery_data_used_for_control = False
             return
 
@@ -365,6 +388,7 @@ class ZendureController:
         with self.state.lock:
             self.state.effective_export_power = effective
             self.state.effective_export_power_valid = True
+            self.state.effective_export_power_used_for_control = True
             self.state.second_battery_data_used_for_control = True
 
     def update_sma_metrics(self, cfg: Dict[str, Any]) -> None:
@@ -763,6 +787,58 @@ class ZendureController:
             return now >= start or now <= end
         return start <= now <= end
 
+    def determine_cycle_required_sources(self, cfg: Dict[str, Any]) -> list:
+        """Return data sources required by the current mode/path.
+
+        This is a diagnostic contract, not a second control algorithm. The mode
+        handlers still perform the actual safety decisions. The returned list is
+        used by the freshness/validity model to make the final decision path
+        auditable in UI, CSV and tests.
+        """
+        with self.state.lock:
+            mode = self.state.current_mode
+            path = self.state.technical_control_path
+            active_limiters = set(self.state.active_limiters)
+            action = self.state.last_control_action
+
+        required = []
+
+        def require(source: str) -> None:
+            if source not in required:
+                required.append(source)
+
+        if path.startswith("GRID") or "SHELLY_STALE" in active_limiters:
+            require("grid")
+
+        if (
+            mode in {
+                "CHARGE", "DISCHARGE", "CHARGE_RAMP_DOWN", "DISCHARGE_RAMP_DOWN",
+                "BLOCKED_BY_SMA", "NIGHT_DISCHARGE", "MANUAL_FIXED_CHARGE",
+                "MANUAL_FIXED_DISCHARGE",
+            }
+            or "SOC_STALE" in active_limiters
+            or "MIN_SOC" in active_limiters
+            or "MAX_SOC" in active_limiters
+        ):
+            require("soc")
+
+        command_modes = {
+            "SAFE_STATE", "STOP_HOLD", "CHARGE", "DISCHARGE", "CHARGE_RAMP_DOWN",
+            "DISCHARGE_RAMP_DOWN", "BLOCKED_BY_SMA", "NIGHT_DISCHARGE",
+            "MANUAL_FIXED_CHARGE", "MANUAL_FIXED_DISCHARGE",
+        }
+        if cfg.get("MQTT_DISCONNECTED_SAFE_STATE", False) or mode in command_modes:
+            require("mqtt_command_path")
+
+        if cross_charge_enabled(cfg) and (
+            "CROSS_CHARGE" in path
+            or "EVCC_STALE" in active_limiters
+            or "SMA_DISCHARGE" in active_limiters
+        ):
+            require("second_battery")
+
+        return required
+
     def update_charge_acceptance_diagnostic(self, cfg: Dict[str, Any]) -> None:
         result = classify_charge_acceptance(
             soc_percent=self.state.battery_soc,
@@ -781,10 +857,33 @@ class ZendureController:
         with self.state.lock:
             self.state.last_loop_duration_ms = int((time.time() - loop_start) * 1000)
             self.state.last_limit_reason = ", ".join(self.state.active_limiters) if self.state.active_limiters else "none"
-            self.state.grid_power_used_for_control = self.state.technical_control_path.startswith("GRID")
-            if self.state.last_shelly_update_epoch is not None:
-                self.state.grid_power_age_seconds = max(0, int(time.time() - self.state.last_shelly_update_epoch))
+            path = self.state.technical_control_path
+            mode = self.state.current_mode
+            self.state.grid_power_used_for_control = path.startswith("GRID")
+            self.state.effective_export_power_used_for_control = path.startswith("GRID") and (
+                "CHARGE" in path or "CROSS_CHARGE" in path
+            )
+            self.state.soc_used_for_control = (
+                mode in {
+                    "CHARGE", "DISCHARGE", "CHARGE_RAMP_DOWN", "DISCHARGE_RAMP_DOWN",
+                    "BLOCKED_BY_SMA", "NIGHT_DISCHARGE", "MANUAL_FIXED_CHARGE",
+                    "MANUAL_FIXED_DISCHARGE",
+                }
+                or any(limiter in self.state.active_limiters for limiter in ("SOC_STALE", "MIN_SOC", "MAX_SOC"))
+            )
+            command_modes = {
+                "SAFE_STATE", "STOP_HOLD", "CHARGE", "DISCHARGE", "CHARGE_RAMP_DOWN",
+                "DISCHARGE_RAMP_DOWN", "BLOCKED_BY_SMA", "NIGHT_DISCHARGE",
+                "MANUAL_FIXED_CHARGE", "MANUAL_FIXED_DISCHARGE",
+            }
+            self.state.mqtt_command_path_used_for_control = mode in command_modes
+            if not self.state.grid_power_used_for_control:
+                self.state.effective_export_power_valid = False
+
         self.update_cycle_display_metrics(cfg)
+        required_sources = self.determine_cycle_required_sources(cfg)
+        self.state.set_control_source_requirements(required_sources)
+        self.state.update_data_validity_model(cfg)
         self.update_charge_acceptance_diagnostic(cfg)
         self.state.record_graph_point(int(cfg.get("GRAPH_HISTORY_LIMIT", 300)))
         try:

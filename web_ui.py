@@ -1601,12 +1601,14 @@ def build_mqtt_diagnostics_page(cfg: Dict[str, Any], rows: List[Dict[str, Any]])
         <div class="small">
             Status: <b>{'aktiv' if enabled else 'deaktiviert'}</b><br>
             Filter: <code>{html.escape(str(cfg.get('MQTT_TOPIC_DIAGNOSTIC_FILTER', 'Zendure/#')))}</code><br>
+            Anzeige: <b>{'nur passende Diagnosefilter-Topics' if str(cfg.get('MQTT_TOPIC_DIAGNOSTIC_VIEW_MODE', 'filtered')).lower() != 'all' else 'alle empfangenen Controller-Topics'}</b><br>
+            Hinweis: MQTT-Topic-Matching ist groß-/kleinschreibungssensitiv. <code>EVCC/#</code> passt nicht auf <code>evcc/site/...</code>.<br>
             Diese Seite zeigt die zuletzt mitgeschnittenen MQTT-Nachrichten. Für längere Mitschnitte bitte nur zeitweise aktivieren.
             <br><a href="/mqtt-diagnostics.csv">MQTT-Diagnose als CSV herunterladen</a>
         </div>
     </div>
     <div class="section"><table>
-        <tr><th>Datum</th><th>Zeit</th><th>Topic</th><th>Payload</th></tr>
+        <tr><th>Datum</th><th>Zeit</th><th>Topic</th><th>Filter</th><th>Payload</th></tr>
     """
     for row in reversed(rows[-200:]):
         page += (
@@ -1614,11 +1616,12 @@ def build_mqtt_diagnostics_page(cfg: Dict[str, Any], rows: List[Dict[str, Any]])
             f"<td>{html.escape(str(row.get('date', '')))}</td>"
             f"<td>{html.escape(str(row.get('timestamp', '')))}</td>"
             f"<td style='text-align:left'>{html.escape(str(row.get('topic', '')))}</td>"
+            f"<td>{'passt' if row.get('diagnostic_filter_matched') else html.escape(str(row.get('diagnostic_view_mode', 'filtered')))}</td>"
             f"<td style='text-align:left'><code>{html.escape(str(row.get('payload', '')))}</code></td>"
             "</tr>"
         )
     if not rows:
-        page += "<tr><td colspan='4'>Noch keine MQTT-Diagnosedaten vorhanden.</td></tr>"
+        page += "<tr><td colspan='5'>Noch keine MQTT-Diagnosedaten vorhanden.</td></tr>"
     page += "</table></div>"
     page += build_footer()
     return page
@@ -1626,13 +1629,16 @@ def build_mqtt_diagnostics_page(cfg: Dict[str, Any], rows: List[Dict[str, Any]])
 
 def diagnostics_to_csv(rows: Iterable[Dict[str, Any]]) -> str:
     buffer = io.StringIO()
-    writer = csv.DictWriter(buffer, fieldnames=["date", "timestamp", "topic", "payload"])
-    writer.writerow({"date": "Datum [lokal]", "timestamp": "Uhrzeit [lokal]", "topic": "MQTT Topic", "payload": "Payload"})
+    writer = csv.DictWriter(buffer, fieldnames=["date", "timestamp", "topic", "diagnostic_filter", "diagnostic_view_mode", "diagnostic_filter_matched", "payload"])
+    writer.writerow({"date": "Datum [lokal]", "timestamp": "Uhrzeit [lokal]", "topic": "MQTT Topic", "diagnostic_filter": "Diagnosefilter", "diagnostic_view_mode": "Anzeigemodus", "diagnostic_filter_matched": "Filter passt", "payload": "Payload"})
     for row in rows:
         writer.writerow({
             "date": row.get("date", ""),
             "timestamp": row.get("timestamp", ""),
             "topic": row.get("topic", ""),
+            "diagnostic_filter": row.get("diagnostic_filter", ""),
+            "diagnostic_view_mode": row.get("diagnostic_view_mode", ""),
+            "diagnostic_filter_matched": row.get("diagnostic_filter_matched", ""),
             "payload": row.get("payload", ""),
         })
     return buffer.getvalue()

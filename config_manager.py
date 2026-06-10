@@ -44,6 +44,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "ZENDURE_LOCAL_API_SOC_PRIORITY": "properties_first",
     "MQTT_TOPIC_DIAGNOSTIC_ENABLED": False,
     "MQTT_TOPIC_DIAGNOSTIC_FILTER": "Zendure/#",
+    "MQTT_TOPIC_DIAGNOSTIC_VIEW_MODE": "filtered",
     "MQTT_TOPIC_DIAGNOSTIC_HISTORY_LIMIT": 200,
 
     # Regelung
@@ -167,7 +168,8 @@ CONFIG_SCHEMA: Dict[str, Dict[str, Any]] = {
     "ZENDURE_LOCAL_API_POLL_INTERVAL_SECONDS": {"group": "Netzwerk", "label": "Zendure lokale API Poll-Intervall", "type": "int", "min": 2, "max": 300, "unit": "s", "description": "Mindestabstand zwischen zwei lokalen Zendure-API-Abfragen für Telemetrie und Temperaturdiagnose."},
     "ZENDURE_LOCAL_API_SOC_PRIORITY": {"group": "Netzwerk", "label": "Zendure lokale API SOC-Priorität", "type": "select", "options": {"properties_first": "properties.electricLevel bevorzugen", "pack_first": "packData[0].socLevel bevorzugen"}, "description": "Legt fest, welcher SOC-Wert aus /properties/report bevorzugt wird, falls sowohl properties.electricLevel als auch packData[0].socLevel vorhanden sind."},
     "MQTT_TOPIC_DIAGNOSTIC_ENABLED": {"group": "Netzwerk", "label": "MQTT Topic-Diagnose aktiv", "type": "bool", "description": "Wenn aktiv, abonniert das Script zusätzlich das konfigurierte Diagnose-Topic, standardmäßig Zendure/#, und zeigt die letzten MQTT-Nachrichten unter /mqtt-diagnostics an. Nur für Analysephasen empfohlen, weil dadurch mehr MQTT-Daten verarbeitet werden."},
-    "MQTT_TOPIC_DIAGNOSTIC_FILTER": {"group": "Netzwerk", "label": "MQTT Topic-Diagnose Filter", "type": "str", "description": "MQTT-Topic-Filter für den Diagnosemitschnitt, z. B. Zendure/#. Änderungen an diesem Filter erfordern meist einen Neustart oder erneutes Speichern der Config."},
+    "MQTT_TOPIC_DIAGNOSTIC_FILTER": {"group": "Netzwerk", "label": "MQTT Topic-Diagnose Filter", "type": "str", "description": "MQTT-Topic-Filter für den Diagnosemitschnitt, z. B. Zendure/# oder evcc/#. MQTT Topic Matching ist groß-/kleinschreibungssensitiv; EVCC/# passt also nicht auf evcc/site/... . Änderungen an diesem Filter erfordern meist einen Neustart oder erneutes Speichern der Config."},
+    "MQTT_TOPIC_DIAGNOSTIC_VIEW_MODE": {"group": "Netzwerk", "label": "MQTT Diagnose Anzeige", "type": "select", "options": {"filtered": "Nur Diagnosefilter anzeigen", "all": "Alle empfangenen Controller-Topics anzeigen"}, "description": "filtered speichert/zeigt nur Nachrichten, die zum MQTT Topic-Diagnose Filter passen. all speichert alle vom Controller empfangenen MQTT-Nachrichten und ist nur für kurze Fehlersuche empfohlen."},
     "MQTT_TOPIC_DIAGNOSTIC_HISTORY_LIMIT": {"group": "Netzwerk", "label": "MQTT Topic-Diagnose Historie", "type": "int", "min": 10, "max": 5000, "description": "Anzahl der letzten MQTT-Diagnosemeldungen, die im RAM gehalten werden. Höhere Werte brauchen mehr Speicher, sind aber für Topic-Analyse hilfreich."},
 
     "INTERVAL_SECONDS": {"group": "Regelung", "label": "Regelintervall", "type": "int", "min": 1, "max": 30, "unit": "s", "description": "Zeit zwischen zwei Regelschritten. Kleinere Werte reagieren schneller, größere Werte laufen ruhiger."},

@@ -40,8 +40,8 @@ class V1282FixTests(unittest.TestCase):
         self.assertEqual(safe_limits().max_files, 4)
         self.assertEqual(safe_limits().max_total_bytes, 12 * 1024 * 1024)
         self.assertEqual(safe_limits().max_rows, 40_000)
-        self.assertEqual(REPLAY_VERSION, "12.8.10")
-        self.assertEqual(version.__version__, "12.8.10")
+        self.assertEqual(REPLAY_VERSION, "12.8.11")
+        self.assertEqual(version.__version__, "12.8.11")
 
 
 if __name__ == "__main__":
