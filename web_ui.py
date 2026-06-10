@@ -337,7 +337,12 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
     @app.get("/mqtt-diagnostics", response_class=HTMLResponse)
     def mqtt_diagnostics_page(request: Request):
         cfg = config_manager.get()
-        return html_or_headless(build_mqtt_diagnostics_page(cfg, state.snapshot().get("mqtt_topic_diagnostics", []), cleared=request.query_params.get("cleared") == "1"))
+        return html_or_headless(
+            build_mqtt_diagnostics_page,
+            cfg,
+            state.snapshot().get("mqtt_topic_diagnostics", []),
+            cleared=request.query_params.get("cleared") == "1",
+        )
 
     @app.get("/mqtt-diagnostics.csv")
     def mqtt_diagnostics_csv():

@@ -1,6 +1,6 @@
-Zendure Energy Controller Version 12.8.12
+Zendure Energy Controller Version 12.8.13
 
-# Zendure Energy Controller V12.8.12
+# Zendure Energy Controller V12.8.13
 
 Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, CSV-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
@@ -9,6 +9,17 @@ Copyright (c) 2026 Eduard Fuchs <info@eduardfuchs.de>
 Lizenziert unter AGPL-3.0-or-later. Siehe `LICENSE`, `NOTICE` und `DISCLAIMER.md`.
 
 
+
+## Wichtige Änderungen in V12.8.13
+
+V12.8.13 ist ein minimaler Hotfix für die MQTT-Topic-Diagnoseseite aus V12.8.12. Die eigentliche Regelstrategie bleibt unverändert.
+
+- Aufruf von `/mqtt-diagnostics` liefert wieder die Diagnose-Webseite statt `Internal Server Error`.
+- Ursache war ein falscher Aufruf von `html_or_headless()` mit bereits erzeugtem HTML-String statt Page-Builder-Funktion.
+- Der Button `Diagnosetabelle leeren` aus V12.8.12 bleibt erhalten.
+- Zusätzliche echte FastAPI-Routentests sichern `GET /mqtt-diagnostics`, `POST /mqtt-diagnostics/clear` und Headless-Verhalten ab.
+- Keine Änderung am Live-Regelalgorithmus.
+- Finale Excel-Lernsimulation bleibt unverändert unter `tools/` enthalten.
 
 ## Wichtige Änderungen in V12.8.12
 
