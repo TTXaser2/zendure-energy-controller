@@ -102,6 +102,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "NIGHT_END_HOUR": 5,
     "NIGHT_END_MINUTE": 0,
     "NIGHT_DISCHARGE_POWER_W": 400,
+    # Optional: eigener Stop-/Reserve-SOC für den Nachtmodus. None/leer = bisheriges Verhalten.
+    "NIGHT_DISCHARGE_STOP_SOC_PERCENT": None,
 
     # Sicherheits-/Fallback-Optionen
     "MAX_CONSECUTIVE_ERRORS": 5,
@@ -220,8 +222,9 @@ CONFIG_SCHEMA: Dict[str, Dict[str, Any]] = {
     "NIGHT_START_HOUR": {"group": "Nachtmodus", "label": "Start Stunde", "type": "int", "min": 0, "max": 23, "description": "Startstunde des Nachtmodus."},
     "NIGHT_START_MINUTE": {"group": "Nachtmodus", "label": "Start Minute", "type": "int", "min": 0, "max": 59, "description": "Startminute des Nachtmodus."},
     "NIGHT_END_HOUR": {"group": "Nachtmodus", "label": "Ende Stunde", "type": "int", "min": 0, "max": 23, "description": "Endstunde des Nachtmodus."},
-    "NIGHT_END_MINUTE": {"group": "Nachtmodus", "label": "Ende Minute", "type": "int", "min": 0, "max": 59, "description": "Endminute des Nachtmodus."},
+    "NIGHT_END_MINUTE": {"group": "Nachtmodus", "label": "Ende Minute", "type": "int", "min": 0, "max": 59, "description": "Endminute des Nachtmodus. Wird in der Weboberfläche zusammen mit der Stunde als hh:mm-Feld dargestellt."},
     "NIGHT_DISCHARGE_POWER_W": {"group": "Nachtmodus", "label": "Nachtleistung", "type": "int", "min": 0, "max": 2400, "unit": "W", "description": "Feste Entladeleistung im Nachtmodus."},
+    "NIGHT_DISCHARGE_STOP_SOC_PERCENT": {"group": "Nachtmodus", "label": "Nachtmodus Reserve-SOC", "type": "optional_int", "min": 0, "max": 100, "unit": "%", "description": "Optionaler Reserve-/Stop-SOC für die Nachtentladung. Leer lassen für bisheriges Verhalten. Wenn gesetzt, stoppt die Nachtentladung bei Erreichen dieses SOC und bleibt für dieses Nachtfenster gesperrt. Der Wert muss mindestens dem globalen Mindest-SOC entsprechen."},
 
     "MAX_CONSECUTIVE_ERRORS": {"group": "Sicherheit / Fallback", "label": "Max Fehler in Folge", "type": "int", "min": 1, "max": 100, "description": "Nach dieser Anzahl direkt aufeinanderfolgender Fehler aktiviert der Controller den Safe-State. Safe-State bedeutet: Ladeleistung und Entladeleistung werden per MQTT auf 0 W gesetzt, der Modus wird auf SAFE_STATE gestellt und die Regelung versucht nicht weiter aktiv Leistung zu verschieben, bis wieder gültige Daten vorliegen und der nächste Regelzyklus sauber laufen kann."},
     "SHELLY_STALE_TIMEOUT_SECONDS": {"group": "Sicherheit / Fallback", "label": "Shelly Timeout", "type": "int", "min": 5, "max": 600, "unit": "s", "description": "Maximales Alter des letzten gültigen Netzleistungswerts."},
@@ -468,6 +471,16 @@ def coerce_and_clamp(value: Any, meta: Dict[str, Any], default: Any) -> Any:
                 coerced = max(meta["min"], coerced)
             if "max" in meta:
                 coerced = min(meta["max"], coerced)
+
+        elif value_type == "optional_int":
+            if value is None or (isinstance(value, str) and value.strip() == ""):
+                coerced = None
+            else:
+                coerced = int(float(value))
+                if "min" in meta:
+                    coerced = max(meta["min"], coerced)
+                if "max" in meta:
+                    coerced = min(meta["max"], coerced)
 
         elif value_type == "float":
             coerced = float(value)

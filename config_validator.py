@@ -58,6 +58,18 @@ def _int_value(cfg: Dict[str, Any], key: str, default: int = 0) -> int:
         return default
 
 
+def _optional_int_value(cfg: Dict[str, Any], key: str) -> Optional[int]:
+    value = cfg.get(key)
+    if value is None:
+        return None
+    if isinstance(value, str) and value.strip() == "":
+        return None
+    try:
+        return int(float(value))
+    except Exception:
+        return None
+
+
 def _float_value(cfg: Dict[str, Any], key: str, default: float = 0.0) -> float:
     try:
         return float(cfg.get(key, default))
@@ -334,6 +346,12 @@ def validate_config_semantics(
             issues.append(_issue("ERROR", "Die Nachtleistung muss bei aktivem Nachtmodus größer als 0 Watt sein.", ["NIGHT_DISCHARGE_POWER_W", "NIGHT_DISCHARGE_ENABLED"], "Nachtmodus", "NIGHT_POWER_ZERO"))
         if night_power > max_discharge:
             issues.append(_issue("ERROR", "Die Nachtleistung darf nicht größer sein als die maximale Zendure-Entladeleistung.", ["NIGHT_DISCHARGE_POWER_W", "MAX_DISCHARGE_POWER_W"], "Nachtmodus", "NIGHT_POWER_TOO_HIGH"))
+
+        night_stop_soc = _optional_int_value(cfg, "NIGHT_DISCHARGE_STOP_SOC_PERCENT")
+        if night_stop_soc is not None and night_stop_soc < min_soc:
+            issues.append(_issue("ERROR", "Der Nachtmodus Reserve-SOC darf nicht unter dem globalen Mindest-SOC liegen.", ["NIGHT_DISCHARGE_STOP_SOC_PERCENT", "MIN_SOC_PERCENT"], "Nachtmodus", "NIGHT_STOP_SOC_BELOW_MIN_SOC"))
+        if night_stop_soc is not None and night_stop_soc > max_soc:
+            issues.append(_issue("WARNING", "Der Nachtmodus Reserve-SOC liegt oberhalb des maximalen Lade-SOC. Das ist technisch möglich, führt aber dazu, dass die Nachtentladung sehr früh oder gar nicht startet.", ["NIGHT_DISCHARGE_STOP_SOC_PERCENT", "MAX_SOC_PERCENT"], "Nachtmodus", "NIGHT_STOP_SOC_ABOVE_MAX_SOC"))
 
     # Safety / fallback.
     if _int_value(cfg, "MAX_CONSECUTIVE_ERRORS", 5) <= 0:

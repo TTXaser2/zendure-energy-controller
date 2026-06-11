@@ -86,6 +86,58 @@ def validate_settings_before_save(cfg: Dict[str, Any], current_cfg: Optional[Dic
         base_dir=os.getcwd(),
     )
 
+
+
+def format_hhmm(hour: Any, minute: Any) -> str:
+    try:
+        h = int(float(hour))
+        m = int(float(minute))
+        if not (0 <= h <= 23 and 0 <= m <= 59):
+            raise ValueError
+        return f"{h:02d}:{m:02d}"
+    except Exception:
+        return "00:00"
+
+
+def parse_hhmm(value: Any) -> Optional[tuple]:
+    text = "" if value is None else str(value).strip()
+    if not text or ":" not in text:
+        return None
+    parts = text.split(":")
+    if len(parts) != 2:
+        return None
+    try:
+        h = int(parts[0])
+        m = int(parts[1])
+    except Exception:
+        return None
+    if not (0 <= h <= 23 and 0 <= m <= 59):
+        return None
+    return h, m
+
+
+def apply_night_time_form_fields(raw_cfg: Dict[str, Any], form: Any) -> List[ValidationIssue]:
+    issues: List[ValidationIssue] = []
+    mapping = [
+        ("NIGHT_START_TIME", "NIGHT_START_HOUR", "NIGHT_START_MINUTE", "Startzeit"),
+        ("NIGHT_END_TIME", "NIGHT_END_HOUR", "NIGHT_END_MINUTE", "Endzeit"),
+    ]
+    for form_key, hour_key, minute_key, label in mapping:
+        if form_key not in form:
+            continue
+        parsed = parse_hhmm(form.get(form_key))
+        if parsed is None:
+            issues.append(ValidationIssue(
+                "ERROR",
+                f"Die Nachtmodus-{label} muss eine gültige Uhrzeit im 24h-Format hh:mm sein.",
+                {hour_key, minute_key},
+                "Nachtmodus",
+                f"{form_key}_INVALID",
+            ))
+            continue
+        raw_cfg[hour_key], raw_cfg[minute_key] = parsed
+    return issues
+
 def find_manual_pdf() -> Optional[str]:
     for candidate in MANUAL_PDF_CANDIDATES:
         path = os.path.abspath(candidate)
@@ -297,8 +349,9 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
                 raw_cfg[key] = key in form
             elif key in form:
                 raw_cfg[key] = form.get(key)
+        validation_issues = apply_night_time_form_fields(raw_cfg, form)
 
-        validation_issues = validate_settings_before_save(raw_cfg, current_cfg)
+        validation_issues += validate_settings_before_save(raw_cfg, current_cfg)
         issue_buckets = split_issues(validation_issues)
         confirmed_warnings = form.get("_confirm_warnings") == "1"
         cfg, _ = validate_config(raw_cfg)
@@ -353,6 +406,21 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
             media_type="text/csv; charset=utf-8",
             headers={"Content-Disposition": "attachment; filename=mqtt-diagnostics.csv"},
         )
+
+    @app.get("/mqtt-diagnostics/data")
+    def mqtt_diagnostics_data():
+        cfg = config_manager.get()
+        if cfg.get("HEADLESS_MODE", False):
+            return {"headless": True, "enabled": False, "rows": [], "count": 0}
+        rows = state.snapshot().get("mqtt_topic_diagnostics", [])
+        return {
+            "headless": False,
+            "enabled": bool(cfg.get("MQTT_TOPIC_DIAGNOSTIC_ENABLED", False)),
+            "filter": str(cfg.get("MQTT_TOPIC_DIAGNOSTIC_FILTER", "Zendure/#")),
+            "view_mode": str(cfg.get("MQTT_TOPIC_DIAGNOSTIC_VIEW_MODE", "filtered")),
+            "count": len(rows),
+            "rows": rows[-200:],
+        }
 
     @app.post("/mqtt-diagnostics/clear")
     def mqtt_diagnostics_clear():
@@ -558,10 +626,30 @@ def build_base_header(title: str, refresh: bool = False, cfg: Optional[Dict[str,
                     card.style.display = show ? '' : 'none';
                 }});
             }}
+            function normalizeNightTimeInput(input) {{
+                var raw = (input.value || '').trim();
+                var m = raw.match(/^([0-9]{{1,2}}):([0-9]{{1,2}})$/);
+                if (!m) {{ input.setCustomValidity('Bitte Uhrzeit im Format hh:mm eingeben.'); return; }}
+                var h = parseInt(m[1], 10);
+                var min = parseInt(m[2], 10);
+                if (isNaN(h) || isNaN(min) || h < 0 || h > 23 || min < 0 || min > 59) {{
+                    input.setCustomValidity('Bitte gültige 24h-Uhrzeit zwischen 00:00 und 23:59 eingeben.');
+                    return;
+                }}
+                input.value = String(h).padStart(2, '0') + ':' + String(min).padStart(2, '0');
+                input.setCustomValidity('');
+            }}
+            function setupNightTimeInputs() {{
+                document.querySelectorAll('input[data-night-time="1"]').forEach(function(input) {{
+                    input.addEventListener('blur', function() {{ normalizeNightTimeInput(input); }});
+                    input.addEventListener('input', function() {{ input.setCustomValidity(''); }});
+                }});
+            }}
             document.addEventListener('DOMContentLoaded', function() {{
                 setupPersistentDetails();
                 toggleManualFields();
                 toggleCrossChargeFields();
+                setupNightTimeInputs();
                 var select = document.querySelector('select[name="MANUAL_MODE"]');
                 if (select) select.addEventListener('change', toggleManualFields);
                 var crossSelect = document.querySelector('select[name="SECOND_BATTERY_SOURCE_PROFILE"]');
@@ -747,6 +835,19 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
         "FIXED_DISCHARGE": "#777",
         "FIXED_CHARGE": "#777",
     }.get(manual_mode_code, "#777")
+
+    night_stop_soc = s.get("night_discharge_stop_soc_percent")
+    night_latched = bool(s.get("night_discharge_latched_off", False))
+    night_stop_reason = str(s.get("night_discharge_stop_reason", "none"))
+    night_status_text = "aktiv" if current_mode == "NIGHT_DISCHARGE" else ("gestoppt" if night_latched else ("bereit" if cfg.get("NIGHT_DISCHARGE_ENABLED") else "aus"))
+    night_status_color = "#9C27B0" if current_mode == "NIGHT_DISCHARGE" else ("#ff9800" if night_latched else ("#4CAF50" if cfg.get("NIGHT_DISCHARGE_ENABLED") else "#777"))
+    night_details = (
+        f"Zeitfenster: {int(cfg.get('NIGHT_START_HOUR', 0)):02d}:{int(cfg.get('NIGHT_START_MINUTE', 0)):02d}–{int(cfg.get('NIGHT_END_HOUR', 0)):02d}:{int(cfg.get('NIGHT_END_MINUTE', 0)):02d}<br>"
+        f"Leistung: {int(cfg.get('NIGHT_DISCHARGE_POWER_W', 0))} W<br>"
+        f"Reserve-SOC: {night_stop_soc if night_stop_soc is not None else '-'} %<br>"
+        f"Latch aktiv: {'ja' if night_latched else 'nein'}<br>"
+        f"Stop-Grund: {html.escape(night_stop_reason)}"
+    )
 
     zendure_setpoint_signed = int(s.get("last_input_power", 0) or 0)
     if int(s.get("last_output_power", 0) or 0) > 0:
@@ -951,6 +1052,14 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
                 'Die Betriebsart wird in den Settings gesetzt. Automatik bedeutet normale automatische Regelung. Stop/Hold setzt beide Leistungen auf 0 W. Feste Lade-/Entlademodi bleiben aktiv, bis der Ziel-SOC erreicht ist oder die Betriebsart geändert wird.',
                 manual_mode_code,
                 settings_group='Manueller Modus'
+            )}
+            {status_card(
+                'Nachtmodus',
+                badge(night_status_text, night_status_color),
+                night_details,
+                'gray',
+                'Zeigt den Zustand der festen Nachtentladung. Wenn ein Nachtmodus Reserve-SOC gesetzt ist, stoppt die Nachtentladung bei Erreichen dieser Grenze und bleibt für dieses Nachtfenster gesperrt. Die Sperre wird zurückgesetzt, sobald das Nachtfenster verlassen wurde.',
+                settings_group='Nachtmodus'
             )}
             {status_card(
                 'MQTT',
@@ -1516,8 +1625,29 @@ def build_settings_page(cfg: Dict[str, Any], validation_issues: Optional[List[Va
             + build_section_validation_messages(group, validation_issues) +
             "<div class='grid'>"
         )
+        if group == "Nachtmodus":
+            page += build_night_time_card(
+                "NIGHT_START_TIME",
+                "Startzeit",
+                cfg.get("NIGHT_START_HOUR"),
+                cfg.get("NIGHT_START_MINUTE"),
+                "Startzeit des Nachtmodus im Format hh:mm. Eingaben wie 5:30 werden beim Verlassen des Feldes sichtbar zu 05:30 normalisiert.",
+                "NIGHT_START_HOUR" in error_keys or "NIGHT_START_MINUTE" in error_keys,
+                "NIGHT_START_HOUR" in warning_keys or "NIGHT_START_MINUTE" in warning_keys,
+            )
+            page += build_night_time_card(
+                "NIGHT_END_TIME",
+                "Endzeit",
+                cfg.get("NIGHT_END_HOUR"),
+                cfg.get("NIGHT_END_MINUTE"),
+                "Endzeit des Nachtmodus im Format hh:mm. Nachtfenster über Mitternacht werden weiterhin unterstützt.",
+                "NIGHT_END_HOUR" in error_keys or "NIGHT_END_MINUTE" in error_keys,
+                "NIGHT_END_HOUR" in warning_keys or "NIGHT_END_MINUTE" in warning_keys,
+            )
         for key, meta in CONFIG_SCHEMA.items():
             if meta.get("group") != group:
+                continue
+            if group == "Nachtmodus" and key in {"NIGHT_START_HOUR", "NIGHT_START_MINUTE", "NIGHT_END_HOUR", "NIGHT_END_MINUTE"}:
                 continue
             page += build_setting_card(key, meta, cfg.get(key), key in error_keys, key in warning_keys)
         page += "</div>"
@@ -1549,6 +1679,19 @@ def cross_profile_card_attr(meta: Dict[str, Any]) -> str:
     if profile in {"evcc", "custom"}:
         return ' data-cross-profile="{}"'.format(html.escape(profile, quote=True))
     return ""
+
+
+def build_night_time_card(name: str, label: str, hour: Any, minute: Any, description: str, has_error: bool = False, has_warning: bool = False) -> str:
+    state_class = " error-card" if has_error else (" warning-card" if has_warning else "")
+    safe_name = html.escape(name, quote=True)
+    safe_value = html.escape(format_hhmm(hour, minute), quote=True)
+    return f"""
+    <div class="card{state_class}">
+        <div class="label">{html.escape(label)}</div>
+        <input type="text" name="{safe_name}" value="{safe_value}" pattern="^\\d{{1,2}}:\\d{{1,2}}$" inputmode="numeric" data-night-time="1" placeholder="hh:mm">
+        <details class="help"><summary>Parameterinfo</summary><div class="small">{html.escape(description)}</div></details>
+    </div>
+    """
 
 
 def build_setting_card(key: str, meta: Dict[str, Any], value: Any, has_error: bool = False, has_warning: bool = False) -> str:
@@ -1595,6 +1738,11 @@ def build_input(key: str, meta: Dict[str, Any], value: Any) -> str:
         max_attr = f' max="{meta["max"]}"' if "max" in meta else ""
         return f'<input type="number" step="1" name="{safe_key}" value="{safe_value}"{min_attr}{max_attr}>'
 
+    if input_type == "optional_int":
+        min_attr = f' min="{meta["min"]}"' if "min" in meta else ""
+        max_attr = f' max="{meta["max"]}"' if "max" in meta else ""
+        return f'<input type="number" step="1" name="{safe_key}" value="{safe_value}"{min_attr}{max_attr} placeholder="leer = deaktiviert">'
+
     if input_type == "float":
         step = meta.get("step", 0.01)
         min_attr = f' min="{meta["min"]}"' if "min" in meta else ""
@@ -1610,28 +1758,99 @@ def build_input(key: str, meta: Dict[str, Any], value: Any) -> str:
 def build_mqtt_diagnostics_page(cfg: Dict[str, Any], rows: List[Dict[str, Any]], cleared: bool = False) -> str:
     page = build_base_header("MQTT Diagnose", cfg=cfg)
     enabled = bool(cfg.get("MQTT_TOPIC_DIAGNOSTIC_ENABLED", False))
-    cleared_html = "<div class='info-box'>Die MQTT-Diagnosetabelle wurde geleert. Neue empfangene Diagnosewerte erscheinen ab jetzt wieder in der Tabelle.</div>" if cleared else ""
+    cleared_html = "<div class='info-box'>Die MQTT-Diagnosetabelle wurde geleert. Neue empfangene Diagnosewerte erscheinen automatisch wieder in der Tabelle.</div>" if cleared else ""
+    filter_text = html.escape(str(cfg.get('MQTT_TOPIC_DIAGNOSTIC_FILTER', 'Zendure/#')))
+    view_mode = str(cfg.get('MQTT_TOPIC_DIAGNOSTIC_VIEW_MODE', 'filtered')).lower()
+    view_text = 'alle empfangenen Controller-Topics' if view_mode == 'all' else 'nur passende Diagnosefilter-Topics'
     page += f"""
     <div class="section">
         {section_title('MQTT Topic-Diagnose', 1, True)}
         {cleared_html}
         <div class="small">
             Status: <b>{'aktiv' if enabled else 'deaktiviert'}</b><br>
-            Filter: <code>{html.escape(str(cfg.get('MQTT_TOPIC_DIAGNOSTIC_FILTER', 'Zendure/#')))}</code><br>
-            Anzeige: <b>{'nur passende Diagnosefilter-Topics' if str(cfg.get('MQTT_TOPIC_DIAGNOSTIC_VIEW_MODE', 'filtered')).lower() != 'all' else 'alle empfangenen Controller-Topics'}</b><br>
+            Filter: <code>{filter_text}</code><br>
+            Anzeige: <b>{html.escape(view_text)}</b><br>
             Hinweis: MQTT-Topic-Matching ist groß-/kleinschreibungssensitiv. <code>EVCC/#</code> passt nicht auf <code>evcc/site/...</code>.<br>
-            Diese Seite zeigt die zuletzt mitgeschnittenen MQTT-Nachrichten. Für längere Mitschnitte bitte nur zeitweise aktivieren.
+            Diese Seite zeigt die zuletzt mitgeschnittenen MQTT-Nachrichten. Für längere Mitschnitte bitte nur zeitweise aktivieren.<br>
+            Die Tabelle wird automatisch aktualisiert; alternativ kann sie manuell über <b>Aktualisieren</b> neu geladen werden.
             <br><a href="/mqtt-diagnostics.csv">MQTT-Diagnose als CSV herunterladen</a>
         </div>
-        <form method="post" action="/mqtt-diagnostics/clear" onsubmit="return confirm('MQTT-Diagnosetabelle wirklich leeren? Die Live-Diagnose läuft danach weiter und neue Werte erscheinen wieder.');">
+        <form method="post" action="/mqtt-diagnostics/clear" onsubmit="return confirm('MQTT-Diagnosetabelle wirklich leeren? Die Live-Diagnose läuft danach weiter und neue Werte erscheinen automatisch wieder.');">
             <button class="save save-small" type="submit">Diagnosetabelle leeren</button>
+            <button class="save save-small" type="button" onclick="refreshMqttDiagnostics();">Aktualisieren</button>
         </form>
+        <div class="small" id="mqtt-diagnostics-live-status">Live-Aktualisierung: aktiv, Intervall 3 Sekunden. Zeilen im Puffer: <span id="mqtt-diagnostics-count">{len(rows)}</span></div>
     </div>
-    <div class="section"><table>
-        <tr><th>Datum</th><th>Zeit</th><th>Topic</th><th>Filter</th><th>Payload</th></tr>
+    <div class="section"><table id="mqtt-diagnostics-table">
+        <thead><tr><th>Datum</th><th>Zeit</th><th>Topic</th><th>Filter</th><th>Payload</th></tr></thead>
+        <tbody id="mqtt-diagnostics-body">
     """
+    page += render_mqtt_diagnostics_rows(rows)
+    page += """</tbody></table></div>
+    <script>
+    function mqttDiagEscape(value) {
+        return String(value === null || value === undefined ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+    function mqttDiagRow(row) {
+        const filterCell = row.diagnostic_filter_matched ? 'passt' : mqttDiagEscape(row.diagnostic_view_mode || 'filtered');
+        return '<tr>'
+            + '<td>' + mqttDiagEscape(row.date || '') + '</td>'
+            + '<td>' + mqttDiagEscape(row.timestamp || '') + '</td>'
+            + '<td style="text-align:left">' + mqttDiagEscape(row.topic || '') + '</td>'
+            + '<td>' + filterCell + '</td>'
+            + '<td style="text-align:left"><code>' + mqttDiagEscape(row.payload || '') + '</code></td>'
+            + '</tr>';
+    }
+    async function refreshMqttDiagnostics() {
+        const status = document.getElementById('mqtt-diagnostics-live-status');
+        try {
+            const response = await fetch('/mqtt-diagnostics/data', {cache: 'no-store'});
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+            const data = await response.json();
+            const rows = Array.isArray(data.rows) ? data.rows : [];
+            const visible = rows.slice(-200).reverse();
+            const body = document.getElementById('mqtt-diagnostics-body');
+            if (body) {
+                body.innerHTML = visible.length
+                    ? visible.map(mqttDiagRow).join('')
+                    : '<tr><td colspan="5">Noch keine MQTT-Diagnosedaten vorhanden.</td></tr>';
+            }
+            const count = document.getElementById('mqtt-diagnostics-count');
+            if (count) {
+                count.textContent = String(data.count || rows.length || 0);
+            }
+            if (status) {
+                const now = new Date().toLocaleTimeString();
+                status.innerHTML = 'Live-Aktualisierung: aktiv, letzte Aktualisierung ' + mqttDiagEscape(now)
+                    + '. Zeilen im Puffer: <span id="mqtt-diagnostics-count">' + mqttDiagEscape(data.count || rows.length || 0) + '</span>';
+            }
+        } catch (err) {
+            if (status) {
+                status.textContent = 'Live-Aktualisierung fehlgeschlagen: ' + err;
+            }
+        }
+    }
+    window.addEventListener('load', function() {
+        refreshMqttDiagnostics();
+        window.setInterval(refreshMqttDiagnostics, 3000);
+    });
+    </script>
+    """
+    page += build_footer()
+    return page
+
+
+def render_mqtt_diagnostics_rows(rows: List[Dict[str, Any]]) -> str:
+    html_rows = ""
     for row in reversed(rows[-200:]):
-        page += (
+        html_rows += (
             "<tr>"
             f"<td>{html.escape(str(row.get('date', '')))}</td>"
             f"<td>{html.escape(str(row.get('timestamp', '')))}</td>"
@@ -1641,11 +1860,8 @@ def build_mqtt_diagnostics_page(cfg: Dict[str, Any], rows: List[Dict[str, Any]],
             "</tr>"
         )
     if not rows:
-        page += "<tr><td colspan='5'>Noch keine MQTT-Diagnosedaten vorhanden.</td></tr>"
-    page += "</table></div>"
-    page += build_footer()
-    return page
-
+        html_rows += "<tr><td colspan='5'>Noch keine MQTT-Diagnosedaten vorhanden.</td></tr>"
+    return html_rows
 
 def diagnostics_to_csv(rows: Iterable[Dict[str, Any]]) -> str:
     buffer = io.StringIO()

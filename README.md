@@ -1,6 +1,6 @@
-Zendure Energy Controller Version 12.8.13
+Zendure Energy Controller Version 12.8.15
 
-# Zendure Energy Controller V12.8.13
+# Zendure Energy Controller V12.8.15
 
 Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, CSV-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
@@ -9,6 +9,32 @@ Copyright (c) 2026 Eduard Fuchs <info@eduardfuchs.de>
 Lizenziert unter AGPL-3.0-or-later. Siehe `LICENSE`, `NOTICE` und `DISCLAIMER.md`.
 
 
+
+## Wichtige Änderungen in V12.8.15
+
+V12.8.15 erweitert den Nachtmodus und verbessert die Settings-Bedienung für Nachtzeiten. Die AUTO-Regelstrategie bleibt unverändert:
+
+- Neuer optionaler Nachtmodus Reserve-/Stop-SOC `NIGHT_DISCHARGE_STOP_SOC_PERCENT`. Leer/`null` bedeutet: bisheriges Verhalten bleibt aktiv.
+- Die Nachtentladung stoppt, sobald der globale `MIN_SOC_PERCENT`, der optionale Nachtmodus Reserve-SOC oder die konfigurierte Endzeit erreicht wird.
+- Wenn der Nachtmodus Reserve-SOC erreicht wurde, bleibt die Nachtentladung per Latch für dieses Nachtfenster gestoppt. Dadurch startet sie nicht wegen kleiner SOC-Schwankungen erneut. Der Latch wird zurückgesetzt, sobald das Nachtfenster verlassen wurde.
+- Status-/CSV-/Graph-Diagnosefelder für Nachtmodus Reserve-SOC, Latch und Stop-Grund ergänzt.
+- Settings-Webseite zeigt Start- und Endzeit des Nachtmodus als zwei Felder im Format `hh:mm` statt vier getrennten Stunde-/Minute-Feldern. Intern bleiben die bisherigen Config-Felder erhalten.
+- Uhrzeiteingaben wie `5:30` oder `23:0` werden beim Verlassen des Eingabefelds sichtbar zu `05:30` bzw. `23:00` normalisiert; ungültige Werte wie `24:00`, `12:75` oder `abc` werden abgelehnt.
+- Validierung: `NIGHT_DISCHARGE_STOP_SOC_PERCENT` muss, wenn gesetzt, mindestens dem globalen Mindest-SOC entsprechen.
+- Zusätzliche Tests für Nachtmodus-Reserve-SOC, Latch-Verhalten, Latch-Reset, Settings-Zeitfelder, Validierung und CSV-Felder.
+- Keine Änderung an MQTT-Subscriptions oder MQTT-Kommandostruktur außerhalb der bestehenden Nachtmodus-Stop-/Hold-Logik.
+
+## Wichtige Änderungen in V12.8.14
+
+V12.8.14 ist ein minimaler Hotfix für die MQTT-Topic-Diagnoseseite und die Installations-/Testrobustheit. Die eigentliche Regelstrategie bleibt unverändert.
+
+- Die MQTT-Diagnoseseite aktualisiert die sichtbare Tabelle nun automatisch per leichtem Polling, ohne die komplette Seite neu zu laden. Nach `Diagnosetabelle leeren` erscheinen neue MQTT-Werte dadurch ohne manuellen Browser-Refresh.
+- Ein zusätzlicher Button `Aktualisieren` lädt die Diagnosezeilen bei Bedarf manuell nach.
+- Neuer JSON-Endpunkt `/mqtt-diagnostics/data` liefert nur die aktuellen Diagnosezeilen und Metadaten für die Tabellenaktualisierung.
+- Die V12.8.13-Routentests wurden so umgebaut, dass sie auf dem Raspberry Pi keine zusätzliche Test-only-Abhängigkeit `httpx` mehr benötigen.
+- Zusätzliche Tests sichern Diagnose-Polling, Datenendpunkt, Headless-Verhalten und neue Werte nach Clear ab.
+- Keine Änderung am Live-Regelalgorithmus.
+- Finale Excel-Lernsimulation bleibt unverändert unter `tools/` enthalten.
 
 ## Wichtige Änderungen in V12.8.13
 

@@ -105,12 +105,16 @@ class ZendureController:
         # after a valid grid measurement.
         self.update_cycle_display_metrics(cfg)
 
+        night_active = self.is_night_discharge_active(cfg)
+        if not night_active:
+            self.state.reset_night_discharge_latch()
+
         manual_mode = str(cfg.get("MANUAL_MODE", "AUTO"))
         if manual_mode != "AUTO":
             self.handle_manual_mode(cfg, manual_mode)
             return
 
-        if self.is_night_discharge_active(cfg):
+        if night_active:
             if not self.soc_is_fresh(cfg):
                 self.state.add_limiter("SOC_STALE")
                 self.safe_state("Nachtmodus blockiert: Zendure SOC fehlt oder ist veraltet")
@@ -474,7 +478,7 @@ class ZendureController:
 
         self.handle_manual_fixed_charge(cfg)
 
-    def stop_hold(self, reason: str) -> None:
+    def stop_hold(self, reason: str, technical_path: str = "MANUAL -> STOP_HOLD", action: str = "STOP_HOLD -> 0 W") -> None:
         with self.state.lock:
             need_force = (
                 self.state.current_mode != "STOP_HOLD"
@@ -493,8 +497,8 @@ class ZendureController:
             self.state.last_target_after_smoothing = 0
             self.state.last_target_after_ramp = 0
             self.state.control_reason = reason
-            self.state.technical_control_path = "MANUAL -> STOP_HOLD"
-            self.state.last_control_action = "STOP_HOLD -> 0 W"
+            self.state.technical_control_path = technical_path
+            self.state.last_control_action = action
 
         self.state.set_mode("STOP_HOLD")
 
@@ -605,12 +609,46 @@ class ZendureController:
             self.state.last_control_action = f"HOLD -> {self.state.current_target_power} W"
         self.state.set_mode("HOLD")
 
+    def _optional_int(self, value: Any) -> Optional[int]:
+        if value is None:
+            return None
+        if isinstance(value, str) and value.strip() == "":
+            return None
+        try:
+            return int(float(value))
+        except Exception:
+            return None
+
     def handle_night_mode(self, cfg: Dict[str, Any]) -> None:
         with self.state.lock:
             soc = self.state.battery_soc
-        if soc is None or soc <= cfg["MIN_SOC_PERCENT"]:
+            latched = self.state.night_discharge_latched_off
+            latch_reason = self.state.night_discharge_latch_reason
+        min_soc = int(cfg["MIN_SOC_PERCENT"])
+        configured_stop_soc = self._optional_int(cfg.get("NIGHT_DISCHARGE_STOP_SOC_PERCENT"))
+        effective_stop_soc = max(min_soc, configured_stop_soc) if configured_stop_soc is not None else None
+        with self.state.lock:
+            self.state.night_discharge_stop_soc_percent = effective_stop_soc
+
+        if latched:
+            self.state.add_limiter("NIGHT_RESERVE_SOC")
+            reason = "Nachtentladung gestoppt: Reserve-SOC erreicht" if latch_reason in {"none", "NIGHT_RESERVE_SOC"} else latch_reason
+            self.stop_hold(reason, technical_path="NIGHT_MODE -> RESERVE_SOC_LATCH -> STOP_HOLD", action="NIGHT_RESERVE_SOC_LATCH -> 0 W")
+            return
+
+        if soc is None or soc <= min_soc:
             self.state.add_limiter("MIN_SOC")
             self.safe_state("Nachtmodus blockiert: Zendure SOC zu niedrig")
+            return
+
+        if effective_stop_soc is not None and soc <= effective_stop_soc:
+            self.state.add_limiter("NIGHT_RESERVE_SOC")
+            self.state.latch_night_discharge_off("NIGHT_RESERVE_SOC")
+            self.stop_hold(
+                f"Nachtentladung gestoppt: Reserve-SOC {effective_stop_soc} % erreicht",
+                technical_path="NIGHT_MODE -> RESERVE_SOC -> STOP_HOLD",
+                action="NIGHT_RESERVE_SOC -> 0 W",
+            )
             return
 
         target = int(cfg["NIGHT_DISCHARGE_POWER_W"])
@@ -627,6 +665,7 @@ class ZendureController:
             self.state.control_reason = "Nachtmodus aktiv"
             self.state.technical_control_path = "NIGHT_MODE -> OUTPUT"
             self.state.last_control_action = f"NIGHT_DISCHARGE -> {target} W"
+            self.state.night_discharge_stop_reason = "none"
         self.state.set_mode("NIGHT_DISCHARGE")
 
     def handle_discharge(self, cfg: Dict[str, Any], grid_power: float) -> None:
@@ -819,6 +858,7 @@ class ZendureController:
             or "SOC_STALE" in active_limiters
             or "MIN_SOC" in active_limiters
             or "MAX_SOC" in active_limiters
+            or "NIGHT_RESERVE_SOC" in active_limiters
         ):
             require("soc")
 

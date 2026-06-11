@@ -91,6 +91,12 @@ CSV_FIELDS: List[str] = [
     "technical_path_label",
     "control_reason",
 
+    # Nachtmodus / Reserve-SOC
+    "night_discharge_stop_soc_percent",
+    "night_discharge_latched_off",
+    "night_discharge_latch_reason",
+    "night_discharge_stop_reason",
+
     # Tatsächlich gesendete MQTT-Kommandodynamik
     "mqtt_commands_sent_total",
     "mqtt_commands_sent_in_cycle",

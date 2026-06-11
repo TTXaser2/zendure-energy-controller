@@ -21,6 +21,7 @@ LIMITER_LABELS = {
     "ZENDURE_API_FALLBACK": "Lokale Zendure-API als Fallback aktiv",
     "MODE_CHANGE_LOCK": "Umschalt-Sperrzeit aktiv",
     "MANUAL_MODE_INVALID": "Ungültiger manueller Modus",
+    "NIGHT_RESERVE_SOC": "Nachtmodus Reserve-SOC erreicht",
 }
 
 PATH_LABELS = {
@@ -30,6 +31,8 @@ PATH_LABELS = {
     "MANUAL -> FIXED_CHARGE -> INPUT": "Manuelle feste Beladung aktiv",
     "GRID -> DEADBAND -> HOLD_POWER": "Totzone aktiv: Leistung wird gehalten",
     "NIGHT_MODE -> OUTPUT": "Nachtmodus: feste Entladung aktiv",
+    "NIGHT_MODE -> RESERVE_SOC -> STOP_HOLD": "Nachtmodus gestoppt: Reserve-SOC erreicht",
+    "NIGHT_MODE -> RESERVE_SOC_LATCH -> STOP_HOLD": "Nachtmodus bleibt gestoppt: Reserve-SOC-Latch aktiv",
     "GRID -> DISCHARGE_CONTROL -> OUTPUT": "Netzbezug erkannt: Zendure entlädt",
     "GRID -> CROSS_CHARGE -> CHARGE_CONTROL -> INPUT": "PV-Überschuss erkannt: Zendure lädt unter Berücksichtigung des Cross-Charge-Schutzes",
     "GRID -> CROSS_CHARGE -> CHARGE_RAMP_DOWN": "Cross-Charge-Schutz: Zendure-Ladung wird reduziert",
