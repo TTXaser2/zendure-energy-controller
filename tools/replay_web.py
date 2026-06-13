@@ -173,12 +173,19 @@ def _bytes_text(value: int) -> str:
     return f"{value / 1024:.1f} KiB".replace(".", ",")
 
 
+def _csv_timestamp_label(row: Dict[str, Any]) -> str:
+    return str(row.get("datetime_local") or (str(row.get("date", "")) + " " + str(row.get("timestamp", ""))).strip() or row.get("timestamp") or "-")
+
+
 def _scan_csv_profile(paths: Sequence[Path], max_scan_rows: int = 100_000) -> Dict[str, Any]:
     rows = 0
-    first_ts = "-"
-    last_ts = "-"
+    global_first_ts = "-"
+    global_last_ts = "-"
+    file_ranges: List[Tuple[str, str, str]] = []
     schema_errors: List[str] = []
     for path in paths:
+        file_first_ts = "-"
+        file_last_ts = "-"
         try:
             with open(path, "r", encoding="utf-8", newline="") as f:
                 sample = f.read(4096)
@@ -199,14 +206,23 @@ def _scan_csv_profile(paths: Sequence[Path], max_scan_rows: int = 100_000) -> Di
                         if schema and schema != CSV_SCHEMA:
                             schema_errors.append(f"{path.name}: Schema {schema}")
                             break
-                        label = str(row.get("datetime_local") or (str(row.get("date", "")) + " " + str(row.get("timestamp", ""))).strip() or row.get("timestamp") or "-")
-                        if first_ts == "-":
-                            first_ts = label
-                        last_ts = label
+                        label = _csv_timestamp_label(row)
+                        if label and label != "-":
+                            if file_first_ts == "-" or label < file_first_ts:
+                                file_first_ts = label
+                            if file_last_ts == "-" or label > file_last_ts:
+                                file_last_ts = label
+                            if global_first_ts == "-" or label < global_first_ts:
+                                global_first_ts = label
+                            if global_last_ts == "-" or label > global_last_ts:
+                                global_last_ts = label
                     rows += 1
         except Exception as exc:
             schema_errors.append(f"{path.name}: {exc}")
-    return {"estimated_rows": rows, "period_start": first_ts, "period_end": last_ts, "schema_errors": schema_errors[:5]}
+        if file_first_ts != "-" or file_last_ts != "-":
+            file_ranges.append((path.name, file_first_ts, file_last_ts))
+    inverted = global_first_ts != "-" and global_last_ts != "-" and global_first_ts > global_last_ts
+    return {"estimated_rows": rows, "period_start": global_first_ts, "period_end": global_last_ts, "file_ranges": file_ranges, "period_inverted": inverted, "schema_errors": schema_errors[:5]}
 
 
 
@@ -245,6 +261,8 @@ def selection_profile(paths: Sequence[Path], cfg: Dict[str, Any]) -> Dict[str, A
         "estimated_rows": rows,
         "period_start": scan.get("period_start", "-"),
         "period_end": scan.get("period_end", "-"),
+        "file_ranges": scan.get("file_ranges") or [],
+        "period_inverted": bool(scan.get("period_inverted")),
         "risk": risk,
         "risk_text": text,
         "needs_confirmation": needs_confirm,
@@ -476,6 +494,7 @@ def build_app() -> FastAPI:
         .chartgrid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px}} .chart-card{{min-width:0}} .barrow{{display:grid;grid-template-columns:minmax(130px,1fr) 1.3fr minmax(150px,auto);gap:8px;align-items:start;margin:8px 0}}
         .barrow .term-info{{grid-column:1 / -1;margin:2px 0 10px 0;max-width:none}} .barrow .term-info div{{max-width:none;width:100%;box-sizing:border-box}}
         .barbox{{height:14px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin-top:3px}} .bar{{height:14px;background:#93c5fd;border-radius:999px}} .chart-info{{margin:0 0 8px 0}} .chart-info summary{{color:#1565c0;cursor:pointer}} .chart-info div{{margin-top:6px;color:#475569;line-height:1.35}}
+        @media (max-width: 620px){{.chartgrid{{grid-template-columns:1fr}}.barrow{{grid-template-columns:1fr;gap:4px;margin:12px 0}}.barlabel{{font-weight:bold;overflow-wrap:anywhere}}.barbox{{width:100%;min-width:0}}.barrow>b{{font-size:.98em}}.barrow .term-info{{margin:0 0 12px 0}}}}
         h2{{scroll-margin-top:70px;border-bottom:1px solid #e5e7eb;padding-bottom:4px}} .section-intro{{margin-top:-4px;color:#475569;line-height:1.45}}
         .analysis-profile{{padding:10px;border-radius:8px;margin:12px 0;border:1px solid #cbd5e1}} .analysis-profile.ok{{border-color:#22c55e}} .analysis-profile.warn{{border-color:#f59e0b}} .analysis-profile.bad{{border-color:#ef4444}}
         .profile-title{{font-weight:bold;font-size:1.05em;margin-bottom:4px}}.profile-explain{{font-size:.92em;color:#475569;margin-bottom:8px;line-height:1.35}}

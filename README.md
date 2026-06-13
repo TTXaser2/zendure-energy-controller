@@ -1,6 +1,6 @@
-Zendure Energy Controller Version 12.8.15
+Zendure Energy Controller Version 12.8.18
 
-# Zendure Energy Controller V12.8.15
+# Zendure Energy Controller V12.8.18
 
 Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, CSV-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
@@ -9,6 +9,45 @@ Copyright (c) 2026 Eduard Fuchs <info@eduardfuchs.de>
 Lizenziert unter AGPL-3.0-or-later. Siehe `LICENSE`, `NOTICE` und `DISCLAIMER.md`.
 
 
+
+
+## Wichtige Änderungen in V12.8.18
+
+V12.8.18 ist eine UI-/Analyse-Nacharbeit auf Basis von V12.8.17 ohne Änderung der AUTO-Regelstrategie und ohne Änderung an MQTT-Subscriptions oder CSV-Schema.
+
+- Statusseite: Die Karte `Netzleistung` zeigt als großen Hauptwert nun den aktuellen/frischen Netzleistungs-Messwert. Der geglättete AUTO-Regelwert bleibt nur als Diagnose sichtbar und wird im festen Nachtmodus nicht mehr irreführend als Hauptstatuswert dargestellt.
+- Statusseite: Wenn die Netzmessung nicht aktuell/gültig ist, wird kein alter Zahlenwert prominent als aktuelle Netzleistung angezeigt.
+- Statusseite: Nachtmodus-Infotext an die V12.8.17-Semantik angepasst: Reserve-SOC pausiert nur die feste Nacht-Basisentladung, AUTO bleibt für Lastspitzen aktiv.
+- Analyse-Webseite: Auswahl-/Risikobox berechnet den Zeitraum bei Mehrdatei-Auswahl nun als globales Minimum aller Startzeitpunkte und globales Maximum aller Endzeitpunkte. Invertierte Vorschauzeiträume durch rotierende CSV-Dateien werden verhindert.
+- Analyse-Webseite: Bereich `Diagramme` ergänzt spezifischere Info-Texte für Betriebszustände und MQTT-Wirkung, u. a. `NIGHT_DISCHARGE`, `HOLD_OUTSIDE_DEADBAND`, `CROSS_CHARGE_*`, `verbessert`, `neutral`, `verschlechtert` und `nicht bewertbar`.
+- Analyse-Webseite: Mobile Darstellung der Balkendiagramme verbessert, damit Labels, Balken, Werte und Info-Links nicht überlappen.
+- Analyse-Webseite: MQTT-Wirkungsbalken verwenden nun eine konsistente absolute Balkenbasis innerhalb des Blocks; Anzahl, Prozentwert und Basis werden klarer ausgewiesen.
+- Analyse-Webseite: Datenqualitätswarnungen sind konkreter. Der Block zeigt nun, welche Werte fehlen, wie viele Zeilen/Prozent betroffen sind, SAFE_STATE-Anteile und eine kompakte Einordnung.
+
+## Wichtige Änderungen in V12.8.17
+
+V12.8.17 ist ein gezielter Hotfix zur Nachtmodus-Reserve-SOC-Logik aus V12.8.16. Anlass war der Live-Test, bei dem der Controller nach Erreichen des Nachtmodus-Reserve-SOC im `STOP_HOLD` blieb und dadurch innerhalb des Nachtfensters nicht mehr auf reale Lastspitzen bzw. Netzbezug reagierte.
+
+- `NIGHT_DISCHARGE_STOP_SOC_PERCENT` pausiert jetzt nur noch die feste Nacht-Basisentladung.
+- Wenn `SOC <= NIGHT_DISCHARGE_STOP_SOC_PERCENT`, wird die feste Nachtentladung auf 0 W gesetzt, aber der Controller fällt danach in den normalen AUTO-Zweig zurück.
+- Im selben Nachtfenster wird dadurch wieder die Grid-/Shelly-/UniMeter-Netzleistung gelesen. Bei realem Netzbezug darf Zendure im AUTO-Modus bis zum globalen `MIN_SOC_PERCENT` entladen.
+- Der Nachtmodus-Status zeigt bei erreichtem Reserve-SOC nun sinngemäß `pausiert` statt einen vollständigen Stop/Hold.
+- Der Stop-Grund `NIGHT_RESERVE_SOC` bleibt als Diagnose erhalten; er bedeutet nun: feste Nachtentladung pausiert, AUTO-Regelung bleibt für Lastspitzen aktiv.
+- Die normale feste Nachtentladung bleibt weiterhin unabhängig von der Grid-Messung, solange der Reserve-SOC nicht erreicht ist.
+- Keine Änderung an MQTT-Subscriptions, MQTT-Kommandostruktur, CSV-Schema oder AUTO-Regelstrategie außerhalb des gezielten Übergangs von pausierter Nachtentladung in AUTO.
+
+## Wichtige Änderungen in V12.8.16
+
+V12.8.16 ist eine gezielte Nacharbeit zur Nachtmodus-Reserve-SOC-Logik aus V12.8.15. Die AUTO-Regelstrategie bleibt unverändert:
+
+- `NIGHT_DISCHARGE_STOP_SOC_PERCENT` arbeitet nun als laufende Untergrenze ohne Latch und ohne Hysterese.
+- Wenn `SOC <= NIGHT_DISCHARGE_STOP_SOC_PERCENT`, wird die Nachtentladung gestoppt.
+- Wenn der SOC später im selben Nachtfenster wieder `> NIGHT_DISCHARGE_STOP_SOC_PERCENT` ist und Nachtfenster, SOC-Freshness und MQTT-Kommandopfad gültig sind, darf die Nachtentladung wieder laufen.
+- Die in V12.8.15 eingeführte Nachtfenster-Latch-Logik wurde entfernt, damit der Reserve-SOC keine einmalige Sperre für das gesamte Nachtfenster mehr ist.
+- Latch-Diagnosefelder wurden aus Status-/Graph-/CSV-Datensatz entfernt; der Stop-Grund `NIGHT_RESERVE_SOC` bleibt erhalten.
+- Settings-UI mit `hh:mm`-Zeitfeldern und automatischer Normalisierung aus V12.8.15 bleibt erhalten.
+- Zusätzliche Tests sichern Stop bei `SOC <= Reserve-SOC`, Wiederanlauf bei `SOC > Reserve-SOC` im selben Nachtfenster, Stop-Grund-Reset und entfernte Latch-Felder ab.
+- Keine Änderung an MQTT-Subscriptions, MQTT-Kommandostruktur oder AUTO-Regelstrategie.
 
 ## Wichtige Änderungen in V12.8.15
 

@@ -4,7 +4,7 @@ import unittest
 from config_manager import DEFAULT_CONFIG, validate_config
 from config_validator import split_issues, validate_config_semantics
 from csv_logger import CSV_FIELDS
-from tests.test_operation_priority import base_cfg, fresh_state, make_controller
+from tests.test_operation_priority import OkShelly, base_cfg, fresh_state, make_controller
 from web_ui import apply_night_time_form_fields, build_settings_page, parse_hhmm
 
 
@@ -23,32 +23,40 @@ class V12815NightModeReserveSocTests(unittest.TestCase):
 
         self.assertEqual(state.current_mode, "NIGHT_DISCHARGE")
         self.assertIn(("output", 400, False), mqtt.commands)
-        self.assertFalse(state.night_discharge_latched_off)
         self.assertIsNone(state.night_discharge_stop_soc_percent)
+        self.assertEqual(state.night_discharge_stop_reason, "none")
         self.assertNotIn("NIGHT_RESERVE_SOC", state.active_limiters)
 
-    def test_night_discharge_stops_and_latches_at_reserve_soc(self):
-        cfg = base_cfg(NIGHT_DISCHARGE_ENABLED=True, NIGHT_DISCHARGE_STOP_SOC_PERCENT=35)
-        controller, state, mqtt, shelly = make_controller(cfg, state=fresh_state(35))
+    def test_night_discharge_reserve_soc_pauses_fixed_night_mode_and_uses_auto_grid_control(self):
+        cfg = base_cfg(NIGHT_DISCHARGE_ENABLED=True, NIGHT_DISCHARGE_STOP_SOC_PERCENT=35, DEADBAND_W=80)
+        state = fresh_state(35)
+        with state.lock:
+            state.current_mode = "NIGHT_DISCHARGE"
+            state.last_output_power = 400
+            state.technical_control_path = "NIGHT_MODE -> OUTPUT"
+        controller, state, mqtt, shelly = make_controller(cfg, state=state, shelly=OkShelly(300))
         controller.is_night_discharge_active = lambda _cfg: True
 
         self._run_full_cycle(controller, cfg)
 
-        self.assertEqual(state.current_mode, "STOP_HOLD")
-        self.assertTrue(state.night_discharge_latched_off)
+        self.assertEqual(shelly.calls, 1)
         self.assertEqual(state.night_discharge_stop_soc_percent, 35)
+        self.assertEqual(state.night_discharge_stop_reason, "NIGHT_RESERVE_SOC")
         self.assertIn("NIGHT_RESERVE_SOC", state.active_limiters)
+        self.assertNotEqual(state.current_mode, "STOP_HOLD")
+        self.assertEqual(state.current_mode, "DISCHARGE")
         self.assertIn(("output", 0, True), mqtt.commands)
-        self.assertIn("Reserve-SOC 35 % erreicht", state.control_reason)
-        self.assertIn("NIGHT_MODE -> RESERVE_SOC", state.technical_control_path)
+        self.assertTrue(any(cmd[0] == "output" and cmd[1] > 0 for cmd in mqtt.commands))
+        self.assertTrue(state.technical_control_path.startswith("GRID -> DISCHARGE"))
 
-    def test_reserve_soc_latch_prevents_restart_in_same_night_window(self):
+    def test_reserve_soc_allows_fixed_night_discharge_again_when_soc_rises_above_threshold(self):
         cfg = base_cfg(NIGHT_DISCHARGE_ENABLED=True, NIGHT_DISCHARGE_STOP_SOC_PERCENT=35)
         state = fresh_state(35)
-        controller, state, mqtt, shelly = make_controller(cfg, state=state)
+        controller, state, mqtt, shelly = make_controller(cfg, state=state, shelly=OkShelly(0))
         controller.is_night_discharge_active = lambda _cfg: True
 
         self._run_full_cycle(controller, cfg)
+        self.assertEqual(state.night_discharge_stop_reason, "NIGHT_RESERVE_SOC")
         mqtt.commands.clear()
         with state.lock:
             state.battery_soc = 37
@@ -56,30 +64,48 @@ class V12815NightModeReserveSocTests(unittest.TestCase):
 
         self._run_full_cycle(controller, cfg)
 
-        self.assertEqual(state.current_mode, "STOP_HOLD")
-        self.assertTrue(state.night_discharge_latched_off)
-        self.assertIn("NIGHT_RESERVE_SOC", state.active_limiters)
-        self.assertNotIn(("output", 400, False), mqtt.commands)
+        self.assertEqual(state.current_mode, "NIGHT_DISCHARGE")
+        self.assertEqual(state.night_discharge_stop_reason, "none")
+        self.assertNotIn("NIGHT_RESERVE_SOC", state.active_limiters)
+        self.assertIn(("output", 400, False), mqtt.commands)
 
-    def test_latch_resets_after_leaving_night_window(self):
+    def test_stop_reason_resets_after_leaving_night_window(self):
         cfg = base_cfg(NIGHT_DISCHARGE_ENABLED=True, NIGHT_DISCHARGE_STOP_SOC_PERCENT=35)
         state = fresh_state(35)
-        controller, state, mqtt, shelly = make_controller(cfg, state=state)
+        controller, state, mqtt, shelly = make_controller(cfg, state=state, shelly=OkShelly(0))
         active = {"value": True}
         controller.is_night_discharge_active = lambda _cfg: active["value"]
 
         self._run_full_cycle(controller, cfg)
-        self.assertTrue(state.night_discharge_latched_off)
+        self.assertEqual(state.night_discharge_stop_reason, "NIGHT_RESERVE_SOC")
 
         active["value"] = False
         with state.lock:
             state.battery_soc = 80
             state.last_soc_update_epoch = time.time()
-        # AUTO path may fail due missing Shelly, but latch reset happens before that.
+        # AUTO path may fail due missing Shelly, but stop reason reset happens before that.
         controller.run_once(cfg)
 
-        self.assertFalse(state.night_discharge_latched_off)
         self.assertEqual(state.night_discharge_stop_reason, "none")
+
+
+    def test_reserve_soc_does_not_reset_existing_auto_discharge_each_cycle(self):
+        cfg = base_cfg(NIGHT_DISCHARGE_ENABLED=True, NIGHT_DISCHARGE_STOP_SOC_PERCENT=35, DEADBAND_W=80)
+        state = fresh_state(35)
+        with state.lock:
+            state.current_mode = "DISCHARGE"
+            state.last_output_power = 120
+            state.technical_control_path = "GRID -> DISCHARGE -> OUTPUT"
+        controller, state, mqtt, shelly = make_controller(cfg, state=state, shelly=OkShelly(300))
+        controller.is_night_discharge_active = lambda _cfg: True
+
+        self._run_full_cycle(controller, cfg)
+
+        self.assertEqual(shelly.calls, 1)
+        self.assertEqual(state.current_mode, "DISCHARGE")
+        self.assertNotIn(("output", 0, True), mqtt.commands)
+        self.assertGreater(state.last_output_power, 0)
+        self.assertIn("NIGHT_RESERVE_SOC", state.active_limiters)
 
     def test_global_min_soc_still_takes_precedence(self):
         cfg = base_cfg(NIGHT_DISCHARGE_ENABLED=True, MIN_SOC_PERCENT=15, NIGHT_DISCHARGE_STOP_SOC_PERCENT=35)
@@ -90,7 +116,7 @@ class V12815NightModeReserveSocTests(unittest.TestCase):
 
         self.assertEqual(state.current_mode, "SAFE_STATE")
         self.assertIn("MIN_SOC", state.active_limiters)
-        self.assertFalse(state.night_discharge_latched_off)
+        self.assertEqual(state.night_discharge_stop_reason, "none")
 
     def test_night_stop_soc_validation_rejects_below_global_min_soc(self):
         cfg = dict(DEFAULT_CONFIG)
@@ -102,7 +128,8 @@ class V12815NightModeReserveSocTests(unittest.TestCase):
 
     def test_csv_fields_include_night_reserve_soc_contract(self):
         self.assertIn("night_discharge_stop_soc_percent", CSV_FIELDS)
-        self.assertIn("night_discharge_latched_off", CSV_FIELDS)
+        self.assertNotIn("night_discharge_latched_off", CSV_FIELDS)
+        self.assertNotIn("night_discharge_latch_reason", CSV_FIELDS)
         self.assertIn("night_discharge_stop_reason", CSV_FIELDS)
 
 

@@ -816,7 +816,26 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
         "STOP_HOLD": "#777", "MANUAL_FIXED_DISCHARGE": "#2196F3", "MANUAL_FIXED_CHARGE": "#4CAF50",
     }.get(current_mode, "#777")
     mqtt_color = "#4CAF50" if s["mqtt_connected"] else "#f44336"
-    grid_class = "red" if s["grid_power"] > 0 else "green"
+    grid_measurement_valid = bool(s.get("grid_power_valid", False))
+    raw_grid_value = float(s.get("raw_grid_power", 0.0) or 0.0)
+    smoothed_grid_value = float(s.get("grid_power", 0.0) or 0.0)
+    grid_age = s.get("grid_power_age_seconds")
+    grid_reason = str(s.get("grid_power_validity_reason", ""))
+    grid_class = "red" if raw_grid_value > 0 else ("green" if raw_grid_value < 0 else "blue")
+    if grid_measurement_valid:
+        grid_main_value = f"{raw_grid_value:.1f} W"
+        grid_short_status = "aktueller Messwert"
+    else:
+        grid_main_value = "nicht aktuell"
+        grid_short_status = f"nicht gültig: {html.escape(grid_reason or 'unbekannt')}"
+        grid_class = "gray"
+    grid_details = (
+        f"{html.escape(grid_short_status)}<br>"
+        f"Rohwert / ungefilterter Messwert: {raw_grid_value:.1f} W<br>"
+        f"Geglätteter AUTO-Regelwert: {smoothed_grid_value:.1f} W"
+        + ("<br><span class='small'>Im festen Nachtmodus ist der geglättete AUTO-Regelwert nicht der aktive Hauptstatuswert.</span>" if current_mode == "NIGHT_DISCHARGE" else "")
+        + f"<br>Alter: {age_text(grid_age)}<br>positiv = <span class=\"red\">Netzbezug</span>, negativ = <span class=\"green\">Einspeisung</span>"
+    )
     active_limiters = list(s.get("active_limiters", []))
     limiter_human = limiter_text(active_limiters)
     limiter_technical = technical_limiter_text(active_limiters)
@@ -837,16 +856,17 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
     }.get(manual_mode_code, "#777")
 
     night_stop_soc = s.get("night_discharge_stop_soc_percent")
-    night_latched = bool(s.get("night_discharge_latched_off", False))
     night_stop_reason = str(s.get("night_discharge_stop_reason", "none"))
-    night_status_text = "aktiv" if current_mode == "NIGHT_DISCHARGE" else ("gestoppt" if night_latched else ("bereit" if cfg.get("NIGHT_DISCHARGE_ENABLED") else "aus"))
-    night_status_color = "#9C27B0" if current_mode == "NIGHT_DISCHARGE" else ("#ff9800" if night_latched else ("#4CAF50" if cfg.get("NIGHT_DISCHARGE_ENABLED") else "#777"))
+    night_stopped = current_mode != "NIGHT_DISCHARGE" and night_stop_reason not in {"", "none", "None"}
+    night_paused_for_reserve = night_stop_reason == "NIGHT_RESERVE_SOC"
+    night_status_text = "aktiv" if current_mode == "NIGHT_DISCHARGE" else (("pausiert" if night_paused_for_reserve else "gestoppt") if night_stopped else ("bereit" if cfg.get("NIGHT_DISCHARGE_ENABLED") else "aus"))
+    night_status_color = "#9C27B0" if current_mode == "NIGHT_DISCHARGE" else ("#ff9800" if night_stopped else ("#4CAF50" if cfg.get("NIGHT_DISCHARGE_ENABLED") else "#777"))
     night_details = (
         f"Zeitfenster: {int(cfg.get('NIGHT_START_HOUR', 0)):02d}:{int(cfg.get('NIGHT_START_MINUTE', 0)):02d}–{int(cfg.get('NIGHT_END_HOUR', 0)):02d}:{int(cfg.get('NIGHT_END_MINUTE', 0)):02d}<br>"
         f"Leistung: {int(cfg.get('NIGHT_DISCHARGE_POWER_W', 0))} W<br>"
         f"Reserve-SOC: {night_stop_soc if night_stop_soc is not None else '-'} %<br>"
-        f"Latch aktiv: {'ja' if night_latched else 'nein'}<br>"
         f"Stop-Grund: {html.escape(night_stop_reason)}"
+        + ("<br>Feste Nachtentladung pausiert; AUTO-Regelung bleibt für Lastspitzen aktiv." if night_paused_for_reserve else "")
     )
 
     zendure_setpoint_signed = int(s.get("last_input_power", 0) or 0)
@@ -1011,10 +1031,10 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
         <div class="grid" id="status-overview">
             {status_card(
                 'Netzleistung',
-                f'{s["grid_power"]:.1f} W',
-                f'Geglätteter Regelwert<br>Rohwert / ungefilterter Messwert: {s["raw_grid_power"]:.1f} W<br>positiv = <span class="red">Netzbezug</span>, negativ = <span class="green">Einspeisung</span>',
+                grid_main_value,
+                grid_details,
                 grid_class,
-                'Der große Wert ist der geglättete Messwert und wird für die Regelung verwendet. Der Rohwert ist der direkte aktuelle Messwert vom Uni-Meter/Shelly ohne Glättung. Unterschiede entstehen durch Mittelwertbildung, Lastsprünge oder Messrauschen.',
+                'Der große Wert zeigt den aktuellen/frischen Netzleistungs-Messwert, nicht einen möglicherweise veralteten AUTO-Regelwert. Der geglättete Wert bleibt als Diagnose sichtbar, wird aber in festen Modi nicht als normaler Status-Hauptwert verwendet. Wenn die Messung nicht aktuell ist, wird kein alter Zahlenwert prominent als aktuelle Netzleistung angezeigt.',
                 settings_group='Regelung'
             )}
             {status_card(
@@ -1058,7 +1078,7 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
                 badge(night_status_text, night_status_color),
                 night_details,
                 'gray',
-                'Zeigt den Zustand der festen Nachtentladung. Wenn ein Nachtmodus Reserve-SOC gesetzt ist, stoppt die Nachtentladung bei Erreichen dieser Grenze und bleibt für dieses Nachtfenster gesperrt. Die Sperre wird zurückgesetzt, sobald das Nachtfenster verlassen wurde.',
+                'Zeigt den Zustand der festen Nacht-Basisentladung. Innerhalb des Nachtfensters kann Zendure mit fester Leistung entladen. Wenn der Nachtmodus Reserve-SOC erreicht ist, wird nur diese feste Basisentladung pausiert; die normale AUTO-Regelung bleibt für Lastspitzen aktiv und darf bis zum globalen Mindest-SOC entladen.',
                 settings_group='Nachtmodus'
             )}
             {status_card(

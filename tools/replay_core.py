@@ -317,6 +317,42 @@ def _classify_state(
     return mode or "OTHER"
 
 
+
+def _dq_row_pct(count: Any, total: Any) -> str:
+    try:
+        total_i = int(total or 0)
+        count_i = int(count or 0)
+    except Exception:
+        return "-"
+    if total_i <= 0:
+        return "-"
+    return f"{(count_i * 100.0 / total_i):.1f} %".replace(".", ",")
+
+
+def _data_quality_recommendation_text(result: Dict[str, Any]) -> str:
+    dq = result.get("data_quality") or {}
+    rows = int(result.get("rows") or 0)
+    duration = float(result.get("duration_seconds") or 0)
+    facts: List[str] = []
+    if int(dq.get("gap_events") or 0):
+        facts.append(f"{int(dq.get('gap_events') or 0)} größere Zeitlücken")
+    if int(dq.get("missing_grid_rows") or 0):
+        missing = int(dq.get("missing_grid_rows") or 0)
+        facts.append(f"{missing} Zeilen ohne Netzleistung ({_dq_row_pct(missing, rows)})")
+    if int(dq.get("missing_soc_rows") or 0):
+        missing = int(dq.get("missing_soc_rows") or 0)
+        facts.append(f"{missing} Zeilen ohne Zendure-SOC ({_dq_row_pct(missing, rows)})")
+    if int(dq.get("missing_zendure_actual_rows") or 0):
+        missing = int(dq.get("missing_zendure_actual_rows") or 0)
+        facts.append(f"{missing} Zeilen ohne Zendure-Istleistung ({_dq_row_pct(missing, rows)})")
+    safe_s = float(dq.get("safe_state_seconds") or 0)
+    if safe_s > 0:
+        safe_pct = f"{(safe_s * 100.0 / duration):.1f} %".replace(".", ",") if duration > 0 else "-"
+        facts.append(f"SAFE_STATE {safe_s:.0f} s ({safe_pct})")
+    if not facts:
+        return "Datenbasis eingeschränkt; Details im Block Datenqualität prüfen."
+    return "Datenbasis eingeschränkt: " + "; ".join(facts[:4]) + ". Details im Block Datenqualität zeigen betroffene Felder, Umfang und Relevanz."
+
 def _state_is_controllable(state: str) -> bool:
     return state in {"AUTO_CHARGE", "AUTO_DISCHARGE", "HOLD_DEADBAND", "HOLD_OUTSIDE_DEADBAND", "NIGHT_DISCHARGE"}
 

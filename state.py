@@ -162,11 +162,10 @@ class ControllerState:
     control_missing_required_sources: List[str] = field(default_factory=list)
     control_data_quality: str = "not_evaluated"
 
-    # Nachtmodus Reserve-/Stop-SOC. Der Latch verhindert Wiederanlauf im
-    # gleichen Nachtfenster, wenn der Reserve-SOC einmal erreicht wurde.
+    # Nachtmodus Reserve-/Stop-SOC. Der Stop-SOC ist eine laufende Untergrenze:
+    # bei SOC <= Stop-SOC wird gestoppt, bei SOC > Stop-SOC darf im gleichen
+    # Nachtfenster wieder entladen werden. Kein Latch, keine Hysterese.
     night_discharge_stop_soc_percent: Optional[int] = None
-    night_discharge_latched_off: bool = False
-    night_discharge_latch_reason: str = "none"
     night_discharge_stop_reason: str = "none"
 
     # Zendure Akkutemperaturen
@@ -464,18 +463,10 @@ class ControllerState:
             self.active_limiters = []
             self.last_limit_reason = "none"
 
-    def reset_night_discharge_latch(self) -> None:
+    def reset_night_discharge_stop_reason(self) -> None:
         with self.lock:
-            if self.night_discharge_latched_off or self.night_discharge_stop_reason != "none":
-                self.night_discharge_latched_off = False
-                self.night_discharge_latch_reason = "none"
+            if self.night_discharge_stop_reason != "none":
                 self.night_discharge_stop_reason = "none"
-
-    def latch_night_discharge_off(self, reason: str) -> None:
-        with self.lock:
-            self.night_discharge_latched_off = True
-            self.night_discharge_latch_reason = reason
-            self.night_discharge_stop_reason = reason
 
     def add_limiter(self, limiter: str) -> None:
         with self.lock:
@@ -706,8 +697,6 @@ class ControllerState:
                 "technical_path_label": path_label(self.technical_control_path),
                 "control_reason": self.control_reason,
                 "night_discharge_stop_soc_percent": self.night_discharge_stop_soc_percent,
-                "night_discharge_latched_off": self.night_discharge_latched_off,
-                "night_discharge_latch_reason": self.night_discharge_latch_reason,
                 "night_discharge_stop_reason": self.night_discharge_stop_reason,
 
                 # MQTT-Kommandodynamik / Diagnose
@@ -819,8 +808,6 @@ class ControllerState:
                 "control_missing_required_sources": list(self.control_missing_required_sources),
                 "control_data_quality": self.control_data_quality,
                 "night_discharge_stop_soc_percent": self.night_discharge_stop_soc_percent,
-                "night_discharge_latched_off": self.night_discharge_latched_off,
-                "night_discharge_latch_reason": self.night_discharge_latch_reason,
                 "night_discharge_stop_reason": self.night_discharge_stop_reason,
                 "mqtt_battery_soc": self.mqtt_battery_soc,
                 "local_api_soc": self.local_api_soc,

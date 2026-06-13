@@ -93,8 +93,6 @@ CSV_FIELDS: List[str] = [
 
     # Nachtmodus / Reserve-SOC
     "night_discharge_stop_soc_percent",
-    "night_discharge_latched_off",
-    "night_discharge_latch_reason",
     "night_discharge_stop_reason",
 
     # Tatsächlich gesendete MQTT-Kommandodynamik

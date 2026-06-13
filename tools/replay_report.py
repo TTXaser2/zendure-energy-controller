@@ -111,6 +111,18 @@ TERM_HELP.update({
     "Anteil": "Prozentanteil bezogen auf die im jeweiligen Block genannte Basis, z. B. bewertbare Kommandos oder analysierte Zeitdauer.",
 })
 
+TERM_HELP.update({
+    "NIGHT_DISCHARGE": "Feste Nacht-Basisentladung. Der Controller fordert im Nachtfenster eine konstante Entladeleistung an. Seit V12.8.17 bedeutet ein erreichter Nachtmodus-Reserve-SOC: nur diese feste Basisentladung pausiert; AUTO kann Lastspitzen weiterhin ausregeln.",
+    "HOLD_OUTSIDE_DEADBAND": "Haltezustand außerhalb des Deadbands. Der Controller sendet in diesem Moment kein neues Kommando, z. B. weil Mindeständerung, Sperrzeit, Grenzen oder andere Schutzlogik eine Änderung verhindern.",
+    "CROSS_CHARGE_BLOCK": "Cross-Charge-Schutz blockiert oder reduziert Zendure-Ladung, weil die Zusatzbatterie/SMA-Quelle entlädt oder nicht genügend echter Überschuss vorhanden ist.",
+    "CROSS_CHARGE_LIMIT": "Cross-Charge-Schutz begrenzt Zendure-Ladung, um Batterie-zu-Batterie-Ladung zu vermeiden.",
+    "CROSS_CHARGE": "Cross-Charge-bezogener Betriebszustand. Diese Zustände zeigen, dass der Schutz gegen gleichzeitige Zusatzbatterie-Entladung und Zendure-Ladung relevant war.",
+    "verbessert": "Einige Messzyklen nach einem MQTT-Kommando war die absolute Netzabweichung kleiner. Das ist ein Hinweis auf wirksame Regelung, aber kein harter Kausalbeweis.",
+    "neutral": "Nach dem MQTT-Kommando war keine eindeutige Verbesserung oder Verschlechterung der absoluten Netzabweichung erkennbar.",
+    "verschlechtert": "Einige Messzyklen nach einem MQTT-Kommando war die absolute Netzabweichung größer. Einzelne Fälle können durch Last-/PV-Sprünge entstehen; Häufung wäre auffällig.",
+    "nicht bewertbar": "Das Kommando konnte nicht belastbar bewertet werden, z. B. wegen fehlender Folgemesspunkte, Datenlücken, Safe-State oder stark überlagernden Last-/PV-Sprüngen.",
+})
+
 try:
     from version import APP_VERSION as REPORT_VERSION
 except Exception:  # pragma: no cover
@@ -321,14 +333,70 @@ def overview_table(result: Dict[str, Any]) -> str:
     ])
 
 
+
+def _row_pct(count: Any, total: Any) -> str:
+    try:
+        total_i = int(total or 0)
+        count_i = int(count or 0)
+    except Exception:
+        return "-"
+    if total_i <= 0:
+        return "-"
+    return _pct(count_i * 100.0 / total_i)
+
+
+def _data_quality_facts(result: Dict[str, Any]) -> List[str]:
+    dq = result.get("data_quality") or {}
+    rows = int(result.get("rows") or 0)
+    duration = float(result.get("duration_seconds") or 0)
+    facts: List[str] = []
+    gap_events = int(dq.get("gap_events") or 0)
+    missing_grid = int(dq.get("missing_grid_rows") or 0)
+    missing_soc = int(dq.get("missing_soc_rows") or 0)
+    missing_actual = int(dq.get("missing_zendure_actual_rows") or 0)
+    safe_s = float(dq.get("safe_state_seconds") or 0)
+    if gap_events:
+        facts.append(f"{gap_events} größere Zeitlücken")
+    if missing_grid:
+        facts.append(f"{missing_grid} Zeilen ohne Netzleistung ({_row_pct(missing_grid, rows)} der Zeilen)")
+    if missing_soc:
+        facts.append(f"{missing_soc} Zeilen ohne Zendure-SOC ({_row_pct(missing_soc, rows)} der Zeilen)")
+    if missing_actual:
+        facts.append(f"{missing_actual} Zeilen ohne Zendure-Istleistung ({_row_pct(missing_actual, rows)} der Zeilen)")
+    if safe_s > 0:
+        facts.append(f"SAFE_STATE {_duration(safe_s)} ({_pct(safe_s * 100.0 / duration) if duration > 0 else '-'})")
+    duplicate_rows = int(result.get("duplicate_rows_removed") or 0)
+    if duplicate_rows:
+        facts.append(f"{duplicate_rows} doppelte Messpunkte entfernt")
+    return facts
+
+
+def _data_quality_recommendation_text(result: Dict[str, Any]) -> str:
+    facts = _data_quality_facts(result)
+    if not facts:
+        return "Datenbasis ist eingeschränkt; Details im Block Datenqualität prüfen."
+    return "Datenbasis eingeschränkt: " + "; ".join(facts[:4]) + ". Betroffene Auswertungen sind je nach fehlendem Feld eingeschränkt; Details im Block Datenqualität."
+
 def data_quality_table(result: Dict[str, Any]) -> str:
     dq = result.get("data_quality") or {}
+    rows = int(result.get("rows") or 0)
+    duration = float(result.get("duration_seconds") or 0)
     warnings = dq.get("warnings") or []
+    facts = _data_quality_facts(result)
     warning_html = SafeHtml("<br>".join(html.escape(str(w)) for w in warnings)) if warnings else "keine"
+    if facts:
+        summary = SafeHtml("<b>Gefunden:</b><br>" + "<br>".join(html.escape(f) for f in facts) + "<br><br><b>Einordnung:</b> " + html.escape(_data_quality_recommendation_text(result)))
+    else:
+        summary = SafeHtml("Keine relevanten Datenlücken oder fehlenden Pflichtwerte erkannt.")
+    safe_s = float(dq.get("safe_state_seconds") or 0)
     return _table([
-        ("Status", dq.get("status", "-")), ("Datenlücken", dq.get("gap_events", 0)),
-        ("Fehlende Netzwerte", dq.get("missing_grid_rows", 0)), ("Fehlende SOC-Werte", dq.get("missing_soc_rows", 0)),
-        ("Fehlende Zendure-Istwerte", dq.get("missing_zendure_actual_rows", 0)), ("SAFE_STATE-Zeit", _duration(dq.get("safe_state_seconds", 0))),
+        ("Status", dq.get("status", "-")),
+        ("Zusammenfassung", summary),
+        ("Datenlücken", dq.get("gap_events", 0)),
+        ("Fehlende Netzwerte", f"{dq.get('missing_grid_rows', 0)} von {rows} Zeilen ({_row_pct(dq.get('missing_grid_rows', 0), rows)})"),
+        ("Fehlende SOC-Werte", f"{dq.get('missing_soc_rows', 0)} von {rows} Zeilen ({_row_pct(dq.get('missing_soc_rows', 0), rows)})"),
+        ("Fehlende Zendure-Istwerte", f"{dq.get('missing_zendure_actual_rows', 0)} von {rows} Zeilen ({_row_pct(dq.get('missing_zendure_actual_rows', 0), rows)})"),
+        ("SAFE_STATE-Zeit", f"{_duration(safe_s)} ({_pct(safe_s * 100.0 / duration) if duration > 0 else '-'})"),
         ("Hinweise", warning_html),
     ])
 
@@ -473,7 +541,10 @@ def _chart_info(title: str, text: str) -> str:
 def _bar_value(label: str, value_text: str, width_value: float, max_value: float, help_key: str = "", css: str = "bar") -> SafeHtml:
     width = 0 if max_value <= 0 else max(0.0, min(100.0, float(width_value or 0) / max_value * 100.0))
     help_html = ""
-    help_text = TERM_HELP.get(help_key or label)
+    key = help_key or label
+    help_text = TERM_HELP.get(key) or TERM_HELP.get(label)
+    if not help_text and str(key).startswith("CROSS_CHARGE"):
+        help_text = TERM_HELP.get("CROSS_CHARGE")
     if help_text:
         # The details element intentionally sits on the chart row grid itself, not inside
         # the label span. This lets the opened text use the full chart width and keeps
@@ -503,6 +574,7 @@ def charts_html(result: Dict[str, Any]) -> str:
         percent = item.get("percent", 0)
         state_items.append((str(item.get("mode")), f"{_duration(seconds)} / {_pct(percent)}", seconds, str(item.get("mode"))))
     command_basis = int((ce.get("improved_count", 0) or 0) + (ce.get("neutral_count", 0) or 0) + (ce.get("worse_count", 0) or 0))
+    command_total = command_basis + int(ce.get("unknown_count", 0) or 0)
     html_parts = ["<div class='chartgrid'>"]
     html_parts.append(
         "<div class='chart-card'><h4>Abweichungsursachen</h4>"
@@ -530,12 +602,12 @@ def charts_html(result: Dict[str, Any]) -> str:
         "<div class='chart-card'><h4>MQTT-Wirkung</h4>"
         + _chart_info("MQTT-Wirkung", "Anzahl der MQTT-Kommandos nach grober Wirkung. Verbessert bedeutet: einige Zyklen später war die absolute Netzabweichung kleiner. Die Aussage ist ein Hinweis, kein Kausalbeweis, weil PV und Hauslast parallel schwanken können.")
         + str(_bars_text([
-            ("verbessert", f"{_count(ce.get('improved_count', 0), 'Kommandos')} / {_pct(ce.get('improved_percent', 0))} der bewertbaren", ce.get("improved_count", 0), "Verbessert"),
-            ("neutral", f"{_count(ce.get('neutral_count', 0), 'Kommandos')} / {_pct(ce.get('no_effect_percent', 0))} der bewertbaren", ce.get("neutral_count", 0), "Neutral"),
-            ("verschlechtert", f"{_count(ce.get('worse_count', 0), 'Kommandos')}", ce.get("worse_count", 0), "Verschlechtert"),
-            ("nicht bewertbar", f"{_count(ce.get('unknown_count', 0), 'Kommandos')}", ce.get("unknown_count", 0), "Nicht bewertbar"),
+            ("verbessert", f"{_count(ce.get('improved_count', 0), 'Kommandos')} / {_pct(ce.get('improved_percent', 0))} der bewertbaren", ce.get("improved_count", 0), "verbessert"),
+            ("neutral", f"{_count(ce.get('neutral_count', 0), 'Kommandos')} / {_pct(ce.get('no_effect_percent', 0))} der bewertbaren", ce.get("neutral_count", 0), "neutral"),
+            ("verschlechtert", f"{_count(ce.get('worse_count', 0), 'Kommandos')} / {_pct(ce.get('worse_percent', 0))} der bewertbaren", ce.get("worse_count", 0), "verschlechtert"),
+            ("nicht bewertbar", f"{_count(ce.get('unknown_count', 0), 'Kommandos')} / {_pct((float(ce.get('unknown_count', 0) or 0) / command_total * 100.0) if command_total else 0)} aller", ce.get("unknown_count", 0), "nicht bewertbar"),
         ]))
-        + f"<p class='small'>Bewertbare Basis: {_count(command_basis, 'Kommandos')}.</p></div>"
+        + f"<p class='small'>Balkenbasis: absolute Anzahl Kommandos in diesem Block. Bewertbare Basis: {_count(command_basis, 'Kommandos')}; gesamt inklusive nicht bewertbar: {_count(command_total, 'Kommandos')}.</p></div>"
     )
     html_parts.append("</div>")
     return "".join(html_parts)
