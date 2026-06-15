@@ -317,6 +317,23 @@ def _classify_state(
     return mode or "OTHER"
 
 
+def _state_is_controllable(state: str) -> bool:
+    return state in {"AUTO_CHARGE", "AUTO_DISCHARGE", "HOLD_DEADBAND", "HOLD_OUTSIDE_DEADBAND", "NIGHT_DISCHARGE"}
+
+
+def _rating_green_yellow_red(value: float, green: float, yellow: float, lower_is_better: bool = True) -> str:
+    if lower_is_better:
+        if value <= green:
+            return "green"
+        if value <= yellow:
+            return "yellow"
+        return "red"
+    if value >= green:
+        return "green"
+    if value >= yellow:
+        return "yellow"
+    return "red"
+
 
 def _dq_row_pct(count: Any, total: Any) -> str:
     try:
@@ -353,23 +370,6 @@ def _data_quality_recommendation_text(result: Dict[str, Any]) -> str:
         return "Datenbasis eingeschränkt; Details im Block Datenqualität prüfen."
     return "Datenbasis eingeschränkt: " + "; ".join(facts[:4]) + ". Details im Block Datenqualität zeigen betroffene Felder, Umfang und Relevanz."
 
-def _state_is_controllable(state: str) -> bool:
-    return state in {"AUTO_CHARGE", "AUTO_DISCHARGE", "HOLD_DEADBAND", "HOLD_OUTSIDE_DEADBAND", "NIGHT_DISCHARGE"}
-
-
-def _rating_green_yellow_red(value: float, green: float, yellow: float, lower_is_better: bool = True) -> str:
-    if lower_is_better:
-        if value <= green:
-            return "green"
-        if value <= yellow:
-            return "yellow"
-        return "red"
-    if value >= green:
-        return "green"
-    if value >= yellow:
-        return "yellow"
-    return "red"
-
 
 def _make_recommendations(result: Dict[str, Any]) -> List[Dict[str, str]]:
     recs: List[Dict[str, str]] = []
@@ -383,7 +383,7 @@ def _make_recommendations(result: Dict[str, Any]) -> List[Dict[str, str]]:
     dq = result.get("data_quality") or {}
 
     if dq.get("status") != "ok":
-        recs.append({"severity": "warning", "topic": "Datenbasis", "text": "Die Analyse enthält Datenlücken oder fehlende Messwerte. Parameteränderungen sollten erst nach Prüfung der Datenqualität bewertet werden."})
+        recs.append({"severity": "warning", "topic": "Datenbasis", "text": _data_quality_recommendation_text(result)})
     if fair.get("controllable_avg_abs_grid_w", 0) > 300:
         recs.append({"severity": "warning", "topic": "Reglerqualität", "text": "Die beeinflussbare Restabweichung ist erhöht. Prüfe CONTROL_GAIN, SMOOTHING_FACTOR und MAX_POWER_STEP_W; bei träger Reaktion kann eine vorsichtig aggressivere Regelung sinnvoll sein."})
     if fair.get("non_controllable_percent", 0) > 50:

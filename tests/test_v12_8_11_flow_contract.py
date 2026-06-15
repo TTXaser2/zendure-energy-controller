@@ -27,7 +27,7 @@ class V12811FlowContractTests(unittest.TestCase):
 
         self._run_full_cycle(controller, cfg)
 
-        self.assertEqual(shelly.calls, 0)
+        self.assertEqual(shelly.calls, 1)
         self.assertEqual(state.current_mode, "NIGHT_DISCHARGE")
         self.assertFalse(state.grid_power_used_for_control)
         self.assertFalse(state.effective_export_power_valid)
@@ -71,7 +71,7 @@ class V12811FlowContractTests(unittest.TestCase):
 
         self._run_full_cycle(controller, cfg)
 
-        self.assertEqual(shelly.calls, 0)
+        self.assertEqual(shelly.calls, 1)
         self.assertEqual(state.current_mode, "SAFE_STATE")
         self.assertIn("SOC_STALE", state.active_limiters)
         self.assertIn("soc", state.control_required_sources)

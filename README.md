@@ -1,6 +1,6 @@
-Zendure Energy Controller Version 12.8.18
+Zendure Energy Controller Version 12.8.20
 
-# Zendure Energy Controller V12.8.18
+# Zendure Energy Controller V12.8.20
 
 Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, CSV-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
@@ -10,31 +10,39 @@ Lizenziert unter AGPL-3.0-or-later. Siehe `LICENSE`, `NOTICE` und `DISCLAIMER.md
 
 
 
+## Wichtige Änderungen in V12.8.20
 
-## Wichtige Änderungen in V12.8.18
+V12.8.20 ist ein gezieltes Analyse-/Diagramm-UI-Nacharbeitsrelease auf Basis von V12.8.19. Die AUTO-Regelstrategie, MQTT-Subscriptions, MQTT-Kommandostruktur und das CSV-Schema bleiben unverändert.
 
-V12.8.18 ist eine UI-/Analyse-Nacharbeit auf Basis von V12.8.17 ohne Änderung der AUTO-Regelstrategie und ohne Änderung an MQTT-Subscriptions oder CSV-Schema.
+- Analyse-Webseite / Diagramme:
+  - Balkenlayout nach dem abgestimmten Mockup-Prinzip umgebaut: Begriff und Balken stehen in der Hauptzeile, die Wert-/Prozentzeile steht darunter.
+  - Lange Werttexte drücken die Balken nicht mehr seitlich zusammen; die Balkenbreite wird visuell unabhängig vom Textbereich dargestellt.
+  - Mobile Darstellung robuster: Labels können umbrechen, Balken behalten eine definierte Breite, Werttexte stehen unterhalb.
+- Info-Texte:
+  - Fehlender Info-Text für `HOLD` ergänzt.
+  - Die im Controller/Replay bekannten Betriebszustände und MQTT-Wirkungskategorien sind explizit mit Hilfetexten abgedeckt.
+  - Neue Tests prüfen, dass bekannte Zustände nicht ohne Beschreibung in der Analyse auftauchen.
+- Keine Änderung an Statusseite, Regelalgorithmus, Datenmodell oder CSV-Schema gegenüber V12.8.19.
+- Finale Excel-Lernsimulation bleibt unverändert unter `tools/` enthalten.
 
-- Statusseite: Die Karte `Netzleistung` zeigt als großen Hauptwert nun den aktuellen/frischen Netzleistungs-Messwert. Der geglättete AUTO-Regelwert bleibt nur als Diagnose sichtbar und wird im festen Nachtmodus nicht mehr irreführend als Hauptstatuswert dargestellt.
-- Statusseite: Wenn die Netzmessung nicht aktuell/gültig ist, wird kein alter Zahlenwert prominent als aktuelle Netzleistung angezeigt.
-- Statusseite: Nachtmodus-Infotext an die V12.8.17-Semantik angepasst: Reserve-SOC pausiert nur die feste Nacht-Basisentladung, AUTO bleibt für Lastspitzen aktiv.
-- Analyse-Webseite: Auswahl-/Risikobox berechnet den Zeitraum bei Mehrdatei-Auswahl nun als globales Minimum aller Startzeitpunkte und globales Maximum aller Endzeitpunkte. Invertierte Vorschauzeiträume durch rotierende CSV-Dateien werden verhindert.
-- Analyse-Webseite: Bereich `Diagramme` ergänzt spezifischere Info-Texte für Betriebszustände und MQTT-Wirkung, u. a. `NIGHT_DISCHARGE`, `HOLD_OUTSIDE_DEADBAND`, `CROSS_CHARGE_*`, `verbessert`, `neutral`, `verschlechtert` und `nicht bewertbar`.
-- Analyse-Webseite: Mobile Darstellung der Balkendiagramme verbessert, damit Labels, Balken, Werte und Info-Links nicht überlappen.
-- Analyse-Webseite: MQTT-Wirkungsbalken verwenden nun eine konsistente absolute Balkenbasis innerhalb des Blocks; Anzahl, Prozentwert und Basis werden klarer ausgewiesen.
-- Analyse-Webseite: Datenqualitätswarnungen sind konkreter. Der Block zeigt nun, welche Werte fehlen, wie viele Zeilen/Prozent betroffen sind, SAFE_STATE-Anteile und eine kompakte Einordnung.
+## Wichtige Änderungen in V12.8.19
 
-## Wichtige Änderungen in V12.8.17
+V12.8.19 ist ein bereinigtes UI-/Analyse-Nacharbeitsrelease auf Basis von V12.8.17. Die problematische V12.8.18-Nacharbeit wurde nicht als fachliche Basis weitergeführt; die betroffenen Punkte wurden neu und gezielter umgesetzt. Die AUTO-Regelstrategie, MQTT-Subscriptions, MQTT-Kommandostruktur und das CSV-Schema bleiben unverändert.
 
-V12.8.17 ist ein gezielter Hotfix zur Nachtmodus-Reserve-SOC-Logik aus V12.8.16. Anlass war der Live-Test, bei dem der Controller nach Erreichen des Nachtmodus-Reserve-SOC im `STOP_HOLD` blieb und dadurch innerhalb des Nachtfensters nicht mehr auf reale Lastspitzen bzw. Netzbezug reagierte.
-
-- `NIGHT_DISCHARGE_STOP_SOC_PERCENT` pausiert jetzt nur noch die feste Nacht-Basisentladung.
-- Wenn `SOC <= NIGHT_DISCHARGE_STOP_SOC_PERCENT`, wird die feste Nachtentladung auf 0 W gesetzt, aber der Controller fällt danach in den normalen AUTO-Zweig zurück.
-- Im selben Nachtfenster wird dadurch wieder die Grid-/Shelly-/UniMeter-Netzleistung gelesen. Bei realem Netzbezug darf Zendure im AUTO-Modus bis zum globalen `MIN_SOC_PERCENT` entladen.
-- Der Nachtmodus-Status zeigt bei erreichtem Reserve-SOC nun sinngemäß `pausiert` statt einen vollständigen Stop/Hold.
-- Der Stop-Grund `NIGHT_RESERVE_SOC` bleibt als Diagnose erhalten; er bedeutet nun: feste Nachtentladung pausiert, AUTO-Regelung bleibt für Lastspitzen aktiv.
-- Die normale feste Nachtentladung bleibt weiterhin unabhängig von der Grid-Messung, solange der Reserve-SOC nicht erreicht ist.
-- Keine Änderung an MQTT-Subscriptions, MQTT-Kommandostruktur, CSV-Schema oder AUTO-Regelstrategie außerhalb des gezielten Übergangs von pausierter Nachtentladung in AUTO.
+- Statusseite / Netzleistung:
+  - Der Hauptwert der Karte `Netzleistung` zeigt wieder den aktuellen Shelly-/UniMeter-Rohmesswert, sofern dieser frisch verfügbar ist.
+  - Grid wird in festen Modi, festem Nachtmodus und STOP/HOLD best-effort für Anzeige/CSV aktualisiert, ohne diese Modi von Grid abhängig zu machen.
+  - AUTO-spezifische Diagnosewerte wie der geglättete AUTO-Regelwert werden in nicht aktiven Modi nicht mehr als statische Wattwerte präsentiert, sondern als `n.a. / nicht aktiv` gekennzeichnet.
+  - Wenn Grid wirklich nicht frisch ist, wird kein alter Zahlenwert als normaler Hauptstatuswert angezeigt.
+- Statusseite / Nachtmodus:
+  - Infotext an die V12.8.17-Semantik angepasst: `NIGHT_DISCHARGE_STOP_SOC_PERCENT` pausiert nur die feste Nacht-Basisentladung; AUTO bleibt für Lastspitzen bis zum globalen `MIN_SOC_PERCENT` aktiv.
+- Analyse-Webseite:
+  - Die Auswahl-/Risikobox berechnet bei Mehrdatei-Auswahl den Zeitraum als globales Minimum aller Startzeitpunkte bis globales Maximum aller Endzeitpunkte. Invertierte Vorschau-Zeiträume bei rotierenden CSVs werden dadurch verhindert.
+  - Der Diagramm-Bereich enthält spezifischere Info-Texte für Betriebszustände und MQTT-Wirkungskategorien.
+  - Die mobile Balkendarstellung wurde stabilisiert, damit Labels, Werte, Balken und Info-Links nicht überlappen.
+  - MQTT-Wirkungsbalken werden jetzt strikt nach absoluter Anzahl innerhalb des Blocks skaliert; `0 Kommandos` erzeugt keinen gefüllten Wertbalken.
+  - Die Datenqualitätswarnung wurde konkretisiert: betroffene Felder, Anzahl/Prozent, SAFE_STATE-Anteil und Einordnung werden besser sichtbar.
+- Finale Excel-Lernsimulation bleibt unverändert unter `tools/` enthalten.
 
 ## Wichtige Änderungen in V12.8.16
 

@@ -111,17 +111,71 @@ TERM_HELP.update({
     "Anteil": "Prozentanteil bezogen auf die im jeweiligen Block genannte Basis, z. B. bewertbare Kommandos oder analysierte Zeitdauer.",
 })
 
+# V12.8.20: Diagramm-Info-Texte müssen die im Controller/Replay-Code
+# möglichen Betriebszustände vollständig abdecken. Fehlende Beschreibungen
+# sollen über Tests auffallen statt durch generische UI-Texte kaschiert zu werden.
+KNOWN_OPERATING_STATES = {
+    "SAFE_STATE",
+    "MAX_SOC",
+    "MIN_SOC",
+    "CROSS_CHARGE_LIMIT",
+    "CROSS_CHARGE_BLOCK",
+    "CROSS_CHARGE",
+    "NIGHT_DISCHARGE",
+    "HOLD_DEADBAND",
+    "HOLD_OUTSIDE_DEADBAND",
+    "AUTO_CHARGE",
+    "AUTO_DISCHARGE",
+    "HOLD",
+    "CHARGE",
+    "DISCHARGE",
+    "CHARGE_RAMP_DOWN",
+    "DISCHARGE_RAMP_DOWN",
+    "BLOCKED_BY_SMA",
+    "STOP_HOLD",
+    "MANUAL_FIXED_CHARGE",
+    "MANUAL_FIXED_DISCHARGE",
+    "STARTUP",
+    "OTHER",
+}
+
+KNOWN_MQTT_EFFECT_STATES = {"verbessert", "neutral", "verschlechtert", "nicht bewertbar"}
+
 TERM_HELP.update({
     "NIGHT_DISCHARGE": "Feste Nacht-Basisentladung. Der Controller fordert im Nachtfenster eine konstante Entladeleistung an. Seit V12.8.17 bedeutet ein erreichter Nachtmodus-Reserve-SOC: nur diese feste Basisentladung pausiert; AUTO kann Lastspitzen weiterhin ausregeln.",
-    "HOLD_OUTSIDE_DEADBAND": "Haltezustand außerhalb des Deadbands. Der Controller sendet in diesem Moment kein neues Kommando, z. B. weil Mindeständerung, Sperrzeit, Grenzen oder andere Schutzlogik eine Änderung verhindern.",
+    "HOLD": "Allgemeiner Haltezustand. Der Controller sendet gerade kein neues Leistungs-Kommando. Je nach Situation liegt das am Deadband, an einer Mindeständerung, einer Schutzlogik oder an einem pausierten festen Modus.",
+    "HOLD_OUTSIDE_DEADBAND": "Haltezustand außerhalb des Deadbands. Der Controller sendet in diesem Moment kein neues Kommando, z. B. weil Mindeständerung, Sperrzeit, Grenzen oder andere Schutzlogik eine Änderung verhindert.",
+    "MAX_SOC": "Oberes SOC-Limit erreicht. Zusätzliche Ladung ist nicht sinnvoll oder nicht erlaubt; Einspeisung kann dann trotz verfügbarem Überschuss nicht vollständig durch Zendure reduziert werden.",
+    "MIN_SOC": "Unteres SOC-Limit erreicht. Zusätzliche Entladung ist nicht sinnvoll oder nicht erlaubt; Netzbezug kann dann trotz Bedarf nicht vollständig durch Zendure reduziert werden.",
     "CROSS_CHARGE_BLOCK": "Cross-Charge-Schutz blockiert oder reduziert Zendure-Ladung, weil die Zusatzbatterie/SMA-Quelle entlädt oder nicht genügend echter Überschuss vorhanden ist.",
     "CROSS_CHARGE_LIMIT": "Cross-Charge-Schutz begrenzt Zendure-Ladung, um Batterie-zu-Batterie-Ladung zu vermeiden.",
     "CROSS_CHARGE": "Cross-Charge-bezogener Betriebszustand. Diese Zustände zeigen, dass der Schutz gegen gleichzeitige Zusatzbatterie-Entladung und Zendure-Ladung relevant war.",
+    "AUTO_CHARGE": "Automatikbetrieb mit Ladeanforderung an Zendure, um Einspeisung zu reduzieren.",
+    "AUTO_DISCHARGE": "Automatikbetrieb mit Entladeanforderung an Zendure, um Netzbezug zu reduzieren.",
+    "CHARGE": "Controller fordert Ladung an. In der Analyse wird dieser technische Modus normalerweise als AUTO_CHARGE verdichtet, kann aber in historischen Logs direkt auftauchen.",
+    "DISCHARGE": "Controller fordert Entladung an. In der Analyse wird dieser technische Modus normalerweise als AUTO_DISCHARGE verdichtet, kann aber in historischen Logs direkt auftauchen.",
+    "CHARGE_RAMP_DOWN": "Ladeleistung wird kontrolliert reduziert, z. B. wegen kleinerem Überschuss, SOC-Grenze, Cross-Charge-Schutz oder geänderter Randbedingungen.",
+    "DISCHARGE_RAMP_DOWN": "Entladeleistung wird kontrolliert reduziert, z. B. wegen kleinerem Netzbezug, SOC-Grenze oder geänderter Randbedingungen.",
+    "BLOCKED_BY_SMA": "Zendure-Ladung ist blockiert oder reduziert, weil die Zusatzbatterie/SMA-Quelle entlädt. Das verhindert unerwünschtes Cross-Charge von Batterie zu Batterie.",
+    "STOP_HOLD": "Manueller Stop/Hold. Die Regelung sendet 0 W bzw. hält Zendure bewusst inaktiv; reale Messwerte wie Grid/SOC sollen trotzdem weiter angezeigt werden.",
+    "MANUAL_FIXED_CHARGE": "Manuelle feste Beladung. Die Automatik ist übersteuert und der Controller fordert eine feste Ladeleistung an, solange Grenzen und Schutzbedingungen dies erlauben.",
+    "MANUAL_FIXED_DISCHARGE": "Manuelle feste Entladung. Die Automatik ist übersteuert und der Controller fordert eine feste Entladeleistung an, solange Grenzen und Schutzbedingungen dies erlauben.",
+    "STARTUP": "Startphase des Controllers. Noch nicht alle Messwerte, MQTT-Zustände oder Regelpfade sind vollständig initialisiert.",
+    "OTHER": "Sonstiger oder historischer Betriebszustand, der nicht in eine der verdichteten Analyseklassen fällt. Dieser Eintrag sollte selten sein und bei Häufung geprüft werden.",
     "verbessert": "Einige Messzyklen nach einem MQTT-Kommando war die absolute Netzabweichung kleiner. Das ist ein Hinweis auf wirksame Regelung, aber kein harter Kausalbeweis.",
     "neutral": "Nach dem MQTT-Kommando war keine eindeutige Verbesserung oder Verschlechterung der absoluten Netzabweichung erkennbar.",
     "verschlechtert": "Einige Messzyklen nach einem MQTT-Kommando war die absolute Netzabweichung größer. Einzelne Fälle können durch Last-/PV-Sprünge entstehen; Häufung wäre auffällig.",
     "nicht bewertbar": "Das Kommando konnte nicht belastbar bewertet werden, z. B. wegen fehlender Folgemesspunkte, Datenlücken, Safe-State oder stark überlagernden Last-/PV-Sprüngen.",
 })
+
+
+def missing_chart_help_keys(keys: Iterable[str]) -> List[str]:
+    """Return chart/help keys without explicit explanation.
+
+    Used by tests to ensure UI explanation gaps are found during development
+    instead of hidden behind generic fallback texts.
+    """
+    return sorted({str(k) for k in keys if str(k) and str(k) not in TERM_HELP})
 
 try:
     from version import APP_VERSION as REPORT_VERSION
@@ -333,7 +387,6 @@ def overview_table(result: Dict[str, Any]) -> str:
     ])
 
 
-
 def _row_pct(count: Any, total: Any) -> str:
     try:
         total_i = int(total or 0)
@@ -376,6 +429,7 @@ def _data_quality_recommendation_text(result: Dict[str, Any]) -> str:
     if not facts:
         return "Datenbasis ist eingeschränkt; Details im Block Datenqualität prüfen."
     return "Datenbasis eingeschränkt: " + "; ".join(facts[:4]) + ". Betroffene Auswertungen sind je nach fehlendem Feld eingeschränkt; Details im Block Datenqualität."
+
 
 def data_quality_table(result: Dict[str, Any]) -> str:
     dq = result.get("data_quality") or {}
@@ -539,7 +593,8 @@ def _chart_info(title: str, text: str) -> str:
 
 
 def _bar_value(label: str, value_text: str, width_value: float, max_value: float, help_key: str = "", css: str = "bar") -> SafeHtml:
-    width = 0 if max_value <= 0 else max(0.0, min(100.0, float(width_value or 0) / max_value * 100.0))
+    numeric_value = float(width_value or 0)
+    width = 0 if max_value <= 0 else max(0.0, min(100.0, numeric_value / max_value * 100.0))
     help_html = ""
     key = help_key or label
     help_text = TERM_HELP.get(key) or TERM_HELP.get(label)
@@ -550,10 +605,16 @@ def _bar_value(label: str, value_text: str, width_value: float, max_value: float
         # the label span. This lets the opened text use the full chart width and keeps
         # label/bar/value columns stable.
         help_html = f"<details class='term-info'><summary>info</summary><div>{html.escape(help_text)}</div></details>"
+    bar_css = css + (" zero" if numeric_value <= 0 or width <= 0 else "")
+    # V12.8.20: The value text is deliberately placed below the bar. This
+    # prevents long German value strings from shrinking the bar area at the
+    # right edge of the chart card and makes the visual relation trustworthy.
     return SafeHtml(
-        f"<div class='barrow'><span class='barlabel'>{html.escape(label)}</span>"
-        f"<div class='barbox'><div class='{css}' style='width:{width:.1f}%'></div></div>"
-        f"<b>{html.escape(value_text)}</b>{help_html}</div>"
+        f"<div class='barrow'>"
+        f"<span class='barlabel'>{html.escape(label)}</span>"
+        f"<div class='barbox{' empty' if numeric_value <= 0 or width <= 0 else ''}' aria-label='{html.escape(label)}: {html.escape(value_text)}'><div class='{bar_css}' style='width:{width:.1f}%'></div></div>"
+        f"<b class='barvalue'>{html.escape(value_text)}</b>"
+        f"{help_html}</div>"
     )
 
 

@@ -222,7 +222,14 @@ def _scan_csv_profile(paths: Sequence[Path], max_scan_rows: int = 100_000) -> Di
         if file_first_ts != "-" or file_last_ts != "-":
             file_ranges.append((path.name, file_first_ts, file_last_ts))
     inverted = global_first_ts != "-" and global_last_ts != "-" and global_first_ts > global_last_ts
-    return {"estimated_rows": rows, "period_start": global_first_ts, "period_end": global_last_ts, "file_ranges": file_ranges, "period_inverted": inverted, "schema_errors": schema_errors[:5]}
+    return {
+        "estimated_rows": rows,
+        "period_start": global_first_ts,
+        "period_end": global_last_ts,
+        "file_ranges": file_ranges,
+        "period_inverted": inverted,
+        "schema_errors": schema_errors[:5],
+    }
 
 
 
@@ -491,10 +498,10 @@ def build_app() -> FastAPI:
         .toc{{position:sticky;top:0;background:#fff;border:1px solid #dbe4ef;padding:10px;border-radius:10px;margin-bottom:14px;z-index:5}}
         .toc a{{display:inline-block;margin:3px 8px 3px 0}} .cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0 16px}}
         .card{{border:1px solid #dbe4ef;border-radius:10px;padding:12px;background:#f8fafc;display:flex;justify-content:space-between;gap:8px;align-items:center}}
-        .chartgrid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px}} .chart-card{{min-width:0}} .barrow{{display:grid;grid-template-columns:minmax(130px,1fr) 1.3fr minmax(150px,auto);gap:8px;align-items:start;margin:8px 0}}
-        .barrow .term-info{{grid-column:1 / -1;margin:2px 0 10px 0;max-width:none}} .barrow .term-info div{{max-width:none;width:100%;box-sizing:border-box}}
-        .barbox{{height:14px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin-top:3px}} .bar{{height:14px;background:#93c5fd;border-radius:999px}} .chart-info{{margin:0 0 8px 0}} .chart-info summary{{color:#1565c0;cursor:pointer}} .chart-info div{{margin-top:6px;color:#475569;line-height:1.35}}
-        @media (max-width: 620px){{.chartgrid{{grid-template-columns:1fr}}.barrow{{grid-template-columns:1fr;gap:4px;margin:12px 0}}.barlabel{{font-weight:bold;overflow-wrap:anywhere}}.barbox{{width:100%;min-width:0}}.barrow>b{{font-size:.98em}}.barrow .term-info{{margin:0 0 12px 0}}}}
+        .chartgrid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:18px}} .chart-card{{min-width:0}} .barrow{{display:grid;grid-template-columns:minmax(120px,38%) minmax(180px,1fr);gap:6px 10px;align-items:center;margin:12px 0 16px 0}}
+        .barlabel{{min-width:0;overflow-wrap:anywhere}} .barvalue{{grid-column:2;font-size:.98em;line-height:1.25}} .barrow .term-info{{grid-column:1 / -1;margin:0 0 2px 0;max-width:none}} .barrow .term-info div{{max-width:none;width:100%;box-sizing:border-box;margin-top:6px;line-height:1.35}}
+        .barbox{{height:14px;width:100%;min-width:0;background:rgba(148,163,184,.28);border-radius:999px;overflow:hidden;margin-top:2px}} .barbox.empty{{background:rgba(148,163,184,.10);border:1px solid rgba(148,163,184,.35);box-sizing:border-box}} .bar{{height:14px;background:#93c5fd;border-radius:999px}} .bar.zero{{background:transparent}} .chart-info{{margin:0 0 8px 0}} .chart-info summary{{color:#1565c0;cursor:pointer}} .chart-info div{{margin-top:6px;color:#475569;line-height:1.35}}
+        @media (max-width: 620px){{.chartgrid{{grid-template-columns:1fr}}.barrow{{grid-template-columns:1fr;gap:4px;margin:14px 0 18px 0}}.barlabel{{font-weight:bold;overflow-wrap:anywhere}}.barvalue{{grid-column:1}}.barbox{{width:100%;min-width:0}}.barrow .term-info{{grid-column:1;margin:0 0 8px 0}}}}
         h2{{scroll-margin-top:70px;border-bottom:1px solid #e5e7eb;padding-bottom:4px}} .section-intro{{margin-top:-4px;color:#475569;line-height:1.45}}
         .analysis-profile{{padding:10px;border-radius:8px;margin:12px 0;border:1px solid #cbd5e1}} .analysis-profile.ok{{border-color:#22c55e}} .analysis-profile.warn{{border-color:#f59e0b}} .analysis-profile.bad{{border-color:#ef4444}}
         .profile-title{{font-weight:bold;font-size:1.05em;margin-bottom:4px}}.profile-explain{{font-size:.92em;color:#475569;margin-bottom:8px;line-height:1.35}}

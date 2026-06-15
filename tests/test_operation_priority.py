@@ -138,18 +138,19 @@ def make_controller(cfg, state=None, shelly=None, mqtt=None):
 
 
 class OperationPriorityTests(unittest.TestCase):
-    def test_night_discharge_does_not_depend_on_shelly_grid_data(self):
+    def test_night_discharge_refreshes_grid_for_display_but_does_not_depend_on_it(self):
         cfg = base_cfg(NIGHT_DISCHARGE_ENABLED=True)
         controller, state, mqtt, shelly = make_controller(cfg)
         controller.is_night_discharge_active = lambda _cfg: True
 
         controller.run_once(cfg)
 
-        self.assertEqual(shelly.calls, 0)
+        self.assertEqual(shelly.calls, 1)
         self.assertEqual(state.current_mode, "NIGHT_DISCHARGE")
         self.assertIn(("output", 400, False), mqtt.commands)
         self.assertNotIn(("output", 0, True), mqtt.commands)
         self.assertNotIn("SHELLY_STALE", state.active_limiters)
+        self.assertFalse(state.grid_power_used_for_control)
 
     def test_night_discharge_still_requires_fresh_soc(self):
         cfg = base_cfg(NIGHT_DISCHARGE_ENABLED=True)
@@ -163,7 +164,7 @@ class OperationPriorityTests(unittest.TestCase):
 
         controller.run_once(cfg)
 
-        self.assertEqual(shelly.calls, 0)
+        self.assertEqual(shelly.calls, 1)
         self.assertEqual(state.current_mode, "SAFE_STATE")
         self.assertIn("SOC_STALE", state.active_limiters)
         self.assertIn(("output", 0, True), mqtt.commands)
@@ -174,7 +175,7 @@ class OperationPriorityTests(unittest.TestCase):
 
         controller.run_once(cfg)
 
-        self.assertEqual(shelly.calls, 0)
+        self.assertEqual(shelly.calls, 1)
         self.assertEqual(state.current_mode, "MANUAL_FIXED_DISCHARGE")
         self.assertIn(("output", 600, False), mqtt.commands)
 
@@ -184,7 +185,7 @@ class OperationPriorityTests(unittest.TestCase):
 
         controller.run_once(cfg)
 
-        self.assertEqual(shelly.calls, 0)
+        self.assertEqual(shelly.calls, 1)
         self.assertEqual(state.current_mode, "MANUAL_FIXED_CHARGE")
         self.assertIn(("input", 700, False), mqtt.commands)
 
@@ -199,7 +200,7 @@ class OperationPriorityTests(unittest.TestCase):
 
         controller.run_once(cfg)
 
-        self.assertEqual(shelly.calls, 0)
+        self.assertEqual(shelly.calls, 1)
         self.assertEqual(state.current_mode, "STOP_HOLD")
         self.assertIn(("input", 0, True), mqtt.commands)
 

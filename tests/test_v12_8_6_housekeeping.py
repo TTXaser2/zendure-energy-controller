@@ -25,7 +25,7 @@ class V1286HousekeepingTests(unittest.TestCase):
 
         controller.run_once(cfg)
 
-        self.assertEqual(shelly.calls, 0)
+        self.assertEqual(shelly.calls, 1)
         self.assertEqual(state.current_mode, "NIGHT_DISCHARGE")
         self.assertEqual(state.sma_battery_display_power, -90.0)
         self.assertEqual(state.sma_battery_discharge_power, 90.0)
@@ -43,7 +43,7 @@ class V1286HousekeepingTests(unittest.TestCase):
 
         controller.run_once(cfg)
 
-        self.assertEqual(shelly.calls, 0)
+        self.assertEqual(shelly.calls, 1)
         self.assertEqual(state.current_mode, "STOP_HOLD")
         self.assertEqual(state.sma_battery_display_power, -87.0)
         self.assertEqual(state.sma_battery_discharge_power, 87.0)

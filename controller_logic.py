@@ -94,9 +94,8 @@ class ZendureController:
 
         # SOC-/Zendure-Telemetrie darf vor fest vorgegebenen Betriebsarten aktualisiert
         # werden, weil diese Betriebsarten ohne Netzanschlusspunktmessung funktionieren.
-        # Shelly/UniMeter wird bewusst erst später gelesen: Nachtmodus sowie manuelle
-        # Festladung/-entladung und Stop/Hold sollen bei fehlender Netzmessung nicht
-        # unnötig in den Safe-State fallen.
+        # Grid/Shelly/UniMeter wird für die Statusseite in festen Modi zusätzlich
+        # best-effort aktualisiert, aber nicht als Pflichtquelle für diese Modi benutzt.
         self.update_zendure_telemetry_from_local_api(cfg)
         # Per-cycle housekeeping: display/CSV metrics that are derived from
         # asynchronous MQTT/API raw values must be refreshed before any early
@@ -111,11 +110,13 @@ class ZendureController:
 
         manual_mode = str(cfg.get("MANUAL_MODE", "AUTO"))
         if manual_mode != "AUTO":
+            self.refresh_grid_power_for_display(cfg)
             self.handle_manual_mode(cfg, manual_mode)
             return
 
         if night_active:
             if not self.soc_is_fresh(cfg):
+                self.refresh_grid_power_for_display(cfg)
                 self.state.add_limiter("SOC_STALE")
                 self.safe_state("Nachtmodus blockiert: Zendure SOC fehlt oder ist veraltet")
                 return
@@ -126,6 +127,7 @@ class ZendureController:
                 if not self.pause_fixed_night_discharge_for_reserve_soc(cfg):
                     return
             else:
+                self.refresh_grid_power_for_display(cfg)
                 self.handle_night_mode(cfg)
                 return
 
@@ -154,7 +156,15 @@ class ZendureController:
 
         self.handle_charge(cfg, grid_power)
 
-    def read_grid_power(self, cfg: Dict[str, Any]) -> bool:
+    def read_grid_power(self, cfg: Dict[str, Any], *, for_control: bool = True) -> bool:
+        """Read the Shelly/UniMeter grid value.
+
+        for_control=True keeps the historical AUTO safety behavior: stale grid
+        data may move AUTO into Safe-State. for_control=False is a best-effort
+        telemetry refresh for UI/CSV/status in modes that deliberately do not
+        require grid data, e.g. fixed night discharge or STOP/HOLD. A display
+        refresh must never stop those modes.
+        """
         try:
             raw = self.shelly.read_grid_power(cfg)
             smoothed = self.state.update_power_history(raw, int(cfg["MOVING_AVERAGE_SAMPLES"]))
@@ -167,10 +177,12 @@ class ZendureController:
                 self.state.last_shelly_update_epoch = now
                 self.state.last_shelly_update_time = now_text
                 self.state.grid_power_valid = True
-                self.state.grid_power_used_for_control = True
+                self.state.grid_power_used_for_control = bool(for_control)
                 self.state.grid_power_age_seconds = 0
+                self.state.grid_power_validity_reason = "OK"
             if cfg.get("LOG_VALUES", False):
-                self.log(f"[GRID] Rohwert: {raw:.1f} W | Mittelwert: {smoothed:.1f} W")
+                suffix = "Regelung" if for_control else "Anzeige"
+                self.log(f"[GRID/{suffix}] Rohwert: {raw:.1f} W | Mittelwert: {smoothed:.1f} W")
             return True
         except Exception as exc:
             self.state.set_error(f"Shelly/Uni-Meter Fehler: {exc}")
@@ -180,12 +192,23 @@ class ZendureController:
                     self.state.grid_power_age_seconds = max(0, int(time.time() - self.state.last_shelly_update_epoch))
             with self.state.lock:
                 last_update = self.state.last_shelly_update_epoch
+            if not for_control:
+                return False
             if cfg.get("SAFE_STATE_ON_SHELLY_ERROR", True):
                 if last_update is None or time.time() - last_update > cfg.get("SHELLY_STALE_TIMEOUT_SECONDS", 15):
                     self.state.add_limiter("SHELLY_STALE")
                     self.safe_state("Shelly/Uni-Meter Daten veraltet")
                     return False
             raise
+
+    def refresh_grid_power_for_display(self, cfg: Dict[str, Any]) -> bool:
+        """Best-effort grid telemetry refresh for status/CSV.
+
+        This is intentionally separate from the AUTO control read. It keeps the
+        status page alive in fixed night discharge and STOP/HOLD, but a failed
+        read must not make those modes depend on grid data.
+        """
+        return self.read_grid_power(cfg, for_control=False)
 
 
     def mqtt_soc_is_fresh(self, cfg: Dict[str, Any]) -> bool:

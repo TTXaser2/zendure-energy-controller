@@ -816,26 +816,38 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
         "STOP_HOLD": "#777", "MANUAL_FIXED_DISCHARGE": "#2196F3", "MANUAL_FIXED_CHARGE": "#4CAF50",
     }.get(current_mode, "#777")
     mqtt_color = "#4CAF50" if s["mqtt_connected"] else "#f44336"
-    grid_measurement_valid = bool(s.get("grid_power_valid", False))
     raw_grid_value = float(s.get("raw_grid_power", 0.0) or 0.0)
     smoothed_grid_value = float(s.get("grid_power", 0.0) or 0.0)
     grid_age = s.get("grid_power_age_seconds")
+    grid_valid = bool(s.get("grid_power_valid", False))
     grid_reason = str(s.get("grid_power_validity_reason", ""))
+    grid_used_for_control = bool(s.get("grid_power_used_for_control", False))
     grid_class = "red" if raw_grid_value > 0 else ("green" if raw_grid_value < 0 else "blue")
-    if grid_measurement_valid:
+    if grid_valid:
         grid_main_value = f"{raw_grid_value:.1f} W"
-        grid_short_status = "aktueller Messwert"
+        grid_status_line = "aktueller Messwert" + (" · für AUTO-Regelung genutzt" if grid_used_for_control else " · nicht regelrelevant")
     else:
         grid_main_value = "nicht aktuell"
-        grid_short_status = f"nicht gültig: {html.escape(grid_reason or 'unbekannt')}"
+        grid_status_line = f"nicht gültig: {html.escape(grid_reason or 'unbekannt')}"
         grid_class = "gray"
-    grid_details = (
-        f"{html.escape(grid_short_status)}<br>"
-        f"Rohwert / ungefilterter Messwert: {raw_grid_value:.1f} W<br>"
-        f"Geglätteter AUTO-Regelwert: {smoothed_grid_value:.1f} W"
-        + ("<br><span class='small'>Im festen Nachtmodus ist der geglättete AUTO-Regelwert nicht der aktive Hauptstatuswert.</span>" if current_mode == "NIGHT_DISCHARGE" else "")
-        + f"<br>Alter: {age_text(grid_age)}<br>positiv = <span class=\"red\">Netzbezug</span>, negativ = <span class=\"green\">Einspeisung</span>"
-    )
+    if grid_used_for_control:
+        auto_rule_line = f"Geglätteter AUTO-Regelwert: {smoothed_grid_value:.1f} W"
+    else:
+        auto_rule_line = "Geglätteter AUTO-Regelwert: n.a. · nicht aktiv"
+    if grid_valid:
+        grid_details = (
+            f"{grid_status_line}<br>"
+            f"Quelle: Shelly/UniMeter · Alter: {age_text(grid_age)}<br>"
+            f"{auto_rule_line}<br>"
+            f'positiv = <span class="red">Netzbezug</span>, negativ = <span class="green">Einspeisung</span>'
+        )
+    else:
+        grid_details = (
+            f"{grid_status_line}<br>"
+            f"Letzter Messwert: {raw_grid_value:.1f} W · Alter: {age_text(grid_age)}<br>"
+            f"{auto_rule_line}<br>"
+            f'positiv = <span class="red">Netzbezug</span>, negativ = <span class="green">Einspeisung</span>'
+        )
     active_limiters = list(s.get("active_limiters", []))
     limiter_human = limiter_text(active_limiters)
     limiter_technical = technical_limiter_text(active_limiters)
@@ -1034,7 +1046,7 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
                 grid_main_value,
                 grid_details,
                 grid_class,
-                'Der große Wert zeigt den aktuellen/frischen Netzleistungs-Messwert, nicht einen möglicherweise veralteten AUTO-Regelwert. Der geglättete Wert bleibt als Diagnose sichtbar, wird aber in festen Modi nicht als normaler Status-Hauptwert verwendet. Wenn die Messung nicht aktuell ist, wird kein alter Zahlenwert prominent als aktuelle Netzleistung angezeigt.',
+                'Der Hauptwert ist der aktuelle Shelly-/UniMeter-Messwert am Netzanschlusspunkt. AUTO-spezifische Diagnosewerte wie der geglättete Regelwert werden nur als Diagnose gezeigt und in festen Modi als nicht aktiv markiert. Feste Nachtentladung oder Stop/Hold hängen dadurch nicht von Grid-Daten ab, die Statusseite zeigt sie aber best-effort aktuell an.',
                 settings_group='Regelung'
             )}
             {status_card(
@@ -1078,7 +1090,7 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
                 badge(night_status_text, night_status_color),
                 night_details,
                 'gray',
-                'Zeigt den Zustand der festen Nacht-Basisentladung. Innerhalb des Nachtfensters kann Zendure mit fester Leistung entladen. Wenn der Nachtmodus Reserve-SOC erreicht ist, wird nur diese feste Basisentladung pausiert; die normale AUTO-Regelung bleibt für Lastspitzen aktiv und darf bis zum globalen Mindest-SOC entladen.',
+                'Zeigt den Zustand der festen Nacht-Basisentladung. Wenn der Nachtmodus Reserve-SOC erreicht ist, wird nur diese feste Basisentladung pausiert; die normale AUTO-Regelung bleibt für Lastspitzen aktiv und darf bis zum globalen Mindest-SOC entladen.',
                 settings_group='Nachtmodus'
             )}
             {status_card(
