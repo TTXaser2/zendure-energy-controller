@@ -15,14 +15,16 @@ Restart=on-failure
 RestartSec=10
 Environment=PYTHONUNBUFFERED=1
 
-# V12.8.5: Ressourcenschutz für Raspberry-Pi-Betrieb.
-# Eine zu große Analyse soll im Fehlerfall den Replay-Dienst beenden oder drosseln,
-# aber nicht EVCC, MQTT oder den Live-Regler mit in Swap-/I/O-Stress ziehen.
+# V12.9.1: Ressourcenschutz für Raspberry-Pi-Betrieb.
+# Schwere Analysen laufen zusätzlich in einem isolierten Worker mit eigenem
+# Timeout/RSS-Limit. Das cgroup-Limit umfasst Webdienst plus Worker und bleibt
+# bewusst unterhalb des Gesamtspeichers, damit Live-Regler, MQTT und EVCC nicht
+# in Swap-/I/O-Stress geraten.
 MemoryAccounting=yes
 CPUAccounting=yes
 IOAccounting=yes
-MemoryHigh=200M
-MemoryMax=300M
+MemoryHigh=450M
+MemoryMax=550M
 CPUQuota=50%
 Nice=10
 IOSchedulingClass=idle

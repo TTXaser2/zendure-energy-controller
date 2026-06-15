@@ -111,6 +111,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "SOC_STALE_TIMEOUT_SECONDS": 90,
     "MQTT_DISCONNECTED_SAFE_STATE": False,
     "ZENDURE_POWER_STALE_TIMEOUT_SECONDS": 90,
+    "ZENDURE_MQTT_CRITICAL_GROUP_STALE_SECONDS": 90,
+    "ZENDURE_MQTT_AFTER_RESTART_GRACE_SECONDS": 90,
     "SAFE_STATE_ON_SHELLY_ERROR": True,
 
     # Historie / Messdaten-Logging
@@ -123,12 +125,16 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "MEASUREMENT_LOG_MIN_FREE_DISK_MB": 500,
     "MEASUREMENT_LOG_ESTIMATED_ROW_BYTES": 4096,
     # Analyse-/Replay-Service Schutzlimits
-    "ANALYSIS_MAX_FILES": 4,
-    "ANALYSIS_MAX_TOTAL_BYTES": 12 * 1024 * 1024,
-    "ANALYSIS_MAX_ROWS": 40_000,
-    "ANALYSIS_EXTENDED_MAX_FILES": 5,
-    "ANALYSIS_EXTENDED_MAX_TOTAL_BYTES": 18 * 1024 * 1024,
-    "ANALYSIS_EXTENDED_MAX_ROWS": 70_000,
+    "ANALYSIS_MAX_FILES": 2,
+    "ANALYSIS_MAX_TOTAL_BYTES": 6 * 1024 * 1024,
+    "ANALYSIS_MAX_ROWS": 20_000,
+    "ANALYSIS_EXTENDED_MAX_FILES": 3,
+    "ANALYSIS_EXTENDED_MAX_TOTAL_BYTES": 10 * 1024 * 1024,
+    "ANALYSIS_EXTENDED_MAX_ROWS": 35_000,
+    "ANALYSIS_WORKER_MEMORY_LIMIT_MB": 300,
+    "ANALYSIS_EXTENDED_WORKER_MEMORY_LIMIT_MB": 380,
+    "ANALYSIS_WORKER_TIMEOUT_SECONDS": 180,
+    "ANALYSIS_EXTENDED_WORKER_TIMEOUT_SECONDS": 300,
 
     # Logging
     "FILE_LOG_ENABLED": False,
@@ -232,6 +238,8 @@ CONFIG_SCHEMA: Dict[str, Dict[str, Any]] = {
     "SOC_STALE_TIMEOUT_SECONDS": {"group": "Sicherheit / Fallback", "label": "SOC Timeout", "type": "int", "min": 10, "max": 3600, "unit": "s", "description": "Maximales Alter des Zendure-SOC. Bei Überschreitung wird Entladung blockiert."},
     "MQTT_DISCONNECTED_SAFE_STATE": {"group": "Sicherheit / Fallback", "label": "Safe-State bei MQTT-Trennung", "type": "bool", "description": "Wenn aktiv, setzt der Controller bei erkannter MQTT-Trennung Lade- und Entladeleistung auf 0 W. Das ist die konservativste Variante, weil ohne MQTT keine zuverlässigen neuen Befehle und teilweise keine aktuellen Rückmeldungen möglich sind. Wenn diese Option nicht aktiv ist, läuft die Logik weiter und zeigt den MQTT-Fehler an; bereits zuletzt an Zendure gesendete Werte können dort aber weiter gültig bleiben, weil der Controller sie während der Trennung nicht sicher ändern kann. Nicht aktiv ist daher toleranter bei kurzen Broker-Aussetzern, aber weniger sicher bei längeren MQTT-Problemen."},
     "ZENDURE_POWER_STALE_TIMEOUT_SECONDS": {"group": "Sicherheit / Fallback", "label": "Zendure Istwert Timeout", "type": "int", "min": 10, "max": 3600, "unit": "s", "description": "Alter der Zendure-Istleistungswerte, ab dem eine Warnung gesetzt wird."},
+    "ZENDURE_MQTT_CRITICAL_GROUP_STALE_SECONDS": {"group": "Sicherheit / Fallback", "label": "Zendure MQTT Live-Timeout", "type": "int", "min": 10, "max": 3600, "unit": "s", "description": "Maximales Alter kritischer Zendure-MQTT-Gruppen für die Live-/Partial-Stale-Diagnose. Warnungen verschwinden automatisch, sobald wieder frische nicht-retained Live-Werte eintreffen."},
+    "ZENDURE_MQTT_AFTER_RESTART_GRACE_SECONDS": {"group": "Sicherheit / Fallback", "label": "Zendure MQTT Neustart-Toleranz", "type": "int", "min": 10, "max": 3600, "unit": "s", "description": "Wartezeit nach MQTT-Reconnect/Broker-Neustart, bevor fehlende nicht-retained Live-Werte als Neustart-/App-Neuspeicherproblem gemeldet werden."},
     "SAFE_STATE_ON_SHELLY_ERROR": {"group": "Sicherheit / Fallback", "label": "Safe-State bei Shelly-Fehlern", "type": "bool", "description": "Wenn aktiv, fährt der Controller bei anhaltenden Messfehlern auf 0 W."},
 
     "GRAPH_HISTORY_LIMIT": {"group": "Messdaten / Historie", "label": "Graph-Historie", "type": "int", "min": 50, "max": 5000, "description": "Anzahl der im RAM gehaltenen Graph-Datenpunkte. Diese Historie ist unabhängig vom dauerhaften Messdaten-Logging."},
@@ -244,11 +252,15 @@ CONFIG_SCHEMA: Dict[str, Dict[str, Any]] = {
     "MEASUREMENT_LOG_ESTIMATED_ROW_BYTES": {"group": "Messdaten / Historie", "label": "Schätzgröße je Messpunkt", "type": "int", "min": 500, "max": 50000, "unit": "Bytes", "description": "Nur für die grobe Aufbewahrungsschätzung, bis reale Zeilengrößen vorliegen. Die Schätzung muss nicht bytegenau sein."},
 
     "ANALYSIS_MAX_FILES": {"group": "Analyse / Replay", "label": "Analyse Pi-Safe Dateien", "type": "int", "min": 1, "max": 20, "description": "Maximale Dateianzahl für normale lokale Analysen auf dem Raspberry Pi. Standard ist bewusst konservativ, um EVCC, MQTT und Live-Regler zu schützen."},
-    "ANALYSIS_MAX_TOTAL_BYTES": {"group": "Analyse / Replay", "label": "Analyse Pi-Safe Gesamtgröße", "type": "int", "min": 1_000_000, "max": 100_000_000, "unit": "Bytes", "description": "Maximale Gesamtgröße der ausgewählten CSV-Dateien für normale lokale Analysen. Standard: ca. 12 MiB."},
-    "ANALYSIS_MAX_ROWS": {"group": "Analyse / Replay", "label": "Analyse Pi-Safe Messpunkte", "type": "int", "min": 1_000, "max": 500_000, "description": "Maximale Messpunktzahl für normale lokale Analysen. Das Limit wird jetzt bereits beim Lesen geprüft, nicht erst nach vollständigem Laden."},
-    "ANALYSIS_EXTENDED_MAX_FILES": {"group": "Analyse / Replay", "label": "Analyse Extended Dateien", "type": "int", "min": 1, "max": 20, "description": "Erweiterte Dateianzahl für bewusst bestätigte große Analysen. Auf dem Raspberry Pi nur mit Warnung verwenden."},
-    "ANALYSIS_EXTENDED_MAX_TOTAL_BYTES": {"group": "Analyse / Replay", "label": "Analyse Extended Gesamtgröße", "type": "int", "min": 1_000_000, "max": 100_000_000, "unit": "Bytes", "description": "Erweiterte Gesamtgröße für bewusst bestätigte große Analysen. Standard: ca. 18 MiB."},
-    "ANALYSIS_EXTENDED_MAX_ROWS": {"group": "Analyse / Replay", "label": "Analyse Extended Messpunkte", "type": "int", "min": 1_000, "max": 500_000, "description": "Erweiterte Messpunktzahl für bewusst bestätigte große Analysen. Alles darüber sollte lokal abgelehnt und offline/auf dem PC analysiert werden."},
+    "ANALYSIS_MAX_TOTAL_BYTES": {"group": "Analyse / Replay", "label": "Analyse Pi-Safe Gesamtgröße", "type": "int", "min": 1_000_000, "max": 100_000_000, "unit": "Bytes", "description": "Maximale Gesamtgröße der ausgewählten CSV-Dateien für normale lokale Analysen. Standard ist bewusst konservativ, weil Python-/HTML-/Diagrammstrukturen deutlich mehr RAM benötigen als die CSV-Datei auf der SD-Karte."},
+    "ANALYSIS_MAX_ROWS": {"group": "Analyse / Replay", "label": "Analyse Pi-Safe Messpunkte", "type": "int", "min": 1_000, "max": 500_000, "description": "Maximale Messpunktzahl für normale lokale Analysen. Das Limit wird bereits beim Lesen geprüft; zusätzlich läuft die Analyse in einem isolierten Worker."},
+    "ANALYSIS_EXTENDED_MAX_FILES": {"group": "Analyse / Replay", "label": "Analyse Extended Dateien", "type": "int", "min": 1, "max": 20, "description": "Erweiterte Dateianzahl für bewusst bestätigte größere Analysen. Auf dem Raspberry Pi nur mit Warnung verwenden."},
+    "ANALYSIS_EXTENDED_MAX_TOTAL_BYTES": {"group": "Analyse / Replay", "label": "Analyse Extended Gesamtgröße", "type": "int", "min": 1_000_000, "max": 100_000_000, "unit": "Bytes", "description": "Erweiterte Gesamtgröße für bewusst bestätigte größere Analysen. Alles darüber wird lokal abgelehnt und sollte offline/auf dem PC analysiert werden."},
+    "ANALYSIS_EXTENDED_MAX_ROWS": {"group": "Analyse / Replay", "label": "Analyse Extended Messpunkte", "type": "int", "min": 1_000, "max": 500_000, "description": "Erweiterte Messpunktzahl für bewusst bestätigte größere Analysen. Alles darüber wird fail-closed abgelehnt."},
+    "ANALYSIS_WORKER_MEMORY_LIMIT_MB": {"group": "Analyse / Replay", "label": "Analyse Worker Speicherlimit", "type": "int", "min": 128, "max": 900, "unit": "MB", "description": "Speicherlimit für normale Analyse-Worker. Bei Überschreitung wird nur der Analyse-Worker beendet, nicht der Live-Controller."},
+    "ANALYSIS_EXTENDED_WORKER_MEMORY_LIMIT_MB": {"group": "Analyse / Replay", "label": "Analyse Extended Speicherlimit", "type": "int", "min": 128, "max": 900, "unit": "MB", "description": "Speicherlimit für bewusst bestätigte größere Analyse-Worker."},
+    "ANALYSIS_WORKER_TIMEOUT_SECONDS": {"group": "Analyse / Replay", "label": "Analyse Timeout", "type": "int", "min": 30, "max": 1800, "unit": "s", "description": "Zeitlimit für normale Analyse-Worker. Bei Überschreitung wird der Worker abgebrochen."},
+    "ANALYSIS_EXTENDED_WORKER_TIMEOUT_SECONDS": {"group": "Analyse / Replay", "label": "Analyse Extended Timeout", "type": "int", "min": 30, "max": 3600, "unit": "s", "description": "Zeitlimit für bewusst bestätigte größere Analyse-Worker."},
 
     "FILE_LOG_ENABLED": {"group": "Logging", "label": "Datei-Logging aktiv", "type": "bool", "description": "Schreibt Betriebs-, Fehler- und Diagnosemeldungen zusätzlich rollierend in eine Text-Logdatei. Das ersetzt nicht das CSV-Datenlogging."},
     "FILE_LOG_DIR": {"group": "Logging", "label": "Datei-Log Verzeichnis", "type": "str", "description": "Relatives oder absolutes Verzeichnis für die Text-Logdatei."},

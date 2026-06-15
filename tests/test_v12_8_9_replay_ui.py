@@ -31,7 +31,7 @@ class V1289ReplayUiTests(unittest.TestCase):
             decoded = json.loads(response.body.decode("utf-8"))
             self.assertIn("safe_limits", decoded["profile"])
             self.assertIsInstance(decoded["profile"]["safe_limits"], dict)
-            self.assertEqual(decoded["profile"]["extended_limits"]["max_files"], 5)
+            self.assertEqual(decoded["profile"]["extended_limits"]["max_files"], 3)
 
     def test_index_contains_no_release_notice_but_profile_explanation_and_top_anchor(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -103,7 +103,7 @@ class V129MeasurementV3Tests(unittest.TestCase):
             f.write(content)
             path = f.name
         try:
-            with self.assertRaisesRegex(ValueError, "ausschließlich ZEC-MEASUREMENT-V3"):
+            with self.assertRaisesRegex(ValueError, "ZEC-MEASUREMENT-V3"):
                 read_measurement_csv(path)
         finally:
             os.remove(path)

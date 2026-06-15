@@ -22,7 +22,7 @@ class V12810ReplayUiTests(unittest.TestCase):
             "command_efficiency": {},
         }
         html = charts_html(result)
-        self.assertIn("<span class='barlabel'>beeinflussbar</span>", html)
+        self.assertIn("<span class='barlabel'>beeinflussbar außerhalb Zielband</span>", html)
         self.assertIn("<b class='barvalue'>25 % der gewichteten Abweichung</b><details class='term-info'", html)
 
     def test_index_disables_start_while_selection_profile_updates(self):

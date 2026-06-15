@@ -22,10 +22,10 @@ class V1285SafetyTests(unittest.TestCase):
         self.assertEqual(derived["discharge_power_w"], 422)
 
     def test_analysis_limits_are_pi_safe_and_extended_is_separate(self):
-        self.assertEqual(safe_limits().max_files, 4)
-        self.assertEqual(safe_limits().max_rows, 40_000)
-        self.assertEqual(extended_limits().max_files, 5)
-        self.assertEqual(extended_limits().max_rows, 70_000)
+        self.assertEqual(safe_limits().max_files, 2)
+        self.assertEqual(safe_limits().max_rows, 20_000)
+        self.assertEqual(extended_limits().max_files, 3)
+        self.assertEqual(extended_limits().max_rows, 35_000)
 
     def test_row_limit_is_checked_while_reading(self):
         with tempfile.TemporaryDirectory() as tmp:

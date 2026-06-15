@@ -280,6 +280,7 @@ class ControllerState:
                 info["live_confirmed"] = False
             self.zendure_mqtt_live_confirmed = False
             self.zendure_mqtt_retained_only = False
+            self.zendure_mqtt_partial_stale = False
             self.zendure_mqtt_after_broker_restart_no_live_updates = False
 
     def mark_zendure_mqtt_disconnect(self, now: Optional[float] = None) -> None:
@@ -376,7 +377,8 @@ class ControllerState:
 
     def update_zendure_mqtt_status(self, cfg: Dict[str, Any], now: Optional[float] = None) -> None:
         now_epoch = now if now is not None else time.time()
-        timeout_s = int(cfg.get("ZENDURE_POWER_STALE_TIMEOUT_SECONDS", 90))
+        timeout_s = int(cfg.get("ZENDURE_MQTT_CRITICAL_GROUP_STALE_SECONDS", cfg.get("ZENDURE_POWER_STALE_TIMEOUT_SECONDS", 90)))
+        grace_s = int(cfg.get("ZENDURE_MQTT_AFTER_RESTART_GRACE_SECONDS", min(timeout_s, 90)))
         required_groups = {"soc", "headunit_power"}
         with self.lock:
             groups = self._zendure_mqtt_group_summary_locked(now_epoch, timeout_s)
@@ -401,7 +403,7 @@ class ControllerState:
             self.zendure_mqtt_after_broker_restart_no_live_updates = (
                 bool(self.mqtt_connected)
                 and connect_age is not None
-                and connect_age > min(timeout_s, 90)
+                and connect_age > grace_s
                 and not self.zendure_mqtt_live_confirmed
             )
 

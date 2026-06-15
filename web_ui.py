@@ -867,6 +867,21 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
         "FIXED_CHARGE": "#777",
     }.get(manual_mode_code, "#777")
 
+    zendure_mqtt_status = str(s.get("zendure_mqtt_overall_status", "ZENDURE_MQTT_STALE"))
+    zendure_mqtt_reason = str(s.get("zendure_mqtt_status_reason", "-"))
+    zendure_mqtt_color = "#4CAF50" if zendure_mqtt_status == "ZENDURE_MQTT_OK" else ("#ff9800" if s.get("mqtt_connected") else "#f44336")
+    zendure_mqtt_hint = "" if zendure_mqtt_status == "ZENDURE_MQTT_OK" else "<br><b>Hinweis:</b> Falls nach Raspberry-/Mosquitto-Neustart keine Live-Werte kommen, MQTT in der Zendure-App erneut speichern/aktivieren."
+    mqtt_details = (
+        f'Letztes Kommando: {html.escape(str(s["last_mqtt_command"]))}<br>'
+        f'Zendure Live-Status: <span style="color:{zendure_mqtt_color}">{html.escape(zendure_mqtt_status)}</span><br>'
+        f'Grund: {html.escape(zendure_mqtt_reason)}<br>'
+        f'Live bestätigt: {"ja" if s.get("zendure_mqtt_live_confirmed") else "nein"}<br>'
+        f'Kritische Daten Alter: {age_text(s.get("zendure_mqtt_critical_data_age_s"))}<br>'
+        f'Fehlende Gruppen: {html.escape(str(s.get("zendure_mqtt_missing_critical_groups") or "-"))}<br>'
+        f'Stale Gruppen: {html.escape(str(s.get("zendure_mqtt_stale_critical_groups") or "-"))}'
+        + zendure_mqtt_hint
+    )
+
     night_stop_soc = s.get("night_discharge_stop_soc_percent")
     night_stop_reason = str(s.get("night_discharge_stop_reason", "none"))
     night_stopped = current_mode != "NIGHT_DISCHARGE" and night_stop_reason not in {"", "none", "None"}
@@ -1096,9 +1111,9 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
             {status_card(
                 'MQTT',
                 badge('Verbunden' if s['mqtt_connected'] else 'Getrennt', mqtt_color),
-                f'Letztes Kommando: {html.escape(str(s["last_mqtt_command"]))}',
+                mqtt_details,
                 'gray',
-                'MQTT ist die Steuerverbindung zu Zendure. Ohne MQTT können keine neuen Leistungsbefehle sicher gesendet werden. Je nach Config kann bei MQTT-Trennung automatisch der Safe-State aktiviert werden.',
+                'MQTT ist die Steuerverbindung zu Zendure. Zusätzlich wird bewertet, ob Zendure nach Broker-/Raspberry-Neustarts wirklich wieder frische nicht-retained Live-Daten liefert. Warnungen verschwinden automatisch, sobald kritische Zendure-Gruppen wieder live und frisch sind.',
                 settings_group='Netzwerk'
             )}
             {evcc_status_card_html}
@@ -1654,9 +1669,22 @@ def build_settings_page(cfg: Dict[str, Any], validation_issues: Optional[List[Va
             f"<div class='section' id='{section_id}'>"
             f"<h2>{html.escape(group)}</h2>"
             f"<div class='section-tools'><a href='#' onclick=\"expandSectionInfo('{section_id}'); return false;\">Alle Infos auf- und zuklappen</a> &nbsp;|&nbsp; <a href='#page-top'>nach oben</a></div>"
-            + build_section_validation_messages(group, validation_issues) +
-            "<div class='grid'>"
+            + build_section_validation_messages(group, validation_issues)
         )
+        if group == "Messdaten / Historie":
+            mode = measurement_log_mode(cfg)
+            retention_h = estimate_retention_hours(cfg)
+            page += (
+                "<div class='info-box' style='margin:12px 0;'>"
+                "<b>Messdaten-Modi:</b><br>"
+                "<b>Aus</b>: keine zyklischen Messdaten, maximale SD-Schonung; spätere Analyse aus neuen Daten ist nicht möglich.<br>"
+                "<b>Standard</b>: vollständige Reglerdiagnose inklusive Roh-/Norm-Kernwerten, Freshness/Validity, MQTT-Stale-Aggregat, Sollwertkaskade, Kommando und Szenario ohne Zendure.<br>"
+                "<b>Erweitert</b>: Standard plus Detaildaten für Simulation, What-if sowie tiefe MQTT-/Freshness-/Packdatenanalyse; erzeugt größere Dateien und sollte gezielt verwendet werden.<br>"
+                f"Aktueller Modus: <b>{html.escape(mode)}</b>. Grob geschätzte Aufbewahrung bei aktuellen Grenzwerten: <b>{html.escape(str(retention_h))} Stunden</b>. "
+                "Diese Schätzung ist bewusst praxisnah, nicht bytegenau. Die Regelung läuft weiter, auch wenn Logging pausiert oder fehlschlägt."
+                "</div>"
+            )
+        page += "<div class='grid'>"
         if group == "Nachtmodus":
             page += build_night_time_card(
                 "NIGHT_START_TIME",
@@ -1683,19 +1711,6 @@ def build_settings_page(cfg: Dict[str, Any], validation_issues: Optional[List[Va
                 continue
             page += build_setting_card(key, meta, cfg.get(key), key in error_keys, key in warning_keys)
         page += "</div>"
-        if group == "Messdaten / Historie":
-            mode = measurement_log_mode(cfg)
-            retention_h = estimate_retention_hours(cfg)
-            page += (
-                "<div class='info-box' style='margin-top:12px;'>"
-                "<b>Messdaten-Modi:</b><br>"
-                "<b>Aus</b>: keine zyklischen Messdaten, maximale SD-Schonung; spätere Analyse aus neuen Daten ist nicht möglich.<br>"
-                "<b>Standard</b>: vollständige Reglerdiagnose inklusive Roh-/Norm-Kernwerten, Freshness/Validity, MQTT-Stale-Aggregat, Sollwertkaskade, Kommando und Szenario ohne Zendure.<br>"
-                "<b>Erweitert</b>: Standard plus Detaildaten für Simulation, What-if sowie tiefe MQTT-/Freshness-/Packdatenanalyse; erzeugt größere Dateien und sollte gezielt verwendet werden.<br>"
-                f"Aktueller Modus: <b>{html.escape(mode)}</b>. Grob geschätzte Aufbewahrung bei aktuellen Grenzwerten: <b>{html.escape(str(retention_h))} Stunden</b>. "
-                "Diese Schätzung ist bewusst praxisnah, nicht bytegenau. Die Regelung läuft weiter, auch wenn Logging pausiert oder fehlschlägt."
-                "</div>"
-            )
         if group == "Manueller Modus":
             page += "<div class='small' style='margin-top:12px;'>Die Detailfelder werden abhängig vom gewählten manuellen Modus eingeblendet. Ohne JavaScript bleiben sie sichtbar, damit die Seite weiterhin vollständig bedienbar ist.</div>"
         page += "<button class='save' type='submit'>Speichern</button>"

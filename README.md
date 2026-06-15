@@ -1,6 +1,6 @@
-Zendure Energy Controller Version 12.9.0
+Zendure Energy Controller Version 12.9.1
 
-# Zendure Energy Controller V12.9.0
+# Zendure Energy Controller V12.9.1
 
 Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, ZEC-MEASUREMENT-V3-Messdaten-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
@@ -9,6 +9,23 @@ Copyright (c) 2026 Eduard Fuchs <info@eduardfuchs.de>
 Lizenziert unter AGPL-3.0-or-later. Siehe `LICENSE`, `NOTICE` und `DISCLAIMER.md`.
 
 
+
+
+## Wichtige Änderungen in V12.9.1
+
+V12.9.1 ist ein Stabilitäts- und Analyse-Nacharbeitsrelease auf Basis von V12.9.0. Die AUTO-Regelstrategie, MQTT-Subscriptions und MQTT-Kommandostruktur bleiben unverändert. Schwerpunkt sind Zendure-MQTT-Live-Diagnose nach Neustarts, ein robusterer Analyse-/Replay-Schutz und verständlichere Analyse-Diagramme.
+
+- Zendure-MQTT Live-/Retained-/Partial-Stale-Erkennung ergänzt: Nach Raspberry-/Mosquitto-Neustart wird sichtbar, ob Zendure wirklich wieder frische nicht-retained Live-Werte liefert oder nur retained/alte/unvollständige Werte vorliegen.
+- Statusseite zeigt den Zendure-MQTT-Live-Status kompakt mit Handlungshinweis. Warnungen verschwinden automatisch, sobald kritische Zendure-Gruppen wieder frisch und live sind.
+- Analyse/Replay akzeptiert generisch nur gültige `ZEC-MEASUREMENT-V3`-Dateien; alles andere wird fail-closed abgelehnt.
+- Analyse läuft nun in einem isolierten Worker-Prozess mit Timeout und Speicherlimit. Der Replay-Webdienst bleibt kontrollierend erreichbar und kann den Worker abbrechen, damit der Live-Controller geschützt bleibt.
+- Pi-Safe-Grenzen wurden konservativer gesetzt; unsichere oder zu große Analysen werden nicht mehr grün bewertet.
+- Analyse-Diagramme semantisch korrigiert: Prozentbalken werden bei Prozentwerten strikt 0–100 skaliert, Restkategorien werden sichtbar, Deadband-/Abweichungsursachen-Diagramme sind verständlicher.
+- Betriebszustandsmatrix benennt Netzenergie eindeutig als `Netzbezug kWh` und `Einspeisung kWh` mit Info-Texten.
+- Settings-Seite: Erklärungsbox für Messdaten-Modi und Aufbewahrung steht nun oberhalb der Messdaten-Eingabefelder.
+- Update-Script bereinigt obsolete Tests im Zielverzeichnis, startet zuvor aktive Dienste nach erfolgreichem Update wieder und versucht bei Updatefehlern zuvor laufende Dienste wiederherzustellen.
+- Kein V2-spezifisches Log-Cleanup mehr: V12.9.1 behandelt alte/ungültige Messdaten generisch als nicht-V3.
+- Der Logger prüft eine vorhandene aktive Messdatei nur beim Öffnen/Initialisieren auf gültigen V3-Header. Bei ungültigem Header wird Logging pausiert und auf der Statusseite gewarnt; es wird nichts gelöscht und die Regelung läuft weiter.
 
 
 ## Wichtige Änderungen in V12.9.0
@@ -24,7 +41,6 @@ V12.9.0 ist ein bewusstes Breaking-Change-Grundlagenrelease für `ZEC-MEASUREMEN
 - Settings-/Statusseite zeigen Schema, Modus, Logging-Status, freien Speicher und eine grobe geschätzte Aufbewahrungsdauer.
 - Alte `CSV_LOG_*`-Config-Keys werden beim Laden/Update einmalig auf `MEASUREMENT_LOG_*` übersetzt.
 - Analyse/Replay akzeptiert nur noch `ZEC-MEASUREMENT-V3`; ältere V2-Dateien werden bewusst nicht migriert oder analysiert.
-- Das Update-Script löscht beim V12.9-Update gezielt bekannte alte V2-Messdaten-Dateien im Log-Verzeichnis, statt ein Archiv-/Legacy-Handling aufzubauen.
 - Finale Excel-Lernsimulation bleibt unverändert unter `tools/` enthalten.
 
 ## Wichtige Änderungen in V12.8.21

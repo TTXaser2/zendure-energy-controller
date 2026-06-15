@@ -5,7 +5,7 @@ VERSION="${1:-}"
 
 if [ -z "$VERSION" ]; then
     echo "Bitte Version angeben, z. B.:"
-    echo "$0 v12_9_0"
+    echo "$0 v12_9_1"
     exit 1
 fi
 
@@ -25,6 +25,32 @@ if [ ! -d "$TARGET" ]; then
     echo "Bitte Erstinstallation gemäß Benutzerhandbuch durchführen."
     exit 1
 fi
+
+CONTROLLER_WAS_ACTIVE=0
+REPLAY_WAS_ACTIVE=0
+if systemctl is-active --quiet zendure-controller.service; then
+    CONTROLLER_WAS_ACTIVE=1
+fi
+if systemctl is-active --quiet zendure-replay.service; then
+    REPLAY_WAS_ACTIVE=1
+fi
+
+recover_on_error() {
+    echo "FEHLER: Update wurde abgebrochen."
+    echo "Versuche, zuvor laufende Dienste wieder zu starten..."
+    if [ "$CONTROLLER_WAS_ACTIVE" -eq 1 ]; then
+        sudo systemctl start zendure-controller.service || true
+    fi
+    if [ "$REPLAY_WAS_ACTIVE" -eq 1 ]; then
+        sudo systemctl start zendure-replay.service || true
+    fi
+    echo "Recovery-Hinweis: Falls ein Dienst nicht startet, Backup liegt unter: ${BACKUP}"
+    sudo systemctl status zendure-controller.service --no-pager -l || true
+    if [ "$REPLAY_WAS_ACTIVE" -eq 1 ]; then
+        sudo systemctl status zendure-replay.service --no-pager -l || true
+    fi
+}
+trap recover_on_error ERR
 
 echo "Update Zendure Energy Controller auf ${VERSION}"
 echo "ZIP:    ${ZIP}"
@@ -83,64 +109,6 @@ PY
 fi
 
 
-if [[ "$VERSION" == v12_9* ]]; then
-    echo "V12.9 Messdaten-Breaking-Change: lösche gezielt alte V2-Messdaten-Dateien..."
-    TARGET="$TARGET" python3 - <<'PYV2CLEAN'
-import json
-import os
-from pathlib import Path
-
-target = Path(os.environ["TARGET"]).resolve()
-cfg_path = target / "config.json"
-log_dir = "logs"
-log_file = "zendure_measurements.csv"
-if cfg_path.exists():
-    try:
-        cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
-        log_dir = str(cfg.get("MEASUREMENT_LOG_DIR") or cfg.get("CSV_LOG_DIR") or "logs")
-        log_file = str(cfg.get("MEASUREMENT_LOG_FILE") or cfg.get("CSV_LOG_FILE") or "zendure_measurements.csv")
-    except Exception:
-        pass
-
-base = Path(log_dir)
-if not base.is_absolute():
-    base = target / base
-base = base.resolve()
-if not base.exists():
-    print(f"Kein Messdaten-Verzeichnis vorhanden: {base}")
-    raise SystemExit(0)
-
-stem = Path(log_file).stem
-suffix = Path(log_file).suffix or ".csv"
-known_names = [log_file] + [f"{stem}_{idx}{suffix}" for idx in range(1, 51)]
-
-def looks_like_v2_measurement(path: Path) -> bool:
-    try:
-        first = path.read_text(encoding="utf-8", errors="replace").splitlines()[0]
-    except Exception:
-        return False
-    low = first.lower()
-    return (
-        "zec-measurement-v2" in low
-        or ("schema;" in low and "measurement_profile" not in low)
-        or ("grid_power" in low and "zendure_target" in low and "scenario_grid_without_zendure_w" not in low)
-    )
-
-deleted = 0
-for name in known_names:
-    path = base / name
-    if not path.is_file():
-        continue
-    if looks_like_v2_measurement(path):
-        path.unlink()
-        deleted += 1
-        print(f"Gelöscht: {path}")
-    else:
-        print(f"Übersprungen (kein eindeutiges V2-Messdatenformat): {path}")
-print(f"V2-Messdaten-Bereinigung abgeschlossen, gelöscht: {deleted}")
-PYV2CLEAN
-fi
-
 echo "Entpacke Update..."
 cd /home/pi/Downloads
 rm -rf "$DIR"
@@ -159,6 +127,12 @@ rsync -av \
   --exclude "__pycache__/" \
   "$DIR/" \
   "$TARGET/"
+
+echo "Bereinige obsolete Tests im Zielverzeichnis..."
+if [ -d "$DIR/tests" ]; then
+    mkdir -p "$TARGET/tests"
+    rsync -a --delete "$DIR/tests/" "$TARGET/tests/"
+fi
 
 echo "Migriere Logging-Config auf MEASUREMENT_LOG_MODE, falls alte CSV_LOG_*-Keys vorhanden sind..."
 cd "$TARGET"
@@ -200,13 +174,27 @@ sudo systemctl daemon-reload
 echo "Starte Live-Dienst..."
 sudo systemctl start zendure-controller.service
 
+if [ "$REPLAY_WAS_ACTIVE" -eq 1 ]; then
+    echo "Starte zuvor aktiven Analyse-Dienst..."
+    sudo systemctl start zendure-replay.service
+fi
+
+trap - ERR
+
 echo "Dienststatus:"
 systemctl status zendure-controller.service --no-pager -l
+if [ "$REPLAY_WAS_ACTIVE" -eq 1 ]; then
+    systemctl status zendure-replay.service --no-pager -l
+fi
 
 echo "Ready-Check:"
 curl -s "http://127.0.0.1:8080/ready" | python3 -m json.tool || true
 
 echo "Update abgeschlossen."
-echo "Der optionale Analyse-Dienst wurde installiert, aber nicht aktiviert."
-echo "Start bei Bedarf: sudo systemctl start zendure-replay.service"
-echo "Optional dauerhaft aktivieren: sudo systemctl enable zendure-replay.service"
+if [ "$REPLAY_WAS_ACTIVE" -eq 1 ]; then
+    echo "Der Analyse-Dienst war vor dem Update aktiv und wurde wieder gestartet."
+else
+    echo "Der optionale Analyse-Dienst wurde installiert, aber nicht aktiviert."
+    echo "Start bei Bedarf: sudo systemctl start zendure-replay.service"
+    echo "Optional dauerhaft aktivieren: sudo systemctl enable zendure-replay.service"
+fi

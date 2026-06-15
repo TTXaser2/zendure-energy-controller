@@ -320,6 +320,8 @@ class CsvRotatingLogger:
 
     def __init__(self) -> None:
         self._last_path = None
+        self._validated_v3_paths = set()
+        self._invalid_schema_paths: Dict[str, str] = {}
 
     def log(self, config: Dict[str, Any], row: Dict[str, Any]) -> Dict[str, Any]:
         mode = measurement_log_mode(config)
@@ -334,6 +336,10 @@ class CsvRotatingLogger:
         min_free = int(config.get("MEASUREMENT_LOG_MIN_FREE_DISK_MB", 500))
         if free_mb is not None and free_mb < min_free:
             return self.status(config, "paused_disk_low", f"Freier Speicher unter {min_free} MB", path=path, free_mb=free_mb)
+
+        schema_error = self._active_file_schema_error(path)
+        if schema_error:
+            return self.status(config, "paused_invalid_schema", schema_error, path=path, free_mb=free_mb)
 
         out_row = self.prepare_row(config, row, path=path, free_mb=free_mb)
         row_size = _serialized_row_length(out_row)
@@ -411,6 +417,37 @@ class CsvRotatingLogger:
 
     def get_current_dir(self, config: Dict[str, Any]) -> str:
         return os.path.dirname(self.get_current_path(config))
+
+
+    def _active_file_schema_error(self, path: str) -> str:
+        """Validate the active file once before appending.
+
+        This is a generic safety guard, not a V2 migration/cleanup path. It
+        prevents mixing V3 rows into an existing file with an incompatible
+        header while avoiding per-write header checks.
+        """
+        if not os.path.exists(path) or os.path.getsize(path) == 0:
+            self._invalid_schema_paths.pop(path, None)
+            return ""
+        if path in self._invalid_schema_paths:
+            return self._invalid_schema_paths[path]
+        if path in self._validated_v3_paths:
+            return ""
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace", newline="") as f:
+                first = f.readline().strip()
+        except Exception as exc:
+            reason = f"Aktive Messdatei konnte nicht geprüft werden: {exc}"
+            self._invalid_schema_paths[path] = reason
+            return reason
+        fields = [part.strip() for part in first.split(";")]
+        required = {"schema", "schema_version", "measurement_profile", "scenario_grid_without_zendure_w"}
+        if fields and fields[0] == "schema" and required.issubset(set(fields)):
+            self._validated_v3_paths.add(path)
+            return ""
+        reason = "Messdaten-Logging pausiert: vorhandene Datei entspricht nicht dem gültigen ZEC-MEASUREMENT-V3-Header. Datei prüfen/löschen oder neuen Dateinamen wählen."
+        self._invalid_schema_paths[path] = reason
+        return reason
 
     def _free_disk_mb(self, directory: str) -> Optional[int]:
         try:

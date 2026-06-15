@@ -14,9 +14,9 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tupl
 
 CSV_SCHEMA = "ZEC-MEASUREMENT-V3"
 
-DEFAULT_MAX_FILES = 4
-DEFAULT_MAX_TOTAL_BYTES = 12 * 1024 * 1024
-DEFAULT_MAX_ROWS = 40_000
+DEFAULT_MAX_FILES = 2
+DEFAULT_MAX_TOTAL_BYTES = 6 * 1024 * 1024
+DEFAULT_MAX_ROWS = 20_000
 DEFAULT_TARGET_BAND_W = 100.0
 DEFAULT_SIGNIFICANT_GRID_W = 200.0
 DEFAULT_CROSS_DISCHARGE_W = 80.0
@@ -193,7 +193,7 @@ def read_measurement_csv(path: str, max_rows: Optional[int] = None, cancel_check
                 continue
             schema = (row.get("schema") or "").strip()
             if schema != CSV_SCHEMA:
-                raise ValueError(f"Nicht unterstütztes CSV-Schema: {schema or 'leer'}. Dieses Analyse-/Replay-Tool unterstützt ausschließlich ZEC-MEASUREMENT-V3; ältere V2-Dateien werden bewusst nicht migriert oder analysiert.")
+                raise ValueError(f"Nicht unterstütztes CSV-Schema: {schema or 'leer'}. Dieses Analyse-/Replay-Tool akzeptiert ausschließlich gültige ZEC-MEASUREMENT-V3-Dateien.")
             rows.append(dict(row))
             if max_rows is not None and len(rows) > max_rows:
                 raise ValueError(f"Zu viele Messpunkte: maximal {max_rows:,} Zeilen pro Analyselauf.".replace(",", "."))
@@ -741,6 +741,8 @@ def analyze_rows(
     controllable_avg = controllable_error_ws / total_dt if total_dt > 0 else 0.0
     controllable_active_avg = controllable_error_ws / controllable_s if controllable_s > 0 else 0.0
     non_controllable_avg = non_controllable_error_ws / total_dt if total_dt > 0 else 0.0
+    tolerated_error_ws = max(0.0, total_error_ws - controllable_error_ws - non_controllable_error_ws)
+    deadband_without_reserve_s = max(0.0, total_dt - deadband_inside_s - outside_deadband_with_reserve_s)
     tracking_avg = sum(tracking_errors) / len(tracking_errors) if tracking_errors else 0.0
     tracking_p95 = _p95(tracking_errors)
 
@@ -888,6 +890,8 @@ def analyze_rows(
             "non_controllable_p95_w": _round(_p95(non_controllable_values), 1),
             "controllable_percent": _percent(controllable_error_ws, total_error_ws),
             "non_controllable_percent": _percent(non_controllable_error_ws, total_error_ws),
+            "tolerated_percent": _percent(tolerated_error_ws, total_error_ws),
+            "tolerated_error_ws": _round(tolerated_error_ws, 1),
         },
         "actuator_reserve": {
             "rating": saturation_rating,
@@ -918,7 +922,10 @@ def analyze_rows(
             "target_band_w": _round(target_band_w, 1),
             "inside_deadband_seconds": _round(deadband_inside_s, 1),
             "inside_deadband_percent": _percent(deadband_inside_s, total_dt),
+            "inside_extended_band_seconds": _round(deadband_extended_s, 1),
             "inside_extended_band_percent": _percent(deadband_extended_s, total_dt),
+            "outside_deadband_without_reserve_seconds": _round(deadband_without_reserve_s, 1),
+            "outside_deadband_without_reserve_percent": _percent(deadband_without_reserve_s, total_dt),
             "hold_inside_deadband_seconds": _round(hold_inside_deadband_s, 1),
             "hold_inside_deadband_percent": _percent(hold_inside_deadband_s, deadband_inside_s),
             "outside_deadband_with_reserve_seconds": _round(outside_deadband_with_reserve_s, 1),

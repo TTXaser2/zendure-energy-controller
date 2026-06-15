@@ -109,6 +109,14 @@ TERM_HELP.update({
     "Verschlechtert": "Einige Messzyklen nach einem MQTT-Kommando war die absolute Netzabweichung größer. Einzelne Fälle können durch Last-/PV-Sprünge entstehen; Häufung wäre auffällig.",
     "Anzahl": "Absolute Anzahl von Messpunkten, Kommandos oder Ereignissen. Für die Interpretation ist die jeweilige Basis wichtig.",
     "Anteil": "Prozentanteil bezogen auf die im jeweiligen Block genannte Basis, z. B. bewertbare Kommandos oder analysierte Zeitdauer.",
+    "Netzbezug kWh": "Energie, die im jeweiligen Betriebszustand aus dem öffentlichen Netz bezogen wurde. Positive Grid-Leistung wird über die Zeit integriert. Dieser Wert ist nicht Zendure-Entladung.",
+    "Einspeisung kWh": "Energie, die im jeweiligen Betriebszustand ins öffentliche Netz eingespeist wurde. Negative Grid-Leistung wird betragsmäßig über die Zeit integriert. Dieser Wert ist nicht Zendure-Ladung.",
+    "Ø |Netz|": "Mittlere absolute Netzleistung im jeweiligen Betriebszustand. Kleine Werte bedeuten, dass der Netzanschlusspunkt in diesem Zustand nahe 0 W lag.",
+    "Zielband %": "Zeitanteil dieses Betriebszustands, in dem die Netzleistung innerhalb des Zielbands um 0 W lag. Die Basis ist die Zeitdauer dieser Tabellenzeile.",
+    "im Zielband / toleriert": "Anteil der gewichteten Netzabweichung, der innerhalb des Zielbands lag oder in dieser Betrachtung nicht als Fehlerursache klassifiziert wird. Diese Restkategorie macht die Prozentbasis vollständig sichtbar.",
+    "beeinflussbar außerhalb Zielband": "Anteil der gewichteten Netzabweichung außerhalb des Zielbands, für den der Controller grundsätzlich Stellreserve hatte.",
+    "nicht beeinflussbar außerhalb Zielband": "Anteil der gewichteten Netzabweichung außerhalb des Zielbands, der wegen SOC-, Leistungs-, Safe-State-, Daten- oder Stellreservegrenzen nicht sinnvoll dem Regler zugerechnet werden sollte.",
+    "außerhalb Deadband ohne Reserve": "Zeit außerhalb des Deadbands, in der keine ausreichende Stellreserve vorhanden war oder die Abweichung durch Grenzen/Randbedingungen nicht sinnvoll beeinflussbar war.",
 })
 
 # V12.8.20: Diagramm-Info-Texte müssen die im Controller/Replay-Code
@@ -557,7 +565,7 @@ def cross_charge_table(result: Dict[str, Any]) -> str:
 
 
 def mode_quality_table(result: Dict[str, Any]) -> str:
-    rows = f"<tr><th>{_th('Zustand')}</th><th>{_th('Samples')}</th><th>{_th('Zeit')}</th><th>Import</th><th>Export</th><th>Ø |Netz|</th><th>Beeinflussbar Ø</th><th>Nicht beeinflussbar Ø</th><th>{_th('Zielband')}</th><th>{_th('MQTT')}</th></tr>"
+    rows = f"<tr><th>{_th('Zustand')}</th><th>{_th('Samples')}</th><th>{_th('Zeit')}</th><th>{_th('Netzbezug kWh')}</th><th>{_th('Einspeisung kWh')}</th><th>{_th('Ø |Netz|')}</th><th>{_th('Beeinflussbar Ø')}</th><th>{_th('Nicht beeinflussbar Ø')}</th><th>{_th('Zielband %')}</th><th>{_th('MQTT')}</th></tr>"
     for item in result.get("operating_state_matrix") or result.get("mode_quality") or []:
         rows += (
             f"<tr><td>{html.escape(str(item.get('mode')))}</td><td>{item.get('samples')}</td><td>{_duration(item.get('seconds', 0))} ({_pct(item.get('percent', 0))})</td>"
@@ -625,6 +633,12 @@ def _bars_text(items: List[Tuple[str, str, float, str]], css: str = "bar") -> Sa
     return SafeHtml("".join(str(_bar_value(label, text, width, max_value, help_key, css)) for label, text, width, help_key in items))
 
 
+def _bars_percent(items: List[Tuple[str, str, float, str]], css: str = "bar") -> SafeHtml:
+    if not items:
+        return SafeHtml("<p>Keine Diagrammdaten.</p>")
+    return SafeHtml("".join(str(_bar_value(label, text, width, 100.0, help_key, css)) for label, text, width, help_key in items))
+
+
 def charts_html(result: Dict[str, Any]) -> str:
     fq = result.get("fair_regulator_quality") or {}
     db = result.get("deadband") or {}
@@ -632,32 +646,41 @@ def charts_html(result: Dict[str, Any]) -> str:
     state_items = []
     for item in (result.get("operating_state_matrix") or [])[:8]:
         seconds = float(item.get("seconds", 0) or 0)
-        percent = item.get("percent", 0)
-        state_items.append((str(item.get("mode")), f"{_duration(seconds)} / {_pct(percent)}", seconds, str(item.get("mode"))))
+        percent = float(item.get("percent", 0) or 0)
+        state_items.append((str(item.get("mode")), f"{_duration(seconds)} / {_pct(percent)}", percent, str(item.get("mode"))))
     command_basis = int((ce.get("improved_count", 0) or 0) + (ce.get("neutral_count", 0) or 0) + (ce.get("worse_count", 0) or 0))
     command_total = command_basis + int(ce.get("unknown_count", 0) or 0)
+
+    tolerated_percent = max(0.0, 100.0 - float(fq.get('controllable_percent', 0) or 0) - float(fq.get('non_controllable_percent', 0) or 0))
+    deadband_note = (
+        f"<p class='small'>Erweitertes Zielband inkl. Deadband: "
+        f"{_duration(db.get('inside_extended_band_seconds', 0))} / {_pct(db.get('inside_extended_band_percent', 0))}. "
+        "Diese Zusatzkennzahl ist verschachtelt und wird deshalb nicht in die 100%-Aufteilung addiert.</p>"
+    )
+
     html_parts = ["<div class='chartgrid'>"]
     html_parts.append(
         "<div class='chart-card'><h4>Abweichungsursachen</h4>"
-        + _chart_info("Abweichungsursachen", "Prozentanteile der gewichteten Netzabweichung. Beeinflussbar bedeutet: Der Controller hatte in diesem Zustand grundsätzlich Stellmöglichkeit; nicht beeinflussbar umfasst z. B. SOC-, Leistungs-, Safe-State- oder Datenlimits.")
-        + str(_bars_text([
-            ("beeinflussbar", f"{_pct(fq.get('controllable_percent', 0))} der gewichteten Abweichung", fq.get("controllable_percent", 0), "Beeinflussbar"),
-            ("nicht beeinflussbar", f"{_pct(fq.get('non_controllable_percent', 0))} der gewichteten Abweichung", fq.get("non_controllable_percent", 0), "Nicht beeinflussbar"),
+        + _chart_info("Abweichungsursachen", "Additive 100%-Aufteilung der gewichteten Netzabweichung. Die Restkategorie 'im Zielband / toleriert' wird bewusst angezeigt, damit die Prozentbasis vollständig sichtbar ist.")
+        + str(_bars_percent([
+            ("im Zielband / toleriert", f"{_pct(tolerated_percent)} der gewichteten Abweichung", tolerated_percent, "im Zielband / toleriert"),
+            ("beeinflussbar außerhalb Zielband", f"{_pct(fq.get('controllable_percent', 0))} der gewichteten Abweichung", fq.get("controllable_percent", 0), "beeinflussbar außerhalb Zielband"),
+            ("nicht beeinflussbar außerhalb Zielband", f"{_pct(fq.get('non_controllable_percent', 0))} der gewichteten Abweichung", fq.get("non_controllable_percent", 0), "nicht beeinflussbar außerhalb Zielband"),
         ])) + "</div>"
     )
     html_parts.append(
         "<div class='chart-card'><h4>Deadband</h4>"
-        + _chart_info("Deadband", "Zeitanteile bezogen auf den analysierten Zeitraum. Deadband heißt: Der Regler soll bewusst ruhig bleiben, damit kleine Schwankungen nicht ständig neue MQTT-Kommandos auslösen.")
-        + str(_bars_text([
+        + _chart_info("Deadband", "Additive 100%-Zeitaufteilung des analysierten Zeitraums: im Deadband, außerhalb mit Stellreserve und außerhalb ohne ausreichende Stellreserve. Die Balkenbreite entspricht dem angezeigten Prozentwert.")
+        + str(_bars_percent([
             ("Deadband", f"{_duration(db.get('inside_deadband_seconds', 0))} / {_pct(db.get('inside_deadband_percent', 0))}", db.get("inside_deadband_percent", 0), "Deadband"),
-            ("erweitert", f"{_duration(db.get('inside_extended_band_seconds', 0))} / {_pct(db.get('inside_extended_band_percent', 0))}", db.get("inside_extended_band_percent", 0), "Zeit im erweiterten Zielband"),
             ("außerhalb mit Reserve", f"{_duration(db.get('outside_deadband_with_reserve_seconds', 0))} / {_pct(db.get('outside_deadband_with_reserve_percent', 0))}", db.get("outside_deadband_with_reserve_percent", 0), "Außerhalb Deadband mit Reserve"),
-        ])) + "</div>"
+            ("außerhalb ohne Reserve", f"{_duration(db.get('outside_deadband_without_reserve_seconds', 0))} / {_pct(db.get('outside_deadband_without_reserve_percent', 0))}", db.get("outside_deadband_without_reserve_percent", 0), "außerhalb Deadband ohne Reserve"),
+        ])) + deadband_note + "</div>"
     )
     html_parts.append(
         "<div class='chart-card'><h4>Betriebszustände</h4>"
-        + _chart_info("Betriebszustände", "Aufsummierte Zeit je abgeleitetem Betriebszustand. Die menschenlesbare Dauer und der Prozentanteil zeigen, wo der Controller den ausgewählten Zeitraum überwiegend verbracht hat.")
-        + str(_bars_text(state_items)) + "</div>"
+        + _chart_info("Betriebszustände", "Additive Zeitverteilung der wichtigsten Betriebszustände. Die Balkenbreite entspricht dem Prozentanteil am analysierten Zeitraum; 100 % bedeutet wirklich der gesamte Zeitraum, nicht nur der größte Balken im Block.")
+        + str(_bars_percent(state_items)) + "</div>"
     )
     html_parts.append(
         "<div class='chart-card'><h4>MQTT-Wirkung</h4>"

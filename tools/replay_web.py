@@ -8,6 +8,7 @@ import html
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -62,8 +63,8 @@ try:
 except Exception:  # pragma: no cover
     REPLAY_VERSION = "12.8.9"
 
-SAFE_DEFAULTS = AnalysisLimits(max_files=4, max_total_bytes=12 * 1024 * 1024, max_rows=40_000)
-EXTENDED_DEFAULTS = AnalysisLimits(max_files=5, max_total_bytes=18 * 1024 * 1024, max_rows=70_000)
+SAFE_DEFAULTS = AnalysisLimits(max_files=2, max_total_bytes=6 * 1024 * 1024, max_rows=20_000)
+EXTENDED_DEFAULTS = AnalysisLimits(max_files=3, max_total_bytes=10 * 1024 * 1024, max_rows=35_000)
 CACHE_TTL_SECONDS = 15 * 60
 
 _job_lock = threading.RLock()
@@ -89,7 +90,7 @@ def _int_cfg(cfg: Dict[str, Any], key: str, default: int) -> int:
 
 
 def log_dir_from_config(cfg: Dict[str, Any]) -> Path:
-    raw = str(cfg.get("CSV_LOG_DIR", "logs") or "logs")
+    raw = str(cfg.get("MEASUREMENT_LOG_DIR", cfg.get("CSV_LOG_DIR", "logs")) or "logs")
     path = Path(raw)
     if not path.is_absolute():
         path = PROJECT_ROOT / path
@@ -203,8 +204,8 @@ def _scan_csv_profile(paths: Sequence[Path], max_scan_rows: int = 100_000) -> Di
                         continue
                     if rows < max_scan_rows:
                         schema = (row.get("schema") or "").strip()
-                        if schema and schema != CSV_SCHEMA:
-                            schema_errors.append(f"{path.name}: Schema {schema}")
+                        if schema != CSV_SCHEMA:
+                            schema_errors.append(f"{path.name}: Schema {schema or 'leer'} ist nicht {CSV_SCHEMA}")
                             break
                         label = _csv_timestamp_label(row)
                         if label and label != "-":
@@ -240,25 +241,67 @@ def _limits_to_dict(limits: AnalysisLimits) -> Dict[str, int]:
         "max_rows": int(limits.max_rows),
     }
 
+def _meminfo_available_mb() -> Optional[int]:
+    try:
+        values: Dict[str, int] = {}
+        for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+            if ":" not in line:
+                continue
+            key, rest = line.split(":", 1)
+            parts = rest.strip().split()
+            if parts:
+                values[key] = int(parts[0]) // 1024
+        return values.get("MemAvailable")
+    except Exception:
+        return None
+
+
+def _worker_memory_limit_mb(cfg: Dict[str, Any], extended: bool = False) -> int:
+    key = "ANALYSIS_EXTENDED_WORKER_MEMORY_LIMIT_MB" if extended else "ANALYSIS_WORKER_MEMORY_LIMIT_MB"
+    default = 380 if extended else 300
+    return max(128, _int_cfg(cfg, key, default))
+
+
+def _worker_timeout_seconds(cfg: Dict[str, Any], extended: bool = False) -> int:
+    key = "ANALYSIS_EXTENDED_WORKER_TIMEOUT_SECONDS" if extended else "ANALYSIS_WORKER_TIMEOUT_SECONDS"
+    default = 300 if extended else 180
+    return max(30, _int_cfg(cfg, key, default))
+
+
 def selection_profile(paths: Sequence[Path], cfg: Dict[str, Any]) -> Dict[str, Any]:
     total_size = sum(p.stat().st_size for p in paths)
     scan = _scan_csv_profile(paths)
     rows = int(scan.get("estimated_rows") or 0)
     safe = safe_limits(cfg)
     ext = extended_limits(cfg)
-    if len(paths) <= safe.max_files and total_size <= safe.max_total_bytes and rows <= safe.max_rows and not scan.get("schema_errors"):
+    mem_available_mb = _meminfo_available_mb()
+    safe_memory_mb = _worker_memory_limit_mb(cfg, extended=False)
+    ext_memory_mb = _worker_memory_limit_mb(cfg, extended=True)
+    schema_errors = scan.get("schema_errors") or []
+    unsafe_memory = mem_available_mb is not None and mem_available_mb < max(180, int(safe_memory_mb * 0.75))
+    if schema_errors:
+        risk = "rejected"
+        text = "Nicht analysierbar: Die Auswahl enthält keine durchgängig gültigen ZEC-MEASUREMENT-V3-Dateien."
+        needs_confirm = False
+        rejected = True
+    elif unsafe_memory:
+        risk = "rejected"
+        text = "Nicht empfohlen: Auf dem Raspberry Pi ist aktuell zu wenig freier RAM für eine sichere lokale Analyse verfügbar."
+        needs_confirm = False
+        rejected = True
+    elif len(paths) <= safe.max_files and total_size <= safe.max_total_bytes and rows <= safe.max_rows:
         risk = "pi-safe"
-        text = "Pi-Safe: lokale Analyse mit konservativen Grenzen."
+        text = "Pi-Safe: kleine V3-Auswahl; Analyse läuft zusätzlich in einem isolierten Worker mit Timeout und Speicherlimit."
         needs_confirm = False
         rejected = False
-    elif len(paths) <= ext.max_files and total_size <= ext.max_total_bytes and rows <= ext.max_rows and not scan.get("schema_errors"):
+    elif len(paths) <= ext.max_files and total_size <= ext.max_total_bytes and rows <= ext.max_rows:
         risk = "extended"
-        text = "Große Analyse: nur bewusst starten; sie kann länger dauern."
+        text = "Größere V3-Analyse: nur bewusst starten. Sie läuft isoliert, kann aber länger dauern und wird bei Zeit-/Speicherlimit abgebrochen."
         needs_confirm = True
         rejected = False
     else:
         risk = "rejected"
-        text = "Nicht empfohlen: lokale Analyse auf dem Raspberry Pi wird abgelehnt. Bitte auf PC/offline analysieren oder später DB-/Aggregationsanalyse nutzen."
+        text = "Nicht empfohlen: lokale Analyse auf dem Raspberry Pi wird fail-closed abgelehnt. Bitte kleinere V3-Auswahl verwenden oder offline auf PC analysieren."
         needs_confirm = False
         rejected = True
     return {
@@ -274,9 +317,12 @@ def selection_profile(paths: Sequence[Path], cfg: Dict[str, Any]) -> Dict[str, A
         "risk_text": text,
         "needs_confirmation": needs_confirm,
         "rejected": rejected,
-        "schema_errors": scan.get("schema_errors") or [],
+        "schema_errors": schema_errors,
         "safe_limits": _limits_to_dict(safe),
         "extended_limits": _limits_to_dict(ext),
+        "mem_available_mb": mem_available_mb,
+        "worker_memory_limit_mb": ext_memory_mb if risk == "extended" else safe_memory_mb,
+        "worker_timeout_seconds": _worker_timeout_seconds(cfg, extended=(risk == "extended")),
     }
 
 
@@ -317,29 +363,97 @@ def _make_snapshot(paths: Sequence[Path]) -> Tuple[Path, List[Path]]:
     return tmpdir, copied
 
 
-def analyze_snapshot(paths: Sequence[Path], cfg: Dict[str, Any], extended: bool, cancel_event: threading.Event, job: Dict[str, Any]) -> Dict[str, Any]:
+def _read_worker_rss_mb(pid: int) -> Optional[int]:
+    try:
+        for line in Path(f"/proc/{pid}/status").read_text(encoding="utf-8").splitlines():
+            if line.startswith("VmRSS:"):
+                parts = line.split()
+                if len(parts) >= 2:
+                    return int(parts[1]) // 1024
+    except Exception:
+        return None
+    return None
+
+
+def _terminate_worker(proc: subprocess.Popen, grace_seconds: float = 3.0) -> None:
+    if proc.poll() is not None:
+        return
+    try:
+        proc.terminate()
+        proc.wait(timeout=grace_seconds)
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        try:
+            proc.wait(timeout=grace_seconds)
+        except Exception:
+            pass
+
+
+def _run_worker(snapshot_paths: Sequence[Path], cfg: Dict[str, Any], extended: bool, job: Dict[str, Any], cancel_event: threading.Event) -> Dict[str, Any]:
     limits = extended_limits(cfg) if extended else safe_limits(cfg)
+    memory_mb = _worker_memory_limit_mb(cfg, extended=extended)
+    timeout_s = _worker_timeout_seconds(cfg, extended=extended)
+    worker_script = TOOLS_DIR / "replay_worker.py"
+    with tempfile.TemporaryDirectory(prefix="zec-worker-") as tmp:
+        tmp_path = Path(tmp)
+        request_path = tmp_path / "request.json"
+        output_path = tmp_path / "result.json"
+        request_path.write_text(json.dumps({
+            "paths": [str(p) for p in snapshot_paths],
+            "cfg": cfg,
+            "limits": _limits_to_dict(limits),
+            "memory_mb": memory_mb,
+        }, ensure_ascii=False), encoding="utf-8")
+        proc = subprocess.Popen(
+            [sys.executable, str(worker_script), "--request", str(request_path), "--output", str(output_path)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        job["worker_pid"] = proc.pid
+        start = time.time()
+        last_phase = "Analyse-Worker läuft"
+        while True:
+            if cancel_event.is_set():
+                _terminate_worker(proc)
+                raise RuntimeError("Analyse abgebrochen.")
+            rc = proc.poll()
+            if rc is not None:
+                break
+            elapsed = time.time() - start
+            if elapsed > timeout_s:
+                _terminate_worker(proc)
+                raise RuntimeError(f"Analyse wegen Zeitlimit abgebrochen ({timeout_s} s). Bitte kleinere Auswahl verwenden oder offline analysieren.")
+            rss = _read_worker_rss_mb(proc.pid)
+            if rss is not None and rss > memory_mb:
+                _terminate_worker(proc)
+                raise RuntimeError(f"Analyse wegen Speicherlimit abgebrochen ({rss} MB > {memory_mb} MB). Bitte kleinere Auswahl verwenden oder offline analysieren.")
+            phase = f"Analyse-Worker läuft ({int(elapsed)} s" + (f", RSS {rss} MB" if rss is not None else "") + ")"
+            if phase != last_phase:
+                job.update({"phase": phase, "percent": min(80, 40 + int(elapsed / max(1, timeout_s) * 40))})
+                last_phase = phase
+            time.sleep(0.5)
+        stdout, stderr = proc.communicate(timeout=5)
+        if proc.returncode != 0:
+            detail = (stderr or stdout or f"Exit-Code {proc.returncode}").strip()
+            raise RuntimeError("Analyse-Worker fehlgeschlagen: " + detail[-1000:])
+        if not output_path.exists():
+            raise RuntimeError("Analyse-Worker hat kein Ergebnis geliefert.")
+        return json.loads(output_path.read_text(encoding="utf-8"))
+
+
+def analyze_snapshot(paths: Sequence[Path], cfg: Dict[str, Any], extended: bool, cancel_event: threading.Event, job: Dict[str, Any]) -> Dict[str, Any]:
     tmpdir: Optional[Path] = None
     try:
         job.update({"phase": "Snapshot wird erstellt", "percent": 20})
         tmpdir, snapshot_paths = _make_snapshot(paths)
         if cancel_event.is_set():
             raise RuntimeError("Analyse abgebrochen.")
-        job.update({"phase": "CSV wird gelesen", "percent": 35})
-        result = analyze_files(
-            [str(p) for p in snapshot_paths],
-            min_soc_percent=int(cfg.get("MIN_SOC_PERCENT", 15)),
-            max_soc_percent=int(cfg.get("MAX_SOC_PERCENT", 99)),
-            limits=limits,
-            target_band_w=float(cfg.get("DEADBAND_W", 100) or 100),
-            significant_grid_w=200.0,
-            cross_discharge_threshold_w=float(cfg.get("SMA_DISCHARGE_BLOCK_W", 80) or 80),
-            zendure_charge_threshold_w=float(cfg.get("MIN_EFFECTIVE_SURPLUS_FOR_CHARGE_W", 150) or 100),
-            max_charge_power_w=float(cfg.get("MAX_CHARGE_POWER_W", 2100) or 2100),
-            max_discharge_power_w=float(cfg.get("MAX_DISCHARGE_POWER_W", 2100) or 2100),
-            cancel_check=cancel_event.is_set,
-        )
-        # Report should show original source names, not temp snapshot prefixes.
+        job.update({"phase": "Isolierter Analyse-Worker wird gestartet", "percent": 35})
+        result = _run_worker(snapshot_paths, cfg, extended, job, cancel_event)
         result["filenames"] = [p.name for p in paths]
         result["paths"] = [str(p) for p in paths]
         result["total_size_bytes"] = sum(p.stat().st_size for p in paths)
@@ -348,6 +462,7 @@ def analyze_snapshot(paths: Sequence[Path], cfg: Dict[str, Any], extended: bool,
     finally:
         if tmpdir and tmpdir.exists():
             shutil.rmtree(tmpdir, ignore_errors=True)
+        job.pop("worker_pid", None)
 
 
 def render_result_html(result: Dict[str, Any], job_id: str) -> str:

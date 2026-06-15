@@ -36,12 +36,12 @@ class V1282FixTests(unittest.TestCase):
         self.assertIn("12,5 W", report)
 
     def test_analysis_file_limit_is_pi_safe_and_version_is_shared(self):
-        self.assertEqual(DEFAULT_MAX_FILES, 4)
-        self.assertEqual(safe_limits().max_files, 4)
-        self.assertEqual(safe_limits().max_total_bytes, 12 * 1024 * 1024)
-        self.assertEqual(safe_limits().max_rows, 40_000)
-        self.assertEqual(REPLAY_VERSION, "12.9.0")
-        self.assertEqual(version.__version__, "12.9.0")
+        self.assertEqual(DEFAULT_MAX_FILES, 2)
+        self.assertEqual(safe_limits().max_files, 2)
+        self.assertEqual(safe_limits().max_total_bytes, 6 * 1024 * 1024)
+        self.assertEqual(safe_limits().max_rows, 20_000)
+        self.assertEqual(REPLAY_VERSION, "12.9.1")
+        self.assertEqual(version.__version__, "12.9.1")
 
 
 if __name__ == "__main__":
