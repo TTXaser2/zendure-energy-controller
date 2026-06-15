@@ -1,6 +1,6 @@
-Zendure Energy Controller Version 12.8.20
+Zendure Energy Controller Version 12.8.21
 
-# Zendure Energy Controller V12.8.20
+# Zendure Energy Controller V12.8.21
 
 Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, CSV-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
@@ -9,6 +9,17 @@ Copyright (c) 2026 Eduard Fuchs <info@eduardfuchs.de>
 Lizenziert unter AGPL-3.0-or-later. Siehe `LICENSE`, `NOTICE` und `DISCLAIMER.md`.
 
 
+
+
+## Wichtige Änderungen in V12.8.21
+
+V12.8.21 ist ein kleiner UI-/Dokumentations-Nacharbeitsrelease auf Basis von V12.8.20. Die AUTO-Regelstrategie, Statusseite, MQTT-Subscriptions, MQTT-Kommandostruktur, CSV-Schema und das Datenmodell bleiben unverändert.
+
+- UI-Hilfe-/Info-Texte auf der Analyse-Webseite wurden von historischen Versionsformulierungen bereinigt. Die Texte beschreiben nun direkt den aktuellen Funktionszustand.
+- Der Hilfetext zu `NIGHT_DISCHARGE` beschreibt die aktuelle Reserve-SOC-Semantik ohne Versionshistorie.
+- High-SOC-Hinweise in der Analyse beschreiben die aktuelle Einordnung als leichte Zusatzdiagnose ohne Versionsverweis.
+- Neuer Test stellt sicher, dass Analyse-Hilfetexte keine historischen Formulierungen wie `Seit V...` oder `Ab V...` enthalten.
+- Keine Änderung am Diagramm-Balkenlayout gegenüber V12.8.20.
 
 ## Wichtige Änderungen in V12.8.20
 

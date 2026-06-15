@@ -63,7 +63,7 @@ TERM_HELP: Dict[str, str] = {
     "Kritische Überschneidungen": "Phasen, in denen die Zusatzbatterie entlädt, während Zendure gleichzeitig lädt.",
     "Zeit bei MIN_SOC": "Zeit, in der der Zendure-SOC am unteren konfigurierten Grenzwert lag.",
     "Zeit bei MAX_SOC": "Zeit, in der der Zendure-SOC am oberen konfigurierten Grenzwert lag.",
-    "High-SOC-Ladeannahme": "Verteilung der einfachen Ladeannahme-Diagnosezustände. V12.8.4 wertet diesen Bereich nur leichtgewichtig aus.",
+    "High-SOC-Ladeannahme": "Verteilung der einfachen Ladeannahme-Diagnosezustände. Dieser Bereich ist bewusst eine leichte Zusatzdiagnose; der Schwerpunkt der Analyse liegt auf Reglerqualität, Stellreserve und Cross-Charge.",
     "Zustand": "Abgeleiteter Betriebszustand für die Matrix. Er trennt regelbare und nicht regelbare Phasen besser als der reine technische Modus.",
     "Samples": "Anzahl der Messpunkte, die dieser Zeile zugeordnet wurden.",
     "Zeit": "Aus dt_s aufsummierte Dauer für diese Gruppe oder dieses Ereignis.",
@@ -142,7 +142,7 @@ KNOWN_OPERATING_STATES = {
 KNOWN_MQTT_EFFECT_STATES = {"verbessert", "neutral", "verschlechtert", "nicht bewertbar"}
 
 TERM_HELP.update({
-    "NIGHT_DISCHARGE": "Feste Nacht-Basisentladung. Der Controller fordert im Nachtfenster eine konstante Entladeleistung an. Seit V12.8.17 bedeutet ein erreichter Nachtmodus-Reserve-SOC: nur diese feste Basisentladung pausiert; AUTO kann Lastspitzen weiterhin ausregeln.",
+    "NIGHT_DISCHARGE": "Feste Nacht-Basisentladung. Der Controller fordert im Nachtfenster eine konstante Entladeleistung an. Ein erreichter Nachtmodus-Reserve-SOC pausiert nur diese feste Basisentladung; AUTO kann Lastspitzen weiterhin ausregeln.",
     "HOLD": "Allgemeiner Haltezustand. Der Controller sendet gerade kein neues Leistungs-Kommando. Je nach Situation liegt das am Deadband, an einer Mindeständerung, einer Schutzlogik oder an einem pausierten festen Modus.",
     "HOLD_OUTSIDE_DEADBAND": "Haltezustand außerhalb des Deadbands. Der Controller sendet in diesem Moment kein neues Kommando, z. B. weil Mindeständerung, Sperrzeit, Grenzen oder andere Schutzlogik eine Änderung verhindert.",
     "MAX_SOC": "Oberes SOC-Limit erreicht. Zusätzliche Ladung ist nicht sinnvoll oder nicht erlaubt; Einspeisung kann dann trotz verfügbarem Überschuss nicht vollständig durch Zendure reduziert werden.",
@@ -574,7 +574,7 @@ def high_soc_table(result: Dict[str, Any]) -> str:
         ("Zeit bei MIN_SOC", _duration(result.get("time_at_min_soc_seconds", 0))),
         ("Zeit bei MAX_SOC", _duration(result.get("time_at_max_soc_seconds", 0))),
         ("High-SOC-Ladeannahme", _states_summary(states)),
-        ("Einordnung", "V12.8.9 zählt High-SOC weiterhin leichtgewichtig; Schwerpunkt sind faire Reglerqualität, Stellreserve und Cross-Charge."),
+        ("Einordnung", "High-SOC-Ladeannahme ist eine leichte Zusatzdiagnose. Schwerpunkt der Analyse sind faire Reglerqualität, Stellreserve und Cross-Charge."),
     ])
 
 
