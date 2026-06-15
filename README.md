@@ -1,8 +1,8 @@
-Zendure Energy Controller Version 12.8.21
+Zendure Energy Controller Version 12.9.0
 
-# Zendure Energy Controller V12.8.21
+# Zendure Energy Controller V12.9.0
 
-Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, CSV-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
+Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, ZEC-MEASUREMENT-V3-Messdaten-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
 Copyright (c) 2026 Eduard Fuchs <info@eduardfuchs.de>
 
@@ -11,13 +11,29 @@ Lizenziert unter AGPL-3.0-or-later. Siehe `LICENSE`, `NOTICE` und `DISCLAIMER.md
 
 
 
+## Wichtige Änderungen in V12.9.0
+
+V12.9.0 ist ein bewusstes Breaking-Change-Grundlagenrelease für `ZEC-MEASUREMENT-V3`. Die AUTO-Regelstrategie, MQTT-Subscriptions und MQTT-Kommandostruktur bleiben fachlich unverändert; geändert wurde der Messdaten-/Logging-/Analysevertrag.
+
+- Neues Messdaten-Schema `ZEC-MEASUREMENT-V3` mit Semikolon-Trennzeichen, Dezimalpunkt und einer Zeile pro Controller-Zyklus.
+- Klare Trennung von Rohmesswerten, normalisierten Regler-Eingängen, Szenario-Basis ohne Zendure-Wirkung, Reglerentscheidung, Sollwert-Kaskade, tatsächlich gesendetem MQTT-Kommando, Istwirkung sowie Freshness-/Validity-Diagnose.
+- Messdaten-Logging ist betriebslogisch über drei Modi steuerbar: `off`, `standard`, `extended`.
+- `standard` enthält vollständige Reglerdiagnose inklusive `scenario_grid_without_zendure_w` und aggregierter Zendure-MQTT Live-/Retained-/Partial-Stale-Diagnose.
+- `extended` ergänzt Detail-JSONs für Topic-/Pack-/Unit-/Limiter-/Freshness-Tiefenanalyse und spätere Simulator-/What-if-Arbeiten.
+- Logging bleibt optional und nachgelagert: Schreibfehler, zu wenig freier Speicher oder deaktiviertes Logging dürfen die Regelung nicht blockieren.
+- Settings-/Statusseite zeigen Schema, Modus, Logging-Status, freien Speicher und eine grobe geschätzte Aufbewahrungsdauer.
+- Alte `CSV_LOG_*`-Config-Keys werden beim Laden/Update einmalig auf `MEASUREMENT_LOG_*` übersetzt.
+- Analyse/Replay akzeptiert nur noch `ZEC-MEASUREMENT-V3`; ältere V2-Dateien werden bewusst nicht migriert oder analysiert.
+- Das Update-Script löscht beim V12.9-Update gezielt bekannte alte V2-Messdaten-Dateien im Log-Verzeichnis, statt ein Archiv-/Legacy-Handling aufzubauen.
+- Finale Excel-Lernsimulation bleibt unverändert unter `tools/` enthalten.
+
 ## Wichtige Änderungen in V12.8.21
 
-V12.8.21 ist ein kleiner UI-/Dokumentations-Nacharbeitsrelease auf Basis von V12.8.20. Die AUTO-Regelstrategie, Statusseite, MQTT-Subscriptions, MQTT-Kommandostruktur, CSV-Schema und das Datenmodell bleiben unverändert.
+V12.8.21 war ein kleiner UI-/Dokumentations-Nacharbeitsrelease auf Basis von V12.8.20. Die AUTO-Regelstrategie, Statusseite, MQTT-Subscriptions, MQTT-Kommandostruktur, CSV-Schema und das Datenmodell blieben unverändert.
 
-- UI-Hilfe-/Info-Texte auf der Analyse-Webseite wurden von historischen Versionsformulierungen bereinigt. Die Texte beschreiben nun direkt den aktuellen Funktionszustand.
-- Der Hilfetext zu `NIGHT_DISCHARGE` beschreibt die aktuelle Reserve-SOC-Semantik ohne Versionshistorie.
-- High-SOC-Hinweise in der Analyse beschreiben die aktuelle Einordnung als leichte Zusatzdiagnose ohne Versionsverweis.
+- UI-Hilfe-/Info-Texte auf der Analyse-Webseite wurden von historischen Versionsformulierungen bereinigt. Die Texte beschreiben direkt den aktuellen Funktionszustand.
+- Der Hilfetext zu `NIGHT_DISCHARGE` beschreibt die Reserve-SOC-Semantik ohne Versionshistorie.
+- High-SOC-Hinweise in der Analyse beschreiben die Einordnung als leichte Zusatzdiagnose ohne Versionsverweis.
 - Neuer Test stellt sicher, dass Analyse-Hilfetexte keine historischen Formulierungen wie `Seit V...` oder `Ab V...` enthalten.
 - Keine Änderung am Diagramm-Balkenlayout gegenüber V12.8.20.
 
@@ -224,7 +240,7 @@ Die Zwischenversionen V12.8.1 und V12.8.2 korrigierten Analyse-Weboberfläche un
 - High-SOC-/Ladeannahme-Zustände werden lesbar statt als JSON/HTML-Escape ausgegeben.
 - Controller-Link zur Analyse-Weboberfläche nutzt den dynamischen Host und den Analyse-Port 8090 bzw. `REPLAY_WEB_PORT`.
 - Analyse-Tabellen enthalten anklickbare `info`-Erklärungen pro Begriff.
-- Maximalwert für `CSV_LOG_BACKUP_COUNT` in den Settings auf 20 erhöht.
+- Maximalwert der Messdaten-Rotationsdateien in den Settings auf 20 erhöht.
 - Analyse-Weboberfläche und Textreport verwenden deutsche Zahlendarstellung mit Dezimalkomma. Technische Messdaten-CSV und JSON-Report bleiben unverändert mit Dezimalpunkt.
 - V12.8.2 hatte die Schutzgrenze der Mehrdatei-Analyse auf maximal 20 CSV-Dateien erhöht; V12.8.5 reduziert diese Grenze wieder bewusst zugunsten der Raspberry-Pi-Betriebssicherheit.
 
@@ -243,9 +259,9 @@ V12.8 erweitert gezielt die Analysefunktionen, ohne den Live-Regelalgorithmus zu
 - Analyse → Controller-Rücklink ergänzt.
 - Statusseite: Diagnoseboxen umsortiert und Kurzverlauf-Graph mit stabiler Höhe gegen Layout-Sprünge.
 
-## Bereits seit V12.7 enthalten
+## Messdaten und Analyse
 
-- CSV-Messdatenformat `ZEC-MEASUREMENT-V2` mit Semikolon-Trennzeichen und Punkt als Dezimalzeichen.
+- Aktuelles Messdatenformat seit V12.9.0: `ZEC-MEASUREMENT-V3` mit Semikolon-Trennzeichen und Punkt als Dezimalzeichen. Ältere V2-Dateien werden vom aktuellen Analyse-/Replay-Modus bewusst nicht mehr unterstützt.
 - Konsistente signierte Leistungswerte:
   - Netzleistung: positiv = Netzbezug, negativ = Einspeisung.
   - Zendure-/Speicherleistung: positiv = Laden, negativ = Entladen.

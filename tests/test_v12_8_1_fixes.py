@@ -18,8 +18,8 @@ class V1281FixTests(unittest.TestCase):
         self.assertIn("nimmt nicht an: 3", html)
         self.assertNotIn("&quot;", html)
 
-    def test_csv_backup_count_limit_is_20(self):
-        self.assertEqual(CONFIG_SCHEMA["CSV_LOG_BACKUP_COUNT"]["max"], 20)
+    def test_measurement_log_backup_count_limit_is_20(self):
+        self.assertEqual(CONFIG_SCHEMA["MEASUREMENT_LOG_BACKUP_COUNT"]["max"], 20)
 
 
 if __name__ == "__main__":

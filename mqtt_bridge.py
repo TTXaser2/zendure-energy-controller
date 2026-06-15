@@ -91,15 +91,26 @@ class MqttBridge:
                 self.client.subscribe(diagnostic_filter)
 
     def on_connect(self, client, userdata, flags, reason_code=None, properties=None):
-        with self.state.lock:
-            self.state.mqtt_connected = True
+        self.state.mark_zendure_mqtt_connect(time.time())
         self.refresh_subscriptions()
         self.log("[MQTT] Verbunden")
 
     def on_disconnect(self, client, userdata, flags=None, reason_code=None, properties=None):
-        with self.state.lock:
-            self.state.mqtt_connected = False
+        self.state.mark_zendure_mqtt_disconnect(time.time())
         self.log("[MQTT] Verbindung getrennt")
+
+    def zendure_topic_group(self, topic: str, topics: Dict[str, str]) -> str:
+        if topic == topics.get("battery_soc"):
+            return "soc"
+        if topic in {topics.get("pack_input_power"), topics.get("output_home_power"), topics.get("grid_input_power"), topics.get("output_pack_power")} or topic.endswith("/power"):
+            return "headunit_power"
+        if topic.endswith("/socLevel"):
+            return "pack_soc"
+        if topic.endswith("/maxTemp") or topic == topics.get("hyper_tmp"):
+            return "temperature"
+        if topic.endswith("/state"):
+            return "device_state"
+        return "optional_diagnostics"
 
     def on_message(self, client, userdata, msg) -> None:
         cfg = self.config_getter()
@@ -108,6 +119,9 @@ class MqttBridge:
         payload = msg.payload.decode(errors="replace").strip()
         now = time.time()
         now_text = datetime.now().strftime("%H:%M:%S")
+        retain = bool(getattr(msg, "retain", False))
+        if topic.startswith("Zendure/"):
+            self.state.track_zendure_mqtt_topic(topic, payload, retain, self.zendure_topic_group(topic, topics))
 
         if mqtt_diagnostic_should_capture(cfg, topic):
             try:

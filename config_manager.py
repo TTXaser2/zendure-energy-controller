@@ -113,14 +113,15 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "ZENDURE_POWER_STALE_TIMEOUT_SECONDS": 90,
     "SAFE_STATE_ON_SHELLY_ERROR": True,
 
-    # Historie / Graph / CSV
+    # Historie / Messdaten-Logging
     "GRAPH_HISTORY_LIMIT": 300,
-    "CSV_LOG_ENABLED": False,
-    "CSV_LOG_DIR": "logs",
-    "CSV_LOG_FILE": "zendure_measurements.csv",
-    "CSV_LOG_MAX_BYTES": 2_000_000,
-    "CSV_LOG_BACKUP_COUNT": 5,
-
+    "MEASUREMENT_LOG_MODE": "off",
+    "MEASUREMENT_LOG_DIR": "logs",
+    "MEASUREMENT_LOG_FILE": "zendure_measurements.csv",
+    "MEASUREMENT_LOG_MAX_BYTES": 25_000_000,
+    "MEASUREMENT_LOG_BACKUP_COUNT": 5,
+    "MEASUREMENT_LOG_MIN_FREE_DISK_MB": 500,
+    "MEASUREMENT_LOG_ESTIMATED_ROW_BYTES": 4096,
     # Analyse-/Replay-Service Schutzlimits
     "ANALYSIS_MAX_FILES": 4,
     "ANALYSIS_MAX_TOTAL_BYTES": 12 * 1024 * 1024,
@@ -233,12 +234,14 @@ CONFIG_SCHEMA: Dict[str, Dict[str, Any]] = {
     "ZENDURE_POWER_STALE_TIMEOUT_SECONDS": {"group": "Sicherheit / Fallback", "label": "Zendure Istwert Timeout", "type": "int", "min": 10, "max": 3600, "unit": "s", "description": "Alter der Zendure-Istleistungswerte, ab dem eine Warnung gesetzt wird."},
     "SAFE_STATE_ON_SHELLY_ERROR": {"group": "Sicherheit / Fallback", "label": "Safe-State bei Shelly-Fehlern", "type": "bool", "description": "Wenn aktiv, fährt der Controller bei anhaltenden Messfehlern auf 0 W."},
 
-    "GRAPH_HISTORY_LIMIT": {"group": "Historie / CSV", "label": "Graph-Historie", "type": "int", "min": 50, "max": 5000, "description": "Anzahl der im RAM gehaltenen Graph-Datenpunkte."},
-    "CSV_LOG_ENABLED": {"group": "Historie / CSV", "label": "CSV Logging aktiv", "type": "bool", "description": "Schreibt Regeldaten zusätzlich rollierend in CSV-Dateien."},
-    "CSV_LOG_DIR": {"group": "Historie / CSV", "label": "CSV Log Verzeichnis", "type": "str", "description": "Relatives oder absolutes Verzeichnis für CSV-Logs."},
-    "CSV_LOG_FILE": {"group": "Historie / CSV", "label": "CSV Log Datei", "type": "str", "description": "Dateiname der aktuellen CSV-Messdaten-Datei, standardmäßig zendure_measurements.csv."},
-    "CSV_LOG_MAX_BYTES": {"group": "Historie / CSV", "label": "Max CSV Dateigröße", "type": "int", "min": 100_000, "max": 100_000_000, "unit": "Bytes", "description": "Bei Überschreitung wird rotiert. Alte Dateien werden nach dem Schema zendure_measurements_1.csv, zendure_measurements_2.csv usw. gehalten."},
-    "CSV_LOG_BACKUP_COUNT": {"group": "Historie / CSV", "label": "CSV Backup-Dateien", "type": "int", "min": 1, "max": 20, "description": "Anzahl alter CSV-Dateien, die behalten werden. Höhere Werte verlängern die analysierbare Historie, benötigen aber mehr Speicherplatz."},
+    "GRAPH_HISTORY_LIMIT": {"group": "Messdaten / Historie", "label": "Graph-Historie", "type": "int", "min": 50, "max": 5000, "description": "Anzahl der im RAM gehaltenen Graph-Datenpunkte. Diese Historie ist unabhängig vom dauerhaften Messdaten-Logging."},
+    "MEASUREMENT_LOG_MODE": {"group": "Messdaten / Historie", "label": "Messdaten-Logging", "type": "select", "options": {"off": "Aus", "standard": "Standard", "extended": "Erweitert"}, "description": "Aus: keine zyklischen Messdaten, schont die SD-Karte. Standard: vollständige Reglerdiagnose inklusive Freshness, MQTT-Stale-Aggregat, Sollwertkaskade, Kommando und Szenario ohne Zendure. Erweitert: Standard plus Detaildaten für Simulation, What-if und tiefe MQTT-/Freshness-Analyse; erzeugt größere Dateien und sollte gezielt genutzt werden."},
+    "MEASUREMENT_LOG_DIR": {"group": "Messdaten / Historie", "label": "Messdaten-Verzeichnis", "type": "str", "description": "Relatives oder absolutes Verzeichnis für ZEC-MEASUREMENT-V3-Messdaten."},
+    "MEASUREMENT_LOG_FILE": {"group": "Messdaten / Historie", "label": "Messdaten-Datei", "type": "str", "description": "Dateiname der aktuellen ZEC-MEASUREMENT-V3-Datei, standardmäßig zendure_measurements.csv."},
+    "MEASUREMENT_LOG_MAX_BYTES": {"group": "Messdaten / Historie", "label": "Max Dateigröße", "type": "int", "min": 100_000, "max": 100_000_000, "unit": "Bytes", "description": "Bei Überschreitung wird rotiert. Zusammen mit der Dateianzahl bestimmt dieser Wert die geschätzte Aufbewahrung."},
+    "MEASUREMENT_LOG_BACKUP_COUNT": {"group": "Messdaten / Historie", "label": "Rotationsdateien", "type": "int", "min": 1, "max": 20, "description": "Anzahl der Messdaten-Dateien, die rollierend behalten werden. Höhere Werte verlängern die analysierbare Historie, benötigen aber mehr Speicherplatz."},
+    "MEASUREMENT_LOG_MIN_FREE_DISK_MB": {"group": "Messdaten / Historie", "label": "Mindestfreier Speicher", "type": "int", "min": 100, "max": 100000, "unit": "MB", "description": "Wenn weniger Speicher frei ist, pausiert das Messdaten-Logging. Die Regelung läuft weiter."},
+    "MEASUREMENT_LOG_ESTIMATED_ROW_BYTES": {"group": "Messdaten / Historie", "label": "Schätzgröße je Messpunkt", "type": "int", "min": 500, "max": 50000, "unit": "Bytes", "description": "Nur für die grobe Aufbewahrungsschätzung, bis reale Zeilengrößen vorliegen. Die Schätzung muss nicht bytegenau sein."},
 
     "ANALYSIS_MAX_FILES": {"group": "Analyse / Replay", "label": "Analyse Pi-Safe Dateien", "type": "int", "min": 1, "max": 20, "description": "Maximale Dateianzahl für normale lokale Analysen auf dem Raspberry Pi. Standard ist bewusst konservativ, um EVCC, MQTT und Live-Regler zu schützen."},
     "ANALYSIS_MAX_TOTAL_BYTES": {"group": "Analyse / Replay", "label": "Analyse Pi-Safe Gesamtgröße", "type": "int", "min": 1_000_000, "max": 100_000_000, "unit": "Bytes", "description": "Maximale Gesamtgröße der ausgewählten CSV-Dateien für normale lokale Analysen. Standard: ca. 12 MiB."},
@@ -427,6 +430,31 @@ def validate_config(candidate: Dict[str, Any]) -> Tuple[Dict[str, Any], bool]:
             changed = True
         if "SECOND_BATTERY_STALE_BLOCK_CHARGE" not in candidate and "EVCC_STALE_BLOCK_CHARGE" in result:
             result["SECOND_BATTERY_STALE_BLOCK_CHARGE"] = bool(result.get("EVCC_STALE_BLOCK_CHARGE", True))
+            changed = True
+
+    # V12.9: einmalige Übersetzung alter CSV_LOG_*-Keys in das neue
+    # betriebslogische Messdaten-Logging. Keine V2-Datenmigration.
+    if isinstance(candidate, dict):
+        if "MEASUREMENT_LOG_MODE" not in candidate and "CSV_LOG_ENABLED" in candidate:
+            result["MEASUREMENT_LOG_MODE"] = "standard" if bool(result.get("CSV_LOG_ENABLED", False)) else "off"
+            changed = True
+        if "MEASUREMENT_LOG_DIR" not in candidate and "CSV_LOG_DIR" in candidate:
+            result["MEASUREMENT_LOG_DIR"] = str(result.get("CSV_LOG_DIR") or result.get("MEASUREMENT_LOG_DIR") or "logs")
+            changed = True
+        if "MEASUREMENT_LOG_FILE" not in candidate and "CSV_LOG_FILE" in candidate:
+            result["MEASUREMENT_LOG_FILE"] = str(result.get("CSV_LOG_FILE") or result.get("MEASUREMENT_LOG_FILE") or "zendure_measurements.csv")
+            changed = True
+        if "MEASUREMENT_LOG_MAX_BYTES" not in candidate and "CSV_LOG_MAX_BYTES" in candidate:
+            try:
+                result["MEASUREMENT_LOG_MAX_BYTES"] = max(100_000, int(result.get("CSV_LOG_MAX_BYTES", result.get("MEASUREMENT_LOG_MAX_BYTES", 25_000_000))))
+            except Exception:
+                result["MEASUREMENT_LOG_MAX_BYTES"] = 25_000_000
+            changed = True
+        if "MEASUREMENT_LOG_BACKUP_COUNT" not in candidate and "CSV_LOG_BACKUP_COUNT" in candidate:
+            try:
+                result["MEASUREMENT_LOG_BACKUP_COUNT"] = max(1, int(result.get("CSV_LOG_BACKUP_COUNT", result.get("MEASUREMENT_LOG_BACKUP_COUNT", 5))))
+            except Exception:
+                result["MEASUREMENT_LOG_BACKUP_COUNT"] = 5
             changed = True
 
     for sign_key in ("SECOND_BATTERY_DISCHARGE_SIGN", "EVCC_SMA_DISCHARGE_SIGN"):

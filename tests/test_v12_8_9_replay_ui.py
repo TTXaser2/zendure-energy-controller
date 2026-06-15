@@ -13,7 +13,7 @@ class V1289ReplayUiTests(unittest.TestCase):
     def _csv(self, path: Path, rows: int = 2) -> None:
         lines = ["schema;datetime_local;grid_power_w;zendure_target_power_w;zendure_actual_power_w"]
         for i in range(rows):
-            lines.append(f"ZEC-MEASUREMENT-V2;2026-06-08 00:00:{i:02d};0;0;0")
+            lines.append(f"ZEC-MEASUREMENT-V3;2026-06-08 00:00:{i:02d};0;0;0")
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     def test_selection_profile_limits_are_json_serializable(self):

@@ -359,10 +359,16 @@ def validate_config_semantics(
     if _int_value(cfg, "SOC_STALE_TIMEOUT_SECONDS", 90) < _int_value(cfg, "INTERVAL_SECONDS", 2) * 2:
         issues.append(_issue("WARNING", "Der SOC Timeout ist sehr kurz im Verhältnis zum Regelintervall. Kurze MQTT-Pausen können dadurch schneller Safe-State auslösen.", ["SOC_STALE_TIMEOUT_SECONDS", "INTERVAL_SECONDS"], "Sicherheit / Fallback", "SOC_TIMEOUT_LOW"))
 
-    # File system checks.
-    if _bool_value(cfg.get("CSV_LOG_ENABLED", False)):
-        if not _path_is_writable(_str_value(cfg, "CSV_LOG_DIR"), base_dir=base_dir):
-            issues.append(_issue("ERROR", "CSV-Logging ist aktiv, aber das CSV-Log-Verzeichnis ist nicht beschreibbar.", ["CSV_LOG_ENABLED", "CSV_LOG_DIR"], "Historie / CSV", "CSV_DIR_NOT_WRITABLE"))
+    # File system checks. Messdaten-Logging ist nachgelagert; Validierung soll
+    # Fehlkonfigurationen sichtbar machen, aber die Regelung selbst hängt nie am Logging.
+    measurement_mode = _str_value(cfg, "MEASUREMENT_LOG_MODE") or "off"
+    if measurement_mode not in {"off", "standard", "extended"}:
+        issues.append(_issue("ERROR", "Der Messdaten-Logging-Modus muss Aus, Standard oder Erweitert sein.", ["MEASUREMENT_LOG_MODE"], "Messdaten / Historie", "MEASUREMENT_LOG_MODE_INVALID"))
+    if measurement_mode != "off":
+        if not _path_is_writable(_str_value(cfg, "MEASUREMENT_LOG_DIR"), base_dir=base_dir):
+            issues.append(_issue("ERROR", "Messdaten-Logging ist aktiv, aber das Messdaten-Verzeichnis ist nicht beschreibbar.", ["MEASUREMENT_LOG_MODE", "MEASUREMENT_LOG_DIR"], "Messdaten / Historie", "MEASUREMENT_LOG_DIR_NOT_WRITABLE"))
+        if measurement_mode == "extended":
+            issues.append(_issue("INFO", "Erweitertes Messdaten-Logging erzeugt größere Dateien. Es ist für gezielte Simulation, What-if und tiefe MQTT-/Freshness-Analyse gedacht, nicht zwingend für Dauerbetrieb.", ["MEASUREMENT_LOG_MODE"], "Messdaten / Historie", "MEASUREMENT_LOG_EXTENDED_VOLUME"))
     if _bool_value(cfg.get("FILE_LOG_ENABLED", False)):
         if not _path_is_writable(_str_value(cfg, "FILE_LOG_DIR"), base_dir=base_dir):
             issues.append(_issue("ERROR", "Datei-Logging ist aktiv, aber das Runtime-Log-Verzeichnis ist nicht beschreibbar.", ["FILE_LOG_ENABLED", "FILE_LOG_DIR"], "Logging", "FILE_LOG_DIR_NOT_WRITABLE"))

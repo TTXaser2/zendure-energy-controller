@@ -995,6 +995,11 @@ class ZendureController:
         self.state.record_graph_point(int(cfg.get("GRAPH_HISTORY_LIMIT", 300)))
         try:
             last_row = self.state.snapshot()["graph_history"][-1]
-            self.csv_logger.log(cfg, last_row)
+            log_status = self.csv_logger.log(cfg, last_row)
+            self.state.set_measurement_log_status(log_status)
         except Exception as exc:
-            self.state.set_error(f"CSV logging error: {exc}")
+            self.state.set_error(f"Messdaten-Logging pausiert: {exc}")
+            self.state.set_measurement_log_status({
+                "measurement_log_status": "error",
+                "measurement_log_status_reason": str(exc),
+            })

@@ -4,6 +4,8 @@
 # This file is part of Zendure Energy Controller.
 # See LICENSE, NOTICE and DISCLAIMER.md for license, attribution and warranty information.
 
+import hashlib
+import json
 import threading
 import time
 from collections import deque
@@ -183,6 +185,34 @@ class ControllerState:
     event_history: Deque[Dict[str, Any]] = field(default_factory=lambda: deque(maxlen=50))
     mqtt_topic_diagnostics: Deque[Dict[str, Any]] = field(default_factory=lambda: deque(maxlen=200))
 
+    # ZEC-MEASUREMENT-V3: Zendure MQTT Live-/Retained-/Partial-Stale-Diagnose.
+    zendure_mqtt_connect_epoch: Optional[float] = None
+    zendure_mqtt_disconnect_epoch: Optional[float] = None
+    zendure_mqtt_topics: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    zendure_mqtt_overall_status: str = "ZENDURE_MQTT_STALE"
+    zendure_mqtt_status_reason: str = "Noch keine Zendure-MQTT-Daten empfangen."
+    zendure_mqtt_live_confirmed: bool = False
+    zendure_mqtt_retained_only: bool = False
+    zendure_mqtt_partial_stale: bool = False
+    zendure_mqtt_after_broker_restart_no_live_updates: bool = False
+    zendure_mqtt_critical_data_age_s: Optional[int] = None
+    zendure_mqtt_last_live_epoch_s: Optional[float] = None
+    zendure_mqtt_last_received_epoch_s: Optional[float] = None
+    zendure_mqtt_missing_critical_groups: str = ""
+    zendure_mqtt_stale_critical_groups: str = ""
+
+    # ZEC-MEASUREMENT-V3: Logging darf die Regelung nie blockieren.
+    measurement_log_status: str = "disabled"
+    measurement_log_status_reason: str = "Messdaten-Logging aus."
+    measurement_estimated_retention_hours: Optional[float] = None
+    measurement_current_file_size_bytes: int = 0
+    measurement_free_disk_mb: Optional[int] = None
+
+    # ZEC-MEASUREMENT-V3: Istleistungs-Freshness.
+    actual_zendure_power_valid: bool = False
+    actual_zendure_power_age_s: Optional[int] = None
+    actual_zendure_power_validity_reason: str = "ZENDURE_POWER_MISSING"
+
     def set_mode(self, new_mode: str) -> None:
         with self.lock:
             if new_mode != self.current_mode:
@@ -235,6 +265,184 @@ class ControllerState:
             removed = len(self.mqtt_topic_diagnostics)
             self.mqtt_topic_diagnostics.clear()
             return removed
+
+    def mark_zendure_mqtt_connect(self, now: Optional[float] = None) -> None:
+        """Mark MQTT reconnect and reset per-connection live confirmation."""
+        with self.lock:
+            ts = now if now is not None else time.time()
+            self.mqtt_connected = True
+            self.zendure_mqtt_connect_epoch = ts
+            self.zendure_mqtt_disconnect_epoch = None
+            for info in self.zendure_mqtt_topics.values():
+                info["message_count_since_connect"] = 0
+                info["non_retained_seen_count_since_connect"] = 0
+                info["retain_seen_count_since_connect"] = 0
+                info["live_confirmed"] = False
+            self.zendure_mqtt_live_confirmed = False
+            self.zendure_mqtt_retained_only = False
+            self.zendure_mqtt_after_broker_restart_no_live_updates = False
+
+    def mark_zendure_mqtt_disconnect(self, now: Optional[float] = None) -> None:
+        with self.lock:
+            self.mqtt_connected = False
+            self.zendure_mqtt_disconnect_epoch = now if now is not None else time.time()
+            self.zendure_mqtt_live_confirmed = False
+
+    def track_zendure_mqtt_topic(self, topic: str, payload: str, retain: bool, group: str, now: Optional[float] = None) -> None:
+        """Track topic freshness and retained/live evidence for V3 diagnostics."""
+        if not topic.startswith("Zendure/"):
+            return
+        now_epoch = now if now is not None else time.time()
+        digest = hashlib.sha256(str(payload).encode("utf-8", errors="replace")).hexdigest()[:16]
+        with self.lock:
+            info = self.zendure_mqtt_topics.get(topic, {
+                "topic": topic,
+                "topic_group": group,
+                "first_received_at": None,
+                "last_received_at": None,
+                "age_s": None,
+                "message_count": 0,
+                "message_count_since_connect": 0,
+                "last_payload_hash": None,
+                "last_payload_changed_at": None,
+                "payload_changed_age_s": None,
+                "retain_flag": False,
+                "retain_seen_count": 0,
+                "retain_seen_count_since_connect": 0,
+                "non_retained_seen_count": 0,
+                "non_retained_seen_count_since_connect": 0,
+                "live_confirmed": False,
+            })
+            if info.get("first_received_at") is None:
+                info["first_received_at"] = round(now_epoch, 3)
+            info["topic_group"] = group
+            info["last_received_at"] = round(now_epoch, 3)
+            info["message_count"] = int(info.get("message_count") or 0) + 1
+            info["message_count_since_connect"] = int(info.get("message_count_since_connect") or 0) + 1
+            info["retain_flag"] = bool(retain)
+            if retain:
+                info["retain_seen_count"] = int(info.get("retain_seen_count") or 0) + 1
+                info["retain_seen_count_since_connect"] = int(info.get("retain_seen_count_since_connect") or 0) + 1
+            else:
+                info["non_retained_seen_count"] = int(info.get("non_retained_seen_count") or 0) + 1
+                info["non_retained_seen_count_since_connect"] = int(info.get("non_retained_seen_count_since_connect") or 0) + 1
+                info["live_confirmed"] = True
+                self.zendure_mqtt_last_live_epoch_s = round(now_epoch, 3)
+            if info.get("last_payload_hash") != digest:
+                info["last_payload_hash"] = digest
+                info["last_payload_changed_at"] = round(now_epoch, 3)
+            self.zendure_mqtt_topics[topic] = info
+            self.zendure_mqtt_last_received_epoch_s = round(now_epoch, 3)
+
+    def _zendure_mqtt_group_summary_locked(self, now_epoch: float, timeout_s: int) -> Dict[str, Dict[str, Any]]:
+        groups: Dict[str, Dict[str, Any]] = {}
+        for topic, raw_info in self.zendure_mqtt_topics.items():
+            info = dict(raw_info)
+            group = str(info.get("topic_group") or "other")
+            last_received = info.get("last_received_at")
+            try:
+                age_s = max(0, int(now_epoch - float(last_received))) if last_received is not None else None
+            except Exception:
+                age_s = None
+            info["age_s"] = age_s
+            last_changed = info.get("last_payload_changed_at")
+            try:
+                info["payload_changed_age_s"] = max(0, int(now_epoch - float(last_changed))) if last_changed is not None else None
+            except Exception:
+                info["payload_changed_age_s"] = None
+            self.zendure_mqtt_topics[topic] = info
+            g = groups.setdefault(group, {
+                "topic_group": group,
+                "topic_count": 0,
+                "fresh_topic_count": 0,
+                "live_confirmed": False,
+                "retained_only": False,
+                "last_received_at": None,
+                "age_s": None,
+                "topics": [],
+            })
+            g["topic_count"] += 1
+            if age_s is not None and age_s <= timeout_s:
+                g["fresh_topic_count"] += 1
+            if bool(info.get("live_confirmed")):
+                g["live_confirmed"] = True
+            if int(info.get("message_count_since_connect") or 0) > 0 and int(info.get("non_retained_seen_count_since_connect") or 0) == 0:
+                g["retained_only"] = True
+            if last_received is not None and (g["last_received_at"] is None or float(last_received) > float(g["last_received_at"])):
+                g["last_received_at"] = last_received
+                g["age_s"] = age_s
+            g["topics"].append(topic)
+        return groups
+
+    def update_zendure_mqtt_status(self, cfg: Dict[str, Any], now: Optional[float] = None) -> None:
+        now_epoch = now if now is not None else time.time()
+        timeout_s = int(cfg.get("ZENDURE_POWER_STALE_TIMEOUT_SECONDS", 90))
+        required_groups = {"soc", "headunit_power"}
+        with self.lock:
+            groups = self._zendure_mqtt_group_summary_locked(now_epoch, timeout_s)
+            missing = sorted(g for g in required_groups if g not in groups)
+            stale = sorted(
+                group for group, info in groups.items()
+                if group in required_groups and (info.get("age_s") is None or int(info.get("age_s") or 999999) > timeout_s)
+            )
+            live_groups = {group for group, info in groups.items() if group in required_groups and bool(info.get("live_confirmed"))}
+            retained_only_groups = {group for group, info in groups.items() if group in required_groups and bool(info.get("retained_only"))}
+            last_critical_ages = [int(info.get("age_s")) for group, info in groups.items() if group in required_groups and info.get("age_s") is not None]
+            self.zendure_mqtt_critical_data_age_s = max(last_critical_ages) if last_critical_ages else None
+            self.zendure_mqtt_missing_critical_groups = ",".join(missing)
+            self.zendure_mqtt_stale_critical_groups = ",".join(stale)
+            self.zendure_mqtt_live_confirmed = required_groups.issubset(live_groups)
+            self.zendure_mqtt_retained_only = bool(retained_only_groups) and not self.zendure_mqtt_live_confirmed
+            self.zendure_mqtt_partial_stale = bool(stale) and bool(groups) and not set(stale).issuperset(required_groups)
+
+            connect_age = None
+            if self.zendure_mqtt_connect_epoch is not None:
+                connect_age = max(0, int(now_epoch - float(self.zendure_mqtt_connect_epoch)))
+            self.zendure_mqtt_after_broker_restart_no_live_updates = (
+                bool(self.mqtt_connected)
+                and connect_age is not None
+                and connect_age > min(timeout_s, 90)
+                and not self.zendure_mqtt_live_confirmed
+            )
+
+            if not self.mqtt_connected:
+                status = "ZENDURE_MQTT_STALE"
+                reason = "MQTT nicht verbunden."
+            elif self.zendure_mqtt_after_broker_restart_no_live_updates:
+                status = "ZENDURE_MQTT_AFTER_BROKER_RESTART_NO_LIVE_UPDATES"
+                reason = "Nach MQTT-Reconnect/Broker-Neustart keine nicht-retained Live-Werte aus kritischen Zendure-Gruppen."
+            elif self.zendure_mqtt_retained_only:
+                status = "ZENDURE_MQTT_RETAINED_ONLY"
+                reason = "Kritische Zendure-Daten seit Reconnect nur als retained empfangen."
+            elif missing or stale:
+                status = "ZENDURE_MQTT_PARTIAL_STALE" if groups and not set(stale + missing).issuperset(required_groups) else "ZENDURE_MQTT_STALE"
+                reason = "Fehlende/stale kritische Gruppen: " + ",".join(sorted(set(missing + stale)))
+            else:
+                status = "ZENDURE_MQTT_OK"
+                reason = "Kritische Zendure-MQTT-Gruppen frisch und Live-Empfang bestätigt."
+            self.zendure_mqtt_overall_status = status
+            self.zendure_mqtt_status_reason = reason
+
+    def zendure_mqtt_topic_groups_json(self) -> str:
+        with self.lock:
+            groups = self._zendure_mqtt_group_summary_locked(time.time(), 90)
+            compact = {k: {kk: vv for kk, vv in v.items() if kk != "topics"} for k, v in groups.items()}
+            return json.dumps(compact, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+    def zendure_mqtt_topics_json(self) -> str:
+        with self.lock:
+            return json.dumps(self.zendure_mqtt_topics, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+    def set_measurement_log_status(self, status: Dict[str, Any]) -> None:
+        with self.lock:
+            self.measurement_log_status = str(status.get("measurement_log_status", self.measurement_log_status))
+            self.measurement_log_status_reason = str(status.get("measurement_log_status_reason", self.measurement_log_status_reason))
+            self.measurement_estimated_retention_hours = status.get("measurement_estimated_retention_hours", self.measurement_estimated_retention_hours)
+            try:
+                self.measurement_current_file_size_bytes = int(status.get("measurement_current_file_size_bytes", self.measurement_current_file_size_bytes) or 0)
+            except Exception:
+                pass
+            self.measurement_free_disk_mb = status.get("measurement_free_disk_mb", self.measurement_free_disk_mb)
 
     def set_error(self, message: str) -> None:
         with self.lock:
@@ -529,6 +737,16 @@ class ControllerState:
                 missing_reason="SECOND_BATTERY_MISSING",
                 stale_reason="SECOND_BATTERY_STALE",
             )
+            zendure_power_status = timestamp_status(
+                "zendure_power",
+                self.last_zendure_power_update_epoch,
+                cfg.get("ZENDURE_POWER_STALE_TIMEOUT_SECONDS", 90),
+                has_value=self.last_zendure_power_update_epoch is not None,
+                used_for_control=False,
+                now_epoch=now_epoch,
+                missing_reason="ZENDURE_POWER_MISSING",
+                stale_reason="ZENDURE_POWER_STALE",
+            )
 
             self.grid_power_available = grid_status.available
             self.grid_power_fresh = grid_status.fresh
@@ -553,6 +771,9 @@ class ControllerState:
             self.second_battery_data_valid = second_status.valid
             self.second_battery_data_age_seconds = second_status.age_s
             self.second_battery_validity_reason = second_status.reason
+            self.actual_zendure_power_valid = zendure_power_status.valid
+            self.actual_zendure_power_age_s = zendure_power_status.age_s
+            self.actual_zendure_power_validity_reason = zendure_power_status.reason
 
             source_status = {
                 "grid": grid_status,
@@ -565,6 +786,8 @@ class ControllerState:
                 if source_status.get(source) is not None and not source_status[source].valid
             ]
             self.control_data_quality = "ok" if not self.control_missing_required_sources else "missing_required_data"
+
+        self.update_zendure_mqtt_status(cfg)
 
     def update_power_history(self, value: float, samples: int) -> float:
         with self.lock:
@@ -594,6 +817,43 @@ class ControllerState:
             mqtt_commands_in_cycle = max(0, int(self.mqtt_commands_sent) - int(self.last_record_mqtt_commands_sent))
             self.last_record_mqtt_commands_sent = int(self.mqtt_commands_sent)
 
+            def signed_stage(value: Any) -> int:
+                try:
+                    magnitude = int(float(value or 0))
+                except Exception:
+                    magnitude = 0
+                if self.last_output_power > 0 and self.last_input_power <= 0:
+                    return -abs(magnitude)
+                return abs(magnitude) if self.last_input_power > 0 else magnitude
+
+            scenario_valid = bool(self.grid_power_valid and self.actual_zendure_power_valid)
+            scenario_without_zendure = round(float(self.grid_power) - float(self.actual_zendure_system_signed_power), 1)
+            scenario_reason = "OK" if scenario_valid else "GRID_OR_ZENDURE_ACTUAL_INVALID"
+            target_error = target_signed - int(self.actual_zendure_system_signed_power or 0)
+            command_sent = mqtt_commands_in_cycle > 0
+            command_required = bool(self.mqtt_command_path_used_for_control)
+            if not command_required:
+                effect_category = "no_command"
+                effect_reason = "Kein MQTT-Kommandopfad in diesem Zyklus erforderlich."
+                effect_valid = False
+            elif not command_sent:
+                effect_category = "no_command"
+                effect_reason = self.last_mqtt_command_skipped or "Kein neues MQTT-Kommando gesendet."
+                effect_valid = False
+            else:
+                effect_category = "not_evaluable"
+                effect_reason = "Momentwert gespeichert; robuste Wirkung wird im Analyse-/Replay-Tool über Folgezyklen bewertet."
+                effect_valid = False
+
+            unit = {
+                "unit_id": "primary",
+                "target_w": target_signed,
+                "actual_power_w": self.actual_zendure_system_signed_power,
+                "soc_percent": self.battery_soc,
+                "freshness": self.zendure_mqtt_overall_status,
+                "command_path_valid": self.mqtt_command_path_valid,
+            }
+
             row = {
                 # Schema / Zeitbasis
                 "schema": CSV_SCHEMA,
@@ -603,6 +863,11 @@ class ControllerState:
                 "datetime_local": now_dt.strftime("%Y-%m-%d %H:%M:%S"),
                 "epoch": round(now_epoch, 3),
                 "dt_s": round(dt_s, 3),
+                "schema_version": "3.0",
+                "measurement_profile": "standard",
+                "controller_version_label": f"V{APP_VERSION}",
+                "cycle_id": self.loop_counter,
+                "epoch_s": round(now_epoch, 3),
 
                 # Messwerte / signierte Hauptwerte
                 "raw_grid_power_w": round(self.raw_grid_power, 1),
@@ -615,6 +880,35 @@ class ControllerState:
                 "grid_power_used_for_control": self.grid_power_used_for_control,
                 "grid_power_age_s": self.grid_power_age_seconds,
                 "grid_power_validity_reason": self.grid_power_validity_reason,
+                "raw_grid_source": "Shelly/UniMeter",
+                "raw_grid_age_s": self.grid_power_age_seconds,
+                "raw_zendure_soc_percent": self.battery_soc,
+                "raw_zendure_soc_source": self.zendure_telemetry_source,
+                "raw_zendure_soc_age_s": self.soc_age_seconds,
+                "raw_zendure_battery_temperature_c": self.current_battery_temperature_c,
+                "raw_second_battery_power_w": round(self.sma_battery_power, 1),
+                "raw_second_battery_soc_percent": self.sma_battery_soc,
+                "raw_second_battery_capacity_kwh": self.sma_battery_capacity_kwh,
+                "raw_second_battery_source": "EVCC/SMA" if self.evcc_data_available else "none",
+                "raw_second_battery_age_s": self.second_battery_data_age_seconds,
+                "norm_grid_power_w": round(self.grid_power, 1),
+                "norm_grid_power_smoothed_w": round(self.grid_power, 1),
+                "norm_zendure_soc_percent": self.battery_soc,
+                "norm_zendure_actual_power_w": self.actual_zendure_system_signed_power,
+                "norm_zendure_actual_charge_power_w": self.actual_zendure_system_charge_power,
+                "norm_zendure_actual_discharge_power_w": self.actual_zendure_system_discharge_power,
+                "norm_second_battery_power_w": round(self.sma_battery_display_power, 1),
+                "norm_second_battery_discharge_power_w": round(self.sma_battery_discharge_power, 1),
+                "norm_effective_export_power_w": self.effective_export_power,
+                "input_grid_power_used_w": round(self.grid_power, 1) if self.grid_power_used_for_control else "",
+                "input_grid_power_used_for_control": self.grid_power_used_for_control,
+                "input_soc_used_percent": self.battery_soc if self.soc_used_for_control else "",
+                "input_soc_used_for_control": self.soc_used_for_control,
+                "input_effective_export_used_w": self.effective_export_power if self.effective_export_power_used_for_control else "",
+                "input_effective_export_used_for_control": self.effective_export_power_used_for_control,
+                "input_second_battery_power_used_w": round(self.sma_battery_display_power, 1) if self.second_battery_data_used_for_control else "",
+                "input_second_battery_used_for_control": self.second_battery_data_used_for_control,
+                "input_mqtt_command_path_used_for_control": self.mqtt_command_path_used_for_control,
                 "zendure_target_power_w": target_signed,
                 "zendure_actual_power_w": self.actual_zendure_system_signed_power,
                 "second_battery_power_w": round(self.sma_battery_display_power, 1),
@@ -655,6 +949,15 @@ class ControllerState:
                 "second_battery_used_for_control": self.second_battery_data_used_for_control,
                 "second_battery_age_s": self.second_battery_data_age_seconds,
                 "second_battery_validity_reason": self.second_battery_validity_reason,
+                "second_battery_available": self.second_battery_data_available,
+                "second_battery_fresh": self.second_battery_data_fresh,
+                "second_battery_valid": self.second_battery_data_valid,
+                "scenario_grid_without_zendure_w": scenario_without_zendure,
+                "scenario_removed_zendure_power_w": self.actual_zendure_system_signed_power,
+                "scenario_reconstruction_valid": scenario_valid,
+                "scenario_reconstruction_reason": scenario_reason,
+                "scenario_includes_sma_effect": True,
+                "scenario_includes_evcc_effect": True,
                 "second_battery_soc_percent": self.sma_battery_soc,
                 "second_battery_capacity_kwh": self.sma_battery_capacity_kwh,
                 "sma_battery_power_meaning": sma_power_meaning(self.sma_battery_display_power),
@@ -676,6 +979,9 @@ class ControllerState:
                 "mqtt_command_path_valid": self.mqtt_command_path_valid,
                 "mqtt_command_path_used_for_control": self.mqtt_command_path_used_for_control,
                 "mqtt_command_path_validity_reason": self.mqtt_command_path_validity_reason,
+                "mqtt_command_path_available": self.mqtt_command_path_available,
+                "mqtt_command_path_fresh": self.mqtt_command_path_fresh,
+                "mqtt_command_path_age_s": self.mqtt_command_path_age_seconds,
                 "control_required_sources": ",".join(self.control_required_sources),
                 "control_missing_required_sources": ",".join(self.control_missing_required_sources),
                 "control_data_quality": self.control_data_quality,
@@ -683,6 +989,27 @@ class ControllerState:
                 "sma_soc": self.sma_battery_soc,
                 "mode": self.current_mode,
                 "mode_label": mode_label(self.current_mode),
+                "previous_mode": self.previous_mode,
+                "mode_duration_s": self.last_mode_duration_seconds,
+                "control_path": self.technical_control_path,
+                "control_path_label": path_label(self.technical_control_path),
+                "deadband_active": self.current_mode in {"HOLD", "HOLD_DEADBAND"} or "DEADBAND" in self.technical_control_path,
+                "cross_charge_guard_active": "CROSS_CHARGE" in self.technical_control_path or any(x in active_limiters for x in ("SMA_DISCHARGE", "LOW_EFFECTIVE_SURPLUS")),
+                "night_discharge_window_active": self.current_mode == "NIGHT_DISCHARGE" or self.night_discharge_stop_reason != "none",
+                "night_discharge_base_active": self.current_mode == "NIGHT_DISCHARGE",
+                "night_discharge_reserve_active": "NIGHT_RESERVE_SOC" in active_limiters or self.night_discharge_stop_reason != "none",
+                "min_soc_limiter_active": "MIN_SOC" in active_limiters,
+                "max_soc_limiter_active": "MAX_SOC" in active_limiters,
+                "safe_state_active": self.current_mode == "SAFE_STATE",
+                "target_limiters_summary": technical_limiter_text(active_limiters),
+                "target_raw_w": signed_stage(self.last_target_before_smoothing),
+                "target_after_deadband_w": signed_stage(self.last_target_before_smoothing),
+                "target_after_cross_charge_w": signed_stage(self.last_target_before_smoothing),
+                "target_after_soc_limits_w": signed_stage(self.last_target_before_smoothing),
+                "target_after_smoothing_w": signed_stage(self.last_target_after_smoothing),
+                "target_after_ramp_w": signed_stage(self.last_target_after_ramp),
+                "target_final_w": target_signed,
+                "target_final_reason": self.control_reason,
                 "target_before_smoothing_w": self.last_target_before_smoothing,
                 "target_after_smoothing_w": self.last_target_after_smoothing,
                 "target_after_ramp_w": self.last_target_after_ramp,
@@ -700,6 +1027,27 @@ class ControllerState:
                 "night_discharge_stop_reason": self.night_discharge_stop_reason,
 
                 # MQTT-Kommandodynamik / Diagnose
+                "mqtt_command_required": command_required,
+                "mqtt_command_sent": command_sent,
+                "mqtt_command_skipped": (not command_sent) and bool(self.last_mqtt_command_skipped and self.last_mqtt_command_skipped != "-"),
+                "mqtt_command_skip_reason": self.last_mqtt_command_skipped,
+                "mqtt_command_signed_target_w": target_signed,
+                "mqtt_command_input_limit_w": self.last_input_power,
+                "mqtt_command_output_limit_w": self.last_output_power,
+                "mqtt_command_result": "sent" if command_sent else "skipped_or_not_required",
+                "mqtt_command_sequence": self.mqtt_commands_sent,
+                "zendure_mqtt_overall_status": self.zendure_mqtt_overall_status,
+                "zendure_mqtt_status_reason": self.zendure_mqtt_status_reason,
+                "zendure_mqtt_connected": self.mqtt_connected,
+                "zendure_mqtt_live_confirmed": self.zendure_mqtt_live_confirmed,
+                "zendure_mqtt_retained_only": self.zendure_mqtt_retained_only,
+                "zendure_mqtt_partial_stale": self.zendure_mqtt_partial_stale,
+                "zendure_mqtt_after_broker_restart_no_live_updates": self.zendure_mqtt_after_broker_restart_no_live_updates,
+                "zendure_mqtt_critical_data_age_s": self.zendure_mqtt_critical_data_age_s,
+                "zendure_mqtt_last_live_epoch_s": self.zendure_mqtt_last_live_epoch_s,
+                "zendure_mqtt_last_received_epoch_s": self.zendure_mqtt_last_received_epoch_s,
+                "zendure_mqtt_missing_critical_groups": self.zendure_mqtt_missing_critical_groups,
+                "zendure_mqtt_stale_critical_groups": self.zendure_mqtt_stale_critical_groups,
                 "mqtt_commands_sent_total": self.mqtt_commands_sent,
                 "mqtt_commands_sent_in_cycle": mqtt_commands_in_cycle,
                 "mqtt_last_command": self.last_mqtt_command,
@@ -714,6 +1062,32 @@ class ControllerState:
                 # High-SOC-Ladeannahme-Diagnose
                 "charge_acceptance_state": self.charge_acceptance_state,
                 "charge_acceptance_reason": self.charge_acceptance_reason,
+                "actual_zendure_power_w": self.actual_zendure_system_signed_power,
+                "actual_zendure_power_valid": self.actual_zendure_power_valid,
+                "actual_zendure_power_age_s": self.actual_zendure_power_age_s,
+                "actual_target_error_w": target_error,
+                "actual_target_error_abs_w": abs(target_error),
+                "command_effect_valid": effect_valid,
+                "command_effect_category": effect_category,
+                "command_effect_reason": effect_reason,
+                "measurement_log_status": self.measurement_log_status,
+                "measurement_log_status_reason": self.measurement_log_status_reason,
+                "measurement_estimated_retention_hours": self.measurement_estimated_retention_hours,
+                "measurement_current_file_size_bytes": self.measurement_current_file_size_bytes,
+                "measurement_free_disk_mb": self.measurement_free_disk_mb,
+                "zendure_unit_count": 1,
+                "zendure_aggregate_target_w": target_signed,
+                "zendure_aggregate_actual_power_w": self.actual_zendure_system_signed_power,
+                "zendure_aggregate_soc_percent": self.battery_soc,
+                "zendure_aggregate_capacity_kwh": "",
+                "zendure_aggregate_freshness": self.zendure_mqtt_overall_status,
+                "zendure_units_json": json.dumps([unit], ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+                "target_limiters_json": json.dumps(active_limiters, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+                "control_decision_json": json.dumps({"mode": self.current_mode, "path": self.technical_control_path, "action": self.last_control_action, "reason": self.control_reason}, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+                "freshness_details_json": json.dumps({"grid": self.grid_power_validity_reason, "soc": self.soc_validity_reason, "mqtt_command_path": self.mqtt_command_path_validity_reason, "second_battery": self.second_battery_validity_reason, "zendure_power": self.actual_zendure_power_validity_reason}, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+                "zendure_pack_data_json": json.dumps(list(self.zendure_battery_details.values()), ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+                "zendure_mqtt_topic_groups_json": self.zendure_mqtt_topic_groups_json(),
+                "zendure_mqtt_topics_json": self.zendure_mqtt_topics_json(),
             }
             self.graph_history.append(row)
 
@@ -749,6 +1123,9 @@ class ControllerState:
                 "zendure_system_charge_power": self.actual_zendure_system_charge_power,
                 "zendure_system_discharge_power": self.actual_zendure_system_discharge_power,
                 "zendure_system_signed_power": self.actual_zendure_system_signed_power,
+                "actual_zendure_power_valid": self.actual_zendure_power_valid,
+                "actual_zendure_power_age_s": self.actual_zendure_power_age_s,
+                "actual_zendure_power_validity_reason": self.actual_zendure_power_validity_reason,
                 "current_target_power": self.current_target_power,
                 "zendure_target_signed_power": self.zendure_target_signed_power,
                 "last_target_before_smoothing": self.last_target_before_smoothing,
@@ -766,12 +1143,26 @@ class ControllerState:
                 "charge_acceptance_state": self.charge_acceptance_state,
                 "charge_acceptance_reason": self.charge_acceptance_reason,
                 "mqtt_connected": self.mqtt_connected,
+                "zendure_mqtt_overall_status": self.zendure_mqtt_overall_status,
+                "zendure_mqtt_status_reason": self.zendure_mqtt_status_reason,
+                "zendure_mqtt_live_confirmed": self.zendure_mqtt_live_confirmed,
+                "zendure_mqtt_retained_only": self.zendure_mqtt_retained_only,
+                "zendure_mqtt_partial_stale": self.zendure_mqtt_partial_stale,
+                "zendure_mqtt_after_broker_restart_no_live_updates": self.zendure_mqtt_after_broker_restart_no_live_updates,
+                "zendure_mqtt_critical_data_age_s": self.zendure_mqtt_critical_data_age_s,
+                "zendure_mqtt_missing_critical_groups": self.zendure_mqtt_missing_critical_groups,
+                "zendure_mqtt_stale_critical_groups": self.zendure_mqtt_stale_critical_groups,
                 "last_mqtt_command": self.last_mqtt_command,
                 "last_mqtt_command_skipped": self.last_mqtt_command_skipped,
                 "mqtt_commands_sent": self.mqtt_commands_sent,
                 "consecutive_errors": self.consecutive_errors,
                 "last_error": self.last_error,
                 "last_error_time": self.last_error_time,
+                "measurement_log_status": self.measurement_log_status,
+                "measurement_log_status_reason": self.measurement_log_status_reason,
+                "measurement_estimated_retention_hours": self.measurement_estimated_retention_hours,
+                "measurement_current_file_size_bytes": self.measurement_current_file_size_bytes,
+                "measurement_free_disk_mb": self.measurement_free_disk_mb,
                 "safe_state_counter": self.safe_state_counter,
                 "last_loop_duration_ms": self.last_loop_duration_ms,
                 "loop_counter": self.loop_counter,

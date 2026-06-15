@@ -10,7 +10,7 @@ class V12810ReplayUiTests(unittest.TestCase):
     def _csv(self, path: Path) -> None:
         path.write_text(
             "schema;datetime_local;grid_power_w;zendure_target_power_w;zendure_actual_power_w\n"
-            "ZEC-MEASUREMENT-V2;2026-06-08 00:00:00;0;0;0\n",
+            "ZEC-MEASUREMENT-V3;2026-06-08 00:00:00;0;0;0\n",
             encoding="utf-8",
         )
 

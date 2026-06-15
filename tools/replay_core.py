@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
-CSV_SCHEMA = "ZEC-MEASUREMENT-V2"
+CSV_SCHEMA = "ZEC-MEASUREMENT-V3"
 
 DEFAULT_MAX_FILES = 4
 DEFAULT_MAX_TOTAL_BYTES = 12 * 1024 * 1024
@@ -168,10 +168,10 @@ def _event(events: List[Dict[str, Any]], row: Dict[str, Any], severity: str, kin
 
 
 def read_measurement_csv(path: str, max_rows: Optional[int] = None, cancel_check: Optional[Callable[[], bool]] = None) -> CsvMeasurementFile:
-    """Read a ZEC-MEASUREMENT-V2 CSV file.
+    """Read a ZEC-MEASUREMENT-V3 CSV file.
 
     Legacy CSV formats are intentionally unsupported. The schema column must be
-    present and every non-empty row must declare ZEC-MEASUREMENT-V2.
+    present and every non-empty row must declare ZEC-MEASUREMENT-V3.
     """
     if not os.path.exists(path):
         raise FileNotFoundError(path)
@@ -182,7 +182,7 @@ def read_measurement_csv(path: str, max_rows: Optional[int] = None, cancel_check
         f.seek(0)
         first_line = sample.splitlines()[0] if sample.splitlines() else ""
         if ";" not in first_line:
-            raise ValueError("Nicht unterstütztes CSV-Format: ZEC-MEASUREMENT-V2 erwartet Semikolon-Trennzeichen.")
+            raise ValueError("Nicht unterstütztes CSV-Format: ZEC-MEASUREMENT-V3 erwartet Semikolon-Trennzeichen.")
         reader = csv.DictReader(f, delimiter=";")
         if not reader.fieldnames or "schema" not in reader.fieldnames:
             raise ValueError("Nicht unterstütztes CSV-Format: Spalte 'schema' fehlt.")
@@ -193,7 +193,7 @@ def read_measurement_csv(path: str, max_rows: Optional[int] = None, cancel_check
                 continue
             schema = (row.get("schema") or "").strip()
             if schema != CSV_SCHEMA:
-                raise ValueError(f"Nicht unterstütztes CSV-Schema: {schema or 'leer'}")
+                raise ValueError(f"Nicht unterstütztes CSV-Schema: {schema or 'leer'}. Dieses Analyse-/Replay-Tool unterstützt ausschließlich ZEC-MEASUREMENT-V3; ältere V2-Dateien werden bewusst nicht migriert oder analysiert.")
             rows.append(dict(row))
             if max_rows is not None and len(rows) > max_rows:
                 raise ValueError(f"Zu viele Messpunkte: maximal {max_rows:,} Zeilen pro Analyselauf.".replace(",", "."))

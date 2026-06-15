@@ -7,7 +7,7 @@ from measurement import classify_charge_acceptance, derive_zendure_actual_power,
 from version import CSV_SCHEMA
 
 
-class MeasurementV2Tests(unittest.TestCase):
+class MeasurementV3Tests(unittest.TestCase):
     def test_signed_target_uses_positive_charge_negative_discharge(self):
         self.assertEqual(signed_zendure_target_w(500, 0), 500)
         self.assertEqual(signed_zendure_target_w(0, 400), -400)
@@ -18,10 +18,12 @@ class MeasurementV2Tests(unittest.TestCase):
         self.assertEqual(derive_zendure_actual_power(grid_input=0, output_home=650)["signed_power_w"], -650)
         self.assertEqual(derive_zendure_actual_power(pack_input=200, output_pack=500)["signed_power_w"], -500)
 
-    def test_csv_v2_uses_semicolon_and_schema_column(self):
+    def test_csv_v3_uses_semicolon_and_schema_column(self):
         text = rows_to_csv([{"schema": CSV_SCHEMA, "grid_power_w": -120.5, "zendure_target_power_w": 200}])
         first_line = text.splitlines()[0]
-        self.assertIn("schema;controller_version", first_line)
+        self.assertIn("schema;", first_line)
+        self.assertIn("schema_version", first_line)
+        self.assertIn("measurement_profile", first_line)
         self.assertNotIn(",", first_line)
         parsed = list(csv.DictReader(io.StringIO(text), delimiter=";"))
         self.assertEqual(parsed[0]["schema"], CSV_SCHEMA)

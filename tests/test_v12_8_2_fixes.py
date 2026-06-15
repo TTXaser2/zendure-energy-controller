@@ -22,7 +22,7 @@ class V1282FixTests(unittest.TestCase):
 
     def test_text_report_uses_german_decimal_comma(self):
         report = text_report({
-            "schema": "ZEC-MEASUREMENT-V2",
+            "schema": "ZEC-MEASUREMENT-V3",
             "filenames": ["a.csv"],
             "rows": 1,
             "data_quality": {"status": "ok", "avg_dt_s": 3.25, "median_dt_s": 3.25, "max_dt_s": 3.25},
@@ -40,8 +40,8 @@ class V1282FixTests(unittest.TestCase):
         self.assertEqual(safe_limits().max_files, 4)
         self.assertEqual(safe_limits().max_total_bytes, 12 * 1024 * 1024)
         self.assertEqual(safe_limits().max_rows, 40_000)
-        self.assertEqual(REPLAY_VERSION, "12.8.21")
-        self.assertEqual(version.__version__, "12.8.21")
+        self.assertEqual(REPLAY_VERSION, "12.9.0")
+        self.assertEqual(version.__version__, "12.9.0")
 
 
 if __name__ == "__main__":

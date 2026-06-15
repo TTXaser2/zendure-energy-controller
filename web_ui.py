@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Red
 from config_manager import CONFIG_SCHEMA, ConfigManager, validate_config
 from config_validator import ValidationIssue, restart_relevant_changes, split_issues, validate_config_semantics
 from cross_charge import cross_charge_enabled
-from csv_logger import rows_to_csv
+from csv_logger import rows_to_csv, estimate_retention_hours, measurement_log_mode
 from version import APP_VERSION, CSV_SCHEMA
 from state import ControllerState
 from translations import (
@@ -40,7 +40,7 @@ GROUP_ORDER = [
     "Cross-Charge-Schutz",
     "Nachtmodus",
     "Sicherheit / Fallback",
-    "Historie / CSV",
+    "Messdaten / Historie",
     "Analyse / Replay",
     "Logging",
 ]
@@ -382,9 +382,9 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
         cfg = config_manager.get()
         if cfg.get("HEADLESS_MODE", False):
             return HTMLResponse(build_headless_page(cfg))
-        path = os.path.abspath(os.path.join(str(cfg.get("CSV_LOG_DIR", "logs")), str(cfg.get("CSV_LOG_FILE", "zendure_measurements.csv"))))
+        path = os.path.abspath(os.path.join(str(cfg.get("MEASUREMENT_LOG_DIR", cfg.get("CSV_LOG_DIR", "logs"))), str(cfg.get("MEASUREMENT_LOG_FILE", cfg.get("CSV_LOG_FILE", "zendure_measurements.csv")))))
         if not os.path.exists(path):
-            return PlainTextResponse("CSV-Logdatei existiert noch nicht oder CSV-Logging ist deaktiviert.", status_code=404)
+            return PlainTextResponse("Messdaten-Datei existiert noch nicht oder Messdaten-Logging ist deaktiviert.", status_code=404)
         return FileResponse(path, media_type="text/csv", filename=os.path.basename(path))
 
     @app.get("/mqtt-diagnostics", response_class=HTMLResponse)
@@ -660,7 +660,7 @@ def build_base_header(title: str, refresh: bool = False, cfg: Optional[Dict[str,
     </head>
     <body><div class="container">
     <div id="page-top"></div>
-    <div class="nav"><a href="/">Status</a><a href="/graph">Großer Graph</a><a href="/settings">Settings</a><a href="/mqtt-diagnostics">MQTT Diagnose</a><a href="/zendure-properties">Zendure Properties</a><a href="/graph-data.csv">Download Graph CSV</a><a href="/logs/current.csv">Download CSV Log</a><a href="/manual.pdf">Download Handbuch</a><a href="/docs">API Docs</a></div>
+    <div class="nav"><a href="/">Status</a><a href="/graph">Großer Graph</a><a href="/settings">Settings</a><a href="/mqtt-diagnostics">MQTT Diagnose</a><a href="/zendure-properties">Zendure Properties</a><a href="/graph-data.csv">Download Graph CSV</a><a href="/logs/current.csv">Download Messdaten CSV</a><a href="/manual.pdf">Download Handbuch</a><a href="/docs">API Docs</a></div>
     """
 
 
@@ -1135,7 +1135,7 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
         {status_card('Aktive Betriebslogik', html.escape(path_human), html.escape(str(s['last_control_action'])), 'gray', 'Die aktive Betriebslogik beschreibt den aktuell verwendeten Entscheidungsweg des Controllers in verständlicher Form. Der technische Code bleibt darunter sichtbar, damit man Events, Graphdaten und Logausgaben eindeutig zuordnen kann.', path_code)}
         {status_card('Regelzyklus', f'{s["last_loop_duration_ms"]} ms', f'Zyklen: {s["loop_counter"]}<br>Uptime: {format_dhms(s["uptime_seconds"])}', 'gray', 'Ein Regelzyklus ist ein kompletter Durchlauf der Steuerung: Messwerte lesen, Schutzlogik prüfen, Zielwert berechnen, MQTT-Befehl senden und Graph-/CSV-Daten speichern. Die Dauer zeigt, wie lange dieser Durchlauf gebraucht hat; das Intervall wird in den Settings festgelegt.')}
         {status_card('Fehler', str(s['consecutive_errors']), f'Letzter Fehler: {html.escape(str(s["last_error"]))}<br>Zeitpunkt: {html.escape(str(s.get("last_error_time", "-")))}<br>Safe-State: {s["safe_state_counter"]}x', 'red', 'Der Fehlerzähler zählt direkt aufeinanderfolgende Fehler. Safe-State bedeutet: Lade- und Entladeleistung werden auf 0 W gesetzt, um bei unsicheren Daten oder Kommunikationsproblemen keine unkontrollierte Energieverschiebung auszulösen.')}
-        {status_card('CSV Logging', 'aktiv' if cfg.get('CSV_LOG_ENABLED') else 'aus', f'{html.escape(str(cfg.get("CSV_LOG_DIR")))}/{html.escape(str(cfg.get("CSV_LOG_FILE")))}<br>Schema: {CSV_SCHEMA}', 'gray', 'Wenn CSV-Logging aktiv ist, schreibt der Controller rollierend Mess- und Diagnosedaten im Schema ZEC-MEASUREMENT-V2 in eine CSV-Datei.')}
+        {status_card('Messdaten-Logging', html.escape(str(cfg.get('MEASUREMENT_LOG_MODE', 'off'))), f'Status: {html.escape(str(s.get("measurement_log_status", "-")))}<br>Grund: {html.escape(str(s.get("measurement_log_status_reason", "-")))}<br>Datei: {html.escape(str(cfg.get("MEASUREMENT_LOG_DIR", "logs")))}/{html.escape(str(cfg.get("MEASUREMENT_LOG_FILE", "zendure_measurements.csv")))}<br>Schema: {CSV_SCHEMA}<br>Geschätzte Aufbewahrung: {html.escape(str(s.get("measurement_estimated_retention_hours") or estimate_retention_hours(cfg)))} h<br>Freier Speicher: {html.escape(str(s.get("measurement_free_disk_mb", "-")))} MB', 'gray', 'Messdaten-Logging ist optional und nachgelagert. Aus schont die SD-Karte. Standard speichert vollständige Reglerdiagnose inklusive MQTT-Stale-Aggregat und Szenario ohne Zendure. Erweitert ergänzt große Detaildaten für Simulation/What-if. Die Regelung läuft weiter, auch wenn Logging pausiert oder fehlschlägt.', settings_group='Messdaten / Historie')}
         {status_card('Analyse-Weboberfläche', f'Port {replay_port}', analysis_link_html, 'gray', 'Die Analyse läuft bewusst getrennt vom Live-Regler. Der Dienst wird mitgeliefert, aber nicht automatisch aktiviert.')}
         {status_card('High-SOC-Ladeannahme', html.escape(str(s.get('charge_acceptance_state', 'ok'))), html.escape(str(s.get('charge_acceptance_reason', '-'))), 'gray', 'Leichtgewichtige Diagnose: Zeigt, ob Zendure eine angeforderte Ladeleistung bei hohem SOC plausibel annimmt. Diese Diagnose greift nicht aktiv in die Regelung ein.')}
     </div></div>
@@ -1683,6 +1683,19 @@ def build_settings_page(cfg: Dict[str, Any], validation_issues: Optional[List[Va
                 continue
             page += build_setting_card(key, meta, cfg.get(key), key in error_keys, key in warning_keys)
         page += "</div>"
+        if group == "Messdaten / Historie":
+            mode = measurement_log_mode(cfg)
+            retention_h = estimate_retention_hours(cfg)
+            page += (
+                "<div class='info-box' style='margin-top:12px;'>"
+                "<b>Messdaten-Modi:</b><br>"
+                "<b>Aus</b>: keine zyklischen Messdaten, maximale SD-Schonung; spätere Analyse aus neuen Daten ist nicht möglich.<br>"
+                "<b>Standard</b>: vollständige Reglerdiagnose inklusive Roh-/Norm-Kernwerten, Freshness/Validity, MQTT-Stale-Aggregat, Sollwertkaskade, Kommando und Szenario ohne Zendure.<br>"
+                "<b>Erweitert</b>: Standard plus Detaildaten für Simulation, What-if sowie tiefe MQTT-/Freshness-/Packdatenanalyse; erzeugt größere Dateien und sollte gezielt verwendet werden.<br>"
+                f"Aktueller Modus: <b>{html.escape(mode)}</b>. Grob geschätzte Aufbewahrung bei aktuellen Grenzwerten: <b>{html.escape(str(retention_h))} Stunden</b>. "
+                "Diese Schätzung ist bewusst praxisnah, nicht bytegenau. Die Regelung läuft weiter, auch wenn Logging pausiert oder fehlschlägt."
+                "</div>"
+            )
         if group == "Manueller Modus":
             page += "<div class='small' style='margin-top:12px;'>Die Detailfelder werden abhängig vom gewählten manuellen Modus eingeblendet. Ohne JavaScript bleiben sie sichtbar, damit die Seite weiterhin vollständig bedienbar ist.</div>"
         page += "<button class='save' type='submit'>Speichern</button>"

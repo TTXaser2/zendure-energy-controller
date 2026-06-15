@@ -6,7 +6,7 @@ from tools.replay_core import CSV_SCHEMA, analyze_file
 
 
 class ReplayCoreTests(unittest.TestCase):
-    def test_analyze_file_accepts_only_v2_and_calculates_energy(self):
+    def test_analyze_file_accepts_only_v3_and_calculates_energy(self):
         content = (
             "schema;controller_version;epoch;dt_s;grid_power_w;zendure_soc_percent;mode;technical_limiters;mqtt_commands_sent_in_cycle;charge_acceptance_state\n"
             f"{CSV_SCHEMA};12.7;1000;3;1200;50;DISCHARGE;;1;ok\n"

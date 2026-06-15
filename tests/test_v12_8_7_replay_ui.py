@@ -19,7 +19,7 @@ class V1287ReplayUiTests(unittest.TestCase):
             csv_path = logdir / "zendure_measurements.csv"
             csv_path.write_text(
                 "schema;datetime_local;grid_power_w;zendure_target_power_w;zendure_actual_power_w\n"
-                "ZEC-MEASUREMENT-V2;2026-06-08 00:00:00;0;0;0\n",
+                "ZEC-MEASUREMENT-V3;2026-06-08 00:00:00;0;0;0\n",
                 encoding="utf-8",
             )
             old_project = replay_web.PROJECT_ROOT

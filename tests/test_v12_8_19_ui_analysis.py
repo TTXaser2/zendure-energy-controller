@@ -22,7 +22,7 @@ CSV_HEADER = "schema;datetime_local;grid_power_w;soc;zendure_actual_power_w\n"
 
 
 def write_csv(path: Path, rows):
-    path.write_text(CSV_HEADER + "".join(f"ZEC-MEASUREMENT-V2;{ts};0;50;0\n" for ts in rows), encoding="utf-8")
+    path.write_text(CSV_HEADER + "".join(f"ZEC-MEASUREMENT-V3;{ts};0;50;0\n" for ts in rows), encoding="utf-8")
 
 
 class V12819UiAnalysisTests(unittest.TestCase):
