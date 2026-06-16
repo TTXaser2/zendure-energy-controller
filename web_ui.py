@@ -1683,6 +1683,14 @@ def build_settings_page(cfg: Dict[str, Any], validation_issues: Optional[List[Va
             else:
                 mount_lines = "<br>Erkannte externe Ziele: keine beschreibbaren USB-/Mountpoints gefunden."
             resolved_path, fallback_active, target_reason = resolve_log_path(cfg, allow_fallback=True)
+            storage_target = str(cfg.get("MEASUREMENT_LOG_STORAGE_TARGET", "internal_sd"))
+            configured_subdir = str(cfg.get("MEASUREMENT_LOG_DIR", "logs") or "logs").lstrip("/")
+            mountpoint_info = ""
+            if target_reason.startswith("external_mount:") or target_reason.startswith("external_auto:"):
+                mountpoint_info = target_reason.split(":", 1)[1]
+            elif storage_target == "external_mount":
+                configured = str(cfg.get("MEASUREMENT_LOG_MOUNTPOINT", "") or "").strip()
+                mountpoint_info = configured or "automatische Erkennung"
             page += (
                 "<div class='info-box' style='margin:12px 0;'>"
                 "<b>Messdaten-Modi:</b><br>"
@@ -1691,7 +1699,10 @@ def build_settings_page(cfg: Dict[str, Any], validation_issues: Optional[List[Va
                 "<b>Erweitert</b>: Standard plus Detaildaten für Simulation, What-if sowie tiefe MQTT-/Freshness-/Packdatenanalyse; erzeugt größere Dateien und sollte gezielt verwendet werden.<br>"
                 f"Aktueller Modus: <b>{html.escape(mode)}</b>. Grob geschätzte Aufbewahrung bei aktuellen Grenzwerten: <b>{html.escape(str(retention_h))} Stunden</b>. "
                 "Diese Schätzung ist bewusst praxisnah, nicht bytegenau. Die Regelung läuft weiter, auch wenn Logging pausiert oder fehlschlägt.<br>"
-                f"Aktiv aufgelöster Zielpfad: <code>{html.escape(resolved_path)}</code>"
+                f"Speicherziel: <b>{html.escape(storage_target)}</b><br>"
+                + (f"USB-/Mountpoint: <code>{html.escape(mountpoint_info)}</code><br>" if storage_target == "external_mount" else "")
+                + (f"Unterordner auf dem Ziel: <code>{html.escape(configured_subdir)}</code><br>" if storage_target == "external_mount" else "")
+                + f"Aktive Datei: <code>{html.escape(resolved_path)}</code>"
                 + (" <b>(SD-Fallback aktiv)</b>" if fallback_active else "")
                 + f"<br>Zielstatus: {html.escape(target_reason)}"
                 + mount_lines

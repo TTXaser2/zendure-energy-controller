@@ -100,6 +100,26 @@ def _path_is_writable(path: str, base_dir: Optional[str] = None) -> bool:
         return False
 
 
+def _detected_writable_external_mountpoint() -> str:
+    try:
+        from csv_logger import detected_log_mounts
+        chosen = next((m for m in detected_log_mounts() if m.get("writable")), None)
+        return str(chosen.get("mountpoint") or "") if chosen else ""
+    except Exception:
+        return ""
+
+
+def _measurement_external_target_dir(cfg: Dict[str, Any]) -> str:
+    mountpoint = _str_value(cfg, "MEASUREMENT_LOG_MOUNTPOINT")
+    if not (mountpoint and os.path.ismount(mountpoint) and os.access(mountpoint, os.W_OK)):
+        mountpoint = _detected_writable_external_mountpoint()
+    if not mountpoint:
+        return ""
+    subdir = _str_value(cfg, "MEASUREMENT_LOG_DIR") or "logs"
+    subdir = subdir.lstrip(os.sep)
+    return os.path.join(mountpoint, subdir)
+
+
 RESTART_RELEVANT_KEYS = {
     "MQTT_BROKER",
     "MQTT_PORT",
@@ -368,8 +388,8 @@ def validate_config_semantics(
         storage_target = _str_value(cfg, "MEASUREMENT_LOG_STORAGE_TARGET") or "internal_sd"
         allow_fallback = _bool_value(cfg.get("MEASUREMENT_LOG_ALLOW_SD_FALLBACK", True))
         if storage_target == "external_mount":
-            mountpoint = _str_value(cfg, "MEASUREMENT_LOG_MOUNTPOINT")
-            mount_ok = bool(mountpoint) and os.path.ismount(mountpoint) and os.access(mountpoint, os.W_OK)
+            target_dir = _measurement_external_target_dir(cfg)
+            mount_ok = bool(target_dir) and _path_is_writable(target_dir, base_dir=base_dir)
             fallback_ok = allow_fallback and _path_is_writable(_str_value(cfg, "MEASUREMENT_LOG_FALLBACK_DIR"), base_dir=base_dir)
             if not mount_ok and not fallback_ok:
                 issues.append(_issue("ERROR", "Externes Messdatenziel ist nicht verfügbar und der SD-Fallback ist nicht beschreibbar.", ["MEASUREMENT_LOG_STORAGE_TARGET", "MEASUREMENT_LOG_MOUNTPOINT", "MEASUREMENT_LOG_FALLBACK_DIR"], "Messdaten / Historie", "MEASUREMENT_LOG_TARGET_UNAVAILABLE"))

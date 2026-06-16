@@ -374,6 +374,37 @@ def detected_log_mounts() -> List[Dict[str, Any]]:
     return mounts
 
 
+def _external_subdir(config: Dict[str, Any]) -> str:
+    """Return the configured sub-directory used below an external mountpoint.
+
+    For external_mount, MEASUREMENT_LOG_DIR is intentionally interpreted as a
+    sub-directory on the selected mountpoint. Leading slashes are stripped so a
+    mistaken absolute-looking value cannot escape the selected USB target.
+    """
+    raw = str(config.get("MEASUREMENT_LOG_DIR", config.get("CSV_LOG_DIR", "logs")) or "logs").strip()
+    if not raw:
+        raw = "logs"
+    return raw.lstrip(os.sep)
+
+
+def _select_external_mountpoint(config: Dict[str, Any]) -> Tuple[str, str]:
+    """Return (mountpoint, reason) for external_mount logging.
+
+    A manually configured writable mountpoint wins. If it is empty or invalid,
+    the first detected writable external mount is used. This matches the UI
+    wording "erkannter USB-/Mountpoint" and avoids requiring the user to copy
+    an auto-detected path into a second field.
+    """
+    manual = str(config.get("MEASUREMENT_LOG_MOUNTPOINT", "") or "").strip()
+    if manual and _is_mountpoint(manual) and os.access(manual, os.W_OK):
+        return manual, f"external_mount:{manual}"
+    chosen = next((m for m in detected_log_mounts() if m.get("writable")), None)
+    if chosen:
+        mountpoint = str(chosen["mountpoint"])
+        return mountpoint, f"external_auto:{mountpoint}"
+    return "", "external_unavailable"
+
+
 def resolve_log_path(config: Dict[str, Any], *, allow_fallback: bool = True) -> Tuple[str, bool, str]:
     """Resolve the active measurement log path.
 
@@ -389,20 +420,12 @@ def resolve_log_path(config: Dict[str, Any], *, allow_fallback: bool = True) -> 
 
     primary_dir = str(config.get("MEASUREMENT_LOG_DIR", config.get("CSV_LOG_DIR", "logs")) or "logs")
     if target == "external_mount":
-        mountpoint = str(config.get("MEASUREMENT_LOG_MOUNTPOINT", "") or "").strip()
-        if mountpoint and _is_mountpoint(mountpoint):
-            primary_dir = os.path.join(mountpoint, "zendure-controller-logs")
-            base_reason = f"external_mount:{mountpoint}"
+        mountpoint, base_reason = _select_external_mountpoint(config)
+        if mountpoint:
+            # Variante A: final path = mountpoint + configured measurement directory + file.
+            primary_dir = os.path.join(mountpoint, _external_subdir(config))
         else:
-            # If the user selected external logging but did not provide a valid
-            # mountpoint, try the first detected writable external mount.
-            chosen = next((m for m in detected_log_mounts() if m.get("writable")), None)
-            if chosen:
-                primary_dir = os.path.join(str(chosen["mountpoint"]), "zendure-controller-logs")
-                base_reason = f"external_auto:{chosen['mountpoint']}"
-            else:
-                base_reason = "external_unavailable"
-                primary_dir = ""
+            primary_dir = ""
     elif target == "custom_path":
         base_reason = "custom_path"
     else:
@@ -486,9 +509,13 @@ class CsvRotatingLogger:
         if mode == "off":
             return self.status(config, "disabled", "MEASUREMENT_LOG_MODE=off")
 
-        path = self.get_current_path(config)
-        fallback_active = bool(getattr(self, "_last_fallback_active", False))
-        target_reason = str(getattr(self, "_last_target_reason", "primary"))
+        # Resolve path/fallback once per cycle and use that same decision for
+        # directory checks, rotation, row contents and returned status. This
+        # avoids one-cycle-delayed status values and mismatches between USB rows
+        # and fallback status fields.
+        path, fallback_active, target_reason = resolve_log_path(config, allow_fallback=True)
+        self._last_fallback_active = fallback_active
+        self._last_target_reason = target_reason
         directory = os.path.dirname(path)
         os.makedirs(directory, exist_ok=True)
 
@@ -501,7 +528,9 @@ class CsvRotatingLogger:
         if schema_error:
             return self.status(config, "paused_invalid_schema", schema_error, path=path, free_mb=free_mb)
 
-        out_row = self.prepare_row(config, row, path=path, free_mb=free_mb)
+        status = "active_fallback_sd" if fallback_active else "active"
+        reason = "SD-Fallback aktiv: primäres Messdatenziel nicht verfügbar; begrenzte Rotation wird verwendet." if fallback_active else "OK"
+        out_row = self.prepare_row(config, row, path=path, free_mb=free_mb, log_status=status, log_status_reason=reason)
         row_size = _serialized_row_length(out_row)
         out_row["measurement_estimated_retention_hours"] = estimate_retention_hours(config, row_size)
 
@@ -511,11 +540,9 @@ class CsvRotatingLogger:
         self._rows_since_flush += 1
         self._flush_if_due(config)
 
-        status = "active_fallback_sd" if fallback_active else "active"
-        reason = "SD-Fallback aktiv: primäres Messdatenziel nicht verfügbar; begrenzte Rotation wird verwendet." if fallback_active else "OK"
         return self.status(config, status, reason, path=path, free_mb=free_mb, row_size_bytes=row_size)
 
-    def prepare_row(self, config: Dict[str, Any], row: Dict[str, Any], *, path: Optional[str] = None, free_mb: Optional[int] = None) -> Dict[str, Any]:
+    def prepare_row(self, config: Dict[str, Any], row: Dict[str, Any], *, path: Optional[str] = None, free_mb: Optional[int] = None, log_status: str = "active", log_status_reason: str = "OK") -> Dict[str, Any]:
         mode = measurement_log_mode(config)
         profile = "extended" if mode == "extended" else "standard"
         out = dict(row)
@@ -536,8 +563,10 @@ class CsvRotatingLogger:
         out["measurement_current_file_size_bytes"] = os.path.getsize(path) if path and os.path.exists(path) else 0
         out["measurement_free_disk_mb"] = free_mb if free_mb is not None else self._free_disk_mb(os.path.dirname(path) if path else self.get_current_dir(config))
         out["measurement_estimated_retention_hours"] = out.get("measurement_estimated_retention_hours") or estimate_retention_hours(config)
-        out["measurement_log_status"] = out.get("measurement_log_status") or "active"
-        out["measurement_log_status_reason"] = out.get("measurement_log_status_reason") or "OK"
+        # Always write the status of this logger decision. Do not preserve stale
+        # status fields from the previous controller state row.
+        out["measurement_log_status"] = log_status
+        out["measurement_log_status_reason"] = log_status_reason
 
         if profile != "extended":
             for field in (

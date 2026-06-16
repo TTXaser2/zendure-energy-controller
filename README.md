@@ -1,6 +1,6 @@
-Zendure Energy Controller Version 12.9.2
+Zendure Energy Controller Version 12.9.3
 
-# Zendure Energy Controller V12.9.2
+# Zendure Energy Controller V12.9.3
 
 Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, ZEC-MEASUREMENT-V3-Messdaten-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
@@ -11,9 +11,9 @@ Lizenziert unter AGPL-3.0-or-later. Siehe `LICENSE`, `NOTICE` und `DISCLAIMER.md
 
 
 
-## Wichtige Änderungen in V12.9.2
+## Wichtige Änderungen in V12.9.3
 
-V12.9.2 ist ein Stabilitäts- und Analyse-Nacharbeitsrelease auf Basis von V12.9.0. Die AUTO-Regelstrategie, MQTT-Subscriptions und MQTT-Kommandostruktur bleiben unverändert. Schwerpunkt sind Zendure-MQTT-Live-Diagnose nach Neustarts, ein robusterer Analyse-/Replay-Schutz und verständlichere Analyse-Diagramme.
+V12.9.3 ist ein Stabilitäts- und Analyse-Nacharbeitsrelease auf Basis von V12.9.0. Die AUTO-Regelstrategie, MQTT-Subscriptions und MQTT-Kommandostruktur bleiben unverändert. Schwerpunkt sind Zendure-MQTT-Live-Diagnose nach Neustarts, ein robusterer Analyse-/Replay-Schutz und verständlichere Analyse-Diagramme.
 
 - Zendure-MQTT Live-/Retained-/Partial-Stale-Erkennung ergänzt: Nach Raspberry-/Mosquitto-Neustart wird sichtbar, ob Zendure wirklich wieder frische nicht-retained Live-Werte liefert oder nur retained/alte/unvollständige Werte vorliegen.
 - Statusseite zeigt den Zendure-MQTT-Live-Status kompakt mit Handlungshinweis. Warnungen verschwinden automatisch, sobald kritische Zendure-Gruppen wieder frisch und live sind.
@@ -24,7 +24,7 @@ V12.9.2 ist ein Stabilitäts- und Analyse-Nacharbeitsrelease auf Basis von V12.9
 - Betriebszustandsmatrix benennt Netzenergie eindeutig als `Netzbezug kWh` und `Einspeisung kWh` mit Info-Texten.
 - Settings-Seite: Erklärungsbox für Messdaten-Modi und Aufbewahrung steht nun oberhalb der Messdaten-Eingabefelder.
 - Update-Script bereinigt obsolete Tests im Zielverzeichnis, startet zuvor aktive Dienste nach erfolgreichem Update wieder und versucht bei Updatefehlern zuvor laufende Dienste wiederherzustellen.
-- Kein V2-spezifisches Log-Cleanup mehr: V12.9.2 behandelt alte/ungültige Messdaten generisch als nicht-V3.
+- Kein V2-spezifisches Log-Cleanup mehr: V12.9.3 behandelt alte/ungültige Messdaten generisch als nicht-V3.
 - Der Logger prüft eine vorhandene aktive Messdatei nur beim Öffnen/Initialisieren auf gültigen V3-Header. Bei ungültigem Header wird Logging pausiert und auf der Statusseite gewarnt; es wird nichts gelöscht und die Regelung läuft weiter.
 
 
@@ -316,6 +316,6 @@ Die Hauptoberfläche verlinkt dynamisch auf den gleichen Host mit Port 8090. In 
 
 Das vollständige DOCX/PDF-Handbuch wurde für diesen Zwischenstand bewusst noch nicht neu erzeugt. V12.8 aktualisiert die technische Basis, README, Installationshinweise und technische Notizen. Eine vollständige Handbuch-Aktualisierung ist für den nächsten größeren stabilen Meilenstein vorgesehen.
 
-## Wichtige Änderungen in V12.9.2
+## Wichtige Änderungen in V12.9.3
 
-V12.9.2 korrigiert die V3-SOC-Auswertung der Analyse, justiert die lokale Pi-RAM-Preflight-Bewertung für kleine V3-Analysen nach und erweitert das Messdaten-Logging um SD-schonendere Schreibweise. Bool-Felder werden als `1`/`0` geschrieben, der Logger puffert ohne hartes `fsync` pro Messzeile und Messdaten können über Settings auf interne SD, externen Mountpoint/USB-Ziel oder benutzerdefinierten Pfad geschrieben werden. Bei externem Ziel ist ein begrenzter, sichtbarer SD-Fallback möglich. Die Regelstrategie bleibt unverändert.
+V12.9.3 korrigiert die V3-SOC-Auswertung der Analyse, justiert die lokale Pi-RAM-Preflight-Bewertung für kleine V3-Analysen nach und erweitert das Messdaten-Logging um SD-schonendere Schreibweise. Bool-Felder werden als `1`/`0` geschrieben, der Logger puffert ohne hartes `fsync` pro Messzeile und Messdaten können über Settings auf interne SD, externen Mountpoint/USB-Ziel oder benutzerdefinierten Pfad geschrieben werden. Bei externem Ziel ist ein begrenzter, sichtbarer SD-Fallback möglich. Die Regelstrategie bleibt unverändert.
