@@ -37,6 +37,7 @@ from replay_core import (  # noqa: E402
     analyze_files,
     summary_csv,
 )
+from csv_logger import resolve_log_path  # noqa: E402
 from replay_report import (  # noqa: E402
     actuator_table,
     charts_html,
@@ -90,8 +91,8 @@ def _int_cfg(cfg: Dict[str, Any], key: str, default: int) -> int:
 
 
 def log_dir_from_config(cfg: Dict[str, Any]) -> Path:
-    raw = str(cfg.get("MEASUREMENT_LOG_DIR", cfg.get("CSV_LOG_DIR", "logs")) or "logs")
-    path = Path(raw)
+    path_str, _, _ = resolve_log_path(cfg, allow_fallback=True)
+    path = Path(path_str).parent
     if not path.is_absolute():
         path = PROJECT_ROOT / path
     return path.resolve()
@@ -278,25 +279,33 @@ def selection_profile(paths: Sequence[Path], cfg: Dict[str, Any]) -> Dict[str, A
     safe_memory_mb = _worker_memory_limit_mb(cfg, extended=False)
     ext_memory_mb = _worker_memory_limit_mb(cfg, extended=True)
     schema_errors = scan.get("schema_errors") or []
-    unsafe_memory = mem_available_mb is not None and mem_available_mb < max(180, int(safe_memory_mb * 0.75))
+    small_selection = len(paths) <= safe.max_files and total_size <= safe.max_total_bytes and rows <= safe.max_rows
+    extended_selection = len(paths) <= ext.max_files and total_size <= ext.max_total_bytes and rows <= ext.max_rows
+    hard_memory_low = mem_available_mb is not None and mem_available_mb < 96
+    memory_tight = mem_available_mb is not None and mem_available_mb < max(128, int(safe_memory_mb * 0.45))
     if schema_errors:
         risk = "rejected"
         text = "Nicht analysierbar: Die Auswahl enthält keine durchgängig gültigen ZEC-MEASUREMENT-V3-Dateien."
         needs_confirm = False
         rejected = True
-    elif unsafe_memory:
+    elif hard_memory_low:
         risk = "rejected"
-        text = "Nicht empfohlen: Auf dem Raspberry Pi ist aktuell zu wenig freier RAM für eine sichere lokale Analyse verfügbar."
+        text = "Nicht empfohlen: Auf dem Raspberry Pi ist extrem wenig MemAvailable verfügbar; lokale Analyse wird zum Schutz des Systems abgelehnt."
         needs_confirm = False
         rejected = True
-    elif len(paths) <= safe.max_files and total_size <= safe.max_total_bytes and rows <= safe.max_rows:
+    elif small_selection:
         risk = "pi-safe"
-        text = "Pi-Safe: kleine V3-Auswahl; Analyse läuft zusätzlich in einem isolierten Worker mit Timeout und Speicherlimit."
+        if memory_tight:
+            text = "Kleine V3-Auswahl: Analyse wird zugelassen; Systemressourcen sind knapp, aber der isolierte Worker schützt durch Timeout und Speicherlimit."
+        else:
+            text = "Pi-Safe: kleine V3-Auswahl; Analyse läuft zusätzlich in einem isolierten Worker mit Timeout und Speicherlimit."
         needs_confirm = False
         rejected = False
-    elif len(paths) <= ext.max_files and total_size <= ext.max_total_bytes and rows <= ext.max_rows:
+    elif extended_selection:
         risk = "extended"
         text = "Größere V3-Analyse: nur bewusst starten. Sie läuft isoliert, kann aber länger dauern und wird bei Zeit-/Speicherlimit abgebrochen."
+        if memory_tight:
+            text += " Aktuelle RAM-Reserve ist knapp; bei Überschreitung wird der Worker beendet."
         needs_confirm = True
         rejected = False
     else:

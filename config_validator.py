@@ -365,8 +365,19 @@ def validate_config_semantics(
     if measurement_mode not in {"off", "standard", "extended"}:
         issues.append(_issue("ERROR", "Der Messdaten-Logging-Modus muss Aus, Standard oder Erweitert sein.", ["MEASUREMENT_LOG_MODE"], "Messdaten / Historie", "MEASUREMENT_LOG_MODE_INVALID"))
     if measurement_mode != "off":
-        if not _path_is_writable(_str_value(cfg, "MEASUREMENT_LOG_DIR"), base_dir=base_dir):
-            issues.append(_issue("ERROR", "Messdaten-Logging ist aktiv, aber das Messdaten-Verzeichnis ist nicht beschreibbar.", ["MEASUREMENT_LOG_MODE", "MEASUREMENT_LOG_DIR"], "Messdaten / Historie", "MEASUREMENT_LOG_DIR_NOT_WRITABLE"))
+        storage_target = _str_value(cfg, "MEASUREMENT_LOG_STORAGE_TARGET") or "internal_sd"
+        allow_fallback = _bool_value(cfg.get("MEASUREMENT_LOG_ALLOW_SD_FALLBACK", True))
+        if storage_target == "external_mount":
+            mountpoint = _str_value(cfg, "MEASUREMENT_LOG_MOUNTPOINT")
+            mount_ok = bool(mountpoint) and os.path.ismount(mountpoint) and os.access(mountpoint, os.W_OK)
+            fallback_ok = allow_fallback and _path_is_writable(_str_value(cfg, "MEASUREMENT_LOG_FALLBACK_DIR"), base_dir=base_dir)
+            if not mount_ok and not fallback_ok:
+                issues.append(_issue("ERROR", "Externes Messdatenziel ist nicht verfügbar und der SD-Fallback ist nicht beschreibbar.", ["MEASUREMENT_LOG_STORAGE_TARGET", "MEASUREMENT_LOG_MOUNTPOINT", "MEASUREMENT_LOG_FALLBACK_DIR"], "Messdaten / Historie", "MEASUREMENT_LOG_TARGET_UNAVAILABLE"))
+            elif not mount_ok and fallback_ok:
+                issues.append(_issue("WARNING", "Externes Messdatenziel ist aktuell nicht als beschreibbarer Mountpoint verfügbar. Nach dem Speichern würde der begrenzte SD-Fallback verwendet.", ["MEASUREMENT_LOG_STORAGE_TARGET", "MEASUREMENT_LOG_MOUNTPOINT"], "Messdaten / Historie", "MEASUREMENT_LOG_EXTERNAL_FALLBACK"))
+        else:
+            if not _path_is_writable(_str_value(cfg, "MEASUREMENT_LOG_DIR"), base_dir=base_dir):
+                issues.append(_issue("ERROR", "Messdaten-Logging ist aktiv, aber das Messdaten-Verzeichnis ist nicht beschreibbar.", ["MEASUREMENT_LOG_MODE", "MEASUREMENT_LOG_DIR"], "Messdaten / Historie", "MEASUREMENT_LOG_DIR_NOT_WRITABLE"))
         if measurement_mode == "extended":
             issues.append(_issue("INFO", "Erweitertes Messdaten-Logging erzeugt größere Dateien. Es ist für gezielte Simulation, What-if und tiefe MQTT-/Freshness-Analyse gedacht, nicht zwingend für Dauerbetrieb.", ["MEASUREMENT_LOG_MODE"], "Messdaten / Historie", "MEASUREMENT_LOG_EXTENDED_VOLUME"))
     if _bool_value(cfg.get("FILE_LOG_ENABLED", False)):

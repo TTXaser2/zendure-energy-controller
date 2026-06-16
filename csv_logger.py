@@ -10,7 +10,7 @@ import io
 import json
 import os
 import shutil
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from version import APP_VERSION, APP_VERSION_LABEL, CSV_SCHEMA
 
@@ -279,7 +279,7 @@ def compute_config_control_hash(config: Dict[str, Any]) -> str:
 
 def _bool_text(value: Any) -> Any:
     if isinstance(value, bool):
-        return "true" if value else "false"
+        return "1" if value else "0"
     return value
 
 
@@ -311,6 +311,120 @@ def estimate_retention_hours(config: Dict[str, Any], row_size_bytes: Optional[in
     return round(rows * interval_s / 3600.0, 2)
 
 
+def _is_mountpoint(path: str) -> bool:
+    try:
+        return os.path.ismount(path)
+    except Exception:
+        return False
+
+
+def _is_writable_dir(path: str) -> bool:
+    try:
+        os.makedirs(path, exist_ok=True)
+        test_path = os.path.join(path, ".zec_write_test")
+        with open(test_path, "w", encoding="utf-8") as f:
+            f.write("ok")
+        os.remove(test_path)
+        return True
+    except Exception:
+        return False
+
+
+def detected_log_mounts() -> List[Dict[str, Any]]:
+    """Return mountpoints that are plausible user-selectable log targets."""
+    mounts: List[Dict[str, Any]] = []
+    try:
+        with open("/proc/mounts", "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+    except Exception:
+        return mounts
+    seen = set()
+    for line in lines:
+        parts = line.split()
+        if len(parts) < 3:
+            continue
+        device, mountpoint, fstype = parts[:3]
+        if mountpoint in seen:
+            continue
+        if fstype in {"proc", "sysfs", "tmpfs", "devtmpfs", "devpts", "overlay", "squashfs", "cgroup", "cgroup2", "securityfs", "pstore", "debugfs", "tracefs", "fusectl"}:
+            continue
+        plausible = (
+            device.startswith("/dev/sd")
+            or device.startswith("/dev/disk/")
+            or mountpoint.startswith("/media/")
+            or mountpoint.startswith("/mnt/")
+        )
+        if not plausible:
+            continue
+        try:
+            usage = shutil.disk_usage(mountpoint)
+            free_mb = int(usage.free / 1024 / 1024)
+            total_mb = int(usage.total / 1024 / 1024)
+        except Exception:
+            free_mb = total_mb = None
+        mounts.append({
+            "device": device,
+            "mountpoint": mountpoint,
+            "fstype": fstype,
+            "free_mb": free_mb,
+            "total_mb": total_mb,
+            "writable": os.access(mountpoint, os.W_OK),
+        })
+        seen.add(mountpoint)
+    return mounts
+
+
+def resolve_log_path(config: Dict[str, Any], *, allow_fallback: bool = True) -> Tuple[str, bool, str]:
+    """Resolve the active measurement log path.
+
+    Returns (path, fallback_active, status_reason). The fallback is deliberately
+    limited to SD and visible through status fields; it is not silent.
+    """
+    target = str(config.get("MEASUREMENT_LOG_STORAGE_TARGET", "internal_sd") or "internal_sd").strip().lower()
+    log_file = str(config.get("MEASUREMENT_LOG_FILE", config.get("CSV_LOG_FILE", "zendure_measurements.csv")) or "zendure_measurements.csv")
+    base_reason = "primary"
+
+    def absolute_join(directory: str) -> str:
+        return os.path.abspath(os.path.join(str(directory or "logs"), log_file))
+
+    primary_dir = str(config.get("MEASUREMENT_LOG_DIR", config.get("CSV_LOG_DIR", "logs")) or "logs")
+    if target == "external_mount":
+        mountpoint = str(config.get("MEASUREMENT_LOG_MOUNTPOINT", "") or "").strip()
+        if mountpoint and _is_mountpoint(mountpoint):
+            primary_dir = os.path.join(mountpoint, "zendure-controller-logs")
+            base_reason = f"external_mount:{mountpoint}"
+        else:
+            # If the user selected external logging but did not provide a valid
+            # mountpoint, try the first detected writable external mount.
+            chosen = next((m for m in detected_log_mounts() if m.get("writable")), None)
+            if chosen:
+                primary_dir = os.path.join(str(chosen["mountpoint"]), "zendure-controller-logs")
+                base_reason = f"external_auto:{chosen['mountpoint']}"
+            else:
+                base_reason = "external_unavailable"
+                primary_dir = ""
+    elif target == "custom_path":
+        base_reason = "custom_path"
+    else:
+        primary_dir = str(config.get("MEASUREMENT_LOG_DIR", "logs") or "logs")
+        base_reason = "internal_sd"
+
+    primary_path = absolute_join(primary_dir) if primary_dir else ""
+    if primary_path:
+        primary_directory = os.path.dirname(primary_path)
+        if _is_writable_dir(primary_directory):
+            return primary_path, False, base_reason
+
+    if allow_fallback and bool(config.get("MEASUREMENT_LOG_ALLOW_SD_FALLBACK", True)) and target in {"external_mount", "custom_path"}:
+        fallback_dir = str(config.get("MEASUREMENT_LOG_FALLBACK_DIR", "logs/fallback") or "logs/fallback")
+        fallback_path = absolute_join(fallback_dir)
+        if _is_writable_dir(os.path.dirname(fallback_path)):
+            return fallback_path, True, f"fallback_sd_active:{base_reason}"
+
+    # Return primary path if available so status messages point to the intended target.
+    return primary_path or absolute_join(str(config.get("MEASUREMENT_LOG_FALLBACK_DIR", "logs/fallback"))), False, f"unavailable:{base_reason}"
+
+
 class CsvRotatingLogger:
     """CSV-Rotator für ZEC-MEASUREMENT-V3.
 
@@ -322,6 +436,50 @@ class CsvRotatingLogger:
         self._last_path = None
         self._validated_v3_paths = set()
         self._invalid_schema_paths: Dict[str, str] = {}
+        self._fh = None
+        self._writer = None
+        self._open_path: Optional[str] = None
+        self._rows_since_flush = 0
+        self._last_flush_epoch = 0.0
+
+    def close(self) -> None:
+        if self._fh is not None:
+            try:
+                self._fh.flush()
+            except Exception:
+                pass
+            try:
+                self._fh.close()
+            except Exception:
+                pass
+        self._fh = None
+        self._writer = None
+        self._open_path = None
+        self._rows_since_flush = 0
+
+    def _get_writer(self, path: str):
+        write_header = not os.path.exists(path) or os.path.getsize(path) == 0
+        if self._fh is None or self._open_path != path or self._fh.closed:
+            self.close()
+            self._fh = open(path, "a", newline="", encoding="utf-8")
+            self._writer = csv.DictWriter(self._fh, fieldnames=CSV_FIELDS, extrasaction="ignore", delimiter=";")
+            self._open_path = path
+            self._last_flush_epoch = __import__("time").time()
+            if write_header:
+                self._writer.writerow(CSV_HEADER_MAP)
+        return self._writer
+
+    def _flush_if_due(self, config: Dict[str, Any]) -> None:
+        if self._fh is None:
+            return
+        import time
+        max_rows = max(1, int(config.get("MEASUREMENT_LOG_FLUSH_EVERY_ROWS", 100)))
+        max_seconds = max(1.0, float(config.get("MEASUREMENT_LOG_FLUSH_EVERY_SECONDS", 60)))
+        now = time.time()
+        if self._rows_since_flush >= max_rows or (now - self._last_flush_epoch) >= max_seconds:
+            self._fh.flush()
+            self._rows_since_flush = 0
+            self._last_flush_epoch = now
 
     def log(self, config: Dict[str, Any], row: Dict[str, Any]) -> Dict[str, Any]:
         mode = measurement_log_mode(config)
@@ -329,6 +487,8 @@ class CsvRotatingLogger:
             return self.status(config, "disabled", "MEASUREMENT_LOG_MODE=off")
 
         path = self.get_current_path(config)
+        fallback_active = bool(getattr(self, "_last_fallback_active", False))
+        target_reason = str(getattr(self, "_last_target_reason", "primary"))
         directory = os.path.dirname(path)
         os.makedirs(directory, exist_ok=True)
 
@@ -345,16 +505,15 @@ class CsvRotatingLogger:
         row_size = _serialized_row_length(out_row)
         out_row["measurement_estimated_retention_hours"] = estimate_retention_hours(config, row_size)
 
-        self._rotate_if_needed(config, path)
-        write_header = not os.path.exists(path) or os.path.getsize(path) == 0
+        self._rotate_if_needed(config, path, fallback_active=fallback_active)
+        writer = self._get_writer(path)
+        writer.writerow({field: _bool_text(out_row.get(field, "")) for field in CSV_FIELDS})
+        self._rows_since_flush += 1
+        self._flush_if_due(config)
 
-        with open(path, "a", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=CSV_FIELDS, extrasaction="ignore", delimiter=";")
-            if write_header:
-                writer.writerow(CSV_HEADER_MAP)
-            writer.writerow({field: _bool_text(out_row.get(field, "")) for field in CSV_FIELDS})
-
-        return self.status(config, "active", "OK", path=path, free_mb=free_mb, row_size_bytes=row_size)
+        status = "active_fallback_sd" if fallback_active else "active"
+        reason = "SD-Fallback aktiv: primäres Messdatenziel nicht verfügbar; begrenzte Rotation wird verwendet." if fallback_active else "OK"
+        return self.status(config, status, reason, path=path, free_mb=free_mb, row_size_bytes=row_size)
 
     def prepare_row(self, config: Dict[str, Any], row: Dict[str, Any], *, path: Optional[str] = None, free_mb: Optional[int] = None) -> Dict[str, Any]:
         mode = measurement_log_mode(config)
@@ -411,9 +570,10 @@ class CsvRotatingLogger:
         }
 
     def get_current_path(self, config: Dict[str, Any]) -> str:
-        log_dir = str(config.get("MEASUREMENT_LOG_DIR", config.get("CSV_LOG_DIR", "logs")))
-        log_file = str(config.get("MEASUREMENT_LOG_FILE", config.get("CSV_LOG_FILE", "zendure_measurements.csv")))
-        return os.path.abspath(os.path.join(log_dir, log_file))
+        path, fallback_active, reason = resolve_log_path(config, allow_fallback=True)
+        self._last_fallback_active = fallback_active
+        self._last_target_reason = reason
+        return path
 
     def get_current_dir(self, config: Dict[str, Any]) -> str:
         return os.path.dirname(self.get_current_path(config))
@@ -457,12 +617,19 @@ class CsvRotatingLogger:
         except Exception:
             return None
 
-    def _rotate_if_needed(self, config: Dict[str, Any], path: str) -> None:
-        max_bytes = int(config.get("MEASUREMENT_LOG_MAX_BYTES", config.get("CSV_LOG_MAX_BYTES", 2_000_000)))
-        backup_count = int(config.get("MEASUREMENT_LOG_BACKUP_COUNT", config.get("CSV_LOG_BACKUP_COUNT", 5)))
+    def _rotate_if_needed(self, config: Dict[str, Any], path: str, *, fallback_active: bool = False) -> None:
+        if fallback_active:
+            max_bytes = int(config.get("MEASUREMENT_LOG_FALLBACK_MAX_BYTES", 10_000_000))
+            backup_count = int(config.get("MEASUREMENT_LOG_FALLBACK_BACKUP_COUNT", 2))
+        else:
+            max_bytes = int(config.get("MEASUREMENT_LOG_MAX_BYTES", config.get("CSV_LOG_MAX_BYTES", 2_000_000)))
+            backup_count = int(config.get("MEASUREMENT_LOG_BACKUP_COUNT", config.get("CSV_LOG_BACKUP_COUNT", 5)))
 
         if not os.path.exists(path) or os.path.getsize(path) < max_bytes:
             return
+
+        if self._open_path == path:
+            self.close()
 
         for index in range(backup_count, 0, -1):
             src = self._backup_path(path, index)

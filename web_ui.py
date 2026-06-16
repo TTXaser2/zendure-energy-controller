@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Red
 from config_manager import CONFIG_SCHEMA, ConfigManager, validate_config
 from config_validator import ValidationIssue, restart_relevant_changes, split_issues, validate_config_semantics
 from cross_charge import cross_charge_enabled
-from csv_logger import rows_to_csv, estimate_retention_hours, measurement_log_mode
+from csv_logger import rows_to_csv, estimate_retention_hours, measurement_log_mode, detected_log_mounts, resolve_log_path
 from version import APP_VERSION, CSV_SCHEMA
 from state import ControllerState
 from translations import (
@@ -382,7 +382,7 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
         cfg = config_manager.get()
         if cfg.get("HEADLESS_MODE", False):
             return HTMLResponse(build_headless_page(cfg))
-        path = os.path.abspath(os.path.join(str(cfg.get("MEASUREMENT_LOG_DIR", cfg.get("CSV_LOG_DIR", "logs"))), str(cfg.get("MEASUREMENT_LOG_FILE", cfg.get("CSV_LOG_FILE", "zendure_measurements.csv")))))
+        path, _, _ = resolve_log_path(cfg, allow_fallback=True)
         if not os.path.exists(path):
             return PlainTextResponse("Messdaten-Datei existiert noch nicht oder Messdaten-Logging ist deaktiviert.", status_code=404)
         return FileResponse(path, media_type="text/csv", filename=os.path.basename(path))
@@ -1150,7 +1150,7 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
         {status_card('Aktive Betriebslogik', html.escape(path_human), html.escape(str(s['last_control_action'])), 'gray', 'Die aktive Betriebslogik beschreibt den aktuell verwendeten Entscheidungsweg des Controllers in verständlicher Form. Der technische Code bleibt darunter sichtbar, damit man Events, Graphdaten und Logausgaben eindeutig zuordnen kann.', path_code)}
         {status_card('Regelzyklus', f'{s["last_loop_duration_ms"]} ms', f'Zyklen: {s["loop_counter"]}<br>Uptime: {format_dhms(s["uptime_seconds"])}', 'gray', 'Ein Regelzyklus ist ein kompletter Durchlauf der Steuerung: Messwerte lesen, Schutzlogik prüfen, Zielwert berechnen, MQTT-Befehl senden und Graph-/CSV-Daten speichern. Die Dauer zeigt, wie lange dieser Durchlauf gebraucht hat; das Intervall wird in den Settings festgelegt.')}
         {status_card('Fehler', str(s['consecutive_errors']), f'Letzter Fehler: {html.escape(str(s["last_error"]))}<br>Zeitpunkt: {html.escape(str(s.get("last_error_time", "-")))}<br>Safe-State: {s["safe_state_counter"]}x', 'red', 'Der Fehlerzähler zählt direkt aufeinanderfolgende Fehler. Safe-State bedeutet: Lade- und Entladeleistung werden auf 0 W gesetzt, um bei unsicheren Daten oder Kommunikationsproblemen keine unkontrollierte Energieverschiebung auszulösen.')}
-        {status_card('Messdaten-Logging', html.escape(str(cfg.get('MEASUREMENT_LOG_MODE', 'off'))), f'Status: {html.escape(str(s.get("measurement_log_status", "-")))}<br>Grund: {html.escape(str(s.get("measurement_log_status_reason", "-")))}<br>Datei: {html.escape(str(cfg.get("MEASUREMENT_LOG_DIR", "logs")))}/{html.escape(str(cfg.get("MEASUREMENT_LOG_FILE", "zendure_measurements.csv")))}<br>Schema: {CSV_SCHEMA}<br>Geschätzte Aufbewahrung: {html.escape(str(s.get("measurement_estimated_retention_hours") or estimate_retention_hours(cfg)))} h<br>Freier Speicher: {html.escape(str(s.get("measurement_free_disk_mb", "-")))} MB', 'gray', 'Messdaten-Logging ist optional und nachgelagert. Aus schont die SD-Karte. Standard speichert vollständige Reglerdiagnose inklusive MQTT-Stale-Aggregat und Szenario ohne Zendure. Erweitert ergänzt große Detaildaten für Simulation/What-if. Die Regelung läuft weiter, auch wenn Logging pausiert oder fehlschlägt.', settings_group='Messdaten / Historie')}
+        {status_card('Messdaten-Logging', html.escape(str(cfg.get('MEASUREMENT_LOG_MODE', 'off'))), f'Status: {html.escape(str(s.get("measurement_log_status", "-")))}<br>Grund: {html.escape(str(s.get("measurement_log_status_reason", "-")))}<br>Datei: {html.escape(str(s.get("measurement_log_path") or resolve_log_path(cfg, allow_fallback=True)[0]))}<br>Speicherziel: {html.escape(str(cfg.get("MEASUREMENT_LOG_STORAGE_TARGET", "internal_sd")))}<br>Schema: {CSV_SCHEMA}<br>Geschätzte Aufbewahrung: {html.escape(str(s.get("measurement_estimated_retention_hours") or estimate_retention_hours(cfg)))} h<br>Freier Speicher: {html.escape(str(s.get("measurement_free_disk_mb", "-")))} MB', 'gray', 'Messdaten-Logging ist optional und nachgelagert. Aus schont die SD-Karte. Standard speichert vollständige Reglerdiagnose inklusive MQTT-Stale-Aggregat und Szenario ohne Zendure. Erweitert ergänzt große Detaildaten für Simulation/What-if. Bei externem Speicherziel kann ein begrenzter SD-Fallback aktiv werden. Die Regelung läuft weiter, auch wenn Logging pausiert oder fehlschlägt.', settings_group='Messdaten / Historie')}
         {status_card('Analyse-Weboberfläche', f'Port {replay_port}', analysis_link_html, 'gray', 'Die Analyse läuft bewusst getrennt vom Live-Regler. Der Dienst wird mitgeliefert, aber nicht automatisch aktiviert.')}
         {status_card('High-SOC-Ladeannahme', html.escape(str(s.get('charge_acceptance_state', 'ok'))), html.escape(str(s.get('charge_acceptance_reason', '-'))), 'gray', 'Leichtgewichtige Diagnose: Zeigt, ob Zendure eine angeforderte Ladeleistung bei hohem SOC plausibel annimmt. Diese Diagnose greift nicht aktiv in die Regelung ein.')}
     </div></div>
@@ -1674,6 +1674,15 @@ def build_settings_page(cfg: Dict[str, Any], validation_issues: Optional[List[Va
         if group == "Messdaten / Historie":
             mode = measurement_log_mode(cfg)
             retention_h = estimate_retention_hours(cfg)
+            mounts = detected_log_mounts()
+            if mounts:
+                mount_lines = "<br>Erkannte externe Ziele: " + "; ".join(
+                    f"<code>{html.escape(str(m.get('mountpoint')))}</code> ({html.escape(str(m.get('free_mb', '-')))} MB frei, {'schreibbar' if m.get('writable') else 'nicht schreibbar'})"
+                    for m in mounts[:5]
+                )
+            else:
+                mount_lines = "<br>Erkannte externe Ziele: keine beschreibbaren USB-/Mountpoints gefunden."
+            resolved_path, fallback_active, target_reason = resolve_log_path(cfg, allow_fallback=True)
             page += (
                 "<div class='info-box' style='margin:12px 0;'>"
                 "<b>Messdaten-Modi:</b><br>"
@@ -1681,8 +1690,12 @@ def build_settings_page(cfg: Dict[str, Any], validation_issues: Optional[List[Va
                 "<b>Standard</b>: vollständige Reglerdiagnose inklusive Roh-/Norm-Kernwerten, Freshness/Validity, MQTT-Stale-Aggregat, Sollwertkaskade, Kommando und Szenario ohne Zendure.<br>"
                 "<b>Erweitert</b>: Standard plus Detaildaten für Simulation, What-if sowie tiefe MQTT-/Freshness-/Packdatenanalyse; erzeugt größere Dateien und sollte gezielt verwendet werden.<br>"
                 f"Aktueller Modus: <b>{html.escape(mode)}</b>. Grob geschätzte Aufbewahrung bei aktuellen Grenzwerten: <b>{html.escape(str(retention_h))} Stunden</b>. "
-                "Diese Schätzung ist bewusst praxisnah, nicht bytegenau. Die Regelung läuft weiter, auch wenn Logging pausiert oder fehlschlägt."
-                "</div>"
+                "Diese Schätzung ist bewusst praxisnah, nicht bytegenau. Die Regelung läuft weiter, auch wenn Logging pausiert oder fehlschlägt.<br>"
+                f"Aktiv aufgelöster Zielpfad: <code>{html.escape(resolved_path)}</code>"
+                + (" <b>(SD-Fallback aktiv)</b>" if fallback_active else "")
+                + f"<br>Zielstatus: {html.escape(target_reason)}"
+                + mount_lines
+                + "</div>"
             )
         page += "<div class='grid'>"
         if group == "Nachtmodus":

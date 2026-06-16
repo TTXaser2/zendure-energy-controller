@@ -274,7 +274,27 @@ def _has_actual(row: Dict[str, Any]) -> bool:
 
 
 def _soc_value(row: Dict[str, Any]) -> Optional[float]:
-    return _float_or_none(row.get("zendure_soc_percent", row.get("soc")))
+    # V3 primary fields. Older aliases remain accepted for tests/offline data.
+    return _float_or_none(
+        row.get("norm_zendure_soc_percent",
+            row.get("raw_zendure_soc_percent",
+                row.get("zendure_soc_percent", row.get("soc"))
+            )
+        )
+    )
+
+
+def _boolish(value: Any) -> Optional[bool]:
+    if value in (None, ""):
+        return None
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "ja", "y"}:
+        return True
+    if text in {"0", "false", "no", "nein", "n"}:
+        return False
+    return None
 
 
 def _sign(value: float, threshold: float) -> int:

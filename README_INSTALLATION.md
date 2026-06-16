@@ -1,4 +1,4 @@
-# Zendure Energy Controller V12.9.1 - Installation und Betrieb
+# Zendure Energy Controller V12.9.2 - Installation und Betrieb
 
 Diese Version ist für den Betrieb unter `/opt/zendure-controller` vorbereitet.
 
@@ -13,21 +13,21 @@ ln -sfn /opt/zendure-controller /home/pi/zendure-controller
 
 Danach kann bequem mit `cd ~/zendure-controller` gearbeitet werden, obwohl die Anwendung sauber unter `/opt` liegt.
 
-## Update auf V12.9.1 installieren
+## Update auf V12.9.2 installieren
 
 Ab V12.7 liegt das Update-Script ausschließlich unter `tools/`.
 
 ```bash
 cp /opt/zendure-controller/tools/update_zendure_controller.sh /home/pi/update_zendure_controller.sh
 chmod +x /home/pi/update_zendure_controller.sh
-/home/pi/update_zendure_controller.sh v12_9_1
+/home/pi/update_zendure_controller.sh v12_9_2
 ```
 
 Das Update-Script erhält die vorhandene `config.json`, sichert das Installationsverzeichnis, bereinigt alte Dopplungen (`Tools/`, `zendureController.py`) und installiert die systemd-Dateien für Live-Controller und optionalen Replay-Dienst.
 
 Das Paket enthält zusätzlich die finale Excel-Lernsimulation `tools/zendure_regelung_lernwerkzeug_v4_2_7_final.xlsx`. Diese Datei wird nur mitkopiert und nicht durch das Update-Script verändert.
 
-Hinweis: V12.9.1 setzt auf `ZEC-MEASUREMENT-V3` auf. Analyse/Replay akzeptiert ausschließlich gültige V3-Dateien; ungültige oder alte Dateien werden generisch abgelehnt. Es gibt keine Migration und kein V2-spezifisches Cleanup. Falls die aktive Messdatei beim Logging-Start keinen gültigen V3-Header hat, pausiert nur das Logging mit Statuswarnung; die Regelung läuft weiter.
+Hinweis: V12.9.2 setzt auf `ZEC-MEASUREMENT-V3` auf. Analyse/Replay akzeptiert ausschließlich gültige V3-Dateien; ungültige oder alte Dateien werden generisch abgelehnt. Es gibt keine Migration und kein V2-spezifisches Cleanup. Falls die aktive Messdatei beim Logging-Start keinen gültigen V3-Header hat, pausiert nur das Logging mit Statuswarnung; die Regelung läuft weiter.
 
 ## Syntaxcheck
 
@@ -62,7 +62,7 @@ journalctl -u zendure-controller.service -f
 
 ## Optionaler Analyse-/Replay-Dienst
 
-V12.9.1 liefert einen separaten Analyse-Webdienst. Er wird nicht automatisch aktiviert und beeinflusst den Live-Regler nicht. Schwere Analysen laufen zusätzlich in einem isolierten Worker-Prozess mit Timeout und Speicherlimit, damit eine problematische Analyse nicht den gesamten Raspberry Pi blockieren soll.
+V12.9.2 liefert einen separaten Analyse-Webdienst. Er wird nicht automatisch aktiviert und beeinflusst den Live-Regler nicht. Schwere Analysen laufen zusätzlich in einem isolierten Worker-Prozess mit Timeout und Speicherlimit, damit eine problematische Analyse nicht den gesamten Raspberry Pi blockieren soll.
 
 Einmalig installieren, falls das Update-Script nicht verwendet wurde:
 
@@ -159,3 +159,7 @@ Die Settings-/Statusseite zeigt den aktiven Modus, den Logging-Status, freien Sp
 Optional kann in den Settings im Bereich `Nachtmodus` ein `Nachtmodus Reserve-SOC` gesetzt werden. Leer bedeutet: Die feste Nachtentladung läuft bis zum globalen Mindest-SOC oder bis zum Ende des Nachtfensters. Wenn gesetzt, arbeitet dieser Wert ohne Latch und ohne Hysterese als laufende Untergrenze: Wenn `SOC <= NIGHT_DISCHARGE_STOP_SOC_PERCENT`, wird nur die feste Nacht-Basisentladung pausiert. Der Controller fällt danach in den normalen AUTO-Zweig zurück, liest die Netzleistung weiter und darf bei realem Netzbezug bis zum globalen `MIN_SOC_PERCENT` geregelt entladen. Wenn der SOC später wieder `> NIGHT_DISCHARGE_STOP_SOC_PERCENT` ist und Nachtfenster, SOC-Freshness und MQTT-Kommandopfad gültig sind, darf auch die feste Nachtentladung im selben Nachtfenster wieder laufen. Der Wert muss mindestens dem globalen `MIN_SOC_PERCENT` entsprechen.
 
 Die Start- und Endzeit des Nachtmodus werden in der Weboberfläche als `hh:mm`-Felder angezeigt. Eingaben wie `5:30` werden beim Verlassen des Feldes zu `05:30` normalisiert. Intern werden weiterhin die bestehenden Felder `NIGHT_START_HOUR`, `NIGHT_START_MINUTE`, `NIGHT_END_HOUR` und `NIGHT_END_MINUTE` gespeichert, damit vorhandene Konfigurationen kompatibel bleiben.
+
+### Messdaten-Speicherziel in V12.9.2
+
+Im Bereich `Messdaten / Historie` kann das Speicherziel für Messdaten ausgewählt werden: interne SD, erkannter USB-/Mountpoint oder benutzerdefinierter Pfad. Bei externem Ziel kann ein begrenzter SD-Fallback aktiviert werden. Dieser Fallback wird sichtbar markiert und enger rotiert, damit bei USB-Ausfall nicht unbegrenzt auf die SD geschrieben wird.
