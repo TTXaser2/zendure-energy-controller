@@ -960,6 +960,28 @@ class ZendureController:
             self.state.charge_acceptance_state = result.get("state", "ok")
             self.state.charge_acceptance_reason = result.get("reason", "-")
 
+
+    def _format_measurement_fallback_event(self, status: Dict[str, Any]) -> str:
+        """Format a compact runtime-log line for measurement storage fallback events.
+
+        This is operational logger diagnostics, intentionally kept out of the
+        ZEC-MEASUREMENT-V3 row schema.
+        """
+        parts = [
+            "[MEASUREMENT_LOG] fallback_to_sd",
+            f"count={status.get('measurement_fallback_count_since_start', '')}",
+            f"primary_path={status.get('measurement_primary_path', '')}",
+            f"mountpoint={status.get('measurement_primary_mountpoint', '')}",
+            f"exists={status.get('measurement_primary_exists', '')}",
+            f"is_mount={status.get('measurement_primary_is_mount', '')}",
+            f"writable={status.get('measurement_primary_writable', '')}",
+            f"free_mb={status.get('measurement_primary_free_mb', '')}",
+            f"failure_reason={status.get('measurement_primary_failure_reason', '')}",
+            f"exception={status.get('measurement_primary_exception', '')}",
+            f"fallback_path={status.get('measurement_log_path', '')}",
+        ]
+        return " ".join(str(part).replace("\n", " ") for part in parts)
+
     def finish_cycle(self, cfg: Dict[str, Any], loop_start: float) -> None:
         with self.state.lock:
             self.state.last_loop_duration_ms = int((time.time() - loop_start) * 1000)
@@ -996,6 +1018,8 @@ class ZendureController:
         try:
             last_row = self.state.snapshot()["graph_history"][-1]
             log_status = self.csv_logger.log(cfg, last_row)
+            if log_status.get("measurement_fallback_event"):
+                self.app_logger.log(cfg, self._format_measurement_fallback_event(log_status))
             self.state.set_measurement_log_status(log_status)
         except Exception as exc:
             self.state.set_error(f"Messdaten-Logging pausiert: {exc}")

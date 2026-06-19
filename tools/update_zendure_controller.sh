@@ -5,7 +5,7 @@ VERSION="${1:-}"
 
 if [ -z "$VERSION" ]; then
     echo "Bitte Version angeben, z. B.:"
-    echo "$0 v12_9_2"
+    echo "$0 v12_9_4"
     exit 1
 fi
 

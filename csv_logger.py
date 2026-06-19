@@ -10,6 +10,7 @@ import io
 import json
 import os
 import shutil
+from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from version import APP_VERSION, APP_VERSION_LABEL, CSV_SCHEMA
@@ -318,16 +319,42 @@ def _is_mountpoint(path: str) -> bool:
         return False
 
 
-def _is_writable_dir(path: str) -> bool:
+def _check_writable_dir(path: str) -> Dict[str, Any]:
+    """Return an operational filesystem diagnosis for a log directory.
+
+    This is intentionally runtime/operational metadata, not measurement data.
+    Callers may expose it on the status page or write it to zendure_runtime.log,
+    but it must not expand the ZEC-MEASUREMENT-V3 row schema.
+    """
+    result: Dict[str, Any] = {
+        "path": path,
+        "exists": False,
+        "writable": False,
+        "free_mb": None,
+        "exception": "",
+    }
     try:
+        result["exists"] = os.path.exists(path)
         os.makedirs(path, exist_ok=True)
+        result["exists"] = os.path.exists(path)
+        try:
+            usage = shutil.disk_usage(path)
+            result["free_mb"] = int(usage.free / 1024 / 1024)
+        except Exception:
+            result["free_mb"] = None
         test_path = os.path.join(path, ".zec_write_test")
         with open(test_path, "w", encoding="utf-8") as f:
             f.write("ok")
         os.remove(test_path)
-        return True
-    except Exception:
-        return False
+        result["writable"] = True
+        return result
+    except Exception as exc:
+        result["exception"] = str(exc)
+        return result
+
+
+def _is_writable_dir(path: str) -> bool:
+    return bool(_check_writable_dir(path).get("writable"))
 
 
 def detected_log_mounts() -> List[Dict[str, Any]]:
@@ -405,47 +432,110 @@ def _select_external_mountpoint(config: Dict[str, Any]) -> Tuple[str, str]:
     return "", "external_unavailable"
 
 
-def resolve_log_path(config: Dict[str, Any], *, allow_fallback: bool = True) -> Tuple[str, bool, str]:
-    """Resolve the active measurement log path.
+def resolve_log_target(config: Dict[str, Any], *, allow_fallback: bool = True) -> Dict[str, Any]:
+    """Resolve the active measurement log target with runtime diagnostics.
 
-    Returns (path, fallback_active, status_reason). The fallback is deliberately
-    limited to SD and visible through status fields; it is not silent.
+    The detailed target diagnosis is operational state for status/runtime logging.
+    The measurement CSV schema remains unchanged; callers should not add these
+    details as per-row measurement fields.
     """
     target = str(config.get("MEASUREMENT_LOG_STORAGE_TARGET", "internal_sd") or "internal_sd").strip().lower()
     log_file = str(config.get("MEASUREMENT_LOG_FILE", config.get("CSV_LOG_FILE", "zendure_measurements.csv")) or "zendure_measurements.csv")
-    base_reason = "primary"
 
     def absolute_join(directory: str) -> str:
         return os.path.abspath(os.path.join(str(directory or "logs"), log_file))
 
+    primary_reason = "primary"
     primary_dir = str(config.get("MEASUREMENT_LOG_DIR", config.get("CSV_LOG_DIR", "logs")) or "logs")
+    selected_mountpoint = ""
+    selected_mount_is_mount = False
+    selected_mount_writable = False
+
     if target == "external_mount":
-        mountpoint, base_reason = _select_external_mountpoint(config)
+        manual = str(config.get("MEASUREMENT_LOG_MOUNTPOINT", "") or "").strip()
+        mountpoint, primary_reason = _select_external_mountpoint(config)
+        selected_mountpoint = mountpoint or manual
+        selected_mount_is_mount = bool(selected_mountpoint and _is_mountpoint(selected_mountpoint))
+        selected_mount_writable = bool(selected_mountpoint and os.access(selected_mountpoint, os.W_OK))
         if mountpoint:
             # Variante A: final path = mountpoint + configured measurement directory + file.
             primary_dir = os.path.join(mountpoint, _external_subdir(config))
         else:
             primary_dir = ""
     elif target == "custom_path":
-        base_reason = "custom_path"
+        primary_reason = "custom_path"
     else:
         primary_dir = str(config.get("MEASUREMENT_LOG_DIR", "logs") or "logs")
-        base_reason = "internal_sd"
+        primary_reason = "internal_sd"
 
     primary_path = absolute_join(primary_dir) if primary_dir else ""
-    if primary_path:
-        primary_directory = os.path.dirname(primary_path)
-        if _is_writable_dir(primary_directory):
-            return primary_path, False, base_reason
+    primary_directory = os.path.dirname(primary_path) if primary_path else ""
+    primary_check = _check_writable_dir(primary_directory) if primary_directory else {
+        "path": primary_directory, "exists": False, "writable": False, "free_mb": None, "exception": ""
+    }
+
+    failure_reason = ""
+    if target == "external_mount" and not primary_dir:
+        failure_reason = "external_mount_unavailable"
+    elif primary_path and not primary_check.get("writable"):
+        failure_reason = "primary_not_writable"
+    elif not primary_path:
+        failure_reason = "primary_unavailable"
+
+    result: Dict[str, Any] = {
+        "path": primary_path,
+        "fallback_active": False,
+        "status_reason": primary_reason if not failure_reason else f"unavailable:{primary_reason}",
+        "target_type": target,
+        "active_target_type": target,
+        "primary_path": primary_path,
+        "primary_directory": primary_directory,
+        "primary_mountpoint": selected_mountpoint,
+        "primary_exists": bool(primary_check.get("exists")),
+        "primary_is_mount": selected_mount_is_mount if target == "external_mount" else _is_mountpoint(primary_directory),
+        "primary_writable": bool(primary_check.get("writable")),
+        "primary_free_mb": primary_check.get("free_mb"),
+        "primary_failure_reason": failure_reason,
+        "primary_exception": primary_check.get("exception", ""),
+        "fallback_path": "",
+        "fallback_writable": False,
+        "fallback_exception": "",
+    }
+
+    if primary_path and primary_check.get("writable"):
+        result["status_reason"] = primary_reason
+        return result
 
     if allow_fallback and bool(config.get("MEASUREMENT_LOG_ALLOW_SD_FALLBACK", True)) and target in {"external_mount", "custom_path"}:
         fallback_dir = str(config.get("MEASUREMENT_LOG_FALLBACK_DIR", "logs/fallback") or "logs/fallback")
         fallback_path = absolute_join(fallback_dir)
-        if _is_writable_dir(os.path.dirname(fallback_path)):
-            return fallback_path, True, f"fallback_sd_active:{base_reason}"
+        fallback_directory = os.path.dirname(fallback_path)
+        fallback_check = _check_writable_dir(fallback_directory)
+        result["fallback_path"] = fallback_path
+        result["fallback_writable"] = bool(fallback_check.get("writable"))
+        result["fallback_exception"] = fallback_check.get("exception", "")
+        if fallback_check.get("writable"):
+            result["path"] = fallback_path
+            result["fallback_active"] = True
+            result["active_target_type"] = "fallback_sd"
+            result["status_reason"] = f"fallback_sd_active:{primary_reason}:{failure_reason or 'primary_unavailable'}"
+            return result
 
     # Return primary path if available so status messages point to the intended target.
-    return primary_path or absolute_join(str(config.get("MEASUREMENT_LOG_FALLBACK_DIR", "logs/fallback"))), False, f"unavailable:{base_reason}"
+    result["path"] = primary_path or absolute_join(str(config.get("MEASUREMENT_LOG_FALLBACK_DIR", "logs/fallback")))
+    result["active_target_type"] = "unavailable"
+    result["status_reason"] = f"unavailable:{primary_reason}:{failure_reason or 'primary_unavailable'}"
+    return result
+
+
+def resolve_log_path(config: Dict[str, Any], *, allow_fallback: bool = True) -> Tuple[str, bool, str]:
+    """Resolve the active measurement log path.
+
+    Returns (path, fallback_active, status_reason). The fallback is deliberately
+    limited to SD and visible through status/runtime diagnostics; it is not silent.
+    """
+    target = resolve_log_target(config, allow_fallback=allow_fallback)
+    return str(target.get("path") or ""), bool(target.get("fallback_active")), str(target.get("status_reason") or "")
 
 
 class CsvRotatingLogger:
@@ -464,6 +554,11 @@ class CsvRotatingLogger:
         self._open_path: Optional[str] = None
         self._rows_since_flush = 0
         self._last_flush_epoch = 0.0
+        self._fallback_active_previous = False
+        self._fallback_counter_since_start = 0
+        self._last_fallback_time = ""
+        self._last_fallback_reason = ""
+        self._last_fallback_signature = ""
 
     def close(self) -> None:
         if self._fh is not None:
@@ -513,7 +608,10 @@ class CsvRotatingLogger:
         # directory checks, rotation, row contents and returned status. This
         # avoids one-cycle-delayed status values and mismatches between USB rows
         # and fallback status fields.
-        path, fallback_active, target_reason = resolve_log_path(config, allow_fallback=True)
+        target_info = resolve_log_target(config, allow_fallback=True)
+        path = str(target_info.get("path") or "")
+        fallback_active = bool(target_info.get("fallback_active"))
+        target_reason = str(target_info.get("status_reason") or "")
         self._last_fallback_active = fallback_active
         self._last_target_reason = target_reason
         directory = os.path.dirname(path)
@@ -528,8 +626,22 @@ class CsvRotatingLogger:
         if schema_error:
             return self.status(config, "paused_invalid_schema", schema_error, path=path, free_mb=free_mb)
 
+        fallback_event = False
+        if fallback_active:
+            signature = f"{target_info.get('primary_path')}|{target_info.get('primary_failure_reason')}|{target_info.get('primary_exception')}"
+            if (not self._fallback_active_previous) or signature != self._last_fallback_signature:
+                fallback_event = True
+                self._fallback_counter_since_start += 1
+                self._last_fallback_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                self._last_fallback_reason = str(target_info.get("primary_failure_reason") or target_reason or "fallback_active")
+                self._last_fallback_signature = signature
+        self._fallback_active_previous = fallback_active
+
         status = "active_fallback_sd" if fallback_active else "active"
-        reason = "SD-Fallback aktiv: primäres Messdatenziel nicht verfügbar; begrenzte Rotation wird verwendet." if fallback_active else "OK"
+        if fallback_active:
+            reason = f"SD-Fallback aktiv: {self._last_fallback_reason}; primäres Messdatenziel nicht verfügbar, begrenzte Rotation wird verwendet."
+        else:
+            reason = "OK"
         out_row = self.prepare_row(config, row, path=path, free_mb=free_mb, log_status=status, log_status_reason=reason)
         row_size = _serialized_row_length(out_row)
         out_row["measurement_estimated_retention_hours"] = estimate_retention_hours(config, row_size)
@@ -540,7 +652,7 @@ class CsvRotatingLogger:
         self._rows_since_flush += 1
         self._flush_if_due(config)
 
-        return self.status(config, status, reason, path=path, free_mb=free_mb, row_size_bytes=row_size)
+        return self.status(config, status, reason, path=path, free_mb=free_mb, row_size_bytes=row_size, target_info=target_info, fallback_event=fallback_event)
 
     def prepare_row(self, config: Dict[str, Any], row: Dict[str, Any], *, path: Optional[str] = None, free_mb: Optional[int] = None, log_status: str = "active", log_status_reason: str = "OK") -> Dict[str, Any]:
         mode = measurement_log_mode(config)
@@ -586,8 +698,11 @@ class CsvRotatingLogger:
         path: Optional[str] = None,
         free_mb: Optional[int] = None,
         row_size_bytes: Optional[int] = None,
+        target_info: Optional[Dict[str, Any]] = None,
+        fallback_event: bool = False,
     ) -> Dict[str, Any]:
-        path = path or self.get_current_path(config)
+        target_info = target_info or resolve_log_target(config, allow_fallback=True)
+        path = path or str(target_info.get("path") or self.get_current_path(config))
         current_size = os.path.getsize(path) if os.path.exists(path) else 0
         return {
             "measurement_log_status": status,
@@ -596,6 +711,21 @@ class CsvRotatingLogger:
             "measurement_current_file_size_bytes": current_size,
             "measurement_free_disk_mb": free_mb if free_mb is not None else self._free_disk_mb(os.path.dirname(path)),
             "measurement_log_path": path,
+            "measurement_log_target_type": target_info.get("target_type", ""),
+            "measurement_log_active_target_type": target_info.get("active_target_type", ""),
+            "measurement_fallback_active": bool(target_info.get("fallback_active")),
+            "measurement_fallback_event": bool(fallback_event),
+            "measurement_fallback_count_since_start": self._fallback_counter_since_start,
+            "measurement_last_fallback_time": self._last_fallback_time,
+            "measurement_last_fallback_reason": self._last_fallback_reason,
+            "measurement_primary_path": target_info.get("primary_path", ""),
+            "measurement_primary_mountpoint": target_info.get("primary_mountpoint", ""),
+            "measurement_primary_exists": target_info.get("primary_exists", ""),
+            "measurement_primary_is_mount": target_info.get("primary_is_mount", ""),
+            "measurement_primary_writable": target_info.get("primary_writable", ""),
+            "measurement_primary_free_mb": target_info.get("primary_free_mb", ""),
+            "measurement_primary_failure_reason": target_info.get("primary_failure_reason", ""),
+            "measurement_primary_exception": target_info.get("primary_exception", ""),
         }
 
     def get_current_path(self, config: Dict[str, Any]) -> str:

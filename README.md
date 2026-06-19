@@ -1,6 +1,6 @@
-Zendure Energy Controller Version 12.9.3
+Zendure Energy Controller Version 12.9.4
 
-# Zendure Energy Controller V12.9.3
+# Zendure Energy Controller V12.9.4
 
 Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, ZEC-MEASUREMENT-V3-Messdaten-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
@@ -10,6 +10,19 @@ Lizenziert unter AGPL-3.0-or-later. Siehe `LICENSE`, `NOTICE` und `DISCLAIMER.md
 
 
 
+
+## Wichtige Änderungen in V12.9.4
+
+V12.9.4 ist ein kleiner Stabilitäts- und Diagnose-Feinschliff auf Basis von V12.9.3. Die AUTO-Regelstrategie, der Nachtmodus, die MQTT-Subscriptions, die MQTT-Kommandostruktur und das `ZEC-MEASUREMENT-V3`-CSV-Grundschema bleiben unverändert. Schwerpunkt ist die saubere Trennung von zyklischen Messdaten und Betriebsdiagnose beim Messdaten-Speicherziel.
+
+- Keine neuen USB-/Fallback-Detailspalten im Measurement-CSV: V3-Daten bleiben während der laufenden Datensammlung konsistent.
+- Messdaten-Statusbox auf der Statusseite kompakter und operativer: Modus, aktives Ziel, Pfad, Status, Fallback-Zähler, letzter Fallback-Zeitpunkt/-Grund, freier Speicher und Aufbewahrung.
+- Die prominente Schema-Zeile wurde aus der Messdaten-Statusbox entfernt; das Schema bleibt unverändert `ZEC-MEASUREMENT-V3`.
+- USB-/SD-Fallback-Diagnose wird als Betriebsdiagnose behandelt: konkrete Primary-Pfad-/Mount-/Schreibbarkeits-/Freispeicher-/Exception-Details werden bei Fallback-Ereignissen ins Runtime-Log geschrieben, sofern Datei-Logging aktiviert ist.
+- Fallback-Ereignisse werden gezählt; ein dauerhaft aktiver Fallback erhöht den Zähler nicht pro Messzyklus, sondern nur beim neuen Ereignis bzw. bei geändertem Fehlerbild.
+- Der umgebungsabhängige USB-Fallback-Test wurde isoliert; reale Mountpoints auf dem Raspberry Pi verfälschen diesen Test nicht mehr.
+- Standard-Dateiname des Runtime-Logs für neue Konfigurationen ist konsistent `zendure_runtime.log`.
+- Keine Änderung an Temperatur-Logging, Schema-Kürzung, Simulator, Analyse-Architektur oder finaler Excel-Lernsimulation.
 
 ## Wichtige Änderungen in V12.9.3
 

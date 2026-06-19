@@ -207,6 +207,13 @@ class ControllerState:
     measurement_estimated_retention_hours: Optional[float] = None
     measurement_current_file_size_bytes: int = 0
     measurement_free_disk_mb: Optional[int] = None
+    measurement_log_path: str = ""
+    measurement_log_target_type: str = ""
+    measurement_log_active_target_type: str = ""
+    measurement_fallback_active: bool = False
+    measurement_fallback_count_since_start: int = 0
+    measurement_last_fallback_time: str = ""
+    measurement_last_fallback_reason: str = ""
 
     # ZEC-MEASUREMENT-V3: Istleistungs-Freshness.
     actual_zendure_power_valid: bool = False
@@ -445,6 +452,16 @@ class ControllerState:
             except Exception:
                 pass
             self.measurement_free_disk_mb = status.get("measurement_free_disk_mb", self.measurement_free_disk_mb)
+            self.measurement_log_path = str(status.get("measurement_log_path", self.measurement_log_path) or "")
+            self.measurement_log_target_type = str(status.get("measurement_log_target_type", self.measurement_log_target_type) or "")
+            self.measurement_log_active_target_type = str(status.get("measurement_log_active_target_type", self.measurement_log_active_target_type) or "")
+            self.measurement_fallback_active = bool(status.get("measurement_fallback_active", self.measurement_fallback_active))
+            try:
+                self.measurement_fallback_count_since_start = int(status.get("measurement_fallback_count_since_start", self.measurement_fallback_count_since_start) or 0)
+            except Exception:
+                pass
+            self.measurement_last_fallback_time = str(status.get("measurement_last_fallback_time", self.measurement_last_fallback_time) or "")
+            self.measurement_last_fallback_reason = str(status.get("measurement_last_fallback_reason", self.measurement_last_fallback_reason) or "")
 
     def set_error(self, message: str) -> None:
         with self.lock:
@@ -1077,6 +1094,13 @@ class ControllerState:
                 "measurement_estimated_retention_hours": self.measurement_estimated_retention_hours,
                 "measurement_current_file_size_bytes": self.measurement_current_file_size_bytes,
                 "measurement_free_disk_mb": self.measurement_free_disk_mb,
+                "measurement_log_path": self.measurement_log_path,
+                "measurement_log_target_type": self.measurement_log_target_type,
+                "measurement_log_active_target_type": self.measurement_log_active_target_type,
+                "measurement_fallback_active": self.measurement_fallback_active,
+                "measurement_fallback_count_since_start": self.measurement_fallback_count_since_start,
+                "measurement_last_fallback_time": self.measurement_last_fallback_time,
+                "measurement_last_fallback_reason": self.measurement_last_fallback_reason,
                 "zendure_unit_count": 1,
                 "zendure_aggregate_target_w": target_signed,
                 "zendure_aggregate_actual_power_w": self.actual_zendure_system_signed_power,
@@ -1165,6 +1189,13 @@ class ControllerState:
                 "measurement_estimated_retention_hours": self.measurement_estimated_retention_hours,
                 "measurement_current_file_size_bytes": self.measurement_current_file_size_bytes,
                 "measurement_free_disk_mb": self.measurement_free_disk_mb,
+                "measurement_log_path": self.measurement_log_path,
+                "measurement_log_target_type": self.measurement_log_target_type,
+                "measurement_log_active_target_type": self.measurement_log_active_target_type,
+                "measurement_fallback_active": self.measurement_fallback_active,
+                "measurement_fallback_count_since_start": self.measurement_fallback_count_since_start,
+                "measurement_last_fallback_time": self.measurement_last_fallback_time,
+                "measurement_last_fallback_reason": self.measurement_last_fallback_reason,
                 "safe_state_counter": self.safe_state_counter,
                 "last_loop_duration_ms": self.last_loop_duration_ms,
                 "loop_counter": self.loop_counter,

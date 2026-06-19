@@ -147,7 +147,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # Logging
     "FILE_LOG_ENABLED": False,
     "FILE_LOG_DIR": "logs",
-    "FILE_LOG_FILE": "runtime_events.log",
+    "FILE_LOG_FILE": "zendure_runtime.log",
     "FILE_LOG_MAX_BYTES": 2_000_000,
     "FILE_LOG_BACKUP_COUNT": 3,
     "DEBUG": False,

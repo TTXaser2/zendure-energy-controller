@@ -45,7 +45,8 @@ class V1292LoggingStorageTests(unittest.TestCase):
                 "MEASUREMENT_LOG_FALLBACK_DIR": str(Path(tmp) / "fallback"),
                 "MEASUREMENT_LOG_FILE": "zendure_measurements.csv",
             }
-            path, fallback, reason = resolve_log_path(cfg, allow_fallback=True)
+            with patch("csv_logger.detected_log_mounts", return_value=[]):
+                path, fallback, reason = resolve_log_path(cfg, allow_fallback=True)
             self.assertTrue(fallback)
             self.assertIn("fallback", path)
             self.assertIn("fallback_sd_active", reason)
