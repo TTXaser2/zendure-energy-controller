@@ -40,7 +40,8 @@ def main() -> int:
     cfg: Dict[str, Any] = request.get("cfg") or {}
     limits = AnalysisLimits(**(request.get("limits") or {}))
     memory_mb = int(request.get("memory_mb") or 0)
-    _set_memory_limit(memory_mb)
+    address_space_mb = int(request.get("address_space_mb") or memory_mb or 0)
+    _set_memory_limit(address_space_mb)
 
     result = analyze_files(
         [str(p) for p in request.get("paths") or []],

@@ -12,8 +12,8 @@ except ImportError:  # allows python -m tools.replay_csv
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Analysiert eine oder mehrere ZEC-MEASUREMENT-V3 CSV-Dateien.")
-    parser.add_argument("csv_files", nargs="+", help="Eine oder mehrere CSV-Dateien im Schema ZEC-MEASUREMENT-V3")
+    parser = argparse.ArgumentParser(description="Analysiert eine oder mehrere ZEC-MEASUREMENT-V3/V4 CSV-Dateien.")
+    parser.add_argument("csv_files", nargs="+", help="Eine oder mehrere CSV-Dateien im Schema ZEC-MEASUREMENT-V3 oder V4")
     parser.add_argument("--min-soc", type=int, default=15)
     parser.add_argument("--max-soc", type=int, default=99)
     parser.add_argument("--max-files", type=int, default=10)

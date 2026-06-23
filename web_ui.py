@@ -490,6 +490,7 @@ def build_base_header(title: str, refresh: bool = False, cfg: Optional[Dict[str,
             .section { background:#111827; box-shadow:0 2px 10px rgba(0,0,0,0.55); }
             .card { background:#1f2937; border-color:#374151; }
             .label, .small, .technical { color:#cbd5e1; }
+            .path-dir { color:#cbd5e1; }
             th { background:#263244; color:#e5e7eb; }
             th, td { border-color:#475569; }
             input[type="number"], input[type="text"], input[type="password"], select { background:#0b1220; color:#e5e7eb; border:1px solid #64748b; }
@@ -521,6 +522,8 @@ def build_base_header(title: str, refresh: bool = False, cfg: Optional[Dict[str,
             .label {{ color:#666; font-size:13px; margin-bottom:6px; font-weight:bold; }}
             .value {{ font-size:24px; font-weight:bold; overflow-wrap:anywhere; }}
             .small {{ font-size:13px; color:#666; line-height:1.45; }}
+            .path-fragment {{ font-family:monospace; overflow-wrap:anywhere; word-break:break-word; }}
+            .path-dir {{ font-size:.92em; color:#475569; }}
             .technical {{ color:#777; font-size:12px; margin-top:4px; }}
             .badge {{ display:inline-block; padding:5px 10px; border-radius:8px; color:white; font-weight:bold; max-width:100%; white-space:normal; overflow-wrap:anywhere; line-height:1.2; box-sizing:border-box; }}
             .green {{ color:#4CAF50; }} .red {{ color:#f44336; }} .blue {{ color:#2196F3; }} .yellow {{ color:#f0ad00; }} .orange {{ color:#ff9800; }} .purple {{ color:#9c27b0; }} .gray {{ color:#777; }}
@@ -1073,10 +1076,20 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
             f"<br>Letzter Fallback: {html.escape(fallback_time or '-')}"
             f"<br>Letzter Grund: {html.escape(fallback_reason or '-')}"
         )
+    measurement_path_raw = str(s.get("measurement_log_path") or resolve_log_path(cfg, allow_fallback=True)[0])
+    measurement_path_obj = os.path.basename(measurement_path_raw)
+    measurement_dir_obj = os.path.dirname(measurement_path_raw)
+    measurement_file_html = html.escape(measurement_path_obj or "-")
+    measurement_dir_html = html.escape(measurement_dir_obj or "-")
+    measurement_full_path_html = html.escape(measurement_path_raw or "-", quote=True)
+    path_block = (
+        f"Datei: <span class='path-fragment' title='{measurement_full_path_html}'>{measurement_file_html}</span><br>"
+        f"Verzeichnis: <span class='path-fragment path-dir' title='{measurement_full_path_html}'>{measurement_dir_html}</span>"
+    )
     measurement_log_details = (
         f"Status: {measurement_status}<br>"
         f"Aktives Ziel: {active_target} · konfiguriert: {configured_target}<br>"
-        f"Datei: {measurement_path}<br>"
+        f"{path_block}<br>"
         f"Aufbewahrung: {html.escape(str(s.get('measurement_estimated_retention_hours') or estimate_retention_hours(cfg)))} h · "
         f"frei: {html.escape(str(s.get('measurement_free_disk_mb', '-')))} MB"
         f"{fallback_line}<br>"
@@ -1184,7 +1197,7 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
     {build_mini_graph_section()}
     <div class="section">{heading_link('Diagnose', 'Sicherheit / Fallback', 2)}<div class="section-tools"><a href="#" onclick="expandSectionInfo('status-diagnostics'); return false;">Alle Infos auf- und zuklappen</a></div><div class="grid" id="status-diagnostics">
         {status_card('Aktive Betriebslogik', html.escape(path_human), html.escape(str(s['last_control_action'])), 'gray', 'Die aktive Betriebslogik beschreibt den aktuell verwendeten Entscheidungsweg des Controllers in verständlicher Form. Der technische Code bleibt darunter sichtbar, damit man Events, Graphdaten und Logausgaben eindeutig zuordnen kann.', path_code)}
-        {status_card('Regelzyklus', f'{s["last_loop_duration_ms"]} ms', f'Zyklen: {s["loop_counter"]}<br>Uptime: {format_dhms(s["uptime_seconds"])}<br>Gesamt ohne Sleep: {s.get("last_cycle_total_ms", 0)} ms<br>Langsamster Teil: {html.escape(str(s.get("last_cycle_slowest_step", "none")))} {s.get("last_cycle_slowest_step_ms", 0)} ms', 'gray', 'Ein Regelzyklus ist ein kompletter Durchlauf der Steuerung: Messwerte lesen, Schutzlogik prüfen, Zielwert berechnen, MQTT-Befehl senden und Graph-/CSV-Daten speichern. Die Dauer zeigt, wie lange dieser Durchlauf gebraucht hat; das Intervall wird in den Settings festgelegt. RC3 ergänzt eine Timing-Diagnose: Gesamtzeit ohne Sleep und langsamster gemessener Teil helfen, Blocker wie lokale API, Grid-Abfrage oder Logging zu identifizieren.')}
+        {status_card('Regelzyklus', f'{s["last_loop_duration_ms"]} ms', f'Zyklen: {s["loop_counter"]}<br>Uptime: {format_dhms(s["uptime_seconds"])}<br>Aktive Arbeitszeit: {s.get("last_cycle_total_ms", 0)} ms<br>Langsamster Teil: {html.escape(str(s.get("last_cycle_slowest_step", "none")))} {s.get("last_cycle_slowest_step_ms", 0)} ms', 'gray', 'Ein Regelzyklus ist ein kompletter Durchlauf der Steuerung. Die aktive Arbeitszeit ist die Zeit, in der der Controller tatsächlich arbeitet: Datenquellen lesen, Regelentscheidung berechnen, MQTT-Kommandopfad, Status aktualisieren und Logging durchführen. Nicht enthalten ist die geplante Wartezeit bis zum nächsten Regelintervall. Der langsamste Teil zeigt den Abschnitt des letzten Zyklus, der am meisten Zeit benötigt hat.')}
         {status_card('Fehler', str(s['consecutive_errors']), f'Letzter Fehler: {html.escape(str(s["last_error"]))}<br>Zeitpunkt: {html.escape(str(s.get("last_error_time", "-")))}<br>Safe-State: {s["safe_state_counter"]}x', 'red', 'Der Fehlerzähler zählt direkt aufeinanderfolgende Fehler. Safe-State bedeutet: Lade- und Entladeleistung werden auf 0 W gesetzt, um bei unsicheren Daten oder Kommunikationsproblemen keine unkontrollierte Energieverschiebung auszulösen.')}
         {status_card('Messdaten-Logging', measurement_mode, measurement_log_details, 'gray', 'Messdaten-Logging ist optional und nachgelagert. Standard speichert vollständige Reglerdiagnose inklusive MQTT-Stale-Aggregat und Szenario ohne Zendure. Erweitert ergänzt große Detaildaten für Simulation, What-if und tiefe MQTT-/Freshness-Analyse. USB-/SD-Fallback-Details sind Betriebsdiagnose und werden im Runtime-Log dokumentiert; die Regelung läuft weiter, auch wenn Logging pausiert oder fehlschlägt.', settings_group='Messdaten / Historie')}
         {status_card('Analyse-Weboberfläche', f'Port {replay_port}', analysis_link_html, 'gray', 'Die Analyse läuft bewusst getrennt vom Live-Regler. Der Dienst wird mitgeliefert, aber nicht automatisch aktiviert.')}

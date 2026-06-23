@@ -120,8 +120,8 @@ class MeasurementV4Rc2Tests(unittest.TestCase):
             (base / "zec_runtime_events.jsonl").write_text('{"event_time_utc":"2026-06-23T00:00:00Z","event_type":"logging_file_opened"}\n', encoding="utf-8")
             profile = replay_web.selection_profile([csv_path], {})
             self.assertEqual("v4", profile["schema_family"])
-            self.assertTrue(profile["rejected"])
-            self.assertIn("V4 erkannt", profile["risk_text"])
+            self.assertFalse(profile["rejected"])
+            self.assertIn("V4-Ist-Datenanalyse", profile["risk_text"])
             self.assertEqual([], profile["schema_errors"])
 
 

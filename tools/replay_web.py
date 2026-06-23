@@ -347,8 +347,11 @@ def _meminfo_available_mb() -> Optional[int]:
 
 def _worker_memory_limit_mb(cfg: Dict[str, Any], extended: bool = False) -> int:
     key = "ANALYSIS_EXTENDED_WORKER_MEMORY_LIMIT_MB" if extended else "ANALYSIS_WORKER_MEMORY_LIMIT_MB"
-    default = 380 if extended else 300
-    return max(128, _int_cfg(cfg, key, default))
+    # Python plus chart/report imports can reserve more virtual memory than the
+    # eventual RSS usage. Keep RLIMIT_AS high enough for small analyses while
+    # the parent process still kills the worker on RSS overrun.
+    default = 640 if extended else 512
+    return max(256, _int_cfg(cfg, key, default))
 
 
 def _worker_timeout_seconds(cfg: Dict[str, Any], extended: bool = False) -> int:
@@ -379,12 +382,18 @@ def selection_profile(paths: Sequence[Path], cfg: Dict[str, Any]) -> Dict[str, A
         needs_confirm = False
         rejected = True
     elif schema_family == "v4":
-        risk = "extended"
-        text = "V4 erkannt: CSV, Manifest und Config-Snapshots wurden grundsätzlich geprüft. Die vollständige V4-Replay-Auswertung ist in diesem RC noch nicht aktiv; diese Auswahl dient als V4-Preflight."
-        if v4_warnings:
-            text += " Hinweise: " + " | ".join(str(w) for w in v4_warnings[:3])
-        needs_confirm = False
-        rejected = True
+        if extended_selection:
+            risk = "extended" if not small_selection else "pi-safe"
+            text = "V4-Ist-Datenanalyse: CSV, Manifest und Config-Snapshots sind konsistent genug für die geschützte Analyse im isolierten Worker."
+            if v4_warnings:
+                text += " Hinweise: " + " | ".join(str(w) for w in v4_warnings[:3])
+            needs_confirm = bool(not small_selection)
+            rejected = False
+        else:
+            risk = "rejected"
+            text = "Nicht empfohlen: lokale V4-Analyse auf dem Raspberry Pi wird wegen Größe/Zeilenzahl fail-closed abgelehnt. Bitte kleinere Auswahl verwenden oder offline analysieren."
+            needs_confirm = False
+            rejected = True
     elif hard_memory_low:
         risk = "rejected"
         text = "Nicht empfohlen: Auf dem Raspberry Pi ist extrem wenig MemAvailable verfügbar; lokale Analyse wird zum Schutz des Systems abgelehnt."
@@ -393,21 +402,21 @@ def selection_profile(paths: Sequence[Path], cfg: Dict[str, Any]) -> Dict[str, A
     elif small_selection:
         risk = "pi-safe"
         if memory_tight:
-            text = "Kleine V3-Auswahl: Analyse wird zugelassen; Systemressourcen sind knapp, aber der isolierte Worker schützt durch Timeout und Speicherlimit."
+            text = "Kleine Auswahl: Analyse wird zugelassen; Systemressourcen sind knapp, aber der isolierte Worker schützt durch Timeout und Speicherlimit."
         else:
-            text = "Pi-Safe: kleine V3-Auswahl; Analyse läuft zusätzlich in einem isolierten Worker mit Timeout und Speicherlimit."
+            text = "Pi-Safe: kleine Auswahl; Analyse läuft in einem isolierten Worker mit Timeout und Speicherlimit."
         needs_confirm = False
         rejected = False
     elif extended_selection:
         risk = "extended"
-        text = "Größere V3-Analyse: nur bewusst starten. Sie läuft isoliert, kann aber länger dauern und wird bei Zeit-/Speicherlimit abgebrochen."
+        text = "Größere Analyse: nur bewusst starten. Sie läuft isoliert, kann aber länger dauern und wird bei Zeit-/Speicherlimit abgebrochen."
         if memory_tight:
             text += " Aktuelle RAM-Reserve ist knapp; bei Überschreitung wird der Worker beendet."
         needs_confirm = True
         rejected = False
     else:
         risk = "rejected"
-        text = "Nicht empfohlen: lokale Analyse auf dem Raspberry Pi wird fail-closed abgelehnt. Bitte kleinere V3-Auswahl verwenden oder offline auf PC analysieren."
+        text = "Nicht empfohlen: lokale Analyse auf dem Raspberry Pi wird fail-closed abgelehnt. Bitte kleinere Auswahl verwenden oder offline auf PC analysieren."
         needs_confirm = False
         rejected = True
     return {
@@ -463,13 +472,25 @@ def _cache_get(key: str) -> Optional[Dict[str, Any]]:
 def _make_snapshot(paths: Sequence[Path]) -> Tuple[Path, List[Path]]:
     tmpdir = Path(tempfile.mkdtemp(prefix="zec-analysis-"))
     copied: List[Path] = []
-    for index, src in enumerate(paths, start=1):
-        safe_name = f"{index:02d}_{src.name}"
+    used_names = set()
+    for src in paths:
+        # Keep original filename whenever possible so V4 manifest file_name still matches.
+        safe_name = src.name
+        if safe_name in used_names:
+            safe_name = f"{len(used_names)+1:02d}_{src.name}"
+        used_names.add(safe_name)
         dest = tmpdir / safe_name
         shutil.copy2(src, dest)
         copied.append(dest)
+    # V4 analysis needs sidecar files in the same snapshot directory.
+    for parent in sorted({p.parent for p in paths}):
+        for sidecar in ("zec_measurement_manifest.json", "zec_config_snapshots.json", "zec_runtime_events.jsonl"):
+            src = parent / sidecar
+            if src.exists() and src.is_file():
+                dest = tmpdir / sidecar
+                if not dest.exists():
+                    shutil.copy2(src, dest)
     return tmpdir, copied
-
 
 def _read_worker_rss_mb(pid: int) -> Optional[int]:
     try:
@@ -514,6 +535,7 @@ def _run_worker(snapshot_paths: Sequence[Path], cfg: Dict[str, Any], extended: b
             "cfg": cfg,
             "limits": _limits_to_dict(limits),
             "memory_mb": memory_mb,
+            "address_space_mb": _int_cfg(cfg, "ANALYSIS_WORKER_ADDRESS_SPACE_LIMIT_MB", max(4096, memory_mb * 4)),
         }, ensure_ascii=False), encoding="utf-8")
         proc = subprocess.Popen(
             [sys.executable, str(worker_script), "--request", str(request_path), "--output", str(output_path)],
@@ -573,12 +595,37 @@ def analyze_snapshot(paths: Sequence[Path], cfg: Dict[str, Any], extended: bool,
         job.pop("worker_pid", None)
 
 
+def _v4_summary_html(result: Dict[str, Any]) -> str:
+    v4 = result.get("v4_analysis") or {}
+    if not v4:
+        return ""
+    def rows(items):
+        if not items:
+            return "<tr><td>-</td><td>-</td></tr>"
+        return "".join(f"<tr><td>{html.escape(str(item.get('name', '-')))}</td><td>{html.escape(str(item.get('count', 0)))}</td></tr>" for item in items)
+    return f"""
+    <h2 id="v4">V4-Ist-Datenanalyse</h2>
+    <p class="section-intro">Dieser Abschnitt wertet die geloggten V4-Istdaten aus. Er prüft keine alternativen Reglerentscheidungen, sondern zeigt, was im ausgewählten Zeitraum tatsächlich protokolliert wurde.</p>
+    <div class="cards">
+      <div class="card"><span>Profil</span><b>{html.escape(str(v4.get('profile', '-')))}</b></div>
+      <div class="card"><span>Duplikate entfernt</span><b>{html.escape(str(v4.get('duplicate_rows_removed', 0)))}</b></div>
+      <div class="card"><span>Zyklusdauer Ø</span><b>{html.escape(str(v4.get('cycle_duration_ms_avg', 0)))} ms</b></div>
+      <div class="card"><span>Zyklusdauer p95/max</span><b>{html.escape(str(v4.get('cycle_duration_ms_p95', 0)))} / {html.escape(str(v4.get('cycle_duration_ms_max', 0)))} ms</b></div>
+    </div>
+    <div class="chartgrid">
+      <div class="chart-card"><h3>Operating Mode</h3><table><tr><th>Wert</th><th>Anzahl</th></tr>{rows(v4.get('operating_mode_top'))}</table></div>
+      <div class="chart-card"><h3>Target Final Reason</h3><table><tr><th>Wert</th><th>Anzahl</th></tr>{rows(v4.get('target_final_reason_top'))}</table></div>
+      <div class="chart-card"><h3>Safe-State-Gründe</h3><table><tr><th>Wert</th><th>Anzahl</th></tr>{rows(v4.get('safe_state_reason_top'))}</table></div>
+      <div class="chart-card"><h3>Kommando-Unterdrückung</h3><table><tr><th>Wert</th><th>Anzahl</th></tr>{rows(v4.get('command_suppressed_reason_top'))}</table></div>
+    </div>
+    """
+
 def render_result_html(result: Dict[str, Any], job_id: str) -> str:
     download_job = html.escape(job_id, quote=True)
     return f"""
     <div class="toc" id="analysis-nav">
         <b>Navigation:</b>
-        <a href="#kurzfazit">Kurzfazit</a><a href="#empfehlungen">Empfehlungen</a><a href="#diagramme">Diagramme</a>
+        <a href="#kurzfazit">Kurzfazit</a><a href="#v4">V4</a><a href="#empfehlungen">Empfehlungen</a><a href="#diagramme">Diagramme</a>
         <a href="#datenqualitaet">Datenqualität</a><a href="#regler">Reglerqualität</a><a href="#stellreserve">Stellreserve</a>
         <a href="#tracking">Soll/Ist</a><a href="#deadband">Deadband</a><a href="#mqtt">MQTT</a>
         <a href="#cross">Cross-Charge</a><a href="#matrix">Matrix</a><a href="#ereignisse">Ereignisse</a>
@@ -587,6 +634,7 @@ def render_result_html(result: Dict[str, Any], job_id: str) -> str:
     <p class="section-intro">Dieser Block verdichtet den analysierten Zeitraum zu einem Gesamturteil. Er zeigt, ob akuter Handlungsdruck besteht oder ob Abweichungen überwiegend durch Randbedingungen wie SOC-, Leistungs- oder Datenlimits erklärbar sind.</p>
     {overall_verdict_html(result)}
     <div class="cards">{summary_cards(result)}</div>
+    {_v4_summary_html(result)}
     <h2 id="empfehlungen">Handlungsempfehlungen</h2>
     <p class="section-intro">Hier stehen konkrete, priorisierte Hinweise. Sie sind Diagnosehinweise und sollten nur mit ausreichender Datenqualität und passenden Logzeiträumen in Parameteränderungen übersetzt werden.</p>
     <table>{recommendations_table(result)}</table>
@@ -604,7 +652,7 @@ def render_result_html(result: Dict[str, Any], job_id: str) -> str:
     <h2 id="mqtt">MQTT-Kommandowirkung</h2><p class="section-intro">Bewertet grob, ob gesendete MQTT-Kommandos anschließend eine erkennbare Verringerung der Netzabweichung bewirken. Nicht bewertbar bedeutet meist: Safe-State, fehlende Folgedaten oder überlagerte Last-/PV-Sprünge.</p><table>{command_efficiency_table(result)}</table>
     <h2 id="oszillation">Oszillation / Richtungswechsel</h2><p class="section-intro">Sucht nach unruhiger Regelung: häufige Vorzeichenwechsel, schnelle Gegenbefehle, große Sollwertsprünge und Moduswechsel.</p><table>{oscillation_table(result)}</table>
     <h2 id="cross">Cross-Charge-Analyse</h2><p class="section-intro">Bewertet, ob die Zusatzbatterie entlädt, während Zendure gleichzeitig lädt. Kritische Überschneidungen deuten auf unerwünschtes Umladen zwischen Speichern hin.</p><table>{cross_charge_table(result)}</table>
-    <h2 id="highsoc">Nachtentladung und High-SOC</h2><p class="section-intro">Zeigt Zeitanteile bei SOC-Grenzen und eine leichte High-SOC-Ladeannahme-Diagnose. Schwerpunkt dieser Version bleibt die Regler- und Cross-Charge-Bewertung.</p><table>{high_soc_table(result)}</table>
+    <h2 id="highsoc">Nachtentladung und High-SOC</h2><p class="section-intro">Zeigt Zeitanteile bei SOC-Grenzen und eine leichte High-SOC-Ladeannahme-Diagnose. Die Werte helfen einzuordnen, ob Lade-/Entladegrenzen oder hoher SOC die Regelwirkung begrenzen.</p><table>{high_soc_table(result)}</table>
     <h2 id="matrix">Betriebszustandsmatrix</h2><p class="section-intro">Verdichtet die Analyse nach abgeleiteten Betriebszuständen. So sieht man, ob Abweichungen eher in AUTO, Nachtentladung, Safe-State oder Limit-Situationen auftreten.</p><table>{mode_quality_table(result)}</table>
     <h2 id="ereignisse">Ereignisprotokoll</h2><p class="section-intro">Chronologische Auswahl erkannter Auffälligkeiten und Zustandswechsel. Die Liste ist begrenzt, damit große Analysen die Oberfläche nicht überladen.</p><table>{events_table(result)}</table>
     <p class="downloads">

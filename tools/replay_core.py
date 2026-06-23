@@ -5,6 +5,7 @@
 # not import this module.
 
 import csv
+import json
 import os
 import statistics
 from collections import Counter, defaultdict
@@ -200,7 +201,209 @@ def read_measurement_csv(path: str, max_rows: Optional[int] = None, cancel_check
     return CsvMeasurementFile(path=path, rows=rows, size_bytes=size_bytes)
 
 
-def read_measurement_csv_files(paths: Sequence[str], limits: Optional[AnalysisLimits] = None, cancel_check: Optional[Callable[[], bool]] = None) -> Tuple[List[CsvMeasurementFile], List[str]]:
+# --- ZEC-MEASUREMENT-V4 support -------------------------------------------------
+
+def _v4_manifest(path: Path) -> Optional[Dict[str, Any]]:
+    manifest_path = path.parent / "zec_measurement_manifest.json"
+    if not manifest_path.exists():
+        return None
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else None
+    except Exception as exc:
+        raise ValueError(f"{path.name}: zec_measurement_manifest.json ist nicht lesbar: {exc}")
+
+
+def _v4_snapshots(path: Path) -> Dict[str, Dict[str, Any]]:
+    snapshot_path = path.parent / "zec_config_snapshots.json"
+    if not snapshot_path.exists():
+        raise ValueError(f"{path.name}: zec_config_snapshots.json fehlt.")
+    try:
+        data = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise ValueError(f"{path.name}: zec_config_snapshots.json ist nicht lesbar: {exc}")
+    if not isinstance(data, dict):
+        raise ValueError(f"{path.name}: zec_config_snapshots.json ist kein JSON-Objekt.")
+    result: Dict[str, Dict[str, Any]] = {}
+    for item in data.get("snapshots", []) or []:
+        if isinstance(item, dict) and item.get("config_control_hash"):
+            result[str(item.get("config_control_hash"))] = item
+    return result
+
+
+def _v4_manifest_entries(manifest: Optional[Dict[str, Any]], filename: str) -> List[Dict[str, Any]]:
+    if not isinstance(manifest, dict):
+        return []
+    return [item for item in (manifest.get("files", []) or []) if isinstance(item, dict) and item.get("file_name") == filename]
+
+
+def _sha_header(fields: Sequence[str]) -> str:
+    import hashlib
+    return hashlib.sha256(";".join(fields).encode("utf-8")).hexdigest()[:16]
+
+
+def _v4_bool(value: Any) -> bool:
+    b = _boolish(value)
+    return bool(b)
+
+
+def _v4_limiter_text(row: Dict[str, Any]) -> str:
+    parts: List[str] = []
+    reason = str(row.get("target_final_reason") or "")
+    if reason:
+        parts.append(reason)
+    flag_map = {
+        "target_changed_by_deadband": "DEADBAND",
+        "target_changed_by_smoothing": "SMOOTHING",
+        "target_changed_by_step_limit": "STEP_LIMIT",
+        "target_changed_by_soc_limit": "SOC_LIMIT",
+        "target_changed_by_power_limit": "POWER_LIMIT",
+        "target_changed_by_cross_charge": "CROSS_CHARGE",
+        "target_changed_by_mode": "MODE",
+        "target_changed_by_safe_state": "SAFE_STATE",
+    }
+    for field, label in flag_map.items():
+        if _v4_bool(row.get(field)):
+            parts.append(label)
+    return ",".join(dict.fromkeys(parts))
+
+
+def _v4_to_analysis_row(row: Dict[str, Any], previous_epoch: Optional[float]) -> Dict[str, Any]:
+    epoch_ms = _float_or_none(row.get("measurement_epoch_ms"))
+    epoch = epoch_ms / 1000.0 if epoch_ms is not None else None
+    converted = dict(row)
+    if epoch is not None:
+        converted["epoch"] = str(epoch)
+    converted["datetime_local"] = row.get("measurement_time_utc") or "-"
+    converted["loop_counter"] = row.get("cycle_index") or ""
+    converted["mode"] = row.get("operating_mode") or "UNKNOWN"
+    converted["grid_power_w"] = row.get("grid_power_w") or ""
+    converted["zendure_target_power_w"] = row.get("target_final_w") or row.get("command_requested_w") or ""
+    converted["zendure_actual_power_w"] = row.get("zendure_actual_power_w") or ""
+    converted["second_battery_power_w"] = row.get("second_battery_power_w") or ""
+    converted["norm_zendure_soc_percent"] = row.get("control_soc_percent") or row.get("zendure_soc_percent") or ""
+    converted["raw_zendure_soc_percent"] = row.get("zendure_soc_raw_percent") or row.get("zendure_soc_percent") or ""
+    converted["control_reason"] = row.get("target_final_reason") or ""
+    converted["limit_reason"] = row.get("target_final_reason") or ""
+    converted["technical_limiters"] = _v4_limiter_text(row)
+    converted["mqtt_commands_sent_in_cycle"] = "1" if _v4_bool(row.get("command_sent_flag")) else "0"
+    converted["dt_s"] = ""
+    if previous_epoch is not None and epoch is not None and epoch >= previous_epoch:
+        converted["dt_s"] = str(max(0.0, epoch - previous_epoch))
+    return converted
+
+
+def _v4_runtime_warnings(parent: Path) -> List[str]:
+    path = parent / "zec_runtime_events.jsonl"
+    warnings: List[str] = []
+    if not path.exists():
+        return ["zec_runtime_events.jsonl fehlt; Runtime-Kontext ist unvollständig."]
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            for line_no, line in enumerate(f, start=1):
+                if not line.strip():
+                    continue
+                try:
+                    json.loads(line)
+                except Exception:
+                    warnings.append(f"zec_runtime_events.jsonl: ungültiges JSON in Zeile {line_no}.")
+                    if len(warnings) >= 5:
+                        break
+    except Exception as exc:
+        warnings.append(f"zec_runtime_events.jsonl konnte nicht gelesen werden: {exc}")
+    return warnings
+
+
+def read_measurement_v4_csv(path: str, max_rows: Optional[int] = None, cancel_check: Optional[Callable[[], bool]] = None) -> CsvMeasurementFile:
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(path)
+    manifest = _v4_manifest(p)
+    if manifest is None:
+        raise ValueError(f"{p.name}: zec_measurement_manifest.json fehlt.")
+    entries = _v4_manifest_entries(manifest, p.name)
+    if not entries:
+        raise ValueError(f"{p.name}: Datei ist nicht im V4-Manifest registriert.")
+    entry = entries[-1]
+    snapshots = _v4_snapshots(p)
+    rows: List[Dict[str, Any]] = []
+    previous_epoch: Optional[float] = None
+    with p.open("r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f, delimiter=";")
+        fieldnames = reader.fieldnames or []
+        if "schema_version" not in fieldnames:
+            raise ValueError(f"{p.name}: Spalte 'schema_version' fehlt.")
+        actual_header_hash = _sha_header(fieldnames)
+        if entry.get("header_hash") and entry.get("header_hash") != actual_header_hash:
+            raise ValueError(f"{p.name}: Manifest header_hash passt nicht zur CSV.")
+        profile = "extended" if any(name.endswith("_json") for name in fieldnames) else "standard"
+        if entry.get("profile") and entry.get("profile") != profile:
+            raise ValueError(f"{p.name}: Manifest profile={entry.get('profile')} passt nicht zum CSV-Profil {profile}.")
+        for raw in reader:
+            if cancel_check and cancel_check():
+                raise RuntimeError("Analyse abgebrochen.")
+            if not any((v or "").strip() for v in raw.values()):
+                continue
+            schema = (raw.get("schema_version") or "").strip()
+            if schema != "4":
+                raise ValueError(f"{p.name}: schema_version {schema or 'leer'} ist nicht 4.")
+            cfg_hash = str(raw.get("config_control_hash") or "")
+            if cfg_hash and cfg_hash not in snapshots:
+                raise ValueError(f"{p.name}: Config-Snapshot fehlt für Hash {cfg_hash}.")
+            epoch_ms = _float_or_none(raw.get("measurement_epoch_ms"))
+            epoch = epoch_ms / 1000.0 if epoch_ms is not None else None
+            converted = _v4_to_analysis_row(raw, previous_epoch)
+            rows.append(converted)
+            if epoch is not None:
+                previous_epoch = epoch
+            if max_rows is not None and len(rows) > max_rows:
+                raise ValueError(f"Zu viele Messpunkte: maximal {max_rows:,} Zeilen pro Analyselauf.".replace(",", "."))
+    return CsvMeasurementFile(path=path, rows=rows, size_bytes=p.stat().st_size)
+
+
+def _detect_schema_family(path: str) -> str:
+    with open(path, "r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f, delimiter=";")
+        fields = reader.fieldnames or []
+    if "schema" in fields:
+        return "v3"
+    if "schema_version" in fields:
+        return "v4"
+    return "unknown"
+
+
+def _v4_metadata(rows: Sequence[Dict[str, Any]], files: Sequence[CsvMeasurementFile], duplicate_rows_removed: int) -> Dict[str, Any]:
+    all_rows: List[Dict[str, Any]] = []
+    for mf in files:
+        all_rows.extend(mf.rows)
+    def c(field: str) -> Counter:
+        return Counter(str(r.get(field) or "") for r in all_rows)
+    cycle_ms = [_float(r.get("cycle_duration_ms"), 0.0) for r in all_rows if r.get("cycle_duration_ms") not in (None, "")]
+    target_reasons = c("target_final_reason")
+    safe_reasons = c("safe_state_reason")
+    suppressed = c("command_suppressed_reason")
+    mqtt = c("zendure_mqtt_status")
+    operating = c("operating_mode")
+    def top(counter: Counter, limit: int = 12) -> List[Dict[str, Any]]:
+        return [{"name": k if k != "" else "(leer)", "count": int(v)} for k, v in counter.most_common(limit)]
+    return {
+        "schema_family": "v4",
+        "profile": "extended" if any(str(name).endswith("_json") for name in (all_rows[0].keys() if all_rows else [])) else "standard",
+        "duplicate_rows_removed": int(duplicate_rows_removed),
+        "operating_mode_top": top(operating),
+        "target_final_reason_top": top(target_reasons),
+        "safe_state_reason_top": top(safe_reasons),
+        "command_suppressed_reason_top": top(suppressed),
+        "zendure_mqtt_status_top": top(mqtt),
+        "unknown_target_final_reason": int(target_reasons.get("UNKNOWN", 0)),
+        "unknown_safe_state_reason": int(safe_reasons.get("UNKNOWN", 0)),
+        "unknown_command_suppressed_reason": int(suppressed.get("UNKNOWN", 0)),
+        "cycle_duration_ms_avg": _round(sum(cycle_ms) / len(cycle_ms), 1) if cycle_ms else 0.0,
+        "cycle_duration_ms_max": _round(max(cycle_ms), 1) if cycle_ms else 0.0,
+        "cycle_duration_ms_p95": _round(_p95(cycle_ms), 1) if cycle_ms else 0.0,
+    }
+
+def read_measurement_csv_files(paths: Sequence[str], limits: Optional[AnalysisLimits] = None, cancel_check: Optional[Callable[[], bool]] = None) -> Tuple[List[CsvMeasurementFile], List[str], str]:
     limits = limits or AnalysisLimits()
     unique_paths: List[str] = []
     seen = set()
@@ -216,6 +419,21 @@ def read_measurement_csv_files(paths: Sequence[str], limits: Optional[AnalysisLi
     if len(unique_paths) > limits.max_files:
         raise ValueError(f"Zu viele Dateien ausgewählt: maximal {limits.max_files} CSV-Dateien pro Analyselauf.")
 
+    families: Dict[str, List[str]] = defaultdict(list)
+    for path in unique_paths:
+        families[_detect_schema_family(path)].append(path)
+    if "unknown" in families:
+        raise ValueError(f"{os.path.basename(families['unknown'][0])}: weder V3-Spalte 'schema' noch V4-Spalte 'schema_version' gefunden.")
+    active_families = [name for name, items in families.items() if items]
+    if len(active_families) != 1:
+        first_conflict = os.path.basename(unique_paths[0])
+        for name in active_families:
+            if name != active_families[0]:
+                first_conflict = os.path.basename(families[name][0])
+                break
+        raise ValueError(f"{first_conflict}: V3- und V4-Dateien dürfen nicht gemeinsam ausgewertet werden.")
+    family = active_families[0]
+
     total_size = 0
     files: List[CsvMeasurementFile] = []
     warnings: List[str] = []
@@ -230,15 +448,18 @@ def read_measurement_csv_files(paths: Sequence[str], limits: Optional[AnalysisLi
                 f"Limit: {limits.max_total_bytes / 1024 / 1024:.0f} MB."
             )
         remaining_rows = max(0, limits.max_rows - total_rows)
-        mf = read_measurement_csv(path, max_rows=remaining_rows, cancel_check=cancel_check)
+        if family == "v4":
+            mf = read_measurement_v4_csv(path, max_rows=remaining_rows, cancel_check=cancel_check)
+            warnings.extend(_v4_runtime_warnings(Path(path).parent))
+        else:
+            mf = read_measurement_csv(path, max_rows=remaining_rows, cancel_check=cancel_check)
         files.append(mf)
         total_rows += len(mf.rows)
         if total_rows > limits.max_rows:
             raise ValueError(f"Zu viele Messpunkte: maximal {limits.max_rows:,} Zeilen pro Analyselauf.".replace(",", "."))
         if not mf.rows:
             warnings.append(f"{os.path.basename(path)} enthält keine Messdaten.")
-    return files, warnings
-
+    return files, warnings, family
 
 def _merge_rows(files: Sequence[CsvMeasurementFile]) -> Tuple[List[Dict[str, Any]], int]:
     merged: List[Dict[str, Any]] = []
@@ -994,7 +1215,7 @@ def analyze_rows(
             "reduced_or_prevented_charge_kwh": _round(cross_prevented_charge_wh / 1000.0, 4),
         },
         "night_discharge": {"seconds": _round(night_s, 1), "percent": _percent(night_s, total_dt)},
-        "high_soc": {"states": dict(sorted(high_soc_states.items())), "note": "V12.8.4 wertet High-SOC bewusst nur leichtgewichtig aus; Schwerpunkt sind Reglerqualität und Cross-Charge."},
+        "high_soc": {"states": dict(sorted(high_soc_states.items())), "note": "High-SOC wird als Zusatzdiagnose ausgewertet. Die Werte zeigen, ob hoher SOC die Ladeannahme oder Regelwirkung begrenzen kann."},
         "cross_charge_events": int(cross_block_events),
         "mqtt_commands_sent": int(mqtt_commands),
         "mqtt_command_rows": int(mqtt_changed_rows),
@@ -1027,7 +1248,7 @@ def analyze_files(
     max_discharge_power_w: float = 2100.0,
     cancel_check: Optional[Callable[[], bool]] = None,
 ) -> Dict[str, Any]:
-    files, warnings = read_measurement_csv_files(paths, limits=limits, cancel_check=cancel_check)
+    files, warnings, schema_family = read_measurement_csv_files(paths, limits=limits, cancel_check=cancel_check)
     merged, duplicates = _merge_rows(files)
     if cancel_check and cancel_check():
         raise RuntimeError("Analyse abgebrochen.")
@@ -1049,6 +1270,23 @@ def analyze_files(
     )
     result["paths"] = [f.path for f in files]
     result["total_size_bytes"] = sum(f.size_bytes for f in files)
+    if schema_family == "v4":
+        result["schema"] = "ZEC-MEASUREMENT-V4"
+        result["analysis_version"] = "12.10.0-rc4"
+        result["v4_analysis"] = _v4_metadata(merged, files, duplicates)
+        # Add concise data-quality warning for V4-specific UNKNOWN diagnostics.
+        v4m = result["v4_analysis"]
+        unknown_bits = []
+        if v4m.get("unknown_target_final_reason"):
+            unknown_bits.append(f"target_final_reason UNKNOWN: {v4m['unknown_target_final_reason']}")
+        if v4m.get("unknown_safe_state_reason"):
+            unknown_bits.append(f"safe_state_reason UNKNOWN: {v4m['unknown_safe_state_reason']}")
+        if v4m.get("unknown_command_suppressed_reason"):
+            unknown_bits.append(f"command_suppressed_reason UNKNOWN: {v4m['unknown_command_suppressed_reason']}")
+        if unknown_bits:
+            result.setdefault("data_quality", {}).setdefault("warnings", []).append("V4-UNKNOWN-Anteile: " + "; ".join(unknown_bits) + ".")
+            if result.get("data_quality", {}).get("status") == "ok":
+                result["data_quality"]["status"] = "warning"
     return result
 
 

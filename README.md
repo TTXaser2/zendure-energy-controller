@@ -1,8 +1,8 @@
-Zendure Energy Controller Version 12.10.0-RC3
+Zendure Energy Controller Version 12.10.0-RC4
 
-# Zendure Energy Controller V12.10.0-RC3
+# Zendure Energy Controller V12.10.0-RC4
 
-Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, ZEC-MEASUREMENT-V4-RC3-Messdaten-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
+Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, ZEC-MEASUREMENT-V4-Messdaten-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
 Copyright (c) 2026 Eduard Fuchs <info@eduardfuchs.de>
 
@@ -11,17 +11,30 @@ Lizenziert unter AGPL-3.0-or-later. Siehe `LICENSE`, `NOTICE` und `DISCLAIMER.md
 
 
 
+## Wichtige Änderungen in V12.10.0-RC4
+
+V12.10.0-RC4 ist ein Release-Candidate für aktives `ZEC-MEASUREMENT-V4`-Logging, V4-Ist-Datenanalyse und Status-/Diagnose-Nacharbeit. Die AUTO-Regelstrategie, der Nachtmodus, Cross-Charge-Logik, MQTT-Subscriptions und MQTT-Kommandostruktur bleiben unverändert.
+
+- Statusseite: Timing-Texte erklären die aktuelle Bedeutung der Werte ohne Versionshistorie; `Aktive Arbeitszeit` beschreibt die Arbeitszeit eines Regelzyklus ohne geplante Wartepause.
+- Statusseite: lange Messdatenpfade werden in Datei und Verzeichnis getrennt dargestellt und robuster umgebrochen.
+- V4-Ist-Datenanalyse: Analyse-Webdienst erkennt V4-Dateien, kopiert CSV plus Manifest, Config-Snapshots und Runtime-JSONL in den geschützten Worker-Snapshot und wertet V4-Istdaten aus.
+- V4-Analyse bleibt Pi-geschützt: Worker/Subprozess mit Timeout, RSS-Überwachung und Address-Space-Grenze; V4 ohne Manifest oder fehlenden Config-Snapshot wird fail-closed abgelehnt.
+- Diagnose-/CLI-Tool akzeptiert V3 und V4 getrennt; V3/V4-Mischung wird mit Dateiname abgelehnt.
+- V4-Kurzstatistik zeigt u. a. Operating-Mode-, Target-Reason-, Safe-State-Reason-, Command-Suppressed-Reason- und Zykluszeit-Kennzahlen.
+- V3-Logging bleibt über `MEASUREMENT_SCHEMA_VERSION=3` als Legacy-/Rollback-Pfad verfügbar.
+- Vollständiger Testlauf: 154 Tests OK.
+
 ## Wichtige Änderungen in V12.10.0-RC3
 
-V12.10.0-RC3 ist ein Release-Candidate für aktives `ZEC-MEASUREMENT-V4`-Logging. Die AUTO-Regelstrategie, der Nachtmodus, Cross-Charge-Logik, MQTT-Subscriptions und MQTT-Kommandostruktur bleiben unverändert. Schwerpunkt ist, reale V4-Logs erzeugen und prüfen zu können, während V3 als Legacy-/Rollback-Pfad im Code erhalten bleibt.
+V12.10.0-RC3 stabilisiert das aktive V4-Logging. Die AUTO-Regelstrategie, der Nachtmodus, Cross-Charge-Logik, MQTT-Subscriptions und MQTT-Kommandostruktur bleiben unverändert.
 
-- Neues aktives V4-Logging über `MEASUREMENT_SCHEMA_VERSION=4`.
-- Neue V4-CSV-Datei wird bei Standarddateiname separat als `zendure_measurements_v4.csv` geschrieben, damit vorhandene V3-Dateien nicht mit V4-Header gemischt werden.
+- V4-Logging über `MEASUREMENT_SCHEMA_VERSION=4`.
+- Session-spezifische V4-CSV-Dateien verhindern, dass RC-/Service-Start-Segmente in derselben physischen Datei vermischt werden.
 - V4 Standard-Header mit 116 Feldern und optionales Extended-Profil mit drei JSON-Spalten: Packtemperaturen, Headunit-Temperaturen, Zendure-MQTT-Gruppenstatus.
-- Neue Begleitdateien: `zec_measurement_manifest.json`, `zec_config_snapshots.json`, `zec_runtime_events.jsonl`.
+- Begleitdateien: `zec_measurement_manifest.json`, `zec_config_snapshots.json`, `zec_runtime_events.jsonl`.
+- Manifest-Updates sind gepuffert/debounced; `MEASUREMENT_LOG_MODE=off` ist ein harter Logging-Bypass.
+- Snapshot-Backfill ergänzt `CROSS_CHARGE_SIGNIFICANT_W` aus Legacy `SMA_DISCHARGE_BLOCK_W`.
 - V4-Fail-Closed-Grundlogik: Wenn Manifest oder Config-Snapshot nicht geschrieben werden kann, pausiert nur das Measurement-Logging; die Regelung und MQTT-Kommandos laufen weiter.
-- V3-Logging bleibt über `MEASUREMENT_SCHEMA_VERSION=3` als Legacy-/Rollback-Pfad verfügbar.
-- Neue Contract-/Writer-Tests für V4; vollständiger Testlauf: 151 Tests OK.
 
 ## Wichtige Änderungen in V12.9.4
 
