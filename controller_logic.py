@@ -38,6 +38,7 @@ class ZendureController:
         self.zendure_api = zendure_api_client
         self.app_logger = app_logger or RotatingAppLogger()
         self._running = True
+        self._cycle_timing_parts: Dict[str, int] = {}
 
     def log(self, message: str) -> None:
         cfg = self.config_manager.get()
@@ -45,15 +46,27 @@ class ZendureController:
             print(message)
         self.app_logger.log(cfg, message)
 
+    def _timed_phase(self, name: str, func, *args, **kwargs):
+        started = time.time()
+        try:
+            return func(*args, **kwargs)
+        finally:
+            elapsed_ms = int((time.time() - started) * 1000)
+            self._cycle_timing_parts[name] = int(self._cycle_timing_parts.get(name, 0)) + elapsed_ms
+
     def run_forever(self) -> None:
         self.log("[CTRL] Hauptschleife gestartet")
         while self._running:
             loop_start = time.time()
+            self._cycle_timing_parts = {}
+            reload_started = time.time()
             cfg, changed = self.config_manager.reload_if_needed()
+            self._cycle_timing_parts["config_reload_ms"] = int((time.time() - reload_started) * 1000)
             if changed:
                 self.log("[CONFIG] Änderung geladen")
-                self.mqtt.refresh_subscriptions()
+                self._timed_phase("mqtt_refresh_subscriptions_ms", self.mqtt.refresh_subscriptions)
 
+            run_once_started = time.time()
             try:
                 self.run_once(cfg)
                 with self.state.lock:
@@ -65,8 +78,19 @@ class ZendureController:
                 self.log(f"[ERROR] {exc}")
                 if self.state.consecutive_errors >= cfg.get("MAX_CONSECUTIVE_ERRORS", 5):
                     self.safe_state("Zu viele Fehler in Folge")
+            finally:
+                self._cycle_timing_parts["run_once_ms"] = int((time.time() - run_once_started) * 1000)
 
+            finish_started = time.time()
             self.finish_cycle(cfg, loop_start)
+            self._cycle_timing_parts["finish_cycle_ms"] = int((time.time() - finish_started) * 1000)
+            total_ms = int((time.time() - loop_start) * 1000)
+            self._cycle_timing_parts["cycle_total_without_sleep_ms"] = total_ms
+            slowest = max(self._cycle_timing_parts.items(), key=lambda item: item[1]) if self._cycle_timing_parts else ("none", 0)
+            self.state.set_cycle_timing(self._cycle_timing_parts, slowest[0], int(slowest[1]), total_ms)
+            warn_ms = int(cfg.get("SLOW_CYCLE_WARN_MS", 5000))
+            if total_ms >= warn_ms:
+                self.log(f"[TIMING] slow_cycle total_ms={total_ms} slowest={slowest[0]}:{slowest[1]}ms details={self._cycle_timing_parts}")
             time.sleep(float(cfg.get("INTERVAL_SECONDS", 2)))
 
     def run_once(self, cfg: Dict[str, Any]) -> None:
@@ -96,13 +120,13 @@ class ZendureController:
         # werden, weil diese Betriebsarten ohne Netzanschlusspunktmessung funktionieren.
         # Grid/Shelly/UniMeter wird für die Statusseite in festen Modi zusätzlich
         # best-effort aktualisiert, aber nicht als Pflichtquelle für diese Modi benutzt.
-        self.update_zendure_telemetry_from_local_api(cfg)
+        self._timed_phase("zendure_local_api_ms", self.update_zendure_telemetry_from_local_api, cfg)
         # Per-cycle housekeeping: display/CSV metrics that are derived from
         # asynchronous MQTT/API raw values must be refreshed before any early
         # return path (manual modes, night mode, safe-state). Cross-charge
         # control metrics remain AUTO/grid-dependent and are refreshed later
         # after a valid grid measurement.
-        self.update_cycle_display_metrics(cfg)
+        self._timed_phase("cycle_display_metrics_ms", self.update_cycle_display_metrics, cfg)
 
         night_active = self.is_night_discharge_active(cfg)
         if not night_active:
@@ -110,13 +134,13 @@ class ZendureController:
 
         manual_mode = str(cfg.get("MANUAL_MODE", "AUTO"))
         if manual_mode != "AUTO":
-            self.refresh_grid_power_for_display(cfg)
+            self._timed_phase("grid_display_read_ms", self.refresh_grid_power_for_display, cfg)
             self.handle_manual_mode(cfg, manual_mode)
             return
 
         if night_active:
             if not self.soc_is_fresh(cfg):
-                self.refresh_grid_power_for_display(cfg)
+                self._timed_phase("grid_display_read_ms", self.refresh_grid_power_for_display, cfg)
                 self.state.add_limiter("SOC_STALE")
                 self.safe_state("Nachtmodus blockiert: Zendure SOC fehlt oder ist veraltet")
                 return
@@ -127,7 +151,7 @@ class ZendureController:
                 if not self.pause_fixed_night_discharge_for_reserve_soc(cfg):
                     return
             else:
-                self.refresh_grid_power_for_display(cfg)
+                self._timed_phase("grid_display_read_ms", self.refresh_grid_power_for_display, cfg)
                 self.handle_night_mode(cfg)
                 return
 
@@ -136,10 +160,10 @@ class ZendureController:
             self.safe_state("Zendure SOC fehlt oder ist veraltet")
             return
 
-        if not self.read_grid_power(cfg):
+        if not self._timed_phase("grid_control_read_ms", self.read_grid_power, cfg):
             return
-        self.update_cycle_display_metrics(cfg)
-        self.update_cross_charge_control_metrics(cfg)
+        self._timed_phase("cycle_display_metrics_ms", self.update_cycle_display_metrics, cfg)
+        self._timed_phase("cross_charge_metrics_ms", self.update_cross_charge_control_metrics, cfg)
 
         grid_power = self.state.grid_power
 
@@ -428,7 +452,7 @@ class ZendureController:
     def update_sma_metrics(self, cfg: Dict[str, Any]) -> None:
         """Backward-compatible wrapper for AUTO/Cross-Charge updates."""
         self.update_second_battery_display_metrics(cfg)
-        self.update_cross_charge_control_metrics(cfg)
+        self._timed_phase("cross_charge_metrics_ms", self.update_cross_charge_control_metrics, cfg)
 
     def update_cycle_display_metrics(self, cfg: Dict[str, Any]) -> None:
         """Housekeeping for values that must be current on every cycle path."""
@@ -1009,15 +1033,15 @@ class ZendureController:
             if not self.state.grid_power_used_for_control:
                 self.state.effective_export_power_valid = False
 
-        self.update_cycle_display_metrics(cfg)
+        self._timed_phase("cycle_display_metrics_ms", self.update_cycle_display_metrics, cfg)
         required_sources = self.determine_cycle_required_sources(cfg)
         self.state.set_control_source_requirements(required_sources)
         self.state.update_data_validity_model(cfg)
-        self.update_charge_acceptance_diagnostic(cfg)
-        self.state.record_graph_point(int(cfg.get("GRAPH_HISTORY_LIMIT", 300)))
+        self._timed_phase("charge_acceptance_diag_ms", self.update_charge_acceptance_diagnostic, cfg)
+        self._timed_phase("graph_snapshot_ms", self.state.record_graph_point, int(cfg.get("GRAPH_HISTORY_LIMIT", 300)))
         try:
             last_row = self.state.snapshot()["graph_history"][-1]
-            log_status = self.csv_logger.log(cfg, last_row)
+            log_status = self._timed_phase("measurement_logging_ms", self.csv_logger.log, cfg, last_row)
             if log_status.get("measurement_fallback_event"):
                 self.app_logger.log(cfg, self._format_measurement_fallback_event(log_status))
             self.state.set_measurement_log_status(log_status)

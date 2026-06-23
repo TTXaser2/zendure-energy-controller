@@ -38,6 +38,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "ZENDURE_LOCAL_API_ENABLED": False,
     "ZENDURE_LOCAL_IP": "",
     "ZENDURE_LOCAL_API_TIMEOUT_SECONDS": 5,
+    "ZENDURE_LOCAL_API_CONTROL_TIMEOUT_CAP_SECONDS": 1.5,
     "ZENDURE_LOCAL_API_USE_FOR_TELEMETRY": True,
     "ZENDURE_LOCAL_API_TELEMETRY_FALLBACK_ONLY": True,
     "ZENDURE_LOCAL_API_POLL_INTERVAL_SECONDS": 5,
@@ -49,6 +50,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 
     # Regelung
     "INTERVAL_SECONDS": 3,
+    "SLOW_CYCLE_WARN_MS": 5000,
     "DEADBAND_W": 80,
     "MOVING_AVERAGE_SAMPLES": 10,
     "SMOOTHING_FACTOR": 0.25,
@@ -129,6 +131,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "MEASUREMENT_LOG_ESTIMATED_ROW_BYTES": 4096,
     "MEASUREMENT_LOG_FLUSH_EVERY_ROWS": 100,
     "MEASUREMENT_LOG_FLUSH_EVERY_SECONDS": 60,
+    "MEASUREMENT_V4_MANIFEST_UPDATE_EVERY_ROWS": 25,
+    "MEASUREMENT_V4_MANIFEST_UPDATE_EVERY_SECONDS": 30,
     "MEASUREMENT_LOG_ALLOW_SD_FALLBACK": True,
     "MEASUREMENT_LOG_FALLBACK_DIR": "logs/fallback",
     "MEASUREMENT_LOG_FALLBACK_MAX_BYTES": 10_000_000,
@@ -181,6 +185,7 @@ CONFIG_SCHEMA: Dict[str, Dict[str, Any]] = {
     "ZENDURE_LOCAL_API_ENABLED": {"group": "Netzwerk", "label": "Zendure lokale API Diagnose aktiv", "type": "bool", "description": "Aktiviert den Diagnose-Endpunkt /zendure-properties. Diese Option steuert die Web-Diagnoseseite; die Telemetrie-Fallback-Nutzung wird separat über die folgenden Optionen gesteuert."},
     "ZENDURE_LOCAL_IP": {"group": "Netzwerk", "label": "Zendure lokale IP", "type": "str", "description": "IP-Adresse der Zendure-Headunit für lokale Abfragen wie /properties/report. Wird sowohl für die Diagnose-Webseite als auch für den optionalen Telemetrie-Fallback verwendet."},
     "ZENDURE_LOCAL_API_TIMEOUT_SECONDS": {"group": "Netzwerk", "label": "Zendure lokale API Timeout", "type": "int", "min": 1, "max": 30, "unit": "s", "description": "Maximale Wartezeit für lokale Zendure-Abfragen in Sekunden."},
+    "ZENDURE_LOCAL_API_CONTROL_TIMEOUT_CAP_SECONDS": {"group": "Netzwerk", "label": "Zendure lokale API Regelzyklus-Timeoutdeckel", "type": "float", "min": 0.2, "max": 5.0, "unit": "s", "description": "Begrenzt die wirksame Wartezeit der optionalen lokalen Zendure-API im Live-Regelzyklus. Schützt die Reaktionszeit, auch wenn ältere Konfigurationen einen höheren API-Timeout enthalten."},
     "ZENDURE_LOCAL_API_USE_FOR_TELEMETRY": {"group": "Netzwerk", "label": "Zendure lokale API für Telemetrie nutzen", "type": "bool", "description": "Wenn aktiv, darf der Controller die lokale Zendure-API als zusätzliche Telemetriequelle für SOC, Istleistung und Akkutemperatur verwenden. Das ist ein Fallback gegen den bekannten Fall, dass Zendure nach Broker-/Raspberry-Neustart keine MQTT-Sensordaten mehr publiziert."},
     "ZENDURE_LOCAL_API_TELEMETRY_FALLBACK_ONLY": {"group": "Netzwerk", "label": "Zendure lokale API nur als Fallback", "type": "bool", "description": "Wenn aktiv, bleibt MQTT die bevorzugte Quelle für SOC und Istleistung. Die lokale API aktualisiert den aktiven SOC nur dann, wenn MQTT fehlt oder veraltet ist. Sobald MQTT wieder gültige Werte liefert, wechselt die Anzeige automatisch zurück zu MQTT."},
     "ZENDURE_LOCAL_API_POLL_INTERVAL_SECONDS": {"group": "Netzwerk", "label": "Zendure lokale API Poll-Intervall", "type": "int", "min": 2, "max": 300, "unit": "s", "description": "Mindestabstand zwischen zwei lokalen Zendure-API-Abfragen für Telemetrie und Temperaturdiagnose."},
@@ -191,6 +196,7 @@ CONFIG_SCHEMA: Dict[str, Dict[str, Any]] = {
     "MQTT_TOPIC_DIAGNOSTIC_HISTORY_LIMIT": {"group": "Netzwerk", "label": "MQTT Topic-Diagnose Historie", "type": "int", "min": 10, "max": 5000, "description": "Anzahl der letzten MQTT-Diagnosemeldungen, die im RAM gehalten werden. Höhere Werte brauchen mehr Speicher, sind aber für Topic-Analyse hilfreich."},
 
     "INTERVAL_SECONDS": {"group": "Regelung", "label": "Regelintervall", "type": "int", "min": 1, "max": 30, "unit": "s", "description": "Zeit zwischen zwei Regelschritten. Kleinere Werte reagieren schneller, größere Werte laufen ruhiger."},
+    "SLOW_CYCLE_WARN_MS": {"group": "Regelung", "label": "Warnschwelle langsamer Zyklus", "type": "int", "min": 1000, "max": 60000, "unit": "ms", "description": "Schreibt einen Runtime-Hinweis, wenn ein Reglerzyklus ohne Sleep länger dauert. Dient der RC3-Timingdiagnose."},
     "DEADBAND_W": {"group": "Regelung", "label": "Totzone", "type": "int", "min": 0, "max": 1000, "unit": "W", "description": "Bereich um 0 W Netzleistung, in dem die Leistung gehalten wird. Reduziert Pendeln und MQTT-Kommandos."},
     "MOVING_AVERAGE_SAMPLES": {"group": "Regelung", "label": "Mittelwertbildung", "type": "int", "min": 1, "max": 60, "description": "Anzahl der Messwerte im gleitenden Mittelwert. Höher = ruhiger, aber träger."},
     "SMOOTHING_FACTOR": {"group": "Regelung", "label": "Smoothing Factor", "type": "float", "min": 0.01, "max": 1.0, "step": 0.01, "description": "Zusätzliche Glättung der Zielwerte. 1.0 reagiert sofort, kleinere Werte sind weicher."},
@@ -257,13 +263,15 @@ CONFIG_SCHEMA: Dict[str, Dict[str, Any]] = {
     "MEASUREMENT_LOG_STORAGE_TARGET": {"group": "Messdaten / Historie", "label": "Speicherziel", "type": "select", "options": {"internal_sd": "Interne SD-Karte", "external_mount": "erkannter USB-/Mountpoint", "custom_path": "benutzerdefinierter Pfad"}, "description": "Legt fest, wo Messdaten primär geschrieben werden. Bei erkanntem USB-/Mountpoint wird ein schreibbarer externer Mount automatisch verwendet; das Feld USB-/Mountpoint kann optional einen bestimmten Mountpoint festlegen."},
     "MEASUREMENT_LOG_MOUNTPOINT": {"group": "Messdaten / Historie", "label": "USB-/Mountpoint", "type": "str", "description": "Optionaler Mountpoint für externes Messdaten-Logging, z. B. /media/pi/USBSTICK oder /mnt/zec-logs. Wenn leer, wird bei Speicherziel external_mount ein erkannter schreibbarer USB-/Mountpoint automatisch verwendet."},
     "MEASUREMENT_LOG_DIR": {"group": "Messdaten / Historie", "label": "Messdaten-Verzeichnis / Custom-Pfad", "type": "str", "description": "Verzeichnis für ZEC-MEASUREMENT-Messdaten. Bei internal_sd/custom_path wird dieses Feld direkt verwendet. Bei external_mount wird es als Unterordner auf dem USB-/Mountpoint verwendet, z. B. USB + ZEC/logs."},
-    "MEASUREMENT_LOG_FILE": {"group": "Messdaten / Historie", "label": "Messdaten-Datei", "type": "str", "description": "Dateiname der aktuellen Measurement-Datei. Bei V4 und Standardname schreibt RC1 automatisch zendure_measurements_v4.csv, damit V3 und V4 nicht gemischt werden."},
+    "MEASUREMENT_LOG_FILE": {"group": "Messdaten / Historie", "label": "Messdaten-Datei", "type": "str", "description": "Dateiname der aktuellen Measurement-Datei. Bei V4 und Standardname schreibt der Controller automatisch zendure_measurements_v4.csv, damit V3 und V4 nicht gemischt werden."},
     "MEASUREMENT_LOG_MAX_BYTES": {"group": "Messdaten / Historie", "label": "Max Dateigröße", "type": "int", "min": 100_000, "max": 100_000_000, "unit": "Bytes", "description": "Bei Überschreitung wird rotiert. Zusammen mit der Dateianzahl bestimmt dieser Wert die geschätzte Aufbewahrung."},
     "MEASUREMENT_LOG_BACKUP_COUNT": {"group": "Messdaten / Historie", "label": "Rotationsdateien", "type": "int", "min": 1, "max": 20, "description": "Anzahl der Messdaten-Dateien, die rollierend behalten werden. Höhere Werte verlängern die analysierbare Historie, benötigen aber mehr Speicherplatz."},
     "MEASUREMENT_LOG_MIN_FREE_DISK_MB": {"group": "Messdaten / Historie", "label": "Mindestfreier Speicher", "type": "int", "min": 100, "max": 100000, "unit": "MB", "description": "Mindestfreier Speicher am aktuell aktiven Messdatenziel: interne SD, externer USB-/Mountpoint oder bei aktivem Fallback der SD-Fallback-Pfad. Wenn weniger Speicher frei ist, pausiert das Messdaten-Logging; die Regelung läuft weiter."},
     "MEASUREMENT_LOG_ESTIMATED_ROW_BYTES": {"group": "Messdaten / Historie", "label": "Schätzgröße je Messpunkt", "type": "int", "min": 500, "max": 50000, "unit": "Bytes", "description": "Nur für die grobe Aufbewahrungsschätzung, bis reale Zeilengrößen vorliegen. Die Schätzung muss nicht bytegenau sein."},
     "MEASUREMENT_LOG_FLUSH_EVERY_ROWS": {"group": "Messdaten / Historie", "label": "Flush alle X Zeilen", "type": "int", "min": 1, "max": 10000, "description": "Schreibt gepufferte Messdaten periodisch aus dem Python-Puffer. Kein hartes fsync pro Zeile; bei Stromausfall können letzte Messdaten fehlen."},
     "MEASUREMENT_LOG_FLUSH_EVERY_SECONDS": {"group": "Messdaten / Historie", "label": "Flush alle X Sekunden", "type": "int", "min": 1, "max": 3600, "unit": "s", "description": "Zeitbasierte Flush-Grenze für gepuffertes Logging. Reduziert kleine Sync-Schreibvorgänge gegenüber hartem Schreiben pro Messpunkt."},
+    "MEASUREMENT_V4_MANIFEST_UPDATE_EVERY_ROWS": {"group": "Messdaten / Historie", "label": "V4 Manifest-Update nach Zeilen", "type": "int", "min": 1, "max": 1000, "unit": "Zeilen", "description": "Schreibt das V4-Manifest gepuffert statt pro Zyklus. Niedrigere Werte sind aktueller, höhere Werte reduzieren I/O."},
+    "MEASUREMENT_V4_MANIFEST_UPDATE_EVERY_SECONDS": {"group": "Messdaten / Historie", "label": "V4 Manifest-Update spätestens nach Sekunden", "type": "int", "min": 5, "max": 600, "unit": "s", "description": "Spätester gepufferter V4-Manifest-Update. Beim Schließen wird immer final aktualisiert."},
     "MEASUREMENT_LOG_ALLOW_SD_FALLBACK": {"group": "Messdaten / Historie", "label": "SD-Fallback bei USB-Ausfall", "type": "bool", "description": "Wenn das externe Speicherziel nicht verfügbar ist, darf begrenzt auf die interne SD geschrieben werden. Der Fallback wird sichtbar markiert und enger rotiert."},
     "MEASUREMENT_LOG_FALLBACK_DIR": {"group": "Messdaten / Historie", "label": "SD-Fallback-Verzeichnis", "type": "str", "description": "Begrenztes Fallback-Verzeichnis auf der internen SD, falls ein externes Logziel ausfällt."},
     "MEASUREMENT_LOG_FALLBACK_MAX_BYTES": {"group": "Messdaten / Historie", "label": "Fallback Max Dateigröße", "type": "int", "min": 100_000, "max": 100_000_000, "unit": "Bytes", "description": "Kleinere Rotationsgrenze für den SD-Fallback, damit ein USB-Ausfall die SD nicht unbegrenzt belastet."},
@@ -462,7 +470,7 @@ def validate_config(candidate: Dict[str, Any]) -> Tuple[Dict[str, Any], bool]:
             result["SECOND_BATTERY_STALE_BLOCK_CHARGE"] = bool(result.get("EVCC_STALE_BLOCK_CHARGE", True))
             changed = True
 
-    # V12.10 RC1: neue/normalisierte Installationen schreiben standardmäßig V4.
+    # V12.10: neue/normalisierte Installationen schreiben standardmäßig V4.
     # Bestehende Installationen können explizit auf Legacy V3 zurückgestellt werden.
     if isinstance(candidate, dict):
         if "MEASUREMENT_SCHEMA_VERSION" not in candidate and "MEASUREMENT_LOG_SCHEMA" not in candidate:

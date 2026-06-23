@@ -37,6 +37,13 @@ from replay_core import (  # noqa: E402
     analyze_files,
     summary_csv,
 )
+try:  # noqa: E402
+    from measurement_v4_contract import EXTENDED_HEADER, STANDARD_HEADER, header_hash as v4_header_hash
+except Exception:  # pragma: no cover - V3-only fallback
+    EXTENDED_HEADER = []
+    STANDARD_HEADER = []
+    def v4_header_hash(fields):  # type: ignore
+        return ""
 from csv_logger import resolve_log_path  # noqa: E402
 from replay_report import (  # noqa: E402
     actuator_table,
@@ -179,15 +186,36 @@ def _csv_timestamp_label(row: Dict[str, Any]) -> str:
     return str(row.get("datetime_local") or (str(row.get("date", "")) + " " + str(row.get("timestamp", ""))).strip() or row.get("timestamp") or "-")
 
 
+def _load_json_file(path: Path) -> Optional[Dict[str, Any]]:
+    try:
+        if not path.exists() or path.stat().st_size <= 0:
+            return None
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+        return loaded if isinstance(loaded, dict) else None
+    except Exception:
+        return None
+
+
+def _v4_manifest_entry(manifest: Optional[Dict[str, Any]], filename: str) -> Optional[Dict[str, Any]]:
+    for item in (manifest or {}).get("files", []) or []:
+        if isinstance(item, dict) and item.get("file_name") == filename:
+            return item
+    return None
+
+
 def _scan_csv_profile(paths: Sequence[Path], max_scan_rows: int = 100_000) -> Dict[str, Any]:
     rows = 0
     global_first_ts = "-"
     global_last_ts = "-"
     file_ranges: List[Tuple[str, str, str]] = []
     schema_errors: List[str] = []
+    schema_families = set()
+    v4_warnings: List[str] = []
+    v4_hashes = set()
     for path in paths:
         file_first_ts = "-"
         file_last_ts = "-"
+        file_rows = 0
         try:
             with open(path, "r", encoding="utf-8", newline="") as f:
                 sample = f.read(4096)
@@ -197,18 +225,56 @@ def _scan_csv_profile(paths: Sequence[Path], max_scan_rows: int = 100_000) -> Di
                     schema_errors.append(f"{path.name}: kein Semikolon-CSV")
                     continue
                 reader = csv.DictReader(f, delimiter=";")
-                if not reader.fieldnames or "schema" not in reader.fieldnames:
-                    schema_errors.append(f"{path.name}: Spalte 'schema' fehlt")
+                fieldnames = reader.fieldnames or []
+                if "schema" in fieldnames:
+                    schema_families.add("v3")
+                    schema_kind = "v3"
+                elif "schema_version" in fieldnames:
+                    schema_families.add("v4")
+                    schema_kind = "v4"
+                    actual_hash = v4_header_hash(fieldnames)
+                    if fieldnames not in (STANDARD_HEADER, EXTENDED_HEADER):
+                        schema_errors.append(f"{path.name}: V4-Header entspricht nicht dem Standard-/Extended-Vertrag")
+                    manifest = _load_json_file(path.parent / "zec_measurement_manifest.json")
+                    snapshots = _load_json_file(path.parent / "zec_config_snapshots.json")
+                    runtime_path = path.parent / "zec_runtime_events.jsonl"
+                    if manifest is None:
+                        schema_errors.append(f"{path.name}: zec_measurement_manifest.json fehlt oder ist nicht lesbar")
+                    else:
+                        entry = _v4_manifest_entry(manifest, path.name)
+                        if entry is None:
+                            schema_errors.append(f"{path.name}: Datei ist nicht im V4-Manifest registriert")
+                        else:
+                            if entry.get("header_hash") and entry.get("header_hash") != actual_hash:
+                                schema_errors.append(f"{path.name}: Manifest header_hash passt nicht zur CSV")
+                            expected_profile = "extended" if fieldnames == EXTENDED_HEADER else "standard"
+                            if entry.get("profile") and entry.get("profile") != expected_profile:
+                                schema_errors.append(f"{path.name}: Manifest profile={entry.get('profile')} passt nicht zum Header {expected_profile}")
+                    if snapshots is None:
+                        schema_errors.append(f"{path.name}: zec_config_snapshots.json fehlt oder ist nicht lesbar")
+                    if not runtime_path.exists():
+                        v4_warnings.append(f"{path.name}: zec_runtime_events.jsonl fehlt; Runtime-Kontext ist unvollständig")
+                else:
+                    schema_errors.append(f"{path.name}: weder V3-Spalte 'schema' noch V4-Spalte 'schema_version' gefunden")
                     continue
                 for row in reader:
                     if not any((v or "").strip() for v in row.values()):
                         continue
                     if rows < max_scan_rows:
-                        schema = (row.get("schema") or "").strip()
-                        if schema != CSV_SCHEMA:
-                            schema_errors.append(f"{path.name}: Schema {schema or 'leer'} ist nicht {CSV_SCHEMA}")
-                            break
-                        label = _csv_timestamp_label(row)
+                        if schema_kind == "v3":
+                            schema = (row.get("schema") or "").strip()
+                            if schema != CSV_SCHEMA:
+                                schema_errors.append(f"{path.name}: Schema {schema or 'leer'} ist nicht {CSV_SCHEMA}")
+                                break
+                            label = _csv_timestamp_label(row)
+                        else:
+                            schema = (row.get("schema_version") or "").strip()
+                            if schema != "4":
+                                schema_errors.append(f"{path.name}: schema_version {schema or 'leer'} ist nicht 4")
+                                break
+                            label = str(row.get("measurement_time_utc") or "-")
+                            if row.get("config_control_hash"):
+                                v4_hashes.add(str(row.get("config_control_hash")))
                         if label and label != "-":
                             if file_first_ts == "-" or label < file_first_ts:
                                 file_first_ts = label
@@ -219,10 +285,30 @@ def _scan_csv_profile(paths: Sequence[Path], max_scan_rows: int = 100_000) -> Di
                             if global_last_ts == "-" or label > global_last_ts:
                                 global_last_ts = label
                     rows += 1
+                    file_rows += 1
+                if schema_kind == "v4":
+                    manifest = _load_json_file(path.parent / "zec_measurement_manifest.json")
+                    entry = _v4_manifest_entry(manifest, path.name)
+                    if entry is not None and entry.get("row_count") not in (None, ""):
+                        try:
+                            manifest_rows = int(entry.get("row_count"))
+                            if manifest_rows != file_rows:
+                                v4_warnings.append(f"{path.name}: Manifest row_count={manifest_rows}, CSV-Zeilen={file_rows}; bei aktivem Live-Logging kann das durch Kopierzeitpunkt entstehen")
+                        except Exception:
+                            schema_errors.append(f"{path.name}: Manifest row_count ist nicht numerisch")
         except Exception as exc:
             schema_errors.append(f"{path.name}: {exc}")
         if file_first_ts != "-" or file_last_ts != "-":
             file_ranges.append((path.name, file_first_ts, file_last_ts))
+    if len(schema_families) > 1:
+        schema_errors.append(f"{paths[0].name if paths else '-'}: V3- und V4-Dateien dürfen nicht gemeinsam ausgewertet werden")
+    if schema_families == {"v4"} and not schema_errors:
+        for parent in sorted({p.parent for p in paths}):
+            snapshots = _load_json_file(parent / "zec_config_snapshots.json")
+            snapshot_hashes = {str(item.get("config_control_hash")) for item in (snapshots or {}).get("snapshots", []) if isinstance(item, dict)}
+            missing = sorted(h for h in v4_hashes if h not in snapshot_hashes)
+            if missing:
+                schema_errors.append(f"{paths[0].name if paths else '-'}: Config-Snapshot fehlt für Hash {missing[0]}")
     inverted = global_first_ts != "-" and global_last_ts != "-" and global_first_ts > global_last_ts
     return {
         "estimated_rows": rows,
@@ -231,6 +317,8 @@ def _scan_csv_profile(paths: Sequence[Path], max_scan_rows: int = 100_000) -> Di
         "file_ranges": file_ranges,
         "period_inverted": inverted,
         "schema_errors": schema_errors[:5],
+        "schema_family": next(iter(schema_families)) if len(schema_families) == 1 else ("mixed" if len(schema_families) > 1 else "unknown"),
+        "v4_warnings": v4_warnings[:5],
     }
 
 
@@ -279,13 +367,22 @@ def selection_profile(paths: Sequence[Path], cfg: Dict[str, Any]) -> Dict[str, A
     safe_memory_mb = _worker_memory_limit_mb(cfg, extended=False)
     ext_memory_mb = _worker_memory_limit_mb(cfg, extended=True)
     schema_errors = scan.get("schema_errors") or []
+    schema_family = scan.get("schema_family") or "unknown"
+    v4_warnings = scan.get("v4_warnings") or []
     small_selection = len(paths) <= safe.max_files and total_size <= safe.max_total_bytes and rows <= safe.max_rows
     extended_selection = len(paths) <= ext.max_files and total_size <= ext.max_total_bytes and rows <= ext.max_rows
     hard_memory_low = mem_available_mb is not None and mem_available_mb < 96
     memory_tight = mem_available_mb is not None and mem_available_mb < max(128, int(safe_memory_mb * 0.45))
     if schema_errors:
         risk = "rejected"
-        text = "Nicht analysierbar: Die Auswahl enthält keine durchgängig gültigen ZEC-MEASUREMENT-V3-Dateien."
+        text = "Nicht analysierbar: Die Auswahl enthält keine durchgängig gültigen unterstützten Measurement-Dateien."
+        needs_confirm = False
+        rejected = True
+    elif schema_family == "v4":
+        risk = "extended"
+        text = "V4 erkannt: CSV, Manifest und Config-Snapshots wurden grundsätzlich geprüft. Die vollständige V4-Replay-Auswertung ist in diesem RC noch nicht aktiv; diese Auswahl dient als V4-Preflight."
+        if v4_warnings:
+            text += " Hinweise: " + " | ".join(str(w) for w in v4_warnings[:3])
         needs_confirm = False
         rejected = True
     elif hard_memory_low:
@@ -327,6 +424,8 @@ def selection_profile(paths: Sequence[Path], cfg: Dict[str, Any]) -> Dict[str, A
         "needs_confirmation": needs_confirm,
         "rejected": rejected,
         "schema_errors": schema_errors,
+        "schema_family": schema_family,
+        "v4_warnings": v4_warnings,
         "safe_limits": _limits_to_dict(safe),
         "extended_limits": _limits_to_dict(ext),
         "mem_available_mb": mem_available_mb,
@@ -635,7 +734,7 @@ def build_app() -> FastAPI:
         </style></head><body id="top" class="mode-{html.escape(ui_mode, quote=True)}">
         <div class="topnav"><a href="{html.escape(controller_url, quote=True)}">← Zurück zum Zendure Controller</a><span class="small">Analyse-Dienst: {html.escape(replay_url)}</span></div>
         <div class="section"><h1>Zendure Replay Analyse V{REPLAY_VERSION}</h1>
-        <p>Separater Analyse-Dienst für CSV-Dateien im Schema <code>{CSV_SCHEMA}</code>. Der Live-Controller wird hiervon nicht importiert oder beeinflusst.</p>
+        <p>Separater Analyse-Dienst für Measurement-CSV-Dateien. V3-Dateien können ausgewertet werden; V4-Dateien werden in diesem RC per Preflight geprüft. Der Live-Controller wird hiervon nicht importiert oder beeinflusst.</p>
         <form id="analysisForm">
             <label>CSV-Dateien:</label><br>
             <select id="filesSelect" name="files" multiple size="8">{options}</select><br><br>

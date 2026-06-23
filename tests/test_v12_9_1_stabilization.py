@@ -56,7 +56,7 @@ class V1291StabilizationTests(unittest.TestCase):
             bad.write_text("schema;date;grid_power_w\nZEC-MEASUREMENT-V2;2026-06-15;0\n", encoding="utf-8")
             profile = replay_web.selection_profile([bad], {})
             self.assertTrue(profile["rejected"])
-            self.assertIn("gültigen ZEC-MEASUREMENT-V3", profile["risk_text"])
+            self.assertIn("gültigen unterstützten Measurement-Dateien", profile["risk_text"])
             self.assertGreaterEqual(profile["worker_memory_limit_mb"], 128)
 
     def test_analysis_worker_is_subprocess_based(self):

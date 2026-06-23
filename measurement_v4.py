@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Eduard Fuchs <info@eduardfuchs.de>
 #
 # ZEC-MEASUREMENT-V4 runtime writer. The writer is intentionally separate from
-# the legacy V3 csv_logger field list so V3 can remain available during RC1.
+# the legacy V3 csv_logger field list so V3 can remain available during the V12.10 release-candidate phase.
 
 import csv
 import hashlib
@@ -192,6 +192,11 @@ def build_config_snapshot(config: Dict[str, Any]) -> Dict[str, Any]:
     for key in CONTROL_SNAPSHOT_KEYS:
         if key in config:
             control_parameters[key] = config.get(key)
+    # V4 uses the neutral cross-charge term. Existing installations still carry
+    # the legacy SMA_* key; expose the new contract key without changing runtime
+    # controller behavior in this RC.
+    if "CROSS_CHARGE_SIGNIFICANT_W" not in control_parameters and "SMA_DISCHARGE_BLOCK_W" in control_parameters:
+        control_parameters["CROSS_CHARGE_SIGNIFICANT_W"] = control_parameters.get("SMA_DISCHARGE_BLOCK_W")
     # Stable derived HH:MM values for easier later reconstruction.
     if "NIGHT_DISCHARGE_START" not in control_parameters:
         control_parameters["NIGHT_DISCHARGE_START"] = f"{int(config.get('NIGHT_START_HOUR', 0)):02d}:{int(config.get('NIGHT_START_MINUTE', 0)):02d}"
@@ -210,11 +215,14 @@ def build_config_snapshot(config: Dict[str, Any]) -> Dict[str, Any]:
 def build_v4_row(config: Dict[str, Any], row: Dict[str, Any], previous_effective_command_w: Optional[float] = None) -> Dict[str, Any]:
     measurement_time_utc, epoch_ms = _line_epoch(row)
     mode_raw = str(row.get("mode", "UNKNOWN") or "UNKNOWN")
-    operating_mode = _map_operating_mode(mode_raw)
     target_final = _safe_float(row.get("target_final_w", row.get("zendure_target_power_w")))
+    active_limiters = _csv_list(row.get("technical_limiters", row.get("target_limiters_summary")))
+    control_reason = str(row.get("control_reason", row.get("target_final_reason", "UNKNOWN")) or "UNKNOWN")
+    target_reason = _map_target_reason(control_reason, mode_raw, target_final, active_limiters, row)
+    operating_mode = _map_operating_mode(mode_raw, target_reason=target_reason, row=row)
     control_intent = _control_intent(operating_mode, target_final)
 
-    missing_names = _csv_list(row.get("control_missing_required_sources"))
+    missing_names = _filter_missing_required_sources(_csv_list(row.get("control_missing_required_sources")), config, row)
     missing_mask, missing_count = _mask_from_names(missing_names, MISSING_SOURCE_ALIASES, MISSING_REQUIRED_SOURCE_BITS)
 
     mqtt_status = _map_mqtt_status(row.get("zendure_mqtt_overall_status"), row)
@@ -227,7 +235,7 @@ def build_v4_row(config: Dict[str, Any], row: Dict[str, Any], previous_effective
     command_required = _bool01(row.get("mqtt_command_required")) == "1"
     mqtt_connected = _bool01(row.get("zendure_mqtt_connected"))
     requested_w = target_final if target_final is not None else ""
-    command_action, suppressed_reason = _command_action(row, command_sent, command_required, mqtt_connected)
+    command_action, suppressed_reason = _command_action(row, command_sent, command_required, mqtt_connected, target_final, previous_effective_command_w)
     command_sent_w = target_final if command_sent and target_final is not None else ""
     effective_w: Any = ""
     if command_sent and target_final is not None:
@@ -242,10 +250,6 @@ def build_v4_row(config: Dict[str, Any], row: Dict[str, Any], previous_effective
     effective_surplus = ""
     if scenario_without is not None:
         effective_surplus = max(0.0, -scenario_without)
-
-    active_limiters = _csv_list(row.get("technical_limiters", row.get("target_limiters_summary")))
-    control_reason = str(row.get("control_reason", row.get("target_final_reason", "UNKNOWN")) or "UNKNOWN")
-    target_reason = _map_target_reason(control_reason, operating_mode, target_final, active_limiters, row)
 
     pack_info = _temperature_aggregates(row)
     cycle_duration_ms = _safe_int(row.get("loop_duration_ms"))
@@ -266,7 +270,7 @@ def build_v4_row(config: Dict[str, Any], row: Dict[str, Any], previous_effective
         "control_input_valid": "0" if missing_count else "1",
         "control_missing_required_source_mask": missing_mask,
         "control_missing_required_source_count": missing_count,
-        "safe_state_active": "1" if operating_mode == "SAFE_STATE" else _bool01(row.get("safe_state_active")),
+        "safe_state_active": "1" if operating_mode == "SAFE_STATE" else "0",
         "safe_state_reason": _safe_state_reason(row, mqtt_status, missing_names, operating_mode),
         "night_window_active": _bool01(row.get("night_discharge_window_active")),
         "control_night_reserve_active": _bool01(row.get("night_discharge_reserve_active")),
@@ -338,11 +342,11 @@ def build_v4_row(config: Dict[str, Any], row: Dict[str, Any], previous_effective
         "scenario_grid_without_zendure_source": "DERIVED",
         "scenario_effective_surplus_w": _round1(effective_surplus),
         "scenario_effective_surplus_valid": _bool01(row.get("scenario_reconstruction_valid")),
-        "control_grid_power_w": _round1(row.get("input_grid_power_used_w", row.get("grid_power_w"))),
+        "control_grid_power_w": _round1(row.get("input_grid_power_used_w", row.get("grid_power_w", row.get("grid_power")))),
         "control_grid_power_smoothed_w": _round1(row.get("norm_grid_power_smoothed_w")),
         "control_grid_power_smoothed_valid": _bool01(row.get("grid_power_used_for_control")),
-        "control_effective_export_w": _round1(row.get("input_effective_export_used_w", row.get("effective_export_power_w"))),
-        "control_effective_export_valid": _bool01(row.get("input_effective_export_used_for_control", row.get("effective_export_power_valid"))),
+        "control_effective_export_w": _round1(row.get("input_effective_export_used_w", row.get("effective_export_power_w", row.get("effective_export_power")))),
+        "control_effective_export_valid": _bool01(row.get("input_effective_export_used_for_control", row.get("effective_export_power_valid", row.get("effective_export_power_used_for_control")))),
         "control_deadband_active": _bool01(row.get("deadband_active")),
         "control_cross_charge_detected": _bool01(row.get("cross_charge_guard_active")),
         "control_cross_charge_limited": _bool01(row.get("cross_charge_guard_active")),
@@ -360,7 +364,7 @@ def build_v4_row(config: Dict[str, Any], row: Dict[str, Any], previous_effective
         "target_changed_by_power_limit": "1" if any(x in active_limiters for x in ("MAX_CHARGE", "MAX_DISCHARGE", "POWER_LIMIT")) else "0",
         "target_changed_by_cross_charge": "1" if "CROSS_CHARGE" in target_reason else "0",
         "target_changed_by_mode": "1" if operating_mode in {"NIGHT_DISCHARGE", "FIXED_CHARGE", "FIXED_DISCHARGE", "STOP_HOLD"} else "0",
-        "target_changed_by_safe_state": "1" if operating_mode == "SAFE_STATE" or target_reason == "SAFE_STATE" else "0",
+        "target_changed_by_safe_state": "1" if target_reason == "SAFE_STATE" else "0",
         "command_action": command_action,
         "command_requested_w": _round1(requested_w),
         "command_sent_w": _round1(command_sent_w),
@@ -388,8 +392,35 @@ def build_extended_values(row: Dict[str, Any], v4_row: Dict[str, Any]) -> Dict[s
     }
 
 
-def _map_operating_mode(mode: str) -> str:
+def _filter_missing_required_sources(names: List[str], config: Dict[str, Any], row: Dict[str, Any]) -> List[str]:
+    """Keep missing-required diagnostics aligned with the V4 contract.
+
+    A stale/missing second battery is only a hard required-source problem when
+    the current control path really depends on it. If the stale-block option is
+    disabled and no cross-charge guard is active, AUTO must remain diagnosable
+    without turning the whole input model invalid just because optional SMA/EVCC
+    telemetry is stale.
+    """
+    filtered: List[str] = []
+    stale_block = bool(config.get("SECOND_BATTERY_STALE_BLOCK_CHARGE", config.get("EVCC_STALE_BLOCK_CHARGE", True)))
+    cross_charge_active = _bool01(row.get("cross_charge_guard_active")) == "1"
+    for name in names:
+        canonical = MISSING_SOURCE_ALIASES.get(str(name).strip().lower(), str(name).strip().upper())
+        if canonical == "SECOND_BATTERY_POWER" and not stale_block and not cross_charge_active:
+            continue
+        filtered.append(name)
+    return filtered
+
+
+def _map_operating_mode(mode: str, *, target_reason: str = "", row: Optional[Dict[str, Any]] = None) -> str:
     raw = str(mode or "").upper()
+    reason = str((row or {}).get("control_reason", (row or {}).get("target_final_reason", "")) or "").upper()
+    # The legacy controller internally uses safe_state() also as a neutralizing
+    # helper for SOC limits. In V4 these are target limiters, not fault modes.
+    if raw == "SAFE_STATE" and target_reason in {"MAX_SOC_LIMIT", "MIN_SOC_LIMIT"}:
+        return "AUTO"
+    if raw == "SAFE_STATE" and ("SOC ZU HOCH" in reason or "SOC ZU NIEDRIG" in reason):
+        return "AUTO"
     if raw in {"AUTO", "HOLD", "HOLD_DEADBAND", "NIGHT_DISCHARGE", "STOP_HOLD", "SAFE_STATE"}:
         return raw
     if raw in {"MANUAL_FIXED_CHARGE", "FIXED_CHARGE"}:
@@ -436,6 +467,7 @@ def _map_mqtt_status(value: Any, row: Dict[str, Any]) -> str:
 
 def _map_target_reason(reason: str, operating_mode: str, target_final: Optional[float], active_limiters: List[str], row: Dict[str, Any]) -> str:
     raw = str(reason or "").upper()
+    upper_limiters = {str(item).upper() for item in active_limiters}
     if operating_mode == "NIGHT_DISCHARGE":
         return "NIGHT_BASE_DISCHARGE"
     stop_reason = str(row.get("night_discharge_stop_reason", "") or "").upper()
@@ -449,16 +481,16 @@ def _map_target_reason(reason: str, operating_mode: str, target_final: Optional[
         return "FIXED_DISCHARGE"
     if operating_mode == "STOP_HOLD":
         return "MANUAL_STOP"
-    if operating_mode == "SAFE_STATE":
+    if "MIN_SOC" in raw or "SOC ZU NIEDRIG" in raw or "MIN_SOC" in upper_limiters:
+        return "MIN_SOC_LIMIT"
+    if "MAX_SOC" in raw or "SOC ZU HOCH" in raw or "MAX_SOC" in upper_limiters:
+        return "MAX_SOC_LIMIT"
+    if str(operating_mode or "").upper() == "SAFE_STATE":
         return "SAFE_STATE"
     if "BLOCKED_BY_SMA" in raw or "SMA" in raw or "CROSS_CHARGE" in raw:
         return "CROSS_CHARGE_BLOCKED" if target_final == 0 else "CROSS_CHARGE_REDUCED"
     if "DEADBAND" in raw:
         return "DEADBAND"
-    if "MIN_SOC" in raw or "MIN_SOC" in active_limiters:
-        return "MIN_SOC_LIMIT"
-    if "MAX_SOC" in raw or "MAX_SOC" in active_limiters:
-        return "MAX_SOC_LIMIT"
     if "DISCONNECT" in raw or "MQTT" in raw:
         return "MQTT_DISCONNECTED" if "DISCONNECT" in raw else "ZENDURE_MQTT_STALE"
     if "GRID" in raw and "STALE" in raw:
@@ -493,7 +525,7 @@ def _safe_state_reason(row: Dict[str, Any], mqtt_status: str, missing_names: Lis
     return "UNKNOWN"
 
 
-def _command_action(row: Dict[str, Any], sent: bool, required: bool, mqtt_connected: str) -> Tuple[str, str]:
+def _command_action(row: Dict[str, Any], sent: bool, required: bool, mqtt_connected: str, target_final: Optional[float] = None, previous_effective_command_w: Optional[float] = None) -> Tuple[str, str]:
     if sent:
         return "SENT", ""
     skip = str(row.get("mqtt_command_skip_reason", row.get("mqtt_last_command_skipped", "")) or "").upper()
@@ -512,6 +544,13 @@ def _command_action(row: Dict[str, Any], sent: bool, required: bool, mqtt_connec
     if "MISSING" in skip or "REQUIRED" in skip:
         return "SUPPRESSED", "MISSING_REQUIRED_SOURCE"
     if skip and skip != "-":
+        # Legacy MQTT skip text often only contains the topic and target value
+        # (e.g. "inputLimit -> 0") after publish() suppresses a repeated value.
+        # That is a no-change suppression, not an unknown diagnostic reason.
+        if "->" in skip:
+            return "SUPPRESSED", "NO_CHANGE"
+        if target_final is not None and previous_effective_command_w is not None and abs(float(target_final) - float(previous_effective_command_w)) < 0.0001:
+            return "SUPPRESSED", "NO_CHANGE"
         return "SUPPRESSED", "UNKNOWN"
     return "SUPPRESSED", "NO_CHANGE"
 
@@ -675,6 +714,10 @@ class RuntimeEventWriter:
 
 
 class ConfigSnapshotStore:
+    def __init__(self) -> None:
+        self._cache: Dict[str, Dict[str, Any]] = {}
+        self._known_hashes: Dict[str, set] = {}
+
     def path_for(self, directory: str) -> str:
         return os.path.join(directory, "zec_config_snapshots.json")
 
@@ -683,18 +726,55 @@ class ConfigSnapshotStore:
         path = self.path_for(directory)
         snapshot = build_config_snapshot(config)
         config_hash = str(snapshot["config_control_hash"])
+        data = self._load(path)
+        snapshots = data.setdefault("snapshots", [])
+        changed = False
+        existing = next((item for item in snapshots if isinstance(item, dict) and str(item.get("config_control_hash")) == config_hash), None)
+        if existing is None:
+            snapshots.append(snapshot)
+            changed = True
+        else:
+            changed = self._backfill_existing_snapshot(existing, snapshot) or changed
+        if changed:
+            self._atomic_write(path, data)
+            self._cache[path] = data
+            self._known_hashes[path] = {str(item.get("config_control_hash")) for item in data.get("snapshots", []) if isinstance(item, dict)}
+        else:
+            self._known_hashes.setdefault(path, {str(item.get("config_control_hash")) for item in snapshots if isinstance(item, dict)})
+        return config_hash
+
+    def _load(self, path: str) -> Dict[str, Any]:
+        if path in self._cache:
+            return self._cache[path]
         data: Dict[str, Any] = {"schema_version": 4, "snapshots": []}
         if os.path.exists(path) and os.path.getsize(path) > 0:
             with open(path, "r", encoding="utf-8") as f:
                 loaded = json.load(f)
             if isinstance(loaded, dict):
+                loaded.setdefault("schema_version", 4)
+                loaded.setdefault("snapshots", [])
                 data = loaded
-        snapshots = data.setdefault("snapshots", [])
-        if any(str(item.get("config_control_hash")) == config_hash for item in snapshots if isinstance(item, dict)):
-            return config_hash
-        snapshots.append(snapshot)
-        self._atomic_write(path, data)
-        return config_hash
+        self._cache[path] = data
+        self._known_hashes[path] = {str(item.get("config_control_hash")) for item in data.get("snapshots", []) if isinstance(item, dict)}
+        return data
+
+    def _backfill_existing_snapshot(self, existing: Dict[str, Any], snapshot: Dict[str, Any]) -> bool:
+        changed = False
+        params = existing.setdefault("control_parameters", {})
+        new_params = snapshot.get("control_parameters", {}) if isinstance(snapshot.get("control_parameters"), dict) else {}
+        if "CROSS_CHARGE_SIGNIFICANT_W" not in params:
+            if "CROSS_CHARGE_SIGNIFICANT_W" in new_params:
+                params["CROSS_CHARGE_SIGNIFICANT_W"] = new_params["CROSS_CHARGE_SIGNIFICANT_W"]
+                changed = True
+            elif "SMA_DISCHARGE_BLOCK_W" in params:
+                params["CROSS_CHARGE_SIGNIFICANT_W"] = params.get("SMA_DISCHARGE_BLOCK_W")
+                changed = True
+        # Preserve original created_time_utc, but add contract keys that were missing in early RC snapshots.
+        for key in ("schema_version", "controller_version", "source"):
+            if key not in existing and key in snapshot:
+                existing[key] = snapshot[key]
+                changed = True
+        return changed
 
     def _atomic_write(self, path: str, data: Dict[str, Any]) -> None:
         tmp = path + ".tmp"
@@ -728,6 +808,9 @@ class ManifestStore:
         if entry is None:
             entry = {}
             files.append(entry)
+        elif entry.get("created_time_utc"):
+            entry_update = dict(entry_update)
+            entry_update["created_time_utc"] = entry.get("created_time_utc")
         entry.update(entry_update)
         tmp = path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
@@ -748,6 +831,7 @@ class MeasurementV4Logger:
         self._logical_stream_id = f"ls_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}_{uuid.uuid4().hex[:8]}"
         self._row_counts: Dict[str, int] = {}
         self._first_epoch_ms: Dict[str, int] = {}
+        self._last_epoch_ms: Dict[str, int] = {}
         self._last_effective_command_w: Optional[float] = None
         self._validated_paths: Dict[str, str] = {}
         self._manifest = ManifestStore()
@@ -758,6 +842,12 @@ class MeasurementV4Logger:
         self._last_fallback_time = ""
         self._last_fallback_reason = ""
         self._last_fallback_signature = ""
+        self._session_suffix = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        self._session_path_map: Dict[str, str] = {}
+        self._manifest_registered_paths: set = set()
+        self._manifest_last_write_epoch: Dict[str, float] = {}
+        self._manifest_last_row_count: Dict[str, int] = {}
+        self._manifest_meta: Dict[str, Dict[str, Any]] = {}
 
     def close(self) -> None:
         if self._fh is not None:
@@ -765,6 +855,12 @@ class MeasurementV4Logger:
                 self._fh.flush()
             except Exception:
                 pass
+        if self._open_path:
+            try:
+                self._update_manifest(self._open_path, force=True)
+            except Exception:
+                pass
+        if self._fh is not None:
             try:
                 self._fh.close()
             except Exception:
@@ -777,10 +873,10 @@ class MeasurementV4Logger:
     def log(self, config: Dict[str, Any], row: Dict[str, Any]) -> Dict[str, Any]:
         mode = measurement_log_mode(config)
         if mode == "off":
-            return self.status(config, "disabled", "MEASUREMENT_LOG_MODE=off")
+            return self._disabled_status("MEASUREMENT_LOG_MODE=off")
         profile = "extended" if mode == "extended" else "standard"
         cfg = _v4_target_config(config)
-        target_info = resolve_log_target(cfg, allow_fallback=True)
+        target_info = self._resolve_target_info(cfg)
         path = str(target_info.get("path") or "")
         directory = os.path.dirname(path)
         os.makedirs(directory, exist_ok=True)
@@ -807,29 +903,31 @@ class MeasurementV4Logger:
         row_epoch = _safe_int(v4_row.get("measurement_epoch_ms")) or 0
 
         fallback_event = self._update_fallback_state(target_info)
+        self._rotate_if_needed(cfg, path, fallback_active=bool(target_info.get("fallback_active")))
         file_id = self._file_id_for_path(path)
         if path not in self._row_counts:
             self._row_counts[path] = 0
         if path not in self._first_epoch_ms:
             self._first_epoch_ms[path] = row_epoch
+        self._last_epoch_ms[path] = row_epoch
+        rotation_reason = "FALLBACK_ENTER" if fallback_event and target_info.get("fallback_active") else "SERVICE_START"
 
         try:
-            self._ensure_manifest_entry(directory, path, profile, fields, file_id, row_epoch, target_info, rotation_reason="FALLBACK_ENTER" if fallback_event and target_info.get("fallback_active") else "SERVICE_START")
+            self._register_manifest_file(directory, path, profile, fields, file_id, row_epoch, target_info, rotation_reason=rotation_reason)
         except Exception as exc:
             self._runtime_best_effort(directory, {"event_type": "manifest_write_failed", "failure_reason": str(exc), "measurement_file_id": file_id, "logical_stream_id": self._logical_stream_id, "resolved_primary_file_path": target_info.get("primary_path", ""), "resolved_mountpoint": target_info.get("primary_mountpoint", ""), "fallback_path": target_info.get("fallback_path", "")})
             return self.status(config, "paused_manifest_error", f"Manifest konnte nicht geschrieben werden: {exc}", path=path, free_mb=free_mb, target_info=target_info)
 
-        self._rotate_if_needed(cfg, path, fallback_active=bool(target_info.get("fallback_active")))
         writer = self._get_writer(path, fields)
         writer.writerow({field: self._serialize(v4_row.get(field, "")) for field in fields})
         self._rows_since_flush += 1
-        self._flush_if_due(config)
+        flushed = self._flush_if_due(config)
         self._row_counts[path] = self._row_counts.get(path, 0) + 1
         if _safe_float(v4_row.get("command_effective_w")) is not None:
             self._last_effective_command_w = _safe_float(v4_row.get("command_effective_w"))
 
         try:
-            self._ensure_manifest_entry(directory, path, profile, fields, file_id, row_epoch, target_info, rotation_reason="FALLBACK_ENTER" if fallback_event and target_info.get("fallback_active") else "SERVICE_START")
+            self._update_manifest_if_due(config, path, row_epoch, force=(self._row_counts.get(path, 0) == 1 or flushed))
         except Exception as exc:
             # The row is already written; surface the problem immediately.
             self._runtime_best_effort(directory, {"event_type": "manifest_write_failed", "failure_reason": str(exc), "measurement_file_id": file_id, "logical_stream_id": self._logical_stream_id})
@@ -852,7 +950,7 @@ class MeasurementV4Logger:
 
     def status(self, config: Dict[str, Any], status: str, reason: str, *, path: Optional[str] = None, free_mb: Optional[int] = None, row_size_bytes: Optional[int] = None, target_info: Optional[Dict[str, Any]] = None, fallback_event: bool = False) -> Dict[str, Any]:
         cfg = _v4_target_config(config)
-        target_info = target_info or resolve_log_target(cfg, allow_fallback=True)
+        target_info = target_info or self._resolve_target_info(cfg)
         path = path or str(target_info.get("path") or "")
         current_size = os.path.getsize(path) if path and os.path.exists(path) else 0
         return {
@@ -879,8 +977,103 @@ class MeasurementV4Logger:
             "measurement_primary_exception": target_info.get("primary_exception", ""),
         }
 
+    def _disabled_status(self, reason: str) -> Dict[str, Any]:
+        # Logging=off must be a hard bypass: no path resolution, disk stat, manifest,
+        # snapshot or retention calculation in the regulator cycle.
+        return {
+            "measurement_log_status": "disabled",
+            "measurement_log_status_reason": reason,
+            "measurement_estimated_retention_hours": "",
+            "measurement_current_file_size_bytes": 0,
+            "measurement_free_disk_mb": "",
+            "measurement_log_path": self._open_path or "",
+            "measurement_log_target_type": "",
+            "measurement_log_active_target_type": "",
+            "measurement_fallback_active": False,
+            "measurement_fallback_event": False,
+            "measurement_fallback_count_since_start": self._fallback_counter_since_start,
+            "measurement_last_fallback_time": self._last_fallback_time,
+            "measurement_last_fallback_reason": self._last_fallback_reason,
+        }
+
     def get_current_path(self, config: Dict[str, Any]) -> str:
-        return str(resolve_log_target(_v4_target_config(config), allow_fallback=True).get("path") or "")
+        if measurement_log_mode(config) == "off":
+            return self._open_path or ""
+        return str(self._resolve_target_info(_v4_target_config(config)).get("path") or "")
+
+    def _resolve_target_info(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        target_info = resolve_log_target(config, allow_fallback=True)
+        base_path = str(target_info.get("path") or "")
+        if not base_path:
+            return target_info
+        session_path = self._session_path_for(base_path)
+        if session_path != base_path:
+            target_info = dict(target_info)
+            target_info["path"] = session_path
+        return target_info
+
+    def _session_path_for(self, base_path: str) -> str:
+        if base_path in self._session_path_map:
+            return self._session_path_map[base_path]
+        path = base_path
+        filename = os.path.basename(base_path)
+        # In RCs, never append a new service-start segment to an existing physical
+        # V4 CSV. A new session file prevents RC1/RC2/RC3 rows from sharing one
+        # manifest entry and keeps live diagnostics readable.
+        if filename == "zendure_measurements_v4.csv" and os.path.exists(base_path) and os.path.getsize(base_path) > 0:
+            stem, ext = os.path.splitext(filename)
+            path = os.path.join(os.path.dirname(base_path), f"{stem}_{self._session_suffix}{ext}")
+        self._session_path_map[base_path] = path
+        return path
+
+    def _register_manifest_file(self, directory: str, path: str, profile: str, fields: List[str], file_id: str, row_epoch: int, target_info: Dict[str, Any], rotation_reason: str) -> None:
+        if path in self._manifest_registered_paths:
+            return
+        self._manifest_meta[path] = {
+            "directory": directory,
+            "profile": profile,
+            "fields": fields,
+            "file_id": file_id,
+            "target_info": dict(target_info),
+            "rotation_reason": rotation_reason,
+        }
+        self._ensure_manifest_entry(directory, path, profile, fields, file_id, row_epoch, target_info, rotation_reason)
+        self._manifest_registered_paths.add(path)
+        self._manifest_last_write_epoch[path] = __import__("time").time()
+        self._manifest_last_row_count[path] = self._row_counts.get(path, 0)
+
+    def _update_manifest_if_due(self, config: Dict[str, Any], path: str, row_epoch: int, *, force: bool = False) -> None:
+        if path not in self._manifest_meta:
+            return
+        import time
+        rows_every = max(1, int(config.get("MEASUREMENT_V4_MANIFEST_UPDATE_EVERY_ROWS", 25)))
+        seconds_every = max(5.0, float(config.get("MEASUREMENT_V4_MANIFEST_UPDATE_EVERY_SECONDS", 30)))
+        row_count = self._row_counts.get(path, 0)
+        last_rows = self._manifest_last_row_count.get(path, 0)
+        last_time = self._manifest_last_write_epoch.get(path, 0.0)
+        now = time.time()
+        if not force and (row_count - last_rows) < rows_every and (now - last_time) < seconds_every:
+            return
+        self._update_manifest(path, force=True, row_epoch=row_epoch)
+
+    def _update_manifest(self, path: str, *, force: bool = False, row_epoch: Optional[int] = None) -> None:
+        if path not in self._manifest_meta:
+            return
+        meta = self._manifest_meta[path]
+        if row_epoch is None:
+            row_epoch = self._last_epoch_ms.get(path, self._first_epoch_ms.get(path, 0))
+        self._ensure_manifest_entry(
+            meta["directory"],
+            path,
+            meta["profile"],
+            meta["fields"],
+            meta["file_id"],
+            int(row_epoch or 0),
+            meta["target_info"],
+            meta["rotation_reason"],
+        )
+        self._manifest_last_write_epoch[path] = __import__("time").time()
+        self._manifest_last_row_count[path] = self._row_counts.get(path, 0)
 
     def _file_id_for_path(self, path: str) -> str:
         if path not in self._file_ids:
@@ -924,9 +1117,9 @@ class MeasurementV4Logger:
                 self._writer.writerow({field: field for field in fields})
         return self._writer
 
-    def _flush_if_due(self, config: Dict[str, Any]) -> None:
+    def _flush_if_due(self, config: Dict[str, Any]) -> bool:
         if self._fh is None:
-            return
+            return False
         import time
         max_rows = max(1, int(config.get("MEASUREMENT_LOG_FLUSH_EVERY_ROWS", 100)))
         max_seconds = max(1.0, float(config.get("MEASUREMENT_LOG_FLUSH_EVERY_SECONDS", 60)))
@@ -935,6 +1128,8 @@ class MeasurementV4Logger:
             self._fh.flush()
             self._rows_since_flush = 0
             self._last_flush_epoch = now
+            return True
+        return False
 
     def _serialize(self, value: Any) -> Any:
         if value is None:

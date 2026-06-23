@@ -100,6 +100,10 @@ class ControllerState:
     last_error_time: str = "-"
     safe_state_counter: int = 0
     last_loop_duration_ms: int = 0
+    last_cycle_total_ms: int = 0
+    last_cycle_slowest_step: str = "none"
+    last_cycle_slowest_step_ms: int = 0
+    last_cycle_timing_json: str = "{}"
     loop_counter: int = 0
     last_record_epoch: Optional[float] = None
     last_record_mqtt_commands_sent: int = 0
@@ -441,6 +445,19 @@ class ControllerState:
     def zendure_mqtt_topics_json(self) -> str:
         with self.lock:
             return json.dumps(self.zendure_mqtt_topics, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+    def set_cycle_timing(self, timing_parts: Dict[str, Any], slowest_step: str, slowest_step_ms: int, total_ms: int) -> None:
+        with self.lock:
+            clean: Dict[str, int] = {}
+            for key, value in (timing_parts or {}).items():
+                try:
+                    clean[str(key)] = int(value)
+                except Exception:
+                    continue
+            self.last_cycle_total_ms = int(total_ms or 0)
+            self.last_cycle_slowest_step = str(slowest_step or "none")
+            self.last_cycle_slowest_step_ms = int(slowest_step_ms or 0)
+            self.last_cycle_timing_json = json.dumps(clean, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
     def set_measurement_log_status(self, status: Dict[str, Any]) -> None:
         with self.lock:
@@ -1074,6 +1091,10 @@ class ControllerState:
                 "last_mqtt_command": self.last_mqtt_command,
                 "last_mqtt_command_skipped": self.last_mqtt_command_skipped,
                 "loop_duration_ms": self.last_loop_duration_ms,
+                "cycle_total_without_sleep_ms": self.last_cycle_total_ms,
+                "cycle_slowest_step": self.last_cycle_slowest_step,
+                "cycle_slowest_step_ms": self.last_cycle_slowest_step_ms,
+                "cycle_timing_json": self.last_cycle_timing_json,
                 "loop_counter": self.loop_counter,
                 "last_error": self.last_error,
                 "last_error_time": self.last_error_time,
@@ -1198,6 +1219,10 @@ class ControllerState:
                 "measurement_last_fallback_reason": self.measurement_last_fallback_reason,
                 "safe_state_counter": self.safe_state_counter,
                 "last_loop_duration_ms": self.last_loop_duration_ms,
+                "last_cycle_total_ms": self.last_cycle_total_ms,
+                "last_cycle_slowest_step": self.last_cycle_slowest_step,
+                "last_cycle_slowest_step_ms": self.last_cycle_slowest_step_ms,
+                "last_cycle_timing_json": self.last_cycle_timing_json,
                 "loop_counter": self.loop_counter,
                 "last_shelly_update_time": self.last_shelly_update_time,
                 "last_shelly_update_age_seconds": age_seconds(self.last_shelly_update_epoch),

@@ -37,7 +37,13 @@ class ZendureLocalApiClient:
         ip = str(config.get("ZENDURE_LOCAL_IP", "")).strip()
         if not ip:
             raise RuntimeError("ZENDURE_LOCAL_IP ist leer")
-        timeout = int(config.get("ZENDURE_LOCAL_API_TIMEOUT_SECONDS", 5))
+        configured_timeout = float(config.get("ZENDURE_LOCAL_API_TIMEOUT_SECONDS", 5))
+        # The local API is optional/read-only telemetry. It must never block the
+        # live regulator for several seconds when the device or Wi-Fi path stalls.
+        # Existing configs may still contain 5 s from older releases; RC3 caps the
+        # effective control-loop timeout unless the user explicitly raises the cap.
+        timeout_cap = float(config.get("ZENDURE_LOCAL_API_CONTROL_TIMEOUT_CAP_SECONDS", 1.5))
+        timeout = max(0.2, min(configured_timeout, timeout_cap))
         url = f"http://{ip}/properties/report"
         response = self.session.get(url, timeout=timeout)
         response.raise_for_status()
