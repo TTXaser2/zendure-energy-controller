@@ -1,8 +1,8 @@
-Zendure Energy Controller Version 12.9.4
+Zendure Energy Controller Version 12.10.0-RC1
 
-# Zendure Energy Controller V12.9.4
+# Zendure Energy Controller V12.10.0-RC1
 
-Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, ZEC-MEASUREMENT-V3-Messdaten-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
+Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, ZEC-MEASUREMENT-V4-RC1-Messdaten-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
 Copyright (c) 2026 Eduard Fuchs <info@eduardfuchs.de>
 
@@ -10,6 +10,18 @@ Lizenziert unter AGPL-3.0-or-later. Siehe `LICENSE`, `NOTICE` und `DISCLAIMER.md
 
 
 
+
+## Wichtige Änderungen in V12.10.0-RC1
+
+V12.10.0-RC1 ist ein Release-Candidate für aktives `ZEC-MEASUREMENT-V4`-Logging. Die AUTO-Regelstrategie, der Nachtmodus, Cross-Charge-Logik, MQTT-Subscriptions und MQTT-Kommandostruktur bleiben unverändert. Schwerpunkt ist, reale V4-Logs erzeugen und prüfen zu können, während V3 als Legacy-/Rollback-Pfad im Code erhalten bleibt.
+
+- Neues aktives V4-Logging über `MEASUREMENT_SCHEMA_VERSION=4`.
+- Neue V4-CSV-Datei wird bei Standarddateiname separat als `zendure_measurements_v4.csv` geschrieben, damit vorhandene V3-Dateien nicht mit V4-Header gemischt werden.
+- V4 Standard-Header mit 116 Feldern und optionales Extended-Profil mit drei JSON-Spalten: Packtemperaturen, Headunit-Temperaturen, Zendure-MQTT-Gruppenstatus.
+- Neue Begleitdateien: `zec_measurement_manifest.json`, `zec_config_snapshots.json`, `zec_runtime_events.jsonl`.
+- V4-Fail-Closed-Grundlogik: Wenn Manifest oder Config-Snapshot nicht geschrieben werden kann, pausiert nur das Measurement-Logging; die Regelung und MQTT-Kommandos laufen weiter.
+- V3-Logging bleibt über `MEASUREMENT_SCHEMA_VERSION=3` als Legacy-/Rollback-Pfad verfügbar.
+- Neue Contract-/Writer-Tests für V4; vollständiger Testlauf: 141 Tests OK.
 
 ## Wichtige Änderungen in V12.9.4
 

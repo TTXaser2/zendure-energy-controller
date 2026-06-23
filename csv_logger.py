@@ -272,6 +272,13 @@ def measurement_profile(config: Dict[str, Any]) -> str:
     return "extended" if mode == "extended" else "standard"
 
 
+def measurement_schema_version(config: Dict[str, Any]) -> str:
+    raw = str(config.get("MEASUREMENT_SCHEMA_VERSION", config.get("MEASUREMENT_LOG_SCHEMA", "3")) or "3").strip().lower()
+    if raw in {"4", "v4", "zec4", "zec-measurement-v4"}:
+        return "4"
+    return "3"
+
+
 def compute_config_control_hash(config: Dict[str, Any]) -> str:
     relevant = {key: config.get(key) for key in CONTROL_HASH_KEYS if key in config}
     payload = json.dumps(relevant, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
@@ -559,6 +566,7 @@ class CsvRotatingLogger:
         self._last_fallback_time = ""
         self._last_fallback_reason = ""
         self._last_fallback_signature = ""
+        self._v4_logger = None
 
     def close(self) -> None:
         if self._fh is not None:
@@ -574,6 +582,11 @@ class CsvRotatingLogger:
         self._writer = None
         self._open_path = None
         self._rows_since_flush = 0
+        if self._v4_logger is not None:
+            try:
+                self._v4_logger.close()
+            except Exception:
+                pass
 
     def _get_writer(self, path: str):
         write_header = not os.path.exists(path) or os.path.getsize(path) == 0
@@ -600,6 +613,11 @@ class CsvRotatingLogger:
             self._last_flush_epoch = now
 
     def log(self, config: Dict[str, Any], row: Dict[str, Any]) -> Dict[str, Any]:
+        if measurement_schema_version(config) == "4":
+            if self._v4_logger is None:
+                from measurement_v4 import MeasurementV4Logger
+                self._v4_logger = MeasurementV4Logger()
+            return self._v4_logger.log(config, row)
         mode = measurement_log_mode(config)
         if mode == "off":
             return self.status(config, "disabled", "MEASUREMENT_LOG_MODE=off")
@@ -729,6 +747,11 @@ class CsvRotatingLogger:
         }
 
     def get_current_path(self, config: Dict[str, Any]) -> str:
+        if measurement_schema_version(config) == "4":
+            if self._v4_logger is None:
+                from measurement_v4 import MeasurementV4Logger
+                self._v4_logger = MeasurementV4Logger()
+            return self._v4_logger.get_current_path(config)
         path, fallback_active, reason = resolve_log_path(config, allow_fallback=True)
         self._last_fallback_active = fallback_active
         self._last_target_reason = reason

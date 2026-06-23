@@ -118,6 +118,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # Historie / Messdaten-Logging
     "GRAPH_HISTORY_LIMIT": 300,
     "MEASUREMENT_LOG_MODE": "off",
+    "MEASUREMENT_SCHEMA_VERSION": "4",
     "MEASUREMENT_LOG_STORAGE_TARGET": "internal_sd",
     "MEASUREMENT_LOG_MOUNTPOINT": "",
     "MEASUREMENT_LOG_DIR": "logs",
@@ -252,10 +253,11 @@ CONFIG_SCHEMA: Dict[str, Dict[str, Any]] = {
 
     "GRAPH_HISTORY_LIMIT": {"group": "Messdaten / Historie", "label": "Graph-Historie", "type": "int", "min": 50, "max": 5000, "description": "Anzahl der im RAM gehaltenen Graph-Datenpunkte. Diese Historie ist unabhängig vom dauerhaften Messdaten-Logging."},
     "MEASUREMENT_LOG_MODE": {"group": "Messdaten / Historie", "label": "Messdaten-Logging", "type": "select", "options": {"off": "Aus", "standard": "Standard", "extended": "Erweitert"}, "description": "Aus: keine zyklischen Messdaten, schont die SD-Karte. Standard: vollständige Reglerdiagnose inklusive Freshness, MQTT-Stale-Aggregat, Sollwertkaskade, Kommando und Szenario ohne Zendure. Erweitert: Standard plus Detaildaten für Simulation, What-if und tiefe MQTT-/Freshness-Analyse; erzeugt größere Dateien und sollte gezielt genutzt werden."},
+    "MEASUREMENT_SCHEMA_VERSION": {"group": "Messdaten / Historie", "label": "Measurement-Schema", "type": "select", "options": {"4": "ZEC-MEASUREMENT-V4", "3": "Legacy V3"}, "description": "Legt das dauerhafte Measurement-Schema fest. V4 schreibt separate V4-CSV-Dateien plus Manifest, Config-Snapshots und Runtime-JSONL. Legacy V3 bleibt für Rollback/Altanalyse verfügbar."},
     "MEASUREMENT_LOG_STORAGE_TARGET": {"group": "Messdaten / Historie", "label": "Speicherziel", "type": "select", "options": {"internal_sd": "Interne SD-Karte", "external_mount": "erkannter USB-/Mountpoint", "custom_path": "benutzerdefinierter Pfad"}, "description": "Legt fest, wo Messdaten primär geschrieben werden. Bei erkanntem USB-/Mountpoint wird ein schreibbarer externer Mount automatisch verwendet; das Feld USB-/Mountpoint kann optional einen bestimmten Mountpoint festlegen."},
     "MEASUREMENT_LOG_MOUNTPOINT": {"group": "Messdaten / Historie", "label": "USB-/Mountpoint", "type": "str", "description": "Optionaler Mountpoint für externes Messdaten-Logging, z. B. /media/pi/USBSTICK oder /mnt/zec-logs. Wenn leer, wird bei Speicherziel external_mount ein erkannter schreibbarer USB-/Mountpoint automatisch verwendet."},
-    "MEASUREMENT_LOG_DIR": {"group": "Messdaten / Historie", "label": "Messdaten-Verzeichnis / Custom-Pfad", "type": "str", "description": "Verzeichnis für ZEC-MEASUREMENT-V3-Messdaten. Bei internal_sd/custom_path wird dieses Feld direkt verwendet. Bei external_mount wird es als Unterordner auf dem USB-/Mountpoint verwendet, z. B. USB + ZEC/logs."},
-    "MEASUREMENT_LOG_FILE": {"group": "Messdaten / Historie", "label": "Messdaten-Datei", "type": "str", "description": "Dateiname der aktuellen ZEC-MEASUREMENT-V3-Datei, standardmäßig zendure_measurements.csv."},
+    "MEASUREMENT_LOG_DIR": {"group": "Messdaten / Historie", "label": "Messdaten-Verzeichnis / Custom-Pfad", "type": "str", "description": "Verzeichnis für ZEC-MEASUREMENT-Messdaten. Bei internal_sd/custom_path wird dieses Feld direkt verwendet. Bei external_mount wird es als Unterordner auf dem USB-/Mountpoint verwendet, z. B. USB + ZEC/logs."},
+    "MEASUREMENT_LOG_FILE": {"group": "Messdaten / Historie", "label": "Messdaten-Datei", "type": "str", "description": "Dateiname der aktuellen Measurement-Datei. Bei V4 und Standardname schreibt RC1 automatisch zendure_measurements_v4.csv, damit V3 und V4 nicht gemischt werden."},
     "MEASUREMENT_LOG_MAX_BYTES": {"group": "Messdaten / Historie", "label": "Max Dateigröße", "type": "int", "min": 100_000, "max": 100_000_000, "unit": "Bytes", "description": "Bei Überschreitung wird rotiert. Zusammen mit der Dateianzahl bestimmt dieser Wert die geschätzte Aufbewahrung."},
     "MEASUREMENT_LOG_BACKUP_COUNT": {"group": "Messdaten / Historie", "label": "Rotationsdateien", "type": "int", "min": 1, "max": 20, "description": "Anzahl der Messdaten-Dateien, die rollierend behalten werden. Höhere Werte verlängern die analysierbare Historie, benötigen aber mehr Speicherplatz."},
     "MEASUREMENT_LOG_MIN_FREE_DISK_MB": {"group": "Messdaten / Historie", "label": "Mindestfreier Speicher", "type": "int", "min": 100, "max": 100000, "unit": "MB", "description": "Mindestfreier Speicher am aktuell aktiven Messdatenziel: interne SD, externer USB-/Mountpoint oder bei aktivem Fallback der SD-Fallback-Pfad. Wenn weniger Speicher frei ist, pausiert das Messdaten-Logging; die Regelung läuft weiter."},
@@ -458,6 +460,13 @@ def validate_config(candidate: Dict[str, Any]) -> Tuple[Dict[str, Any], bool]:
             changed = True
         if "SECOND_BATTERY_STALE_BLOCK_CHARGE" not in candidate and "EVCC_STALE_BLOCK_CHARGE" in result:
             result["SECOND_BATTERY_STALE_BLOCK_CHARGE"] = bool(result.get("EVCC_STALE_BLOCK_CHARGE", True))
+            changed = True
+
+    # V12.10 RC1: neue/normalisierte Installationen schreiben standardmäßig V4.
+    # Bestehende Installationen können explizit auf Legacy V3 zurückgestellt werden.
+    if isinstance(candidate, dict):
+        if "MEASUREMENT_SCHEMA_VERSION" not in candidate and "MEASUREMENT_LOG_SCHEMA" not in candidate:
+            result["MEASUREMENT_SCHEMA_VERSION"] = "4"
             changed = True
 
     # V12.9: einmalige Übersetzung alter CSV_LOG_*-Keys in das neue
