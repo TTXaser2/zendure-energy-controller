@@ -67,7 +67,10 @@ class V1286HousekeepingTests(unittest.TestCase):
         self.assertEqual(shelly.calls, 1)
         self.assertEqual(state.sma_battery_display_power, -90.0)
         self.assertEqual(state.sma_battery_discharge_power, 90.0)
-        self.assertEqual(state.effective_export_power, 810)
+        # RC6 keeps effective export as the real export candidate; symmetric
+        # Cross-Charge reduction is applied later to the signed target so it is
+        # not subtracted twice.
+        self.assertEqual(state.effective_export_power, 1000)
         self.assertTrue(state.second_battery_data_used_for_control)
         self.assertTrue(state.grid_power_used_for_control)
 

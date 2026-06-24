@@ -90,6 +90,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "SECOND_BATTERY_CAPACITY_UNIT": "kWh",
     "SECOND_BATTERY_DISCHARGE_SIGN": 1,
     "SMA_DISCHARGE_BLOCK_W": 80,
+    "CROSS_CHARGE_SIGNIFICANT_W": 80,
     "CROSS_CHARGE_RESERVE_W": 100,
     "MIN_EFFECTIVE_SURPLUS_FOR_CHARGE_W": 150,
     "SMA_GUARD_RAMP_DOWN_W": 250,
@@ -233,7 +234,8 @@ CONFIG_SCHEMA: Dict[str, Dict[str, Any]] = {
     "SECOND_BATTERY_POWER_UNIT": {"group": "Cross-Charge-Schutz", "label": "Leistungseinheit", "type": "select", "options": {"W": "W", "kW": "kW"}, "description": "Einheit des Leistungswerts der Zusatzbatterie. Intern wird immer auf Watt normalisiert."},
     "SECOND_BATTERY_CAPACITY_UNIT": {"group": "Cross-Charge-Schutz", "label": "Kapazitätseinheit", "type": "select", "options": {"kWh": "kWh", "Wh": "Wh"}, "description": "Einheit des Kapazitätswerts der Zusatzbatterie. Die Statusseite zeigt den Wert in kWh an."},
     "SECOND_BATTERY_DISCHARGE_SIGN": {"group": "Cross-Charge-Schutz", "label": "Zusatzbatterie Entlade-Vorzeichen", "type": "int", "min": -1, "max": 1, "description": "+1 bedeutet: positive MQTT-Leistung = Zusatzbatterie entlädt. -1 bedeutet: negative MQTT-Leistung = Zusatzbatterie entlädt. Die Statusanzeige normiert danach auf positiv = Ladung, negativ = Entladung."},
-    "SMA_DISCHARGE_BLOCK_W": {"group": "Cross-Charge-Schutz", "label": "Entlade-Blockgrenze", "type": "int", "min": 0, "max": 5000, "unit": "W", "description": "Ab dieser Entladeleistung der Zusatzbatterie wird Zendure-Laden konservativer behandelt. Oberhalb der Grenze wird der Cross-Charge-Schutz sichtbar aktiv und verhindert, dass Energie aus einer Batterie in die andere verschoben wird."},
+    "SMA_DISCHARGE_BLOCK_W": {"group": "Cross-Charge-Schutz", "label": "Entlade-Blockgrenze (Legacy)", "type": "int", "min": 0, "max": 5000, "unit": "W", "description": "Legacy-Wert für ältere Konfigurationen. Neue Installationen verwenden Cross-Charge-Signifikanzschwelle."},
+    "CROSS_CHARGE_SIGNIFICANT_W": {"group": "Cross-Charge-Schutz", "label": "Cross-Charge-Signifikanzschwelle", "type": "int", "min": 0, "max": 5000, "unit": "W", "description": "Ab diesem gegenläufigen Leistungsfluss zwischen Zusatzbatterie und Zendure wird der Cross-Charge-Schutz aktiv. Eine interne niedrigere Freigabeschwelle verhindert hektisches Ein-/Ausschalten."},
     "CROSS_CHARGE_RESERVE_W": {"group": "Cross-Charge-Schutz", "label": "Cross-Charge Reserve", "type": "int", "min": 0, "max": 1000, "unit": "W", "description": "Sicherheitsreserve, die vom sichtbaren Überschuss abgezogen wird, bevor Zendure lädt."},
     "MIN_EFFECTIVE_SURPLUS_FOR_CHARGE_W": {"group": "Cross-Charge-Schutz", "label": "Mindest-Überschuss für Ladung", "type": "int", "min": 0, "max": 2000, "unit": "W", "description": "Zendure lädt nur, wenn nach Zusatzbatterie-Abzug und Reserve mindestens dieser Überschuss übrig bleibt."},
     "SMA_GUARD_RAMP_DOWN_W": {"group": "Cross-Charge-Schutz", "label": "Cross-Charge Ramp-Down", "type": "int", "min": 1, "max": 2400, "unit": "W", "description": "Schrittweite, mit der Zendure-Ladung reduziert wird, wenn der Cross-Charge-Schutz blockiert."},
@@ -468,6 +470,12 @@ def validate_config(candidate: Dict[str, Any]) -> Tuple[Dict[str, Any], bool]:
             changed = True
         if "SECOND_BATTERY_STALE_BLOCK_CHARGE" not in candidate and "EVCC_STALE_BLOCK_CHARGE" in result:
             result["SECOND_BATTERY_STALE_BLOCK_CHARGE"] = bool(result.get("EVCC_STALE_BLOCK_CHARGE", True))
+            changed = True
+        if "CROSS_CHARGE_SIGNIFICANT_W" not in candidate:
+            try:
+                result["CROSS_CHARGE_SIGNIFICANT_W"] = int(float(result.get("SMA_DISCHARGE_BLOCK_W", 80)))
+            except Exception:
+                result["CROSS_CHARGE_SIGNIFICANT_W"] = 80
             changed = True
 
     # V12.10: neue/normalisierte Installationen schreiben standardmäßig V4.

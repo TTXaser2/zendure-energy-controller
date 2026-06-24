@@ -1,6 +1,6 @@
-Zendure Energy Controller Version 12.10.0-RC5
+Zendure Energy Controller Version 12.10.0-RC6
 
-# Zendure Energy Controller V12.10.0-RC5
+# Zendure Energy Controller V12.10.0-RC6
 
 Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, ZEC-MEASUREMENT-V4-Messdaten-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
@@ -11,9 +11,9 @@ Lizenziert unter AGPL-3.0-or-later. Siehe `LICENSE`, `NOTICE` und `DISCLAIMER.md
 
 
 
-## Wichtige Änderungen in V12.10.0-RC5
+## Wichtige Änderungen in V12.10.0-RC6
 
-V12.10.0-RC5 stellt wieder gültige V4-Logs her, repariert die V4-Rotation/Manifest-Führung, verbessert das Analysepaket-Tool und ergänzt eine eng begrenzte Nachtmodus-Exit-Neutralisierung. Die AUTO-Regelstrategie, symmetrische Cross-Charge-Strategie, MQTT-Subscriptions und MQTT-Kommandostruktur bleiben unverändert.
+V12.10.0-RC6 ergänzt den symmetrischen Cross-Charge-Schutz in AUTO/HOLD: gegenläufige Flüsse zwischen Zusatzbatterie/SMA und Zendure werden in beiden Richtungen erkannt und proportional reduziert oder neutralisiert. Zusätzlich enthält RC6 Nacharbeiten an V4-Manifest/Mapping, Analyse-Service-Dateipfaden und Cross-Charge-Auswertung. NIGHT_DISCHARGE, feste manuelle Modi, MQTT-Subscriptions und MQTT-Kommandostruktur bleiben unverändert.
 
 - V4-Rotation ist manifestgeführt: Jede physische V4-CSV-Datei bekommt einen eigenen Manifest-Eintrag. Es werden keine versteckten `_1`/`_2`-Rotationsdateien ohne Manifest-Eintrag mehr erzeugt.
 - Analyse-Service und `tools/replay_csv.py` bleiben V3/V4-strikt und können neue V4-Rotationsdateien vertraglich sauber auswerten.

@@ -98,7 +98,7 @@ def _int_cfg(cfg: Dict[str, Any], key: str, default: int) -> int:
 
 
 def log_dir_from_config(cfg: Dict[str, Any]) -> Path:
-    path_str, _, _ = resolve_log_path(cfg, allow_fallback=True)
+    path_str, _, _ = resolve_log_path(cfg, allow_fallback=False)
     path = Path(path_str).parent
     if not path.is_absolute():
         path = PROJECT_ROOT / path
@@ -651,7 +651,7 @@ def render_result_html(result: Dict[str, Any], job_id: str) -> str:
     <h2 id="deadband">Deadband-Erfolg</h2><p class="section-intro">Bewertet, ob die Totzone sinnvoll Ruhe erzeugt oder ob der Regler trotz vorhandener Reserve zu oft außerhalb des Zielbands bleibt.</p><table>{deadband_table(result)}</table>
     <h2 id="mqtt">MQTT-Kommandowirkung</h2><p class="section-intro">Bewertet grob, ob gesendete MQTT-Kommandos anschließend eine erkennbare Verringerung der Netzabweichung bewirken. Nicht bewertbar bedeutet meist: Safe-State, fehlende Folgedaten oder überlagerte Last-/PV-Sprünge.</p><table>{command_efficiency_table(result)}</table>
     <h2 id="oszillation">Oszillation / Richtungswechsel</h2><p class="section-intro">Sucht nach unruhiger Regelung: häufige Vorzeichenwechsel, schnelle Gegenbefehle, große Sollwertsprünge und Moduswechsel.</p><table>{oscillation_table(result)}</table>
-    <h2 id="cross">Cross-Charge-Analyse</h2><p class="section-intro">Bewertet, ob die Zusatzbatterie entlädt, während Zendure gleichzeitig lädt. Kritische Überschneidungen deuten auf unerwünschtes Umladen zwischen Speichern hin.</p><table>{cross_charge_table(result)}</table>
+    <h2 id="cross">Cross-Charge-Analyse</h2><p class="section-intro">Bewertet gegenläufige Batterieflüsse in beiden Richtungen: Zusatzbatterie entlädt während Zendure lädt oder Zusatzbatterie lädt während Zendure entlädt. Die Analyse unterscheidet Regler-Gegenfluss von kurzzeitigem Istwert-/Telemetrie-Nachlauf.</p><table>{cross_charge_table(result)}</table>
     <h2 id="highsoc">Nachtentladung und High-SOC</h2><p class="section-intro">Zeigt Zeitanteile bei SOC-Grenzen und eine leichte High-SOC-Ladeannahme-Diagnose. Die Werte helfen einzuordnen, ob Lade-/Entladegrenzen oder hoher SOC die Regelwirkung begrenzen.</p><table>{high_soc_table(result)}</table>
     <h2 id="matrix">Betriebszustandsmatrix</h2><p class="section-intro">Verdichtet die Analyse nach abgeleiteten Betriebszuständen. So sieht man, ob Abweichungen eher in AUTO, Nachtentladung, Safe-State oder Limit-Situationen auftreten.</p><table>{mode_quality_table(result)}</table>
     <h2 id="ereignisse">Ereignisprotokoll</h2><p class="section-intro">Chronologische Auswahl erkannter Auffälligkeiten und Zustandswechsel. Die Liste ist begrenzt, damit große Analysen die Oberfläche nicht überladen.</p><table>{events_table(result)}</table>
@@ -759,7 +759,7 @@ def build_app() -> FastAPI:
         body{{font-family:Arial,sans-serif;margin:20px;background:#f5f7fb;color:#111827}}
         a{{color:#1565c0}} .section{{background:white;padding:18px;border-radius:12px;margin-bottom:18px;box-shadow:0 2px 8px #ddd}}
         table{{border-collapse:collapse;width:100%;margin-bottom:16px}} th,td{{border:1px solid #ddd;padding:8px;text-align:left;vertical-align:top}} th{{background:#f1f5f9;width:34%}}
-        .error{{background:#fee2e2;border:1px solid #f87171;padding:12px;border-radius:8px}}
+        .error{{background:#7f1d1d;border:1px solid #ef4444;color:#fff;padding:12px;border-radius:8px;overflow-wrap:anywhere}}
         .notice{{background:#eef6ff;border:1px solid #bfdbfe;padding:10px;border-radius:8px}}
         .small{{font-size:0.92em;color:#64748b}} select{{min-width:320px;max-width:100%}} button{{padding:7px 12px;border-radius:6px;cursor:pointer}}
         button:disabled{{opacity:.55;cursor:not-allowed}} .topnav{{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:10px}} .downloads a{{display:inline-block;margin-right:14px}}
@@ -782,7 +782,7 @@ def build_app() -> FastAPI:
         </style></head><body id="top" class="mode-{html.escape(ui_mode, quote=True)}">
         <div class="topnav"><a href="{html.escape(controller_url, quote=True)}">← Zurück zum Zendure Controller</a><span class="small">Analyse-Dienst: {html.escape(replay_url)}</span></div>
         <div class="section"><h1>Zendure Replay Analyse V{REPLAY_VERSION}</h1>
-        <p>Separater Analyse-Dienst für Measurement-CSV-Dateien. V3-Dateien können ausgewertet werden; V4-Dateien werden in diesem RC per Preflight geprüft. Der Live-Controller wird hiervon nicht importiert oder beeinflusst.</p>
+        <p>Separater Analyse-Dienst für Measurement-CSV-Dateien. V3- und V4-Istdaten können ausgewertet werden. Der Live-Controller wird hiervon nicht importiert oder beeinflusst.</p>
         <form id="analysisForm">
             <label>CSV-Dateien:</label><br>
             <select id="filesSelect" name="files" multiple size="8">{options}</select><br><br>

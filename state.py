@@ -75,6 +75,8 @@ class ControllerState:
     last_target_before_smoothing: int = 0
     last_target_after_smoothing: int = 0
     last_target_after_ramp: int = 0
+    cross_charge_guard_latched: bool = False
+    cross_charge_last_direction: str = ""
 
     # Modus / Diagnose
     current_mode: str = "STARTUP"
@@ -1030,7 +1032,7 @@ class ControllerState:
                 "control_path": self.technical_control_path,
                 "control_path_label": path_label(self.technical_control_path),
                 "deadband_active": self.current_mode in {"HOLD", "HOLD_DEADBAND"} or "DEADBAND" in self.technical_control_path,
-                "cross_charge_guard_active": "CROSS_CHARGE" in self.technical_control_path or any(x in active_limiters for x in ("SMA_DISCHARGE", "LOW_EFFECTIVE_SURPLUS")),
+                "cross_charge_guard_active": "CROSS_CHARGE" in self.technical_control_path or any(x in active_limiters for x in ("CROSS_CHARGE", "SMA_DISCHARGE", "LOW_EFFECTIVE_SURPLUS")),
                 "night_discharge_window_active": self.current_mode == "NIGHT_DISCHARGE" or self.night_discharge_stop_reason != "none",
                 "night_discharge_base_active": self.current_mode == "NIGHT_DISCHARGE",
                 "night_discharge_reserve_active": "NIGHT_RESERVE_SOC" in active_limiters or self.night_discharge_stop_reason != "none",

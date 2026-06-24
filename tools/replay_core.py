@@ -644,7 +644,7 @@ def _make_recommendations(result: Dict[str, Any]) -> List[Dict[str, str]]:
     if cmd.get("no_effect_percent", 0) > 25:
         recs.append({"severity": "info", "topic": "MQTT-Kommandowirkung", "text": "Ein relevanter Anteil der MQTT-Kommandos zeigt keine erkennbare Wirkung. Prüfe MIN_COMMAND_CHANGE_W, Zendure-Reaktionszeit und Telemetrieaktualität."})
     if cross.get("rating") in {"yellow", "red"}:
-        recs.append({"severity": "warning", "topic": "Cross-Charge", "text": "Cross-Charge zeigt kritische Überschneidungen. Prüfe SMA_DISCHARGE_BLOCK_W, CROSS_CHARGE_RESERVE_W und MIN_EFFECTIVE_SURPLUS_FOR_CHARGE_W."})
+        recs.append({"severity": "warning", "topic": "Cross-Charge", "text": "Cross-Charge zeigt gegenläufige Batterieflüsse. Prüfe, ob es Regler-Gegenfluss oder nur kurzen Istwert-/Telemetrie-Nachlauf gab; relevant sind CROSS_CHARGE_SIGNIFICANT_W und die Cross-Charge-Flags im V4-Log."})
     if not recs:
         recs.append({"severity": "ok", "topic": "Gesamtbewertung", "text": "Keine eindeutige Handlungsempfehlung erkannt. Die Regelung wirkt in den ausgewählten Daten unauffällig oder die Abweichungen sind überwiegend systembedingt."})
     return recs[:10]
@@ -847,22 +847,27 @@ def analyze_rows(
                 _event(events, row, "info", "cross_charge_block", "Cross-Charge-Schutz begrenzt oder blockiert Zendure-Ladung", {"limiters": _limiter_text(row)})
         was_cross_blocked = blocked
 
-        sma_discharge = _second_discharge_power(row)
-        zendure_charge = max(0.0, actual)
-        zendure_target_charge = max(0.0, target)
-        critical = sma_discharge >= cross_discharge_threshold_w and zendure_charge >= zendure_charge_threshold_w
+        second_power = _second_display_power(row)
+        actual_conflict_power = abs(actual) if (second_power * actual) < 0 else 0.0
+        target_conflict_power = abs(target) if (second_power * target) < 0 else 0.0
+        second_conflict_power = abs(second_power)
+        critical = second_conflict_power >= cross_discharge_threshold_w and actual_conflict_power >= zendure_charge_threshold_w
+        regulator_risk = second_conflict_power >= cross_discharge_threshold_w and target_conflict_power >= zendure_charge_threshold_w
         if critical:
             cross_critical_s += dt
-            cross_sma_discharge_wh += sma_discharge * dt / 3600.0
-            cross_zendure_charge_wh += zendure_charge * dt / 3600.0
-            cross_sma_discharge_samples.append(sma_discharge)
-            cross_zendure_charge_samples.append(zendure_charge)
+            cross_sma_discharge_wh += second_conflict_power * dt / 3600.0
+            cross_zendure_charge_wh += actual_conflict_power * dt / 3600.0
+            cross_sma_discharge_samples.append(second_conflict_power)
+            cross_zendure_charge_samples.append(actual_conflict_power)
             if not was_cross_critical:
                 cross_critical_events += 1
-                _event(events, row, "warning", "cross_charge_overlap", f"Kritische Überschneidung: Zusatzbatterie entlädt ({sma_discharge:.0f} W), Zendure lädt ({zendure_charge:.0f} W)")
+                direction = "Zusatzbatterie lädt, Zendure entlädt" if second_power > 0 else "Zusatzbatterie entlädt, Zendure lädt"
+                severity = "warning" if regulator_risk else "info"
+                kind = "Regler-Gegenfluss" if regulator_risk else "Istwert-/Nachlauf-Gegenfluss"
+                _event(events, row, severity, "cross_charge_overlap", f"{kind}: {direction} ({second_conflict_power:.0f} W / {actual_conflict_power:.0f} W)")
         was_cross_critical = critical
-        if blocked and zendure_target_charge > zendure_charge:
-            cross_prevented_charge_wh += (zendure_target_charge - zendure_charge) * dt / 3600.0
+        if blocked and target_conflict_power > actual_conflict_power:
+            cross_prevented_charge_wh += (target_conflict_power - actual_conflict_power) * dt / 3600.0
 
         charge_reserve = max(0.0, max_charge_power_w - max(0.0, actual))
         discharge_reserve = max(0.0, max_discharge_power_w - max(0.0, -actual))
@@ -873,7 +878,7 @@ def analyze_rows(
         if safe_state:
             charge_reserve = discharge_reserve = 0.0
         if blocked:
-            charge_reserve = min(charge_reserve, max(0.0, abs(grid_value) - sma_discharge))
+            charge_reserve = min(charge_reserve, max(0.0, abs(grid_value) - max(0.0, -second_power)))
 
         if grid_value < -target_band_w:
             controllable_part = min(abs_grid, charge_reserve)
@@ -994,10 +999,10 @@ def analyze_rows(
 
     if cross_critical_s >= 300 or (cross_sma_discharge_samples and max(cross_sma_discharge_samples) >= 500 and cross_critical_s >= 60):
         cross_rating = "red"
-        cross_rating_reason = "Längere oder leistungsstarke gleichzeitige Zusatzbatterie-Entladung und Zendure-Ladung erkannt."
+        cross_rating_reason = "Längere oder leistungsstarke gegenläufige Istleistung zwischen Zusatzbatterie und Zendure erkannt."
     elif cross_critical_s > 0:
         cross_rating = "yellow"
-        cross_rating_reason = "Kurze oder geringe kritische Überschneidung erkannt."
+        cross_rating_reason = "Kurze oder geringe gegenläufige Istleistungs-Überschneidung erkannt."
 
     osc_score = target_sign_changes + short_reverse_commands * 2 + large_target_steps * 0.5
     osc_rating = "green" if osc_score <= 5 else ("yellow" if osc_score <= 15 else "red")
@@ -1272,7 +1277,7 @@ def analyze_files(
     result["total_size_bytes"] = sum(f.size_bytes for f in files)
     if schema_family == "v4":
         result["schema"] = "ZEC-MEASUREMENT-V4"
-        result["analysis_version"] = "12.10.0-rc5"
+        result["analysis_version"] = "12.10.0-rc6"
         result["v4_analysis"] = _v4_metadata(merged, files, duplicates)
         # Add concise data-quality warning for V4-specific UNKNOWN diagnostics.
         v4m = result["v4_analysis"]

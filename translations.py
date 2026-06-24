@@ -12,6 +12,7 @@ LIMITER_LABELS = {
     "MIN_SOC": "Mindest-SOC erreicht",
     "MAX_SOC": "Maximal-SOC erreicht",
     "SMA_DISCHARGE": "Zusatzbatterie-Entladung erkannt",
+    "CROSS_CHARGE": "Cross-Charge-Schutz aktiv",
     "LOW_EFFECTIVE_SURPLUS": "Zu wenig echter PV-Überschuss",
     "SMA_OR_LOW_EFFECTIVE_SURPLUS": "Cross-Charge-Schutz / zu wenig echter PV-Überschuss",
     "MQTT_DISCONNECTED": "MQTT-Verbindung getrennt",
@@ -35,6 +36,9 @@ PATH_LABELS = {
     "NIGHT_MODE -> RESERVE_SOC -> AUTO": "Nachtmodus pausiert: Reserve-SOC erreicht, AUTO-Regelung aktiv",
     "GRID -> DISCHARGE_CONTROL -> OUTPUT": "Netzbezug erkannt: Zendure entlädt",
     "GRID -> CROSS_CHARGE -> CHARGE_CONTROL -> INPUT": "PV-Überschuss erkannt: Zendure lädt unter Berücksichtigung des Cross-Charge-Schutzes",
+    "GRID -> CROSS_CHARGE -> DISCHARGE_CONTROL -> OUTPUT": "Netzbezug erkannt: Zendure entlädt unter Berücksichtigung des Cross-Charge-Schutzes",
+    "GRID -> CROSS_CHARGE -> HOLD_CORRECTED": "Cross-Charge-Schutz: bestehender Zielwert wurde reduziert oder neutralisiert",
+    "GRID -> DEADBAND -> CROSS_CHARGE -> HOLD_POWER": "Totzone aktiv: gehaltener Zielwert wurde durch Cross-Charge-Schutz reduziert",
     "GRID -> CROSS_CHARGE -> CHARGE_RAMP_DOWN": "Cross-Charge-Schutz: Zendure-Ladung wird reduziert",
     "GRID -> DISCHARGE_RAMP_DOWN": "Entladeleistung wird kontrolliert reduziert",
 }

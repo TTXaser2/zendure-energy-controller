@@ -170,11 +170,11 @@ class ZendureController:
 
         grid_power = self.state.grid_power
 
-        if self.sma_guard_blocks_existing_charge(cfg):
+        if self.cross_charge_guard_corrects_existing_target(cfg):
             return
 
         if abs(grid_power) <= cfg["DEADBAND_W"]:
-            self.handle_deadband()
+            self.handle_deadband(cfg)
             return
 
         if grid_power > 0:
@@ -444,7 +444,11 @@ class ZendureController:
         if evcc_stale and cfg.get("SECOND_BATTERY_STALE_BLOCK_CHARGE", cfg.get("EVCC_STALE_BLOCK_CHARGE", True)):
             effective = 0
         else:
-            effective = max(0, int(export_power - sma_discharge - cfg.get("CROSS_CHARGE_RESERVE_W", 100)))
+            # RC6: effective export is the real export candidate. Symmetric
+            # Cross-Charge reduction is applied later to the signed Zendure target
+            # in both directions. Do not pre-subtract one direction here, otherwise
+            # the target would be reduced twice.
+            effective = max(0, int(export_power))
 
         with self.state.lock:
             self.state.effective_export_power = effective
@@ -475,25 +479,141 @@ class ZendureController:
         return (time.time() - last_soc) <= cfg.get("SOC_STALE_TIMEOUT_SECONDS", 90)
 
     def sma_guard_blocks_existing_charge(self, cfg: Dict[str, Any]) -> bool:
-        if not cross_charge_enabled(cfg):
-            return False
+        # Backward-compatible method name kept for older tests; RC6 uses the
+        # symmetric implementation for both battery-flow directions.
+        return self.cross_charge_guard_corrects_existing_target(cfg)
+
+
+    def _cross_charge_thresholds(self, cfg: Dict[str, Any]) -> tuple:
+        try:
+            engage = int(float(cfg.get("CROSS_CHARGE_SIGNIFICANT_W", cfg.get("SMA_DISCHARGE_BLOCK_W", 80))))
+        except Exception:
+            engage = 80
+        engage = max(0, engage)
+        release = max(20, int(engage / 2)) if engage > 0 else 0
+        return engage, release
+
+    def _apply_symmetric_cross_charge_limit(self, cfg: Dict[str, Any], target_signed_w: int) -> Dict[str, Any]:
+        """Return a corrected signed Zendure target for AUTO/HOLD Cross-Charge protection.
+
+        Sign convention: target >0 charges Zendure, target <0 discharges Zendure.
+        second_battery_display_power >0 means the second battery charges, <0 discharges.
+        The protection reduces a conflicting Zendure target proportionally, but never
+        reverses direction by itself.
+        """
+        original = int(target_signed_w or 0)
+        result = {
+            "target": original,
+            "active": False,
+            "limited": False,
+            "blocked": False,
+            "reason": "",
+            "direction": "",
+        }
+
+        if not cross_charge_enabled(cfg) or original == 0:
+            with self.state.lock:
+                self.state.cross_charge_guard_latched = False
+                self.state.cross_charge_last_direction = ""
+            return result
 
         with self.state.lock:
-            last_input = self.state.last_input_power
-            sma_discharge = self.state.sma_battery_discharge_power
+            second_power = float(self.state.sma_battery_display_power or 0.0)
+            valid = bool(self.state.second_battery_data_valid and self.state.second_battery_data_fresh)
+            was_latched = bool(self.state.cross_charge_guard_latched)
 
-        if last_input <= 0:
+        if not valid or second_power == 0 or (second_power * original) >= 0:
+            with self.state.lock:
+                self.state.cross_charge_guard_latched = False
+                self.state.cross_charge_last_direction = ""
+            return result
+
+        engage, release = self._cross_charge_thresholds(cfg)
+        magnitude = abs(second_power)
+        active = magnitude >= engage or (was_latched and magnitude >= release)
+        if not active:
+            with self.state.lock:
+                self.state.cross_charge_guard_latched = False
+                self.state.cross_charge_last_direction = ""
+            return result
+
+        corrected = original + int(round(second_power))
+        if original > 0:
+            corrected = max(0, min(original, corrected))
+            direction = "SECOND_BATTERY_DISCHARGES_ZENDURE_CHARGES"
+            phrase = "Zusatzbatterie entlädt, Zendure-Ladung wird reduziert"
+        else:
+            corrected = min(0, max(original, corrected))
+            direction = "SECOND_BATTERY_CHARGES_ZENDURE_DISCHARGES"
+            phrase = "Zusatzbatterie lädt, Zendure-Entladung wird reduziert"
+
+        blocked = corrected == 0
+        if blocked:
+            phrase = phrase.replace("wird reduziert", "wurde auf 0 W neutralisiert")
+
+        with self.state.lock:
+            self.state.cross_charge_guard_latched = True
+            self.state.cross_charge_last_direction = direction
+        self.state.add_limiter("CROSS_CHARGE")
+        result.update({
+            "target": int(corrected),
+            "active": True,
+            "limited": int(corrected) != original,
+            "blocked": bool(blocked),
+            "reason": "Cross-Charge-Schutz: " + phrase,
+            "direction": direction,
+        })
+        return result
+
+    def _publish_signed_target(self, signed_target_w: int, *, force_zero: bool = False) -> None:
+        signed_target_w = int(signed_target_w or 0)
+        if signed_target_w > 0:
+            self.mqtt.set_ac_mode("Input mode")
+            self.mqtt.set_output_limit(0)
+            self.mqtt.set_input_limit(signed_target_w)
+        elif signed_target_w < 0:
+            self.mqtt.set_ac_mode("Output mode")
+            self.mqtt.set_input_limit(0)
+            self.mqtt.set_output_limit(abs(signed_target_w))
+        else:
+            self.mqtt.set_input_limit(0, force=force_zero)
+            self.mqtt.set_output_limit(0, force=force_zero)
+
+    def _store_signed_target(self, signed_target_w: int, reason: str, path: str, action_prefix: str) -> None:
+        signed_target_w = int(signed_target_w or 0)
+        input_power = max(0, signed_target_w)
+        output_power = max(0, -signed_target_w)
+        with self.state.lock:
+            self.state.last_input_power = input_power
+            self.state.last_output_power = output_power
+            self.state.current_target_power = max(input_power, output_power)
+            self.state.last_target_after_ramp = max(input_power, output_power)
+            self.state.control_reason = reason
+            self.state.technical_control_path = path
+            self.state.last_control_action = f"{action_prefix} -> {signed_target_w} W"
+
+    def cross_charge_guard_corrects_existing_target(self, cfg: Dict[str, Any]) -> bool:
+        """Reduce an already active AUTO/HOLD target when the second battery moves opposite."""
+        with self.state.lock:
+            if self.state.last_input_power > 0 and self.state.last_output_power <= 0:
+                current = int(self.state.last_input_power)
+            elif self.state.last_output_power > 0 and self.state.last_input_power <= 0:
+                current = -int(self.state.last_output_power)
+            else:
+                current = 0
+        correction = self._apply_symmetric_cross_charge_limit(cfg, current)
+        if not correction.get("active") or int(correction.get("target", current)) == current:
             return False
-
-        if sma_discharge >= cfg.get("SMA_DISCHARGE_BLOCK_W", 80):
-            self.state.add_limiter("SMA_DISCHARGE")
-            self.ramp_down_charge(
-                cfg,
-                "Cross-Charge-Schutz: Zusatzbatterie entlädt während Zendure lädt -> Zendure-Ladung wird reduziert",
-            )
-            return True
-
-        return False
+        new_target = int(correction["target"])
+        self._publish_signed_target(new_target, force_zero=(new_target == 0))
+        self._store_signed_target(
+            new_target,
+            correction.get("reason") or "Cross-Charge-Schutz aktiv",
+            "GRID -> CROSS_CHARGE -> HOLD_CORRECTED",
+            "CROSS_CHARGE",
+        )
+        self.state.set_mode("HOLD" if new_target == 0 else ("CHARGE" if new_target > 0 else "DISCHARGE"))
+        return True
 
     def safe_state(self, reason: str) -> None:
         with self.state.lock:
@@ -657,13 +777,34 @@ class ZendureController:
         else:
             self.stop_hold(reason + " -> Automatik ab nächstem Zyklus")
 
-    def handle_deadband(self) -> None:
+    def handle_deadband(self, cfg: Optional[Dict[str, Any]] = None) -> None:
         self.state.add_limiter("DEADBAND")
         with self.state.lock:
+            if self.state.last_input_power > 0 and self.state.last_output_power <= 0:
+                signed_target = int(self.state.last_input_power)
+            elif self.state.last_output_power > 0 and self.state.last_input_power <= 0:
+                signed_target = -int(self.state.last_output_power)
+            else:
+                signed_target = 0
+
+        correction = self._apply_symmetric_cross_charge_limit(cfg or {}, signed_target) if cfg is not None else {"target": signed_target, "active": False}
+        final_signed = int(correction.get("target", signed_target))
+        if correction.get("active") and final_signed != signed_target:
+            self._publish_signed_target(final_signed, force_zero=(final_signed == 0))
+            reason = correction.get("reason") or "Cross-Charge-Schutz aktiv"
+            path = "GRID -> DEADBAND -> CROSS_CHARGE -> HOLD_POWER"
+        else:
+            reason = "Innerhalb Totzone -> Leistung halten"
+            path = "GRID -> DEADBAND -> HOLD_POWER"
+
+        with self.state.lock:
+            self.state.last_input_power = max(0, final_signed)
+            self.state.last_output_power = max(0, -final_signed)
             self.state.current_target_power = max(self.state.last_output_power, self.state.last_input_power)
-            self.state.control_reason = "Innerhalb Totzone -> Leistung halten"
-            self.state.technical_control_path = "GRID -> DEADBAND -> HOLD_POWER"
-            self.state.last_control_action = f"HOLD -> {self.state.current_target_power} W"
+            self.state.last_target_after_ramp = self.state.current_target_power
+            self.state.control_reason = reason
+            self.state.technical_control_path = path
+            self.state.last_control_action = f"HOLD -> {final_signed} W"
         self.state.set_mode("HOLD")
 
     def _optional_int(self, value: Any) -> Optional[int]:
@@ -816,7 +957,7 @@ class ZendureController:
 
         if mode == "CHARGE" and mode_duration < cfg.get("MODE_CHANGE_LOCK_SECONDS", 0):
             self.state.add_limiter("MODE_CHANGE_LOCK")
-            self.handle_deadband()
+            self.handle_deadband(cfg)
             return
 
         raw_target = last_output + int(grid_power * cfg.get("CONTROL_GAIN", 0.30))
@@ -824,24 +965,27 @@ class ZendureController:
         target_smoothed = self.smooth_transition(last_output, target, cfg)
         target_ramped = self.limit_power_step(last_output, target_smoothed, cfg)
 
-        self.mqtt.set_ac_mode("Output mode")
-        self.mqtt.set_input_limit(0)
-        self.mqtt.set_output_limit(target_ramped)
+        signed_before_cross = -int(target_ramped)
+        correction = self._apply_symmetric_cross_charge_limit(cfg, signed_before_cross)
+        signed_final = int(correction.get("target", signed_before_cross))
+        final_output = max(0, -signed_final)
+
+        self._publish_signed_target(signed_final, force_zero=(signed_final == 0 and correction.get("active")))
 
         with self.state.lock:
-            self.state.last_input_power = 0
-            self.state.last_output_power = target_ramped
-            self.state.current_target_power = target_ramped
+            self.state.last_input_power = max(0, signed_final)
+            self.state.last_output_power = final_output
+            self.state.current_target_power = max(self.state.last_input_power, self.state.last_output_power)
             self.state.last_target_before_smoothing = raw_target
             self.state.last_target_after_smoothing = target_smoothed
-            self.state.last_target_after_ramp = target_ramped
-            self.state.control_reason = "Netzbezug erkannt -> Zendure entlädt"
-            self.state.technical_control_path = "GRID -> DISCHARGE_CONTROL -> OUTPUT"
-            self.state.last_control_action = f"DISCHARGE -> {target_ramped} W"
-        self.state.set_mode("DISCHARGE")
+            self.state.last_target_after_ramp = self.state.current_target_power
+            self.state.control_reason = correction.get("reason") if correction.get("active") else "Netzbezug erkannt -> Zendure entlädt"
+            self.state.technical_control_path = "GRID -> CROSS_CHARGE -> DISCHARGE_CONTROL -> OUTPUT" if correction.get("active") else "GRID -> DISCHARGE_CONTROL -> OUTPUT"
+            self.state.last_control_action = f"DISCHARGE -> {signed_final} W"
+        self.state.set_mode("HOLD" if signed_final == 0 and correction.get("active") else "DISCHARGE")
 
         if cfg.get("LOG_CONTROL", False):
-            self.log(f"[CTRL] Entladen: raw={raw_target} smooth={target_smoothed} ramp={target_ramped}")
+            self.log(f"[CTRL] Entladen: raw={raw_target} smooth={target_smoothed} ramp={target_ramped} final={signed_final}")
 
     def handle_charge(self, cfg: Dict[str, Any], grid_power: float) -> None:
         with self.state.lock:
@@ -860,11 +1004,6 @@ class ZendureController:
             self.ramp_down_discharge(cfg, "Wechsel auf Ladung: Entladeleistung wird erst reduziert")
             return
 
-        if sma_discharge >= cfg.get("SMA_DISCHARGE_BLOCK_W", 80):
-            self.state.add_limiter("SMA_DISCHARGE")
-            self.ramp_down_charge(cfg, "Cross-Charge-Schutz: Zusatzbatterie entlädt -> Zendure-Ladung blockiert")
-            return
-
         if effective < cfg.get("MIN_EFFECTIVE_SURPLUS_FOR_CHARGE_W", 150):
             self.state.add_limiter("LOW_EFFECTIVE_SURPLUS")
             self.ramp_down_charge(cfg, "Keine sichere PV-Überschussladung nach Zusatzbatterie-/Cross-Charge-Abzug")
@@ -875,24 +1014,27 @@ class ZendureController:
         target_smoothed = self.smooth_transition(last_input, target, cfg)
         target_ramped = self.limit_power_step(last_input, target_smoothed, cfg)
 
-        self.mqtt.set_ac_mode("Input mode")
-        self.mqtt.set_output_limit(0)
-        self.mqtt.set_input_limit(target_ramped)
+        signed_before_cross = int(target_ramped)
+        correction = self._apply_symmetric_cross_charge_limit(cfg, signed_before_cross)
+        signed_final = int(correction.get("target", signed_before_cross))
+        final_input = max(0, signed_final)
+
+        self._publish_signed_target(signed_final, force_zero=(signed_final == 0 and correction.get("active")))
 
         with self.state.lock:
-            self.state.last_output_power = 0
-            self.state.last_input_power = target_ramped
-            self.state.current_target_power = target_ramped
+            self.state.last_output_power = max(0, -signed_final)
+            self.state.last_input_power = final_input
+            self.state.current_target_power = max(self.state.last_input_power, self.state.last_output_power)
             self.state.last_target_before_smoothing = raw_target
             self.state.last_target_after_smoothing = target_smoothed
-            self.state.last_target_after_ramp = target_ramped
-            self.state.control_reason = "PV-Überschuss erkannt -> Zendure lädt"
+            self.state.last_target_after_ramp = self.state.current_target_power
+            self.state.control_reason = correction.get("reason") if correction.get("active") else "PV-Überschuss erkannt -> Zendure lädt"
             self.state.technical_control_path = "GRID -> CROSS_CHARGE -> CHARGE_CONTROL -> INPUT"
-            self.state.last_control_action = f"CHARGE -> {target_ramped} W"
-        self.state.set_mode("CHARGE")
+            self.state.last_control_action = f"CHARGE -> {signed_final} W"
+        self.state.set_mode("HOLD" if signed_final == 0 and correction.get("active") else "CHARGE")
 
         if cfg.get("LOG_CONTROL", False):
-            self.log(f"[CTRL] Laden: effective={effective} raw={raw_target} smooth={target_smoothed} ramp={target_ramped}")
+            self.log(f"[CTRL] Laden: effective={effective} raw={raw_target} smooth={target_smoothed} ramp={target_ramped} final={signed_final}")
 
     def ramp_down_charge(self, cfg: Dict[str, Any], reason: str) -> None:
         with self.state.lock:

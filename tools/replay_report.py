@@ -164,7 +164,7 @@ TERM_HELP.update({
     "DISCHARGE": "Controller fordert Entladung an. In der Analyse wird dieser technische Modus normalerweise als AUTO_DISCHARGE verdichtet, kann aber in historischen Logs direkt auftauchen.",
     "CHARGE_RAMP_DOWN": "Ladeleistung wird kontrolliert reduziert, z. B. wegen kleinerem Überschuss, SOC-Grenze, Cross-Charge-Schutz oder geänderter Randbedingungen.",
     "DISCHARGE_RAMP_DOWN": "Entladeleistung wird kontrolliert reduziert, z. B. wegen kleinerem Netzbezug, SOC-Grenze oder geänderter Randbedingungen.",
-    "BLOCKED_BY_SMA": "Zendure-Ladung ist blockiert oder reduziert, weil die Zusatzbatterie/SMA-Quelle entlädt. Das verhindert unerwünschtes Cross-Charge von Batterie zu Batterie.",
+    "BLOCKED_BY_SMA": "Zendure-Leistung ist blockiert oder reduziert, weil die Zusatzbatterie/SMA-Quelle gegenläufig arbeitet. Das verhindert unerwünschtes Cross-Charge von Batterie zu Batterie.",
     "STOP_HOLD": "Manueller Stop/Hold. Die Regelung sendet 0 W bzw. hält Zendure bewusst inaktiv; reale Messwerte wie Grid/SOC sollen trotzdem weiter angezeigt werden.",
     "MANUAL_FIXED_CHARGE": "Manuelle feste Beladung. Die Automatik ist übersteuert und der Controller fordert eine feste Ladeleistung an, solange Grenzen und Schutzbedingungen dies erlauben.",
     "MANUAL_FIXED_DISCHARGE": "Manuelle feste Entladung. Die Automatik ist übersteuert und der Controller fordert eine feste Entladeleistung an, solange Grenzen und Schutzbedingungen dies erlauben.",
@@ -557,10 +557,10 @@ def cross_charge_table(result: Dict[str, Any]) -> str:
         ("Blockade-Ereignisse", cq.get("block_events", 0)), ("Blockade-Zeit", _duration(cq.get("blocked_seconds", 0))),
         ("Kritische Überschneidungen", cq.get("critical_overlap_events", 0)),
         ("Kritische Überschneidungszeit", _duration(cq.get("critical_overlap_seconds", 0))),
-        ("Max. SMA-Entladung während Überschneidung", _w(cq.get('max_sma_discharge_w_during_overlap', 0))),
-        ("Ø SMA-Entladung während Überschneidung", _w(cq.get('avg_sma_discharge_w_during_overlap', 0))),
-        ("Max. Zendure-Ladung während Überschneidung", _w(cq.get('max_zendure_charge_w_during_overlap', 0))),
-        ("Verhinderte/reduzierte Ladeenergie grob", _kwh(cq.get('reduced_or_prevented_charge_kwh', 0))),
+        ("Max. Zusatzbatterie-Gegenfluss", _w(cq.get('max_sma_discharge_w_during_overlap', 0))),
+        ("Ø Zusatzbatterie-Gegenfluss", _w(cq.get('avg_sma_discharge_w_during_overlap', 0))),
+        ("Max. Zendure-Gegenfluss", _w(cq.get('max_zendure_charge_w_during_overlap', 0))),
+        ("Verhinderte/reduzierte Gegenfluss-Energie grob", _kwh(cq.get('reduced_or_prevented_charge_kwh', 0))),
     ])
 
 
