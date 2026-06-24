@@ -86,7 +86,8 @@ class ZendureController:
             self._cycle_timing_parts["finish_cycle_ms"] = int((time.time() - finish_started) * 1000)
             total_ms = int((time.time() - loop_start) * 1000)
             self._cycle_timing_parts["cycle_total_without_sleep_ms"] = total_ms
-            slowest = max(self._cycle_timing_parts.items(), key=lambda item: item[1]) if self._cycle_timing_parts else ("none", 0)
+            measured_parts = {k: v for k, v in self._cycle_timing_parts.items() if k != "cycle_total_without_sleep_ms"}
+            slowest = max(measured_parts.items(), key=lambda item: item[1]) if measured_parts else ("none", 0)
             self.state.set_cycle_timing(self._cycle_timing_parts, slowest[0], int(slowest[1]), total_ms)
             warn_ms = int(cfg.get("SLOW_CYCLE_WARN_MS", 5000))
             if total_ms >= warn_ms:
@@ -130,7 +131,9 @@ class ZendureController:
 
         night_active = self.is_night_discharge_active(cfg)
         if not night_active:
-            self.state.reset_night_discharge_stop_reason()
+            night_exit_neutralized = self.neutralize_ended_night_discharge_if_needed()
+            if not night_exit_neutralized:
+                self.state.reset_night_discharge_stop_reason()
 
         manual_mode = str(cfg.get("MANUAL_MODE", "AUTO"))
         if manual_mode != "AUTO":
@@ -687,6 +690,41 @@ class ZendureController:
         if soc is None:
             return False
         return effective_stop_soc is not None and soc <= effective_stop_soc
+
+    def neutralize_ended_night_discharge_if_needed(self) -> bool:
+        """Neutralize a fixed night-discharge target when the night window ends.
+
+        The fixed night-discharge command is an explicit output limit. If the
+        time window ends while this command is still the effective command, it
+        must be cleared once so HOLD/deadband cannot keep the old discharge
+        target alive. After neutralization the AUTO path may continue normally
+        in the same cycle and issue a new command if grid conditions require it.
+        """
+        with self.state.lock:
+            previous_mode = self.state.current_mode
+            previous_path = self.state.technical_control_path
+            previous_output = self.state.last_output_power
+        if previous_mode != "NIGHT_DISCHARGE" and previous_path != "NIGHT_MODE -> OUTPUT":
+            return False
+        if int(previous_output or 0) <= 0:
+            return False
+
+        self.mqtt.set_ac_mode("Output mode")
+        self.mqtt.set_input_limit(0, force=True)
+        self.mqtt.set_output_limit(0, force=True)
+        with self.state.lock:
+            self.state.last_input_power = 0
+            self.state.last_output_power = 0
+            self.state.current_target_power = 0
+            self.state.last_target_before_smoothing = 0
+            self.state.last_target_after_smoothing = 0
+            self.state.last_target_after_ramp = 0
+            self.state.control_reason = "Nachtfenster beendet: feste Nachtentladung neutralisiert"
+            self.state.technical_control_path = "NIGHT_MODE -> WINDOW_ENDED -> NEUTRALIZED"
+            self.state.last_control_action = "NIGHT_WINDOW_ENDED -> NEUTRALIZE_FIXED_NIGHT_DISCHARGE"
+            self.state.night_discharge_stop_reason = "NIGHT_WINDOW_ENDED"
+        self.state.set_mode("HOLD")
+        return True
 
     def pause_fixed_night_discharge_for_reserve_soc(self, cfg: Dict[str, Any]) -> bool:
         with self.state.lock:

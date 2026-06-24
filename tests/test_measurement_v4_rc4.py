@@ -95,7 +95,7 @@ class MeasurementV4Rc4Tests(unittest.TestCase):
         text = Path("web_ui.py").read_text(encoding="utf-8")
         self.assertNotIn("RC3 ergänzt", text)
         self.assertNotIn("Gesamt ohne Sleep", text)
-        self.assertIn("Aktive Arbeitszeit", text)
+        self.assertIn("Aktive Zykluszeit", text)
 
 
 if __name__ == "__main__":

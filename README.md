@@ -1,6 +1,6 @@
-Zendure Energy Controller Version 12.10.0-RC4
+Zendure Energy Controller Version 12.10.0-RC5
 
-# Zendure Energy Controller V12.10.0-RC4
+# Zendure Energy Controller V12.10.0-RC5
 
 Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, ZEC-MEASUREMENT-V4-Messdaten-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
@@ -11,18 +11,18 @@ Lizenziert unter AGPL-3.0-or-later. Siehe `LICENSE`, `NOTICE` und `DISCLAIMER.md
 
 
 
-## Wichtige Änderungen in V12.10.0-RC4
+## Wichtige Änderungen in V12.10.0-RC5
 
-V12.10.0-RC4 ist ein Release-Candidate für aktives `ZEC-MEASUREMENT-V4`-Logging, V4-Ist-Datenanalyse und Status-/Diagnose-Nacharbeit. Die AUTO-Regelstrategie, der Nachtmodus, Cross-Charge-Logik, MQTT-Subscriptions und MQTT-Kommandostruktur bleiben unverändert.
+V12.10.0-RC5 stellt wieder gültige V4-Logs her, repariert die V4-Rotation/Manifest-Führung, verbessert das Analysepaket-Tool und ergänzt eine eng begrenzte Nachtmodus-Exit-Neutralisierung. Die AUTO-Regelstrategie, symmetrische Cross-Charge-Strategie, MQTT-Subscriptions und MQTT-Kommandostruktur bleiben unverändert.
 
-- Statusseite: Timing-Texte erklären die aktuelle Bedeutung der Werte ohne Versionshistorie; `Aktive Arbeitszeit` beschreibt die Arbeitszeit eines Regelzyklus ohne geplante Wartepause.
-- Statusseite: lange Messdatenpfade werden in Datei und Verzeichnis getrennt dargestellt und robuster umgebrochen.
-- V4-Ist-Datenanalyse: Analyse-Webdienst erkennt V4-Dateien, kopiert CSV plus Manifest, Config-Snapshots und Runtime-JSONL in den geschützten Worker-Snapshot und wertet V4-Istdaten aus.
-- V4-Analyse bleibt Pi-geschützt: Worker/Subprozess mit Timeout, RSS-Überwachung und Address-Space-Grenze; V4 ohne Manifest oder fehlenden Config-Snapshot wird fail-closed abgelehnt.
-- Diagnose-/CLI-Tool akzeptiert V3 und V4 getrennt; V3/V4-Mischung wird mit Dateiname abgelehnt.
-- V4-Kurzstatistik zeigt u. a. Operating-Mode-, Target-Reason-, Safe-State-Reason-, Command-Suppressed-Reason- und Zykluszeit-Kennzahlen.
-- V3-Logging bleibt über `MEASUREMENT_SCHEMA_VERSION=3` als Legacy-/Rollback-Pfad verfügbar.
-- Vollständiger Testlauf: 154 Tests OK.
+- V4-Rotation ist manifestgeführt: Jede physische V4-CSV-Datei bekommt einen eigenen Manifest-Eintrag. Es werden keine versteckten `_1`/`_2`-Rotationsdateien ohne Manifest-Eintrag mehr erzeugt.
+- Analyse-Service und `tools/replay_csv.py` bleiben V3/V4-strikt und können neue V4-Rotationsdateien vertraglich sauber auswerten.
+- `tools/create_zec_analysis_package.sh` wird mitgeliefert: Default-Output `/home/pi/Downloads`, automatische Measurement-Pfad-Erkennung, alle V4-Dateien standardmäßig, Cleanup temporärer Arbeitsverzeichnisse nach ZIP-Erstellung, keine doppelte Runtime-Log-Kopie.
+- Statusseite: Die Timing-Hauptkennzahl heißt `Aktive Zykluszeit` und nutzt dieselbe Timing-Struktur wie die Detailwerte. Technische Timing-Feldnamen werden nicht mehr direkt angezeigt.
+- V4-Mapping: `control_effective_export_w` nutzt zusätzliche Fallbacks aus der Szenario-Rekonstruktion.
+- Nachtmodus-Exit-Fix: Beim Verlassen der festen Nachtentladung wird ein alter Entlade-Sollwert einmalig auf 0 W neutralisiert, damit HOLD/Deadband ihn nicht weiterführen können. Diese Neutralisierung darf `MIN_COMMAND_CHANGE_W` übersteuern.
+- Symmetrischer Cross-Charge-Schutz und Restüberschuss-Ernte bleiben für den nächsten Reglerlogik-RC geplant.
+- Vollständiger Testlauf: 157 Tests OK.
 
 ## Wichtige Änderungen in V12.10.0-RC3
 

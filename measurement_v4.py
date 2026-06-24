@@ -345,8 +345,8 @@ def build_v4_row(config: Dict[str, Any], row: Dict[str, Any], previous_effective
         "control_grid_power_w": _round1(row.get("input_grid_power_used_w", row.get("grid_power_w", row.get("grid_power")))),
         "control_grid_power_smoothed_w": _round1(row.get("norm_grid_power_smoothed_w")),
         "control_grid_power_smoothed_valid": _bool01(row.get("grid_power_used_for_control")),
-        "control_effective_export_w": _round1(row.get("input_effective_export_used_w", row.get("effective_export_power_w", row.get("effective_export_power")))),
-        "control_effective_export_valid": _bool01(row.get("input_effective_export_used_for_control", row.get("effective_export_power_valid", row.get("effective_export_power_used_for_control")))),
+        "control_effective_export_w": _round1(row.get("input_effective_export_used_w", row.get("effective_export_power_w", row.get("effective_export_power", effective_surplus)))),
+        "control_effective_export_valid": _bool01(row.get("input_effective_export_used_for_control", row.get("effective_export_power_valid", row.get("effective_export_power_used_for_control", row.get("scenario_reconstruction_valid"))))),
         "control_deadband_active": _bool01(row.get("deadband_active")),
         "control_cross_charge_detected": _bool01(row.get("cross_charge_guard_active")),
         "control_cross_charge_limited": _bool01(row.get("cross_charge_guard_active")),
@@ -903,7 +903,14 @@ class MeasurementV4Logger:
         row_epoch = _safe_int(v4_row.get("measurement_epoch_ms")) or 0
 
         fallback_event = self._update_fallback_state(target_info)
-        self._rotate_if_needed(cfg, path, fallback_active=bool(target_info.get("fallback_active")))
+        rotated_path = self._rotate_if_needed(cfg, path, fallback_active=bool(target_info.get("fallback_active")))
+        if rotated_path != path:
+            path = rotated_path
+            directory = os.path.dirname(path)
+            target_info = dict(target_info)
+            target_info["path"] = path
+            os.makedirs(directory, exist_ok=True)
+            free_mb = self._free_disk_mb(directory)
         file_id = self._file_id_for_path(path)
         if path not in self._row_counts:
             self._row_counts[path] = 0
@@ -1163,25 +1170,38 @@ class MeasurementV4Logger:
             return ""
         return "Messdaten-Logging pausiert: vorhandene Datei entspricht nicht dem gültigen ZEC-MEASUREMENT-V4-Header. Datei prüfen/löschen oder neuen Dateinamen wählen."
 
-    def _rotate_if_needed(self, config: Dict[str, Any], path: str, *, fallback_active: bool = False) -> None:
+    def _rotate_if_needed(self, config: Dict[str, Any], path: str, *, fallback_active: bool = False) -> str:
         if fallback_active:
             max_bytes = int(config.get("MEASUREMENT_LOG_FALLBACK_MAX_BYTES", 10_000_000))
-            backup_count = int(config.get("MEASUREMENT_LOG_FALLBACK_BACKUP_COUNT", 2))
         else:
             max_bytes = int(config.get("MEASUREMENT_LOG_MAX_BYTES", 25_000_000))
-            backup_count = int(config.get("MEASUREMENT_LOG_BACKUP_COUNT", 5))
         if not os.path.exists(path) or os.path.getsize(path) < max_bytes:
-            return
+            return path
+
         if self._open_path == path:
             self.close()
-        for index in range(backup_count, 0, -1):
-            src = self._backup_path(path, index)
-            dst = self._backup_path(path, index + 1)
-            if index == backup_count and os.path.exists(src):
-                os.remove(src)
-            elif os.path.exists(src):
-                os.replace(src, dst)
-        os.replace(path, self._backup_path(path, 1))
+
+        directory = os.path.dirname(path)
+        filename = os.path.basename(path)
+        stem, ext = os.path.splitext(filename)
+        # V4 rotation is manifest-led: never create hidden _1/_2 files that are
+        # not registered as physical measurement files. Start a new session-like
+        # CSV and let normal manifest registration create its own entry.
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        new_path = os.path.join(directory, f"{stem}_{stamp}{ext}")
+        if os.path.exists(new_path):
+            new_path = os.path.join(directory, f"{stem}_{stamp}_{uuid.uuid4().hex[:6]}{ext}")
+        for base, mapped in list(self._session_path_map.items()):
+            if mapped == path:
+                self._session_path_map[base] = new_path
+        self._runtime_best_effort(directory, {
+            "event_type": "logging_file_rotated",
+            "logical_stream_id": self._logical_stream_id,
+            "previous_path": path,
+            "new_path": new_path,
+            "rotation_reason": "SIZE_LIMIT",
+        })
+        return new_path
 
     def _backup_path(self, path: str, index: int) -> str:
         directory = os.path.dirname(path)

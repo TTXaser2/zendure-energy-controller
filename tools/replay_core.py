@@ -1272,7 +1272,7 @@ def analyze_files(
     result["total_size_bytes"] = sum(f.size_bytes for f in files)
     if schema_family == "v4":
         result["schema"] = "ZEC-MEASUREMENT-V4"
-        result["analysis_version"] = "12.10.0-rc4"
+        result["analysis_version"] = "12.10.0-rc5"
         result["v4_analysis"] = _v4_metadata(merged, files, duplicates)
         # Add concise data-quality warning for V4-specific UNKNOWN diagnostics.
         v4m = result["v4_analysis"]

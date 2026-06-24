@@ -1,4 +1,4 @@
-# Zendure Energy Controller V12.10.0-RC4 - Installation und Betrieb
+# Zendure Energy Controller V12.10.0-RC5 - Installation und Betrieb
 
 Diese Version ist für den Betrieb unter `/opt/zendure-controller` vorbereitet.
 
@@ -13,21 +13,21 @@ ln -sfn /opt/zendure-controller /home/pi/zendure-controller
 
 Danach kann bequem mit `cd ~/zendure-controller` gearbeitet werden, obwohl die Anwendung sauber unter `/opt` liegt.
 
-## Update auf V12.10.0-RC4 installieren
+## Update auf V12.10.0-RC5 installieren
 
 Ab V12.7 liegt das Update-Script ausschließlich unter `tools/`.
 
 ```bash
 cp /opt/zendure-controller/tools/update_zendure_controller.sh /home/pi/update_zendure_controller.sh
 chmod +x /home/pi/update_zendure_controller.sh
-/home/pi/update_zendure_controller.sh v12_10_0_rc4
+/home/pi/update_zendure_controller.sh v12_10_0_rc5
 ```
 
 Das Update-Script erhält die vorhandene `config.json`, sichert das Installationsverzeichnis, bereinigt alte Dopplungen (`Tools/`, `zendureController.py`) und installiert die systemd-Dateien für Live-Controller und optionalen Replay-Dienst.
 
 Das Paket enthält zusätzlich die finale Excel-Lernsimulation `tools/zendure_regelung_lernwerkzeug_v4_2_7_final.xlsx`. Diese Datei wird nur mitkopiert und nicht durch das Update-Script verändert.
 
-Hinweis: V12.10.0-RC4 führt aktives `ZEC-MEASUREMENT-V4`-Logging ein. Bei `MEASUREMENT_SCHEMA_VERSION=4` schreibt der Controller bei Standarddateiname in `zendure_measurements_v4.csv` und erzeugt zusätzlich `zec_measurement_manifest.json`, `zec_config_snapshots.json` und `zec_runtime_events.jsonl`. V3 bleibt als Legacy-/Rollback-Pfad über `MEASUREMENT_SCHEMA_VERSION=3` verfügbar. Die Reglerlogik, MQTT-Subscriptions und MQTT-Kommandostruktur bleiben unverändert.
+Hinweis: V12.10.0-RC5 schreibt bei `MEASUREMENT_SCHEMA_VERSION=4` gültige V4-Measurement-Dateien mit Manifest, Config-Snapshots und Runtime-Events. V3 bleibt als Legacy-/Rollback-Pfad über `MEASUREMENT_SCHEMA_VERSION=3` verfügbar. Die AUTO-Regelstrategie, symmetrische Cross-Charge-Strategie, MQTT-Subscriptions und MQTT-Kommandostruktur bleiben unverändert.
 
 ## Syntaxcheck
 
