@@ -12,7 +12,7 @@ OUTPUT_DIR="/home/pi/Downloads"
 NAME=""
 STOP_SERVICES=1
 LATEST_ONLY=0
-NO_REPLAY_REPORT=0
+WITH_REPLAY_REPORT=0
 NO_FALLBACK_LOGS=0
 
 log() { printf '[zec-export] %s\n' "$*"; }
@@ -36,7 +36,9 @@ Options:
   --no-stop-services      Do not stop controller/replay services while copying files
   --latest-only           Include only the newest zendure_measurements_v4*.csv file
                           Default includes all zendure_measurements_v4*.csv files
-  --no-replay-report      Do not generate replay_report.txt
+  --with-replay-report    Optional: generate replay_report.txt with timeout and low priority
+                          Default skips replay report to protect the Raspberry Pi
+  --no-replay-report      Deprecated compatibility option; replay report is skipped by default
   --no-fallback-logs      Do not include fallback log directory
   -h, --help              Show help
 EOF
@@ -52,7 +54,8 @@ while [[ $# -gt 0 ]]; do
     --name) NAME="${2:-}"; shift 2 ;;
     --no-stop-services) STOP_SERVICES=0; shift ;;
     --latest-only) LATEST_ONLY=1; shift ;;
-    --no-replay-report) NO_REPLAY_REPORT=1; shift ;;
+    --with-replay-report) WITH_REPLAY_REPORT=1; shift ;;
+    --no-replay-report) WITH_REPLAY_REPORT=0; shift ;;
     --no-fallback-logs) NO_FALLBACK_LOGS=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) err "Unknown option: $1" ;;
@@ -172,21 +175,36 @@ install_dir=$INSTALL_DIR
 output_dir=$OUTPUT_DIR
 stop_services=$STOP_SERVICES
 latest_only=$LATEST_ONLY
+with_replay_report=$WITH_REPLAY_REPORT
 
 config.json is intentionally not included.
 EOF
 
-if [[ $NO_REPLAY_REPORT -eq 0 ]]; then
+if [[ $WITH_REPLAY_REPORT -eq 1 ]]; then
   REPLAY="$INSTALL_DIR/tools/replay_csv.py"
   if [[ -f "$REPLAY" ]]; then
-    log "Generating replay report with $REPLAY"
+    log "Generating optional replay report with timeout and low priority: $REPLAY"
+    REPLAY_TIMEOUT_SECONDS="${ZEC_EXPORT_REPLAY_TIMEOUT_SECONDS:-180}"
+    REPLAY_CMD=(python3 "$REPLAY" zendure_measurements_v4*.csv)
+    if command -v ionice >/dev/null 2>&1; then
+      REPLAY_CMD=(ionice -c3 "${REPLAY_CMD[@]}")
+    fi
+    if command -v nice >/dev/null 2>&1; then
+      REPLAY_CMD=(nice -n 15 "${REPLAY_CMD[@]}")
+    fi
     (
       cd "$WORKDIR"
-      python3 "$REPLAY" zendure_measurements_v4*.csv > replay_report.txt 2>&1 || true
+      if command -v timeout >/dev/null 2>&1; then
+        timeout --kill-after=5s "${REPLAY_TIMEOUT_SECONDS}s" "${REPLAY_CMD[@]}" > replay_report.txt 2>&1 || warn "Replay report failed or timed out; package remains usable without it"
+      else
+        warn "timeout command not found; skipping replay report to protect the Pi"
+      fi
     )
   else
     warn "Replay tool not found: $REPLAY"
   fi
+else
+  log "Skipping replay report by default; raw CSV/manifest/config/runtime files are included for offline analysis"
 fi
 
 {

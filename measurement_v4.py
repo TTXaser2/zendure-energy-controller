@@ -93,6 +93,12 @@ def _round1(value: Any) -> Any:
     return round(number, 1)
 
 
+def _first_non_empty(*values: Any) -> Any:
+    for value in values:
+        if value not in (None, ""):
+            return value
+    return ""
+
 def _bool01(value: Any) -> str:
     if value in (None, ""):
         return ""
@@ -342,14 +348,14 @@ def build_v4_row(config: Dict[str, Any], row: Dict[str, Any], previous_effective
         "scenario_grid_without_zendure_source": "DERIVED",
         "scenario_effective_surplus_w": _round1(effective_surplus),
         "scenario_effective_surplus_valid": _bool01(row.get("scenario_reconstruction_valid")),
-        "control_grid_power_w": _round1(row.get("input_grid_power_used_w", row.get("grid_power_w", row.get("grid_power")))),
-        "control_grid_power_smoothed_w": _round1(row.get("norm_grid_power_smoothed_w")),
-        "control_grid_power_smoothed_valid": _bool01(row.get("grid_power_used_for_control")),
-        "control_effective_export_w": _round1(row.get("input_effective_export_used_w", row.get("effective_export_power_w", row.get("effective_export_power", effective_surplus)))),
-        "control_effective_export_valid": _bool01(row.get("input_effective_export_used_for_control", row.get("effective_export_power_valid", row.get("effective_export_power_used_for_control", row.get("scenario_reconstruction_valid"))))),
+        "control_grid_power_w": _round1(_first_non_empty(row.get("input_grid_power_used_w"), row.get("grid_power_w"), row.get("grid_power"))),
+        "control_grid_power_smoothed_w": _round1(_first_non_empty(row.get("norm_grid_power_smoothed_w"), row.get("grid_power_w"), row.get("grid_power"))),
+        "control_grid_power_smoothed_valid": _bool01(_first_non_empty(row.get("grid_power_used_for_control"), row.get("input_grid_power_used_for_control"))),
+        "control_effective_export_w": _round1(_first_non_empty(row.get("input_effective_export_used_w"), row.get("effective_export_power_w"), row.get("effective_export_power"), effective_surplus)),
+        "control_effective_export_valid": _bool01(_first_non_empty(row.get("input_effective_export_used_for_control"), row.get("effective_export_power_used_for_control"), row.get("effective_export_power_valid"), row.get("scenario_reconstruction_valid"))),
         "control_deadband_active": _bool01(row.get("deadband_active")),
         "control_cross_charge_detected": _bool01(row.get("cross_charge_guard_active")),
-        "control_cross_charge_limited": _bool01(row.get("cross_charge_guard_active")),
+        "control_cross_charge_limited": _bool01(row.get("cross_charge_guard_limited", row.get("cross_charge_guard_active"))),
         "control_mode_change_lock_active": "1" if "MODE_CHANGE" in str(row.get("technical_path", row.get("control_path", ""))).upper() else "0",
         "target_raw_w": _round1(row.get("target_raw_w")),
         "target_filtered_w": _round1(row.get("target_after_smoothing_w", row.get("target_filtered_w"))),
@@ -511,7 +517,7 @@ def _map_target_reason(reason: str, operating_mode: str, target_final: Optional[
 
 
 def _safe_state_reason(row: Dict[str, Any], mqtt_status: str, missing_names: List[str], operating_mode: str) -> str:
-    if operating_mode != "SAFE_STATE" and _bool01(row.get("safe_state_active")) != "1":
+    if operating_mode != "SAFE_STATE":
         return ""
     lowered = {name.lower() for name in missing_names}
     if "soc" in lowered or "zendure_soc" in lowered:
@@ -1183,11 +1189,12 @@ class MeasurementV4Logger:
 
         directory = os.path.dirname(path)
         filename = os.path.basename(path)
-        stem, ext = os.path.splitext(filename)
+        _stem, ext = os.path.splitext(filename)
         # V4 rotation is manifest-led: never create hidden _1/_2 files that are
-        # not registered as physical measurement files. Start a new session-like
-        # CSV and let normal manifest registration create its own entry.
+        # not registered as physical measurement files. Use a fresh short name
+        # instead of appending timestamps to already rotated filenames.
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        stem = "zendure_measurements_v4" if filename.startswith("zendure_measurements_v4") else _stem
         new_path = os.path.join(directory, f"{stem}_{stamp}{ext}")
         if os.path.exists(new_path):
             new_path = os.path.join(directory, f"{stem}_{stamp}_{uuid.uuid4().hex[:6]}{ext}")

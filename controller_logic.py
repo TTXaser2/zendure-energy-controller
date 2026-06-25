@@ -54,6 +54,15 @@ class ZendureController:
             elapsed_ms = int((time.time() - started) * 1000)
             self._cycle_timing_parts[name] = int(self._cycle_timing_parts.get(name, 0)) + elapsed_ms
 
+    def request_stop(self) -> None:
+        self._running = False
+
+    def close(self) -> None:
+        try:
+            self.csv_logger.close()
+        except Exception:
+            pass
+
     def run_forever(self) -> None:
         self.log("[CTRL] Hauptschleife gestartet")
         while self._running:
@@ -1029,7 +1038,7 @@ class ZendureController:
             self.state.last_target_after_smoothing = target_smoothed
             self.state.last_target_after_ramp = self.state.current_target_power
             self.state.control_reason = correction.get("reason") if correction.get("active") else "PV-Überschuss erkannt -> Zendure lädt"
-            self.state.technical_control_path = "GRID -> CROSS_CHARGE -> CHARGE_CONTROL -> INPUT"
+            self.state.technical_control_path = "GRID -> CROSS_CHARGE -> CHARGE_CONTROL -> INPUT" if correction.get("active") else "GRID -> CHARGE_CONTROL -> INPUT"
             self.state.last_control_action = f"CHARGE -> {signed_final} W"
         self.state.set_mode("HOLD" if signed_final == 0 and correction.get("active") else "CHARGE")
 
@@ -1052,9 +1061,9 @@ class ZendureController:
             self.state.last_target_after_smoothing = target
             self.state.last_target_after_ramp = target
             self.state.control_reason = reason
-            self.state.technical_control_path = "GRID -> CROSS_CHARGE -> CHARGE_RAMP_DOWN"
+            self.state.technical_control_path = "GRID -> CHARGE_RAMP_DOWN"
             self.state.last_control_action = f"CHARGE_RAMP_DOWN -> {target} W"
-        self.state.set_mode("BLOCKED_BY_SMA" if target == 0 else "CHARGE_RAMP_DOWN")
+        self.state.set_mode("HOLD" if target == 0 else "CHARGE_RAMP_DOWN")
 
     def ramp_down_discharge(self, cfg: Dict[str, Any], reason: str) -> None:
         with self.state.lock:

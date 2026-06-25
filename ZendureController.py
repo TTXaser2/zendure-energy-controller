@@ -18,6 +18,7 @@ import os
 import sys
 import threading
 import fcntl
+import signal
 
 import uvicorn
 
@@ -77,6 +78,13 @@ def main() -> None:
         on_config_saved=mqtt_bridge.refresh_subscriptions,
     )
 
+    def request_shutdown(signum, frame) -> None:  # type: ignore[no-untyped-def]
+        app_logger.log(config_manager.get(), f"[SHUTDOWN] Signal {signum} empfangen, Controller wird sauber beendet")
+        controller.request_stop()
+
+    signal.signal(signal.SIGTERM, request_shutdown)
+    signal.signal(signal.SIGINT, request_shutdown)
+
     def run_webserver() -> None:
         cfg = config_manager.get()
         uvicorn.run(
@@ -100,6 +108,10 @@ def main() -> None:
     try:
         controller.run_forever()
     finally:
+        try:
+            controller.close()
+        except Exception:
+            pass
         try:
             instance_lock.close()
         except Exception:

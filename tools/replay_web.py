@@ -345,6 +345,24 @@ def _meminfo_available_mb() -> Optional[int]:
         return None
 
 
+def _loadavg_1min() -> Optional[float]:
+    try:
+        return float(os.getloadavg()[0])
+    except Exception:
+        return None
+
+
+def _estimated_worker_rss_mb(rows: int, total_size_bytes: int, schema_family: str, extended: bool = False) -> int:
+    # Empirical Pi-facing estimate for the Python analysis worker. The CSV files
+    # are small, but parsing, conversion, counters and HTML/report state expand
+    # memory substantially. Keep this conservative for the preflight only.
+    base = 320 if extended or schema_family == "v4" else 220
+    per_row_kb = 15 if extended or schema_family == "v4" else 8
+    by_rows = int((max(0, rows) * per_row_kb) / 1024)
+    by_size = int(max(0, total_size_bytes) / (1024 * 1024) * (10 if schema_family == "v4" else 6))
+    return base + by_rows + by_size
+
+
 def _worker_memory_limit_mb(cfg: Dict[str, Any], extended: bool = False) -> int:
     key = "ANALYSIS_EXTENDED_WORKER_MEMORY_LIMIT_MB" if extended else "ANALYSIS_WORKER_MEMORY_LIMIT_MB"
     # Python plus chart/report imports can reserve more virtual memory than the
@@ -374,8 +392,14 @@ def selection_profile(paths: Sequence[Path], cfg: Dict[str, Any]) -> Dict[str, A
     v4_warnings = scan.get("v4_warnings") or []
     small_selection = len(paths) <= safe.max_files and total_size <= safe.max_total_bytes and rows <= safe.max_rows
     extended_selection = len(paths) <= ext.max_files and total_size <= ext.max_total_bytes and rows <= ext.max_rows
+    loadavg_1min = _loadavg_1min()
+    estimated_safe_rss_mb = _estimated_worker_rss_mb(rows, total_size, schema_family, extended=False)
+    estimated_ext_rss_mb = _estimated_worker_rss_mb(rows, total_size, schema_family, extended=True)
+    estimated_rss_mb = estimated_ext_rss_mb if not small_selection else estimated_safe_rss_mb
+    ram_reserve_mb = None if mem_available_mb is None else int(mem_available_mb - estimated_rss_mb)
     hard_memory_low = mem_available_mb is not None and mem_available_mb < 96
-    memory_tight = mem_available_mb is not None and mem_available_mb < max(128, int(safe_memory_mb * 0.45))
+    memory_tight = ram_reserve_mb is not None and ram_reserve_mb < max(128, int(mem_available_mb * 0.25))
+    load_tight = loadavg_1min is not None and loadavg_1min >= float(cfg.get("ANALYSIS_PREFLIGHT_WARN_LOADAVG", 2.0))
     if schema_errors:
         risk = "rejected"
         text = "Nicht analysierbar: Die Auswahl enthält keine durchgängig gültigen unterstützten Measurement-Dateien."
@@ -385,9 +409,13 @@ def selection_profile(paths: Sequence[Path], cfg: Dict[str, Any]) -> Dict[str, A
         if extended_selection:
             risk = "extended" if not small_selection else "pi-safe"
             text = "V4-Ist-Datenanalyse: CSV, Manifest und Config-Snapshots sind konsistent genug für die geschützte Analyse im isolierten Worker."
+            if memory_tight:
+                text += " RAM-Reserve ist knapp; lokale Analyse kann EVCC/Controller spürbar belasten und sollte eher offline erfolgen."
+            if load_tight:
+                text += " Aktuelle Systemlast ist erhöht; lokale Analyse wird vorsichtig eingestuft."
             if v4_warnings:
                 text += " Hinweise: " + " | ".join(str(w) for w in v4_warnings[:3])
-            needs_confirm = bool(not small_selection)
+            needs_confirm = bool((not small_selection) or memory_tight or load_tight)
             rejected = False
         else:
             risk = "rejected"
@@ -401,8 +429,8 @@ def selection_profile(paths: Sequence[Path], cfg: Dict[str, Any]) -> Dict[str, A
         rejected = True
     elif small_selection:
         risk = "pi-safe"
-        if memory_tight:
-            text = "Kleine Auswahl: Analyse wird zugelassen; Systemressourcen sind knapp, aber der isolierte Worker schützt durch Timeout und Speicherlimit."
+        if memory_tight or load_tight:
+            text = "Kleine Auswahl: Analyse wird zugelassen; Systemressourcen/Systemlast sind nicht ideal. Der isolierte Worker schützt durch Timeout und Speicherlimit."
         else:
             text = "Pi-Safe: kleine Auswahl; Analyse läuft in einem isolierten Worker mit Timeout und Speicherlimit."
         needs_confirm = False
@@ -412,6 +440,8 @@ def selection_profile(paths: Sequence[Path], cfg: Dict[str, Any]) -> Dict[str, A
         text = "Größere Analyse: nur bewusst starten. Sie läuft isoliert, kann aber länger dauern und wird bei Zeit-/Speicherlimit abgebrochen."
         if memory_tight:
             text += " Aktuelle RAM-Reserve ist knapp; bei Überschreitung wird der Worker beendet."
+        if load_tight:
+            text += " Aktuelle Systemlast ist erhöht; Analyse kann den Pi spürbar belasten."
         needs_confirm = True
         rejected = False
     else:
@@ -440,6 +470,9 @@ def selection_profile(paths: Sequence[Path], cfg: Dict[str, Any]) -> Dict[str, A
         "mem_available_mb": mem_available_mb,
         "worker_memory_limit_mb": ext_memory_mb if risk == "extended" else safe_memory_mb,
         "worker_timeout_seconds": _worker_timeout_seconds(cfg, extended=(risk == "extended")),
+        "estimated_worker_rss_mb": estimated_ext_rss_mb if risk == "extended" else estimated_safe_rss_mb,
+        "estimated_ram_reserve_mb": ram_reserve_mb,
+        "loadavg_1min": loadavg_1min,
     }
 
 
@@ -537,8 +570,13 @@ def _run_worker(snapshot_paths: Sequence[Path], cfg: Dict[str, Any], extended: b
             "memory_mb": memory_mb,
             "address_space_mb": _int_cfg(cfg, "ANALYSIS_WORKER_ADDRESS_SPACE_LIMIT_MB", max(4096, memory_mb * 4)),
         }, ensure_ascii=False), encoding="utf-8")
+        cmd = [sys.executable, str(worker_script), "--request", str(request_path), "--output", str(output_path)]
+        if shutil.which("ionice"):
+            cmd = ["ionice", "-c3"] + cmd
+        if shutil.which("nice"):
+            cmd = ["nice", "-n", str(_int_cfg(cfg, "ANALYSIS_WORKER_NICE", 15))] + cmd
         proc = subprocess.Popen(
-            [sys.executable, str(worker_script), "--request", str(request_path), "--output", str(output_path)],
+            cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -595,28 +633,59 @@ def analyze_snapshot(paths: Sequence[Path], cfg: Dict[str, Any], extended: bool,
         job.pop("worker_pid", None)
 
 
+V4_VALUE_HELP = {
+    "AUTO": "Automatische Regelung auf Basis der Netzleistung.",
+    "HOLD": "Neutraler Haltezustand ohne neue Lade-/Entladeanforderung.",
+    "HOLD_DEADBAND": "Netzleistung liegt innerhalb der Totzone; Regelung bleibt bewusst ruhig.",
+    "NIGHT_DISCHARGE": "Feste Nacht-Basisentladung ist aktiv.",
+    "STOP_HOLD": "Manueller Stop/Hold; Zendure soll neutral bleiben.",
+    "SAFE_STATE": "Schutz-/Fehlerzustand; Zendure wird auf 0 W geführt.",
+    "AUTO_GRID_IMPORT": "Netzbezug wurde erkannt; AUTO wollte Zendure entladen.",
+    "AUTO_GRID_EXPORT": "Netzeinspeisung wurde erkannt; AUTO wollte Zendure laden.",
+    "DEADBAND": "Abweichung lag innerhalb der Totzone; kein neuer Eingriff nötig.",
+    "MAX_SOC_LIMIT": "Ladung wurde durch oberen SOC-Grenzwert begrenzt.",
+    "MIN_SOC_LIMIT": "Entladung wurde durch unteren SOC-Grenzwert begrenzt.",
+    "CROSS_CHARGE_REDUCED": "Zielwert wurde reduziert, um gegenläufige Batterieflüsse zu vermeiden.",
+    "CROSS_CHARGE_BLOCKED": "Zielwert wurde auf 0 W neutralisiert, um Cross-Charge zu vermeiden.",
+    "ZENDURE_MQTT_STALE": "Zendure-MQTT-Daten waren veraltet oder teilweise veraltet.",
+    "MQTT_DISCONNECTED": "MQTT-Kommandoweg war nicht verfügbar.",
+    "NO_CHANGE": "Kein MQTT-Kommando nötig, weil der wirksame Zielwert unverändert war.",
+    "MIN_COMMAND_CHANGE": "Änderung war kleiner als die Mindeständerung und wurde unterdrückt.",
+    "MODE_HOLD": "Aktueller Modus fordert bewusst kein neues Kommando.",
+    "SAFE_STATE": "Schutz-/Fehlerzustand; Zendure wird auf 0 W geführt.",
+    "UNKNOWN": "Nicht eindeutig zugeordnet; bei Häufung Mapping oder Datenqualität prüfen.",
+    "": "Leerer Wert bedeutet hier meist: kein Grund/kein Safe-State/keine Unterdrückung aktiv.",
+}
+
+
 def _v4_summary_html(result: Dict[str, Any]) -> str:
     v4 = result.get("v4_analysis") or {}
     if not v4:
         return ""
+    def explain(value: Any) -> str:
+        text = V4_VALUE_HELP.get(str(value), "Kategorie aus dem V4-Log; Häufigkeit im ausgewählten Zeitraum.")
+        return html.escape(text)
     def rows(items):
         if not items:
-            return "<tr><td>-</td><td>-</td></tr>"
-        return "".join(f"<tr><td>{html.escape(str(item.get('name', '-')))}</td><td>{html.escape(str(item.get('count', 0)))}</td></tr>" for item in items)
+            return "<tr><td>-</td><td>-</td><td>Keine Werte in dieser Kategorie.</td></tr>"
+        return "".join(
+            f"<tr><td>{html.escape(str(item.get('name', '-')))}</td><td>{html.escape(str(item.get('count', 0)))}</td><td>{explain(item.get('name', ''))}</td></tr>"
+            for item in items
+        )
     return f"""
     <h2 id="v4">V4-Ist-Datenanalyse</h2>
-    <p class="section-intro">Dieser Abschnitt wertet die geloggten V4-Istdaten aus. Er prüft keine alternativen Reglerentscheidungen, sondern zeigt, was im ausgewählten Zeitraum tatsächlich protokolliert wurde.</p>
+    <p class="section-intro">Dieser Abschnitt wertet die geloggten V4-Istdaten aus. Er prüft keine alternativen Reglerentscheidungen, sondern zeigt, was im ausgewählten Zeitraum tatsächlich protokolliert wurde. Die Tabellen nennen den protokollierten Wert, die Anzahl der Messpunkte und eine kurze Interpretation.</p>
     <div class="cards">
-      <div class="card"><span>Profil</span><b>{html.escape(str(v4.get('profile', '-')))}</b></div>
-      <div class="card"><span>Duplikate entfernt</span><b>{html.escape(str(v4.get('duplicate_rows_removed', 0)))}</b></div>
-      <div class="card"><span>Zyklusdauer Ø</span><b>{html.escape(str(v4.get('cycle_duration_ms_avg', 0)))} ms</b></div>
-      <div class="card"><span>Zyklusdauer p95/max</span><b>{html.escape(str(v4.get('cycle_duration_ms_p95', 0)))} / {html.escape(str(v4.get('cycle_duration_ms_max', 0)))} ms</b></div>
+      <div class="card"><span>Profil</span><b>{html.escape(str(v4.get('profile', '-')))}</b><small>standard oder extended; bestimmt, welche V4-Felder in den Dateien stehen.</small></div>
+      <div class="card"><span>Duplikate entfernt</span><b>{html.escape(str(v4.get('duplicate_rows_removed', 0)))}</b><small>Doppelte Messzyklen, die bei Primary-/Fallback-Überlappung nicht doppelt gezählt werden.</small></div>
+      <div class="card"><span>Zyklusdauer Ø</span><b>{html.escape(str(v4.get('cycle_duration_ms_avg', 0)))} ms</b><small>Mittlere aktive Zyklusdauer ohne geplante Schlafzeit.</small></div>
+      <div class="card"><span>Zyklusdauer p95/max</span><b>{html.escape(str(v4.get('cycle_duration_ms_p95', 0)))} / {html.escape(str(v4.get('cycle_duration_ms_max', 0)))} ms</b><small>p95 zeigt den typischen oberen Bereich; max zeigt Ausreißer.</small></div>
     </div>
     <div class="chartgrid">
-      <div class="chart-card"><h3>Operating Mode</h3><table><tr><th>Wert</th><th>Anzahl</th></tr>{rows(v4.get('operating_mode_top'))}</table></div>
-      <div class="chart-card"><h3>Target Final Reason</h3><table><tr><th>Wert</th><th>Anzahl</th></tr>{rows(v4.get('target_final_reason_top'))}</table></div>
-      <div class="chart-card"><h3>Safe-State-Gründe</h3><table><tr><th>Wert</th><th>Anzahl</th></tr>{rows(v4.get('safe_state_reason_top'))}</table></div>
-      <div class="chart-card"><h3>Kommando-Unterdrückung</h3><table><tr><th>Wert</th><th>Anzahl</th></tr>{rows(v4.get('command_suppressed_reason_top'))}</table></div>
+      <div class="chart-card"><h3>Operating Mode</h3><p class="small-help">Betriebszustand je Messpunkt. Zeigt, ob der Zeitraum überwiegend AUTO, HOLD, Nachtentladung oder Safe-State war.</p><table><tr><th>Wert</th><th>Anzahl</th><th>Info</th></tr>{rows(v4.get('operating_mode_top'))}</table></div>
+      <div class="chart-card"><h3>Target Final Reason</h3><p class="small-help">Begründung für den finalen Zendure-Zielwert. Diese Tabelle erklärt, warum geladen, entladen, gehalten oder begrenzt wurde.</p><table><tr><th>Wert</th><th>Anzahl</th><th>Info</th></tr>{rows(v4.get('target_final_reason_top'))}</table></div>
+      <div class="chart-card"><h3>Safe-State-Gründe</h3><p class="small-help">Ursachen für aktive Schutz-/Fehlerzustände. Leere Werte sind normal, wenn kein Safe-State aktiv war.</p><table><tr><th>Wert</th><th>Anzahl</th><th>Info</th></tr>{rows(v4.get('safe_state_reason_top'))}</table></div>
+      <div class="chart-card"><h3>Kommando-Unterdrückung</h3><p class="small-help">Erklärt, warum kein neues MQTT-Kommando gesendet wurde. Häufiges NO_CHANGE ist normal; UNKNOWN sollte selten sein.</p><table><tr><th>Wert</th><th>Anzahl</th><th>Info</th></tr>{rows(v4.get('command_suppressed_reason_top'))}</table></div>
     </div>
     """
 
@@ -844,7 +913,11 @@ def build_app() -> FastAPI:
             + '<div class="profile-explain">Diese Box zeigt Dateianzahl, Gesamtgröße, abgedeckten Zeitraum, geschätzte Messpunkte und das Auslastungsrisiko des Raspberry Pi für diese Analyseauswahl.</div>'
             + '<b>Auswahl:</b> '+profile.file_count+' Datei(en), '+profile.total_size_text+', ca. '+profile.estimated_rows+' Messpunkte<br>'
             + '<b>Zeitraum:</b> '+escapeHtml(profile.period_start||'-')+' bis '+escapeHtml(profile.period_end||'-')+'<br>'
-            + '<b>Risiko:</b> '+escapeHtml(profile.risk_text||'-')
+            + '<b>Risiko:</b> '+escapeHtml(profile.risk_text||'-')+'<br>'
+            + '<b>Ressourcen:</b> geschätzter Worker-Speicher '+escapeHtml(profile.estimated_worker_rss_mb ?? '-')+' MB, '
+            + 'MemAvailable '+escapeHtml(profile.mem_available_mb ?? '-')+' MB, '
+            + 'Reserve '+escapeHtml(profile.estimated_ram_reserve_mb ?? '-')+' MB, '
+            + 'Load 1m '+escapeHtml(profile.loadavg_1min ?? '-')
             + (errors ? '<ul>'+errors+'</ul>' : '') + '</div>';
           profileReady=true; profileRejected=!!profile.rejected || profile.file_count < 1; refreshStartButton();
         }}
