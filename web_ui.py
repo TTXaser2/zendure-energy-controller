@@ -924,6 +924,12 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
     actual_system_signed = int(s.get("zendure_system_signed_power", 0) or 0)
     actual_system_class = "green" if actual_system_signed > 0 else ("red" if actual_system_signed < 0 else "blue")
     actual_system_html = f'<span class="{actual_system_class}">{signed_power(actual_system_signed)}</span>'
+    last_command_html = html.escape(str(s.get("last_mqtt_command") or s.get("mqtt_last_command") or "-"))
+    last_command_skipped_html = html.escape(str(s.get("last_mqtt_command_skipped") or s.get("mqtt_last_command_skipped") or "-"))
+    if zendure_setpoint_signed == 0 and abs(actual_system_signed) >= int(cfg.get("MIN_COMMAND_CHANGE_W", 50)):
+        setpoint_hint = "<br><span class='warn'>Hinweis: Zielwert ist 0 W, die gemessene Zendure-Istleistung ist aber noch deutlich aktiv. Das kann kurzer Nachlauf oder ein zuvor wirksames Limit nach Restart/HOLD sein.</span>"
+    else:
+        setpoint_hint = ""
 
     battery_details = list(s.get("zendure_battery_details", []) or [])
     def battery_sort_key(item: Dict[str, Any]) -> str:
@@ -1149,12 +1155,15 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
             )}
             {status_card(
                 'Zendure Systemleistung',
-                f'Soll {signed_power(zendure_setpoint_signed)}',
-                f'Headunit erreicht: {actual_system_html}<br>'
+                f'Ziel {signed_power(zendure_setpoint_signed)}',
+                f'Gemessene Istleistung: {actual_system_html}<br>'
                 f'Angefordertes Lade-Limit: {s["last_input_power"]} W / Entlade-Limit: {s["last_output_power"]} W<br>'
-                f'Darstellung: positiv = Ladung, negativ = Entladung',
+                f'Letztes MQTT-Kommando: {last_command_html}<br>'
+                f'Letztes unterdrücktes Kommando: {last_command_skipped_html}<br>'
+                f'Darstellung: positiv = Ladung, negativ = Entladung'
+                f'{setpoint_hint}',
                 zendure_setpoint_class,
-                'Diese Karte unterscheidet zwischen der vom Controller angeforderten Sollleistung und der tatsächlich an der Zendure-Headunit erreichten Systemleistung. Positive Werte bedeuten Laden, negative Werte Entladen. Bei aktiver Entladeanforderung werden mehrdeutige positive Pack-Rohwerte als interner Pack-zu-Headunit-Fluss und damit systemisch als Entladung interpretiert. Abweichungen sind normal: inputLimit/outputLimit sind nur Vorgaben; die reale Leistung hängt von Zendure-Firmware, Ladezustand, Temperatur, internen Grenzen, AC/DC-Pfad und Reaktionszeit ab.',
+                'Diese Karte trennt den aktuellen Controller-Zielwert von der gemessenen Zendure-Istleistung und vom letzten MQTT-Kommando. Der Zielwert ist die interne Regleranforderung dieses Zyklus; die Istleistung zeigt, was die Zendure real tut. Bei HOLD/DEADBAND oder nach einem Service-Neustart können Zielwert und Istleistung kurz auseinanderlaufen, bis ein neues Kommando wirkt oder die Firmware nachregelt.',
                 settings_group='Regelung'
             )}
             {status_card(

@@ -1,6 +1,6 @@
-Zendure Energy Controller Version 12.10.0-RC6
+Zendure Energy Controller Version 12.10.0-RC8
 
-# Zendure Energy Controller V12.10.0-RC6
+# Zendure Energy Controller V12.10.0-RC8
 
 Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, ZEC-MEASUREMENT-V4-Messdaten-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
@@ -9,6 +9,19 @@ Copyright (c) 2026 Eduard Fuchs <info@eduardfuchs.de>
 Lizenziert unter AGPL-3.0-or-later. Siehe `LICENSE`, `NOTICE` und `DISCLAIMER.md`.
 
 
+
+
+## Wichtige Änderungen in V12.10.0-RC8
+
+V12.10.0-RC8 ist ein isolierter Stabilitäts-Fix für die nach RC7 erkannten Fehler in V4-Logging, Diagnosepaket und Restart-/HOLD-Transparenz. Es enthält keine Restüberschuss-Ernte und keine neue breite Regelstrategie.
+
+- V4-Measurement schreibt neue Service-Starts immer in eine eigene kurze Session-Datei, damit Manifest-Eintrag und physische CSV-Datei eindeutig zusammenpassen und eine bestehende Basisdatei nicht überschrieben oder verwaist wird.
+- Das Diagnosepaket-Tool arbeitet standardmäßig ohne Service-Stop. Ein konsistenter Stop/Start-Snapshot ist nur noch explizit per `--stop-services` aktiv.
+- Das Diagnosepaket-Tool kann fallback-only Pakete erzeugen, ignoriert 0-Byte-CSV als Datenbasis und warnt, wenn Manifest-Dateien physisch fehlen.
+- Nach einem Service-Neustart wird in AUTO/HOLD/DEADBAND einmalig ein neutrales 0/0-Kommando gesendet, wenn der Controller noch keinen bekannten wirksamen Zielzustand hat. Dadurch kann ein altes Zendure-Limit nicht unsichtbar weiterlaufen.
+- Die Statuskarte „Zendure Systemleistung“ trennt Zielwert, gemessene Istleistung und letztes MQTT-Kommando klarer.
+- Keine Änderung an MQTT-Topic-/Kommandostruktur, Nachtmodus-Strategie oder Restüberschuss-Ernte.
+- Vollständiger Testlauf: 174 Tests OK.
 
 
 ## Wichtige Änderungen in V12.10.0-RC6

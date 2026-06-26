@@ -39,6 +39,11 @@ class ZendureController:
         self.app_logger = app_logger or RotatingAppLogger()
         self._running = True
         self._cycle_timing_parts: Dict[str, int] = {}
+        # After a controller/service restart the Zendure inverter may still obey
+        # a previously sent limit, while the in-memory command state starts at
+        # 0 W.  If the first AUTO decision falls into HOLD/DEADBAND, publish one
+        # explicit neutral command so UI, state and physical device cannot drift.
+        self._startup_deadband_neutralized = False
 
     def log(self, message: str) -> None:
         cfg = self.config_manager.get()
@@ -802,6 +807,15 @@ class ZendureController:
             self._publish_signed_target(final_signed, force_zero=(final_signed == 0))
             reason = correction.get("reason") or "Cross-Charge-Schutz aktiv"
             path = "GRID -> DEADBAND -> CROSS_CHARGE -> HOLD_POWER"
+            self._startup_deadband_neutralized = True
+        elif final_signed == 0 and not self._startup_deadband_neutralized:
+            # RC8 targeted restart guard: one forced neutral 0/0 command in AUTO
+            # deadband after service start.  This is deliberately cheap and does
+            # not add recurring health checks to the live cycle.
+            self._publish_signed_target(0, force_zero=True)
+            reason = "Innerhalb Totzone -> Startzustand neutralisiert"
+            path = "GRID -> DEADBAND -> STARTUP_NEUTRALIZE -> HOLD_POWER"
+            self._startup_deadband_neutralized = True
         else:
             reason = "Innerhalb Totzone -> Leistung halten"
             path = "GRID -> DEADBAND -> HOLD_POWER"

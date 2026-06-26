@@ -1030,12 +1030,18 @@ class MeasurementV4Logger:
             return self._session_path_map[base_path]
         path = base_path
         filename = os.path.basename(base_path)
-        # In RCs, never append a new service-start segment to an existing physical
-        # V4 CSV. A new session file prevents RC1/RC2/RC3 rows from sharing one
-        # manifest entry and keeps live diagnostics readable.
-        if filename == "zendure_measurements_v4.csv" and os.path.exists(base_path) and os.path.getsize(base_path) > 0:
+        # RC8: never write a V4 runtime session into the unsuffixed base file.
+        # The RC7 investigation showed a dangerous split-brain condition where
+        # the manifest referenced a timestamped session file while the physical
+        # data was no longer present after restart/package handling.  A fresh,
+        # explicit session file for every service start keeps manifest entries
+        # and physical files one-to-one and prevents accidental truncation or
+        # reuse of zendure_measurements_v4.csv.
+        if filename == "zendure_measurements_v4.csv":
             stem, ext = os.path.splitext(filename)
             path = os.path.join(os.path.dirname(base_path), f"{stem}_{self._session_suffix}{ext}")
+            if os.path.exists(path):
+                path = os.path.join(os.path.dirname(base_path), f"{stem}_{self._session_suffix}_{uuid.uuid4().hex[:6]}{ext}")
         self._session_path_map[base_path] = path
         return path
 

@@ -113,7 +113,9 @@ class MeasurementV4WriterTests(unittest.TestCase):
             status = logger.log(base_config(tmp), base_row())
             logger.close()
             self.assertEqual("active", status["measurement_log_status"])
-            csv_path = os.path.join(tmp, "zendure_measurements_v4.csv")
+            csv_files = [name for name in os.listdir(tmp) if name.startswith("zendure_measurements_v4") and name.endswith(".csv")]
+            self.assertEqual(1, len(csv_files))
+            csv_path = os.path.join(tmp, csv_files[0])
             self.assertTrue(os.path.exists(csv_path))
             with open(csv_path, newline="", encoding="utf-8") as f:
                 rows = list(csv.DictReader(f, delimiter=";"))
@@ -147,7 +149,9 @@ class MeasurementV4WriterTests(unittest.TestCase):
             logger = CsvRotatingLogger()
             logger.log(base_config(tmp, mode="extended"), base_row())
             logger.close()
-            csv_path = os.path.join(tmp, "zendure_measurements_v4.csv")
+            csv_files = [name for name in os.listdir(tmp) if name.startswith("zendure_measurements_v4") and name.endswith(".csv")]
+            self.assertEqual(1, len(csv_files))
+            csv_path = os.path.join(tmp, csv_files[0])
             with open(csv_path, newline="", encoding="utf-8") as f:
                 rows = list(csv.DictReader(f, delimiter=";"))
             self.assertEqual(EXTENDED_HEADER, list(rows[0].keys()))

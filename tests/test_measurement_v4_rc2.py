@@ -83,7 +83,9 @@ class MeasurementV4Rc2Tests(unittest.TestCase):
             created = first_manifest["files"][0]["created_time_utc"]
             logger.log(cfg, row2)
             logger.close()
-            with open(os.path.join(tmp, "zendure_measurements_v4.csv"), newline="", encoding="utf-8") as f:
+            csv_files = [name for name in os.listdir(tmp) if name.startswith("zendure_measurements_v4") and name.endswith(".csv")]
+            self.assertEqual(1, len(csv_files))
+            with open(os.path.join(tmp, csv_files[0]), newline="", encoding="utf-8") as f:
                 data_rows = list(csv.DictReader(f, delimiter=";"))
             with open(os.path.join(tmp, "zec_measurement_manifest.json"), encoding="utf-8") as f:
                 manifest = json.load(f)
