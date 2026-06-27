@@ -415,7 +415,8 @@ def selection_profile(paths: Sequence[Path], cfg: Dict[str, Any]) -> Dict[str, A
                 text += " Aktuelle Systemlast ist erhöht; lokale Analyse wird vorsichtig eingestuft."
             if v4_warnings:
                 text += " Hinweise: " + " | ".join(str(w) for w in v4_warnings[:3])
-            needs_confirm = bool((not small_selection) or memory_tight or load_tight)
+            tiny_selection = rows <= 1000 or total_size <= 1024 * 1024
+            needs_confirm = bool((not small_selection) or ((memory_tight or load_tight) and not tiny_selection))
             rejected = False
         else:
             risk = "rejected"
@@ -958,8 +959,9 @@ def build_app() -> FastAPI:
             const js=await res.json().catch(()=>({{error:'Ungültige Serverantwort'}}));
             if(js.profile) renderProfile(js.profile);
             if(js.requires_confirmation){{
-              setBusy(false); setStatus(js.message||'Große Analyse erfordert Bestätigung.',0,'info');
-              if(confirm((js.message||'Große Analyse starten?')+'\\n\\nWeiter?')) startAnalysis(true);
+              setBusy(false); setStatus(js.message||'Größere Analyse erfordert Bestätigung.',0,'info');
+              const msg=escapeHtml(js.message||'Diese Analyse kann den Raspberry Pi stärker belasten.');
+              byId('result').innerHTML='<h2>Analyse bestätigen</h2><div class="warning"><b>Bewusste Bestätigung erforderlich</b><br>'+msg+'<br><br><button class="save save-small" onclick="startAnalysis(true); return false;">Analyse trotzdem starten</button></div>';
               return;
             }}
             if(!res.ok){{

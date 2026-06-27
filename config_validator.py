@@ -224,6 +224,11 @@ def validate_config_semantics(
             "ZENDURE_LOCAL_API_FALLBACK_WITHOUT_IP",
         ))
 
+    control_timeout_cap = _float_value(cfg, "ZENDURE_LOCAL_API_CONTROL_TIMEOUT_CAP_SECONDS", 1.5)
+    interval_for_timeout = _int_value(cfg, "INTERVAL_SECONDS", 3)
+    if use_local_api and control_timeout_cap >= max(1.0, interval_for_timeout * 0.75):
+        issues.append(_issue("WARNING", "Der Timeout-Cap der lokalen Zendure-API liegt nahe am Regelintervall. Langsame API-Antworten können einzelne Regelzyklen spürbar verlängern.", ["ZENDURE_LOCAL_API_CONTROL_TIMEOUT_CAP_SECONDS", "INTERVAL_SECONDS"], "Netzwerk", "LOCAL_API_TIMEOUT_NEAR_INTERVAL"))
+
     if not _str_value(cfg, "SHELLY_IP"):
         issues.append(_issue("ERROR", "Die Shelly-/Uni-Meter-IP darf nicht leer sein, weil die Netzleistung die zentrale Regelgröße ist.", ["SHELLY_IP"], "Netzwerk", "SHELLY_IP_MISSING"))
     if not _str_value(cfg, "MQTT_BROKER"):
@@ -293,6 +298,24 @@ def validate_config_semantics(
             "FAST_CONTROL_PARAMS",
         ))
 
+    min_command_change = _int_value(cfg, "MIN_COMMAND_CHANGE_W", 50)
+    if max_step > 0 and min_command_change > max_step:
+        issues.append(_issue(
+            "WARNING",
+            "Die MQTT-Mindeständerung ist größer als die maximale Zielwertänderung pro Zyklus. Der Regler kann dadurch berechnete kleine Schritte häufig unterdrücken und deutlich träger wirken als erwartet.",
+            ["MIN_COMMAND_CHANGE_W", "MAX_POWER_STEP_W"],
+            "Regelung",
+            "MIN_COMMAND_ABOVE_STEP",
+        ))
+    if deadband > 0 and min_command_change > deadband * 2:
+        issues.append(_issue(
+            "INFO",
+            "Die MQTT-Mindeständerung ist deutlich größer als die normale Totzone. Das reduziert Kommandohäufigkeit, kann aber kleine Zielwertkorrekturen sichtbar verzögern.",
+            ["MIN_COMMAND_CHANGE_W", "DEADBAND_W"],
+            "Regelung",
+            "MIN_COMMAND_HIGH_VS_DEADBAND",
+        ))
+
     # Manual modes.
     manual_mode = _str_value(cfg, "MANUAL_MODE") or "AUTO"
     fixed_discharge_power = _int_value(cfg, "MANUAL_FIXED_DISCHARGE_POWER_W", 0)
@@ -316,18 +339,18 @@ def validate_config_semantics(
     if cross_charge_enabled(cfg):
         profile = _str_value(cfg, "SECOND_BATTERY_SOURCE_PROFILE") or PROFILE_EVCC_STANDARD
         if profile not in {PROFILE_EVCC_STANDARD, PROFILE_CUSTOM}:
-            issues.append(_issue("ERROR", "Das Datenquellen-Profil des Cross-Charge-Schutzes ist ungültig.", ["SECOND_BATTERY_SOURCE_PROFILE"], "Cross-Charge-Schutz", "SECOND_BATTERY_PROFILE_INVALID"))
+            issues.append(_issue("ERROR", "Das Datenquellen-Profil der Zweitbatterie ist ungültig.", ["SECOND_BATTERY_SOURCE_PROFILE"], "Zweitbatterie", "SECOND_BATTERY_PROFILE_INVALID"))
 
         if not _str_value(cfg, "SECOND_BATTERY_DISPLAY_NAME"):
-            issues.append(_issue("WARNING", "Der Anzeigename der Zusatzbatterie ist leer. Die Oberfläche verwendet dann technische Fallback-Bezeichnungen.", ["SECOND_BATTERY_DISPLAY_NAME"], "Cross-Charge-Schutz", "SECOND_BATTERY_NAME_EMPTY"))
+            issues.append(_issue("WARNING", "Der Anzeigename der Zusatzbatterie ist leer. Die Oberfläche verwendet dann technische Fallback-Bezeichnungen.", ["SECOND_BATTERY_DISPLAY_NAME"], "Zweitbatterie", "SECOND_BATTERY_NAME_EMPTY"))
 
         topics = second_battery_topics(cfg)
         if profile == PROFILE_EVCC_STANDARD:
             if not _str_value(cfg, "SECOND_BATTERY_EVCC_BASE_TOPIC"):
-                issues.append(_issue("ERROR", "Der Cross-Charge-Schutz nutzt das Profil EVCC Standard, aber das EVCC Batterie-Basis-Topic ist leer.", ["CROSS_CHARGE_ENABLED", "SECOND_BATTERY_SOURCE_PROFILE", "SECOND_BATTERY_EVCC_BASE_TOPIC"], "Cross-Charge-Schutz", "SECOND_BATTERY_EVCC_BASE_TOPIC_MISSING"))
+                issues.append(_issue("ERROR", "Die Zweitbatterie nutzt das Profil EVCC Standard, aber das EVCC Batterie-Basis-Topic ist leer.", ["CROSS_CHARGE_ENABLED", "SECOND_BATTERY_SOURCE_PROFILE", "SECOND_BATTERY_EVCC_BASE_TOPIC"], "Zweitbatterie", "SECOND_BATTERY_EVCC_BASE_TOPIC_MISSING"))
         else:
             if not topics.get("power"):
-                issues.append(_issue("ERROR", "Der Cross-Charge-Schutz ist aktiv, aber im benutzerdefinierten Profil fehlt das Leistungs-Topic der Zusatzbatterie.", ["CROSS_CHARGE_ENABLED", "SECOND_BATTERY_SOURCE_PROFILE", "SECOND_BATTERY_POWER_TOPIC"], "Cross-Charge-Schutz", "SECOND_BATTERY_POWER_TOPIC_MISSING"))
+                issues.append(_issue("ERROR", "Die Zweitbatterie ist aktiv, aber im benutzerdefinierten Profil fehlt das Leistungs-Topic der Zusatzbatterie.", ["CROSS_CHARGE_ENABLED", "SECOND_BATTERY_SOURCE_PROFILE", "SECOND_BATTERY_POWER_TOPIC"], "Zweitbatterie", "SECOND_BATTERY_POWER_TOPIC_MISSING"))
 
             for kind, topic_key, payload_key, json_key, label in (
                 ("power", "SECOND_BATTERY_POWER_TOPIC", "SECOND_BATTERY_POWER_PAYLOAD_TYPE", "SECOND_BATTERY_POWER_JSON_PATH", "Leistung"),
@@ -338,26 +361,60 @@ def validate_config_semantics(
                 payload_type = _str_value(cfg, payload_key) or "number"
                 json_path = _str_value(cfg, json_key)
                 if payload_type not in {"number", "json"}:
-                    issues.append(_issue("ERROR", f"Der Payload-Typ für {label} muss 'Zahl direkt' oder 'JSON mit Feldpfad' sein.", [payload_key], "Cross-Charge-Schutz", f"SECOND_BATTERY_{kind.upper()}_PAYLOAD_TYPE_INVALID"))
+                    issues.append(_issue("ERROR", f"Der Payload-Typ für {label} muss 'Zahl direkt' oder 'JSON mit Feldpfad' sein.", [payload_key], "Zweitbatterie", f"SECOND_BATTERY_{kind.upper()}_PAYLOAD_TYPE_INVALID"))
                 if topic_value and payload_type == "json" and not json_path:
-                    issues.append(_issue("ERROR", f"Für {label} ist JSON-Payload gewählt, aber der JSON-Feldpfad ist leer.", [topic_key, payload_key, json_key], "Cross-Charge-Schutz", f"SECOND_BATTERY_{kind.upper()}_JSON_PATH_MISSING"))
+                    issues.append(_issue("ERROR", f"Für {label} ist JSON-Payload gewählt, aber der JSON-Feldpfad ist leer.", [topic_key, payload_key, json_key], "Zweitbatterie", f"SECOND_BATTERY_{kind.upper()}_JSON_PATH_MISSING"))
 
         power_unit = _str_value(cfg, "SECOND_BATTERY_POWER_UNIT") or "W"
         capacity_unit = _str_value(cfg, "SECOND_BATTERY_CAPACITY_UNIT") or "kWh"
         if power_unit not in {"W", "kW"}:
-            issues.append(_issue("ERROR", "Die Leistungseinheit der Zusatzbatterie muss W oder kW sein.", ["SECOND_BATTERY_POWER_UNIT"], "Cross-Charge-Schutz", "SECOND_BATTERY_POWER_UNIT_INVALID"))
+            issues.append(_issue("ERROR", "Die Leistungseinheit der Zusatzbatterie muss W oder kW sein.", ["SECOND_BATTERY_POWER_UNIT"], "Zweitbatterie", "SECOND_BATTERY_POWER_UNIT_INVALID"))
         if capacity_unit not in {"Wh", "kWh"}:
-            issues.append(_issue("ERROR", "Die Kapazitätseinheit der Zusatzbatterie muss Wh oder kWh sein.", ["SECOND_BATTERY_CAPACITY_UNIT"], "Cross-Charge-Schutz", "SECOND_BATTERY_CAPACITY_UNIT_INVALID"))
+            issues.append(_issue("ERROR", "Die Kapazitätseinheit der Zusatzbatterie muss Wh oder kWh sein.", ["SECOND_BATTERY_CAPACITY_UNIT"], "Zweitbatterie", "SECOND_BATTERY_CAPACITY_UNIT_INVALID"))
 
         sign = _int_value(cfg, "SECOND_BATTERY_DISCHARGE_SIGN", 1)
         if sign not in (-1, 1):
-            issues.append(_issue("ERROR", "Das Entlade-Vorzeichen der Zusatzbatterie muss entweder 1 oder -1 sein.", ["SECOND_BATTERY_DISCHARGE_SIGN"], "Cross-Charge-Schutz", "SECOND_BATTERY_SIGN_INVALID"))
+            issues.append(_issue("ERROR", "Das Entlade-Vorzeichen der Zusatzbatterie muss entweder 1 oder -1 sein.", ["SECOND_BATTERY_DISCHARGE_SIGN"], "Zweitbatterie", "SECOND_BATTERY_SIGN_INVALID"))
         if _int_value(cfg, "SMA_DISCHARGE_BLOCK_W", 80) <= 0:
-            issues.append(_issue("ERROR", "Die Entlade-Blockgrenze der Zusatzbatterie muss größer als 0 Watt sein.", ["SMA_DISCHARGE_BLOCK_W"], "Cross-Charge-Schutz", "SMA_BLOCK_ZERO"))
+            issues.append(_issue("ERROR", "Die Entlade-Blockgrenze der Zusatzbatterie muss größer als 0 Watt sein.", ["SMA_DISCHARGE_BLOCK_W"], "Zweitbatterie", "SMA_BLOCK_ZERO"))
         if _int_value(cfg, "SECOND_BATTERY_STALE_TIMEOUT_SECONDS", 30) < 5:
-            issues.append(_issue("WARNING", "Ein sehr kurzer Daten-Timeout kann bei kurzen MQTT-Pausen unnötig schnell zur Blockierung der Zendure-Ladung führen.", ["SECOND_BATTERY_STALE_TIMEOUT_SECONDS"], "Cross-Charge-Schutz", "SECOND_BATTERY_TIMEOUT_LOW"))
+            issues.append(_issue("WARNING", "Ein sehr kurzer Daten-Timeout kann bei kurzen MQTT-Pausen unnötig schnell zur Blockierung der Zendure-Ladung führen.", ["SECOND_BATTERY_STALE_TIMEOUT_SECONDS"], "Zweitbatterie", "SECOND_BATTERY_TIMEOUT_LOW"))
         if profile == PROFILE_CUSTOM and topics.get("soc") == "" and topics.get("capacity") == "":
-            issues.append(_issue("INFO", "SOC- und Kapazitäts-Topic sind nicht konfiguriert. Der Cross-Charge-Schutz funktioniert weiterhin über die Leistungsmessung; Status- und Diagnoseanzeige bleiben für diese Zusatzwerte leer.", ["SECOND_BATTERY_SOC_TOPIC", "SECOND_BATTERY_CAPACITY_TOPIC"], "Cross-Charge-Schutz", "SECOND_BATTERY_OPTIONAL_VALUES_EMPTY"))
+            issues.append(_issue("INFO", "SOC- und Kapazitäts-Topic sind nicht konfiguriert. Die Zweitbatterie-Diagnose funktioniert weiterhin über die Leistungsmessung; Status- und Diagnoseanzeige bleiben für diese Zusatzwerte leer.", ["SECOND_BATTERY_SOC_TOPIC", "SECOND_BATTERY_CAPACITY_TOPIC"], "Zweitbatterie", "SECOND_BATTERY_OPTIONAL_VALUES_EMPTY"))
+
+    # Restüberschuss-Ernte: harte Abhängigkeiten und verständliche Querhinweise.
+    harvest_enabled = _bool_value(cfg.get("REST_SURPLUS_HARVEST_ENABLED", False))
+    if harvest_enabled:
+        max_primary_charge = _optional_int_value(cfg, "SECOND_BATTERY_MAX_CHARGE_POWER_W")
+        min_export = _int_value(cfg, "REST_SURPLUS_MIN_EXPORT_W", 80)
+        entry_confirm = _int_value(cfg, "REST_SURPLUS_ENTRY_CONFIRM_SECONDS", 30)
+        margin = _int_value(cfg, "SECOND_BATTERY_CHARGE_SATURATION_MARGIN_W", 100)
+        if max_primary_charge is None or max_primary_charge <= 0:
+            issues.append(_issue("ERROR", "Restüberschuss-Ernte ist aktiv, aber die maximale Ladeleistung des Primärspeichers ist leer oder ungültig. Ohne diesen Wert kann der Controller nicht erkennen, wann der Primärspeicher nahe seiner Ladegrenze arbeitet.", ["REST_SURPLUS_HARVEST_ENABLED", "SECOND_BATTERY_MAX_CHARGE_POWER_W"], "Zweitbatterie", "HARVEST_MAX_CHARGE_MISSING"))
+        elif max_primary_charge < 300:
+            issues.append(_issue("ERROR", "Die maximale Ladeleistung des Primärspeichers ist für die Restüberschuss-Ernte unplausibel niedrig. Trage den technischen Maximalwert des Primärspeichers in Watt ein.", ["SECOND_BATTERY_MAX_CHARGE_POWER_W"], "Zweitbatterie", "HARVEST_MAX_CHARGE_TOO_LOW"))
+        if not cross_charge_enabled(cfg):
+            issues.append(_issue("ERROR", "Restüberschuss-Ernte benötigt den Cross-Charge-Schutz. Wenn der Primärspeicher während einer Erntephase in Entladung kippt, muss Zendure-Ladung sicher reduziert oder blockiert werden können.", ["REST_SURPLUS_HARVEST_ENABLED", "CROSS_CHARGE_ENABLED"], "Zweitbatterie", "HARVEST_NEEDS_CROSS_CHARGE"))
+        profile = _str_value(cfg, "SECOND_BATTERY_SOURCE_PROFILE") or PROFILE_EVCC_STANDARD
+        topics = second_battery_topics(cfg)
+        if profile == PROFILE_EVCC_STANDARD and not _str_value(cfg, "SECOND_BATTERY_EVCC_BASE_TOPIC"):
+            issues.append(_issue("ERROR", "Restüberschuss-Ernte benötigt frische Leistungsdaten der Zweitbatterie, aber das EVCC Batterie-Basis-Topic ist leer.", ["REST_SURPLUS_HARVEST_ENABLED", "SECOND_BATTERY_EVCC_BASE_TOPIC"], "Zweitbatterie", "HARVEST_SECOND_BATTERY_TOPIC_MISSING"))
+        if profile == PROFILE_CUSTOM and not topics.get("power"):
+            issues.append(_issue("ERROR", "Restüberschuss-Ernte benötigt frische Leistungsdaten der Zweitbatterie, aber im benutzerdefinierten Profil fehlt das Leistungs-Topic.", ["REST_SURPLUS_HARVEST_ENABLED", "SECOND_BATTERY_POWER_TOPIC"], "Zweitbatterie", "HARVEST_SECOND_BATTERY_POWER_TOPIC_MISSING"))
+        if min_export <= 0:
+            issues.append(_issue("ERROR", "Der Mindest-Netzexport für die Restüberschuss-Ernte muss größer als 0 W sein.", ["REST_SURPLUS_MIN_EXPORT_W"], "Zweitbatterie", "HARVEST_MIN_EXPORT_ZERO"))
+        if entry_confirm < interval * 3:
+            issues.append(_issue("WARNING", "Die Entry-Bestätigungszeit der Restüberschuss-Ernte ist sehr kurz. Kurze Wolkenlücken oder Lastspitzen könnten den Modus unnötig starten.", ["REST_SURPLUS_ENTRY_CONFIRM_SECONDS", "INTERVAL_SECONDS"], "Zweitbatterie", "HARVEST_ENTRY_CONFIRM_SHORT"))
+        if margin <= 0 or (max_primary_charge and margin >= max_primary_charge):
+            issues.append(_issue("ERROR", "Die interne Marge zur Erkennung der Primärspeicher-Ladegrenze ist ungültig.", ["SECOND_BATTERY_CHARGE_SATURATION_MARGIN_W", "SECOND_BATTERY_MAX_CHARGE_POWER_W"], "Zweitbatterie", "HARVEST_MARGIN_INVALID"))
+        if min_command_change > min_export:
+            issues.append(_issue("WARNING", "Die MQTT-Mindeständerung ist größer als der Mindest-Netzexport der Restüberschuss-Ernte. Die Funktion kann zwar aktiv werden, kleine Korrekturen werden aber möglicherweise durch die Mindeständerung unterdrückt.", ["MIN_COMMAND_CHANGE_W", "REST_SURPLUS_MIN_EXPORT_W"], "Zweitbatterie", "HARVEST_MIN_COMMAND_ABOVE_MIN_EXPORT"))
+        if min_export < deadband:
+            issues.append(_issue("INFO", "Der Mindest-Netzexport der Restüberschuss-Ernte liegt innerhalb der normalen Totzone. Das ist für diese Speziallage zulässig: Der Modus startet nur bei bestätigtem Primärspeicher-Ladelimit und darf dann bewusst feineren Restexport ernten.", ["REST_SURPLUS_MIN_EXPORT_W", "DEADBAND_W"], "Zweitbatterie", "HARVEST_EXPORT_BELOW_DEADBAND"))
+        if max_step < min_export:
+            issues.append(_issue("WARNING", "Die maximale Zielwertänderung pro Zyklus ist kleiner als der Mindest-Netzexport der Restüberschuss-Ernte. Zendure wird den Restüberschuss bewusst sehr langsam aufnehmen.", ["MAX_POWER_STEP_W", "REST_SURPLUS_MIN_EXPORT_W"], "Zweitbatterie", "HARVEST_STEP_SMALL"))
+        if smoothing < 0.10 or interval >= 10:
+            issues.append(_issue("INFO", "Die Restüberschuss-Ernte nutzt weiterhin Step-/Smoothing-Limits. Sehr kleine Glättungsfaktoren oder lange Regelintervalle machen Zendure bewusst träge und können kurze Überschussfenster teilweise verpassen.", ["SMOOTHING_FACTOR", "INTERVAL_SECONDS"], "Zweitbatterie", "HARVEST_SLOW_RESPONSE"))
 
     # Night mode.
     if _bool_value(cfg.get("NIGHT_DISCHARGE_ENABLED", False)):

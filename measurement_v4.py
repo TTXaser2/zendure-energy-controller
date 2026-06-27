@@ -32,6 +32,9 @@ CONTROL_SNAPSHOT_KEYS = [
     "CROSS_CHARGE_SIGNIFICANT_W", "SMA_DISCHARGE_BLOCK_W", "CROSS_CHARGE_ENABLED",
     "CROSS_CHARGE_RESERVE_W", "MIN_EFFECTIVE_SURPLUS_FOR_CHARGE_W", "SECOND_BATTERY_ENABLED",
     "SECOND_BATTERY_SOURCE_PROFILE", "SECOND_BATTERY_DISCHARGE_SIGN", "SECOND_BATTERY_STALE_BLOCK_CHARGE",
+    "REST_SURPLUS_HARVEST_ENABLED", "SECOND_BATTERY_MAX_CHARGE_POWER_W",
+    "REST_SURPLUS_MIN_EXPORT_W", "REST_SURPLUS_ENTRY_CONFIRM_SECONDS",
+    "SECOND_BATTERY_CHARGE_SATURATION_MARGIN_W",
 ]
 
 MQTT_GROUP_ALIASES = {
@@ -353,9 +356,16 @@ def build_v4_row(config: Dict[str, Any], row: Dict[str, Any], previous_effective
         "control_grid_power_smoothed_valid": _bool01(_first_non_empty(row.get("grid_power_used_for_control"), row.get("input_grid_power_used_for_control"))),
         "control_effective_export_w": _round1(_first_non_empty(row.get("input_effective_export_used_w"), row.get("effective_export_power_w"), row.get("effective_export_power"), effective_surplus)),
         "control_effective_export_valid": _bool01(_first_non_empty(row.get("input_effective_export_used_for_control"), row.get("effective_export_power_used_for_control"), row.get("effective_export_power_valid"), row.get("scenario_reconstruction_valid"))),
+        "rest_surplus_harvest_active": _bool01(row.get("rest_surplus_harvest_active")),
+        "rest_surplus_harvest_eligible": _bool01(row.get("rest_surplus_harvest_eligible")),
+        "rest_surplus_entry_progress_s": _round1(row.get("rest_surplus_entry_progress_s")),
+        "rest_surplus_exit_reason": str(row.get("rest_surplus_exit_reason", "") or ""),
+        "second_battery_charge_pressure_w": _round1(row.get("second_battery_charge_pressure_w")),
+        "second_battery_charge_saturation_threshold_w": _round1(row.get("second_battery_charge_saturation_threshold_w")),
+        "rest_surplus_export_w": _round1(row.get("rest_surplus_export_w", max(0.0, -(_safe_float(row.get("grid_power_w", row.get("grid_power"))) or 0.0)))),
         "control_deadband_active": _bool01(row.get("deadband_active")),
-        "control_cross_charge_detected": _bool01(row.get("cross_charge_guard_active")),
-        "control_cross_charge_limited": _bool01(row.get("cross_charge_guard_limited", row.get("cross_charge_guard_active"))),
+        "control_cross_charge_detected": "1" if target_reason in {"CROSS_CHARGE_REDUCED", "CROSS_CHARGE_BLOCKED"} else "0",
+        "control_cross_charge_limited": "1" if target_reason in {"CROSS_CHARGE_REDUCED", "CROSS_CHARGE_BLOCKED"} else "0",
         "control_mode_change_lock_active": "1" if "MODE_CHANGE" in str(row.get("technical_path", row.get("control_path", ""))).upper() else "0",
         "target_raw_w": _round1(row.get("target_raw_w")),
         "target_filtered_w": _round1(row.get("target_after_smoothing_w", row.get("target_filtered_w"))),
@@ -493,6 +503,8 @@ def _map_target_reason(reason: str, operating_mode: str, target_final: Optional[
         return "MAX_SOC_LIMIT"
     if str(operating_mode or "").upper() == "SAFE_STATE":
         return "SAFE_STATE"
+    if "REST_SURPLUS" in raw or "HARVEST" in raw or "RESTÜBERSCHUSS" in raw or "RESTUEBERSCHUSS" in raw or "ERNTE" in raw:
+        return "REST_SURPLUS_HARVEST"
     if "BLOCKED_BY_SMA" in raw or "SMA" in raw or "CROSS_CHARGE" in raw:
         return "CROSS_CHARGE_BLOCKED" if target_final == 0 else "CROSS_CHARGE_REDUCED"
     if "DEADBAND" in raw:
@@ -775,10 +787,20 @@ class ConfigSnapshotStore:
             elif "SMA_DISCHARGE_BLOCK_W" in params:
                 params["CROSS_CHARGE_SIGNIFICANT_W"] = params.get("SMA_DISCHARGE_BLOCK_W")
                 changed = True
-        # Preserve original created_time_utc, but add contract keys that were missing in early RC snapshots.
-        for key in ("schema_version", "controller_version", "source"):
+        # Preserve original created_time_utc, but keep runtime/controller version and
+        # newly introduced rule parameters current for diagnostics. The config hash
+        # deliberately remains the hash of rule-relevant config values.
+        for key in ("schema_version", "source"):
             if key not in existing and key in snapshot:
                 existing[key] = snapshot[key]
+                changed = True
+        if existing.get("controller_version") != snapshot.get("controller_version"):
+            existing["controller_version"] = snapshot.get("controller_version")
+            existing["updated_time_utc"] = _now_utc()
+            changed = True
+        for key, value in new_params.items():
+            if key not in params:
+                params[key] = value
                 changed = True
         return changed
 

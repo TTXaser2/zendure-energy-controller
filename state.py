@@ -78,6 +78,18 @@ class ControllerState:
     cross_charge_guard_latched: bool = False
     cross_charge_last_direction: str = ""
 
+    # Restüberschuss-Ernte: zustandsbehaftete Diagnosefelder.
+    # Der Modus darf nur in AUTO laden, startet erst nach bestätigtem
+    # SMA-Ladelimit+Export-Zustand und bleibt danach bewusst großzügig aktiv,
+    # solange er dem System nicht schadet.
+    rest_surplus_harvest_active: bool = False
+    rest_surplus_harvest_eligible: bool = False
+    rest_surplus_entry_progress_s: float = 0.0
+    rest_surplus_exit_reason: str = ""
+    rest_surplus_export_w: float = 0.0
+    second_battery_charge_pressure_w: float = 0.0
+    second_battery_charge_saturation_threshold_w: float = 0.0
+
     # Modus / Diagnose
     current_mode: str = "STARTUP"
     previous_mode: str = "STARTUP"
@@ -1005,6 +1017,13 @@ class ControllerState:
                 "effective_export_power_valid": self.effective_export_power_valid,
                 "effective_export_power_used_for_control": self.effective_export_power_used_for_control,
                 "effective_export_meaning": "Für Zendure-Ladung verfügbarer Überschuss nach Zusatzbatterie-Abzug und Sicherheitsreserve",
+                "rest_surplus_harvest_active": self.rest_surplus_harvest_active,
+                "rest_surplus_harvest_eligible": self.rest_surplus_harvest_eligible,
+                "rest_surplus_entry_progress_s": round(float(self.rest_surplus_entry_progress_s or 0.0), 1),
+                "rest_surplus_exit_reason": self.rest_surplus_exit_reason,
+                "second_battery_charge_pressure_w": round(float(self.second_battery_charge_pressure_w or 0.0), 1),
+                "second_battery_charge_saturation_threshold_w": round(float(self.second_battery_charge_saturation_threshold_w or 0.0), 1),
+                "rest_surplus_export_w": round(float(self.rest_surplus_export_w or 0.0), 1),
 
                 # SOC / Modus / Reglerpfad
                 "zendure_soc_percent": self.battery_soc,
@@ -1286,6 +1305,13 @@ class ControllerState:
                 "second_battery_data_age_seconds": self.second_battery_data_age_seconds,
                 "second_battery_validity_reason": self.second_battery_validity_reason,
                 "evcc_data_available": self.evcc_data_available,
+                "rest_surplus_harvest_active": self.rest_surplus_harvest_active,
+                "rest_surplus_harvest_eligible": self.rest_surplus_harvest_eligible,
+                "rest_surplus_entry_progress_s": round(float(self.rest_surplus_entry_progress_s or 0.0), 1),
+                "rest_surplus_exit_reason": self.rest_surplus_exit_reason,
+                "second_battery_charge_pressure_w": round(float(self.second_battery_charge_pressure_w or 0.0), 1),
+                "second_battery_charge_saturation_threshold_w": round(float(self.second_battery_charge_saturation_threshold_w or 0.0), 1),
+                "rest_surplus_export_w": round(float(self.rest_surplus_export_w or 0.0), 1),
                 "graph_history": list(self.graph_history),
                 "event_history": list(self.event_history),
                 "mqtt_topic_diagnostics": list(self.mqtt_topic_diagnostics),

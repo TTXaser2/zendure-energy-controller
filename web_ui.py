@@ -11,6 +11,7 @@ import os
 import shlex
 import subprocess
 import threading
+from datetime import datetime, timedelta
 from typing import Any, Dict, Iterable, List, Optional
 
 import requests
@@ -21,7 +22,7 @@ from config_manager import CONFIG_SCHEMA, ConfigManager, validate_config
 from config_validator import ValidationIssue, restart_relevant_changes, split_issues, validate_config_semantics
 from cross_charge import cross_charge_enabled
 from csv_logger import rows_to_csv, estimate_retention_hours, measurement_log_mode, detected_log_mounts, resolve_log_path
-from version import APP_VERSION, CSV_SCHEMA
+from version import APP_VERSION, APP_VERSION_LABEL, CSV_SCHEMA
 from state import ControllerState
 from translations import (
     limiter_label,
@@ -37,7 +38,7 @@ GROUP_ORDER = [
     "Weboberfläche",
     "Regelung",
     "Manueller Modus",
-    "Cross-Charge-Schutz",
+    "Zweitbatterie",
     "Nachtmodus",
     "Sicherheit / Fallback",
     "Messdaten / Historie",
@@ -295,6 +296,8 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
     @app.get("/status")
     def status():
         snap = state.snapshot()
+        snap["controller_version"] = APP_VERSION
+        snap["controller_version_label"] = APP_VERSION_LABEL
         snap.pop("graph_history", None)
         snap.pop("event_history", None)
         snap.pop("mqtt_topic_diagnostics", None)
@@ -807,6 +810,48 @@ def status_card(label: str, value: str, details: str = "", value_class: str = "g
     """
 
 
+def night_mode_projection_text(cfg: Dict[str, Any], s: Dict[str, Any], current_mode: str) -> str:
+    if not cfg.get("NIGHT_DISCHARGE_ENABLED", False):
+        return "Voraussichtliches Ende: nicht relevant – Nachtmodus deaktiviert"
+    try:
+        now = datetime.now()
+        start = now.replace(hour=int(cfg.get('NIGHT_START_HOUR', 0)), minute=int(cfg.get('NIGHT_START_MINUTE', 0)), second=0, microsecond=0)
+        end = now.replace(hour=int(cfg.get('NIGHT_END_HOUR', 0)), minute=int(cfg.get('NIGHT_END_MINUTE', 0)), second=0, microsecond=0)
+        if end <= start:
+            if now <= end:
+                start = start - timedelta(days=1)
+            else:
+                end = end + timedelta(days=1)
+        in_window = start <= now <= end
+        if current_mode != "NIGHT_DISCHARGE" and not in_window:
+            return "Voraussichtliches Ende: nicht relevant – Nachtfenster aktuell nicht aktiv"
+        soc = s.get("battery_soc")
+        capacity_wh = cfg.get("ZENDURE_BATTERY_CAPACITY_WH")
+        night_power_w = int(cfg.get("NIGHT_DISCHARGE_POWER_W", 0) or 0)
+        if soc is None or capacity_wh in (None, "") or night_power_w <= 0:
+            return "Voraussichtliches Ende: nicht berechenbar – SOC, Kapazität oder Entladeleistung fehlt"
+        soc_f = float(soc)
+        capacity_wh = float(capacity_wh)
+        if capacity_wh <= 0:
+            return "Voraussichtliches Ende: nicht berechenbar – Batteriekapazität fehlt"
+        reserve = cfg.get("NIGHT_DISCHARGE_STOP_SOC_PERCENT")
+        reserve_soc = float(reserve) if reserve not in (None, "") else float(cfg.get("MIN_SOC_PERCENT", 0) or 0)
+        reserve_soc = max(float(cfg.get("MIN_SOC_PERCENT", 0) or 0), reserve_soc)
+        if soc_f <= reserve_soc:
+            return f"Voraussichtliches Ende: jetzt durch Reserve-SOC ({reserve_soc:.0f} %)"
+        rest_wh = capacity_wh * max(0.0, soc_f - reserve_soc) / 100.0
+        hours_to_reserve = rest_wh / float(night_power_w)
+        reserve_time = now + timedelta(hours=hours_to_reserve)
+        if reserve_time <= end:
+            return f"Voraussichtliches Ende: {reserve_time.strftime('%H:%M')} Uhr durch Reserve-SOC ({reserve_soc:.0f} %)"
+        hours_to_window_end = max(0.0, (end - now).total_seconds() / 3600.0)
+        used_wh = night_power_w * hours_to_window_end
+        projected_soc = max(reserve_soc, soc_f - (used_wh / capacity_wh) * 100.0)
+        return f"Voraussichtliches Ende: {end.strftime('%H:%M')} Uhr durch Nachtfenster-Ende mit vorauss. SOC von {projected_soc:.0f} %"
+    except Exception as exc:
+        return f"Voraussichtliches Ende: nicht berechenbar – {html.escape(str(exc))}"
+
+
 def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
     current_mode = str(s["current_mode"])
     evcc_enabled = bool(cross_charge_enabled(cfg))
@@ -891,10 +936,12 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
     night_paused_for_reserve = night_stop_reason == "NIGHT_RESERVE_SOC"
     night_status_text = "aktiv" if current_mode == "NIGHT_DISCHARGE" else (("pausiert" if night_paused_for_reserve else "gestoppt") if night_stopped else ("bereit" if cfg.get("NIGHT_DISCHARGE_ENABLED") else "aus"))
     night_status_color = "#9C27B0" if current_mode == "NIGHT_DISCHARGE" else ("#ff9800" if night_stopped else ("#4CAF50" if cfg.get("NIGHT_DISCHARGE_ENABLED") else "#777"))
+    night_projection = night_mode_projection_text(cfg, s, current_mode)
     night_details = (
         f"Zeitfenster: {int(cfg.get('NIGHT_START_HOUR', 0)):02d}:{int(cfg.get('NIGHT_START_MINUTE', 0)):02d}–{int(cfg.get('NIGHT_END_HOUR', 0)):02d}:{int(cfg.get('NIGHT_END_MINUTE', 0)):02d}<br>"
         f"Leistung: {int(cfg.get('NIGHT_DISCHARGE_POWER_W', 0))} W<br>"
         f"Reserve-SOC: {night_stop_soc if night_stop_soc is not None else '-'} %<br>"
+        f"{html.escape(night_projection)}<br>"
         f"Stop-Grund: {html.escape(night_stop_reason)}"
         + ("<br>Feste Nachtentladung pausiert; AUTO-Regelung bleibt für Lastspitzen aktiv." if night_paused_for_reserve else "")
     )
@@ -1022,7 +1069,7 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
             evcc_details,
             'gray',
             f'Diese Anzeige bewertet, ob über MQTT aktuelle Zusatzbatterie-Werte für {second_name_html} eintreffen. Grün bedeutet: Die Werte sind vorhanden und jünger als der konfigurierte Daten-Timeout. Rot bedeutet: Es liegen keine oder zu alte Werte vor; je nach Config blockiert der Cross-Charge-Schutz dann die Zendure-Ladung konservativ.',
-            settings_group='Cross-Charge-Schutz'
+            settings_group='Zweitbatterie'
         )
         sma_card_html = status_card(
             second_name_html,
@@ -1033,7 +1080,7 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
             f'MQTT Update: {s["last_sma_battery_update_time"]}',
             'gray',
             f'Dieser Wert kommt per MQTT aus der generischen MQTT-Zusatzbatterie-Integration. Für die Anzeige wird die in den Settings konfigurierte Vorzeichenlogik berücksichtigt: positiv bedeutet Ladung von {second_name_html}, negativ bedeutet Entladung. Der positive Entladewert wird intern für den Cross-Charge-Schutz genutzt, um Batterie-zu-Batterie-Ladung zu vermeiden.',
-            settings_group='Cross-Charge-Schutz'
+            settings_group='Zweitbatterie'
         )
 
     limiter_details = ""
@@ -1725,6 +1772,15 @@ def build_restart_service_page(cfg: Dict[str, Any], enabled: bool = True, error:
     return page
 
 
+def subgroup_help_text(subgroup: str) -> str:
+    texts = {
+        "Zweitbatterie-Messwerte": "<div class='small'>Hier wird festgelegt, woher die Leistung der Zweitbatterie bzw. des Primärspeichers kommt und wie deren Vorzeichen zu interpretieren ist. Für ZEC gilt: positiv = Zweitbatterie lädt, negativ = Zweitbatterie entlädt.</div>",
+        "Cross-Charge-Schutz": "<div class='small'>Der Schutz verhindert Gegenfluss zwischen Primärspeicher und Zendure. Er bleibt das Sicherheitsnetz für alle Funktionen, die Zweitbatterie- und Zendure-Leistung koordinieren.</div>",
+        "Restüberschuss-Ernte": "<div class='small'>Diese Funktion ist nur im AUTO-Modus wirksam. Sie startet erst, wenn der Primärspeicher für eine gewisse Zeit nahe seiner Ladegrenze lädt und gleichzeitig Netzexport anliegt. Kurze Wolkenlücken lösen die Funktion nicht sofort aus.</div>",
+    }
+    return texts.get(subgroup, "")
+
+
 def build_settings_page(cfg: Dict[str, Any], validation_issues: Optional[List[ValidationIssue]] = None, validation_state: str = "", saved: bool = False, restart_required: bool = False, restart_keys: str = "") -> str:
     error_keys = validation_issue_keys(validation_issues, "ERROR")
     warning_keys = validation_issue_keys(validation_issues, "WARNING")
@@ -1812,11 +1868,18 @@ def build_settings_page(cfg: Dict[str, Any], validation_issues: Optional[List[Va
                 "NIGHT_END_HOUR" in error_keys or "NIGHT_END_MINUTE" in error_keys,
                 "NIGHT_END_HOUR" in warning_keys or "NIGHT_END_MINUTE" in warning_keys,
             )
+        current_subgroup = None
         for key, meta in CONFIG_SCHEMA.items():
             if meta.get("group") != group:
                 continue
             if group == "Nachtmodus" and key in {"NIGHT_START_HOUR", "NIGHT_START_MINUTE", "NIGHT_END_HOUR", "NIGHT_END_MINUTE"}:
                 continue
+            subgroup = str(meta.get("subgroup", "") or "")
+            if subgroup and subgroup != current_subgroup:
+                if current_subgroup is not None:
+                    page += "</div><div class='grid'>"
+                page += f"<div class='card' style='grid-column:1 / -1; background:#f6f8fa;'><h3 style='margin:0 0 6px 0;'>{html.escape(subgroup)}</h3>{subgroup_help_text(subgroup)}</div>"
+                current_subgroup = subgroup
             page += build_setting_card(key, meta, cfg.get(key), key in error_keys, key in warning_keys)
         page += "</div>"
         if group == "Manueller Modus":

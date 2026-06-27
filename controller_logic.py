@@ -104,8 +104,11 @@ class ZendureController:
             slowest = max(measured_parts.items(), key=lambda item: item[1]) if measured_parts else ("none", 0)
             self.state.set_cycle_timing(self._cycle_timing_parts, slowest[0], int(slowest[1]), total_ms)
             warn_ms = int(cfg.get("SLOW_CYCLE_WARN_MS", 5000))
+            detail_ms = int(cfg.get("TIMING_DETAIL_LOG_MS", 2000))
             if total_ms >= warn_ms:
                 self.log(f"[TIMING] slow_cycle total_ms={total_ms} slowest={slowest[0]}:{slowest[1]}ms details={self._cycle_timing_parts}")
+            elif detail_ms > 0 and total_ms >= detail_ms:
+                self.log(f"[TIMING] cycle_detail total_ms={total_ms} slowest={slowest[0]}:{slowest[1]}ms details={self._cycle_timing_parts}")
             time.sleep(float(cfg.get("INTERVAL_SECONDS", 2)))
 
     def run_once(self, cfg: Dict[str, Any]) -> None:
@@ -127,6 +130,7 @@ class ZendureController:
             self.state.control_data_quality = "not_evaluated"
 
         if cfg.get("MQTT_DISCONNECTED_SAFE_STATE", False) and not self.state.mqtt_connected:
+            self._reset_rest_surplus_harvest("MQTT_DISCONNECTED")
             self.state.add_limiter("MQTT_DISCONNECTED")
             self.safe_state("MQTT getrennt")
             return
@@ -151,11 +155,13 @@ class ZendureController:
 
         manual_mode = str(cfg.get("MANUAL_MODE", "AUTO"))
         if manual_mode != "AUTO":
+            self._reset_rest_surplus_harvest("MODE_CHANGED")
             self._timed_phase("grid_display_read_ms", self.refresh_grid_power_for_display, cfg)
             self.handle_manual_mode(cfg, manual_mode)
             return
 
         if night_active:
+            self._reset_rest_surplus_harvest("MODE_CHANGED")
             if not self.soc_is_fresh(cfg):
                 self._timed_phase("grid_display_read_ms", self.refresh_grid_power_for_display, cfg)
                 self.state.add_limiter("SOC_STALE")
@@ -183,6 +189,7 @@ class ZendureController:
         self._timed_phase("cross_charge_metrics_ms", self.update_cross_charge_control_metrics, cfg)
 
         grid_power = self.state.grid_power
+        self.update_rest_surplus_harvest_state(cfg, grid_power)
 
         if self.cross_charge_guard_corrects_existing_target(cfg):
             return
@@ -629,7 +636,115 @@ class ZendureController:
         self.state.set_mode("HOLD" if new_target == 0 else ("CHARGE" if new_target > 0 else "DISCHARGE"))
         return True
 
+
+    def _rest_surplus_max_charge_w(self, cfg: Dict[str, Any]) -> Optional[int]:
+        value = self._optional_int(cfg.get("SECOND_BATTERY_MAX_CHARGE_POWER_W"))
+        return value if value is not None and value > 0 else None
+
+    def _rest_surplus_thresholds(self, cfg: Dict[str, Any]) -> Dict[str, int]:
+        max_charge = self._rest_surplus_max_charge_w(cfg) or 0
+        margin = max(0, int(cfg.get("SECOND_BATTERY_CHARGE_SATURATION_MARGIN_W", 100) or 100))
+        min_export = max(1, int(cfg.get("REST_SURPLUS_MIN_EXPORT_W", 80) or 80))
+        entry_confirm_s = max(1, int(cfg.get("REST_SURPLUS_ENTRY_CONFIRM_SECONDS", 30) or 30))
+        saturation = max(0, max_charge - margin) if max_charge > 0 else 0
+        critical_floor = max(200, int(round(max_charge * 0.10))) if max_charge > 0 else 0
+        return {
+            "max_charge": max_charge,
+            "margin": margin,
+            "min_export": min_export,
+            "entry_confirm_s": entry_confirm_s,
+            "saturation": saturation,
+            "critical_floor": critical_floor,
+        }
+
+    def _reset_rest_surplus_harvest(self, reason: str) -> None:
+        with self.state.lock:
+            self.state.rest_surplus_harvest_active = False
+            self.state.rest_surplus_harvest_eligible = False
+            self.state.rest_surplus_entry_progress_s = 0.0
+            self.state.rest_surplus_exit_reason = str(reason or "")
+
+    def update_rest_surplus_harvest_state(self, cfg: Dict[str, Any], grid_power: float) -> None:
+        """Update Entry/Stay diagnostics for the Restüberschuss-Ernte state machine.
+
+        This method deliberately does not publish commands. It only qualifies the
+        strict entry condition and keeps the active latch generous. The command
+        decision remains in handle_charge()/ramp_down paths so the live cycle
+        stays readable and cheap.
+        """
+        thresholds = self._rest_surplus_thresholds(cfg)
+        export_w = max(0.0, -float(grid_power or 0.0))
+        with self.state.lock:
+            second_power = float(self.state.sma_battery_display_power or 0.0)
+            second_valid = bool(self.state.second_battery_data_valid and self.state.second_battery_data_fresh)
+            soc = self.state.battery_soc
+            zendure_actual = float(self.state.actual_zendure_system_signed_power or 0.0)
+            zendure_target = float(self.state.last_input_power or 0.0)
+            active = bool(self.state.rest_surplus_harvest_active)
+        zendure_charge = max(0.0, zendure_actual if zendure_actual > 0 else zendure_target)
+        charge_pressure = max(0.0, second_power) + zendure_charge + export_w
+
+        with self.state.lock:
+            self.state.second_battery_charge_pressure_w = round(charge_pressure, 1)
+            self.state.second_battery_charge_saturation_threshold_w = float(thresholds["saturation"])
+            self.state.rest_surplus_export_w = round(export_w, 1)
+
+        if not bool(cfg.get("REST_SURPLUS_HARVEST_ENABLED", False)):
+            self._reset_rest_surplus_harvest("DISABLED")
+            return
+        if thresholds["max_charge"] <= 0:
+            self._reset_rest_surplus_harvest("MISSING_SECOND_BATTERY_MAX_CHARGE_POWER")
+            return
+        if not cross_charge_enabled(cfg):
+            self._reset_rest_surplus_harvest("CROSS_CHARGE_DISABLED")
+            return
+        if not second_valid:
+            self._reset_rest_surplus_harvest("SECOND_BATTERY_DATA_INVALID")
+            return
+        if soc is None or float(soc) >= float(cfg.get("MAX_SOC_PERCENT", 100)):
+            self._reset_rest_surplus_harvest("MAX_SOC_LIMIT")
+            return
+        if not self.state.mqtt_connected and cfg.get("MQTT_DISCONNECTED_SAFE_STATE", False):
+            self._reset_rest_surplus_harvest("MQTT_DISCONNECTED")
+            return
+
+        eligible_now = bool(
+            second_power >= thresholds["saturation"]
+            and export_w >= thresholds["min_export"]
+        )
+        step_s = max(1.0, float(cfg.get("INTERVAL_SECONDS", 3) or 3))
+        with self.state.lock:
+            self.state.rest_surplus_harvest_eligible = eligible_now
+            if eligible_now:
+                self.state.rest_surplus_entry_progress_s = min(
+                    float(thresholds["entry_confirm_s"]),
+                    float(self.state.rest_surplus_entry_progress_s or 0.0) + step_s,
+                )
+                if self.state.rest_surplus_entry_progress_s >= thresholds["entry_confirm_s"]:
+                    self.state.rest_surplus_harvest_active = True
+                    self.state.rest_surplus_exit_reason = ""
+            elif not active:
+                # Soft decay: one short outlier should not destroy progress, but
+                # a short cloud window should still fail to qualify.
+                self.state.rest_surplus_entry_progress_s = max(0.0, float(self.state.rest_surplus_entry_progress_s or 0.0) - step_s)
+
+    def _rest_surplus_is_active(self) -> bool:
+        with self.state.lock:
+            return bool(self.state.rest_surplus_harvest_active)
+
+    def _rest_surplus_should_reduce_in_hold(self, cfg: Dict[str, Any]) -> bool:
+        if not self._rest_surplus_is_active():
+            return False
+        thresholds = self._rest_surplus_thresholds(cfg)
+        if thresholds["critical_floor"] <= 0:
+            return False
+        with self.state.lock:
+            second_power = float(self.state.sma_battery_display_power or 0.0)
+            last_input = int(self.state.last_input_power or 0)
+        return last_input > 0 and second_power < thresholds["critical_floor"]
+
     def safe_state(self, reason: str) -> None:
+        self._reset_rest_surplus_harvest("SAFE_STATE")
         with self.state.lock:
             need_force = (self.state.last_input_power != 0 or self.state.last_output_power != 0 or self.state.current_mode != "SAFE_STATE")
         self.mqtt.set_output_limit(0, force=need_force)
@@ -793,6 +908,9 @@ class ZendureController:
 
     def handle_deadband(self, cfg: Optional[Dict[str, Any]] = None) -> None:
         self.state.add_limiter("DEADBAND")
+        if cfg is not None and self._rest_surplus_should_reduce_in_hold(cfg):
+            self.ramp_down_charge(cfg, "Restüberschuss-Ernte: Primärspeicher-Ladung unter kritischem Bereich, Ladeziel wird reduziert")
+            return
         with self.state.lock:
             if self.state.last_input_power > 0 and self.state.last_output_power <= 0:
                 signed_target = int(self.state.last_input_power)
@@ -1027,12 +1145,29 @@ class ZendureController:
             self.ramp_down_discharge(cfg, "Wechsel auf Ladung: Entladeleistung wird erst reduziert")
             return
 
-        if effective < cfg.get("MIN_EFFECTIVE_SURPLUS_FOR_CHARGE_W", 150):
+        harvest_active = self._rest_surplus_is_active()
+        thresholds = self._rest_surplus_thresholds(cfg)
+        export_w = max(0.0, -float(grid_power or 0.0))
+        with self.state.lock:
+            second_power = float(self.state.sma_battery_display_power or 0.0)
+        harvest_near_saturation = bool(harvest_active and second_power >= thresholds.get("saturation", 0) and export_w > 0)
+
+        if not harvest_active and effective < cfg.get("MIN_EFFECTIVE_SURPLUS_FOR_CHARGE_W", 150):
             self.state.add_limiter("LOW_EFFECTIVE_SURPLUS")
             self.ramp_down_charge(cfg, "Keine sichere PV-Überschussladung nach Zusatzbatterie-/Cross-Charge-Abzug")
             return
 
-        raw_target = last_input + int(effective * cfg.get("CONTROL_GAIN", 0.30))
+        if harvest_active:
+            self.state.add_limiter("REST_SURPLUS_HARVEST")
+            if harvest_near_saturation:
+                raw_target = last_input + int(round(export_w))
+                control_reason = "Restüberschuss-Ernte: Primärspeicher nahe Ladegrenze, Netzexport wird Richtung 0 W geerntet"
+            else:
+                raw_target = last_input
+                control_reason = "Restüberschuss-Ernte: Ladeziel wird gehalten; Primärspeicher ist nicht mehr nahe Ladegrenze"
+        else:
+            raw_target = last_input + int(effective * cfg.get("CONTROL_GAIN", 0.30))
+            control_reason = "PV-Überschuss erkannt -> Zendure lädt"
         target = max(0, min(raw_target, int(cfg["MAX_CHARGE_POWER_W"])))
         target_smoothed = self.smooth_transition(last_input, target, cfg)
         target_ramped = self.limit_power_step(last_input, target_smoothed, cfg)
@@ -1051,8 +1186,13 @@ class ZendureController:
             self.state.last_target_before_smoothing = raw_target
             self.state.last_target_after_smoothing = target_smoothed
             self.state.last_target_after_ramp = self.state.current_target_power
-            self.state.control_reason = correction.get("reason") if correction.get("active") else "PV-Überschuss erkannt -> Zendure lädt"
-            self.state.technical_control_path = "GRID -> CROSS_CHARGE -> CHARGE_CONTROL -> INPUT" if correction.get("active") else "GRID -> CHARGE_CONTROL -> INPUT"
+            self.state.control_reason = correction.get("reason") if correction.get("active") else control_reason
+            if correction.get("active"):
+                self.state.technical_control_path = "GRID -> CROSS_CHARGE -> CHARGE_CONTROL -> INPUT"
+            elif harvest_active:
+                self.state.technical_control_path = "GRID -> REST_SURPLUS_HARVEST -> CHARGE_CONTROL -> INPUT"
+            else:
+                self.state.technical_control_path = "GRID -> CHARGE_CONTROL -> INPUT"
             self.state.last_control_action = f"CHARGE -> {signed_final} W"
         self.state.set_mode("HOLD" if signed_final == 0 and correction.get("active") else "CHARGE")
 
@@ -1067,6 +1207,13 @@ class ZendureController:
         self.mqtt.set_ac_mode("Input mode")
         self.mqtt.set_output_limit(0)
         self.mqtt.set_input_limit(target)
+        if self._rest_surplus_is_active():
+            self.state.add_limiter("REST_SURPLUS_HARVEST")
+            with self.state.lock:
+                self.state.rest_surplus_exit_reason = "TARGET_ZERO" if target == 0 else "GRID_IMPORT_REDUCE"
+                if target == 0:
+                    self.state.rest_surplus_harvest_active = False
+                    self.state.rest_surplus_entry_progress_s = 0.0
         with self.state.lock:
             self.state.last_output_power = 0
             self.state.last_input_power = target
@@ -1165,7 +1312,8 @@ class ZendureController:
             require("mqtt_command_path")
 
         if cross_charge_enabled(cfg) and (
-            "CROSS_CHARGE" in path
+            "REST_SURPLUS_HARVEST" in path
+            or "CROSS_CHARGE" in path
             or "EVCC_STALE" in active_limiters
             or "SMA_DISCHARGE" in active_limiters
         ):
@@ -1217,7 +1365,7 @@ class ZendureController:
             mode = self.state.current_mode
             self.state.grid_power_used_for_control = path.startswith("GRID")
             self.state.effective_export_power_used_for_control = path.startswith("GRID") and (
-                "CHARGE" in path or "CROSS_CHARGE" in path
+                "CHARGE" in path or "CROSS_CHARGE" in path or "REST_SURPLUS_HARVEST" in path
             )
             self.state.soc_used_for_control = (
                 mode in {

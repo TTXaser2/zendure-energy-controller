@@ -1,6 +1,6 @@
-Zendure Energy Controller Version 12.10.0-RC8
+Zendure Energy Controller Version 12.10.0-RC9
 
-# Zendure Energy Controller V12.10.0-RC8
+# Zendure Energy Controller V12.10.0-RC9
 
 Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, ZEC-MEASUREMENT-V4-Messdaten-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
@@ -11,18 +11,22 @@ Lizenziert unter AGPL-3.0-or-later. Siehe `LICENSE`, `NOTICE` und `DISCLAIMER.md
 
 
 
-## Wichtige Änderungen in V12.10.0-RC8
+## Wichtige Änderungen in V12.10.0-RC9
 
-V12.10.0-RC8 ist ein isolierter Stabilitäts-Fix für die nach RC7 erkannten Fehler in V4-Logging, Diagnosepaket und Restart-/HOLD-Transparenz. Es enthält keine Restüberschuss-Ernte und keine neue breite Regelstrategie.
+V12.10.0-RC9 ergänzt als einzige echte Regeländerung die Restüberschuss-Ernte bei Primärspeicher-Ladelimit. Wenn die Zweitbatterie/der SMA-Primärspeicher über eine bestätigte Zeit nahe seiner konfigurierten maximalen Ladeleistung lädt und trotzdem Netzexport übrig bleibt, darf Zendure diesen Restüberschuss zusätzlich laden. Die Funktion darf nur laden, niemals Entladung auslösen, und der Cross-Charge-Schutz bleibt übergeordnet.
 
-- V4-Measurement schreibt neue Service-Starts immer in eine eigene kurze Session-Datei, damit Manifest-Eintrag und physische CSV-Datei eindeutig zusammenpassen und eine bestehende Basisdatei nicht überschrieben oder verwaist wird.
-- Das Diagnosepaket-Tool arbeitet standardmäßig ohne Service-Stop. Ein konsistenter Stop/Start-Snapshot ist nur noch explizit per `--stop-services` aktiv.
-- Das Diagnosepaket-Tool kann fallback-only Pakete erzeugen, ignoriert 0-Byte-CSV als Datenbasis und warnt, wenn Manifest-Dateien physisch fehlen.
-- Nach einem Service-Neustart wird in AUTO/HOLD/DEADBAND einmalig ein neutrales 0/0-Kommando gesendet, wenn der Controller noch keinen bekannten wirksamen Zielzustand hat. Dadurch kann ein altes Zendure-Limit nicht unsichtbar weiterlaufen.
-- Die Statuskarte „Zendure Systemleistung“ trennt Zielwert, gemessene Istleistung und letztes MQTT-Kommando klarer.
-- Keine Änderung an MQTT-Topic-/Kommandostruktur, Nachtmodus-Strategie oder Restüberschuss-Ernte.
-- Vollständiger Testlauf: 174 Tests OK.
-
+- Neuer Settings-Hauptbereich „Zweitbatterie“ mit Unterabschnitten „Zweitbatterie-Messwerte“, „Cross-Charge-Schutz“ und „Restüberschuss-Ernte“.
+- Restüberschuss-Ernte mit bewusst strengem Entry: Start erst nach stabiler Bestätigung, nicht nach einem einzelnen kurzen PV-/Last-Ausreißer.
+- Während aktiver Ernte bleibt Zendure bewusst träger: Step-/Smoothing-Limits gelten weiter, damit der SMA/Primärspeicher der schnelle Regler bleibt.
+- Der Modus bleibt großzügig aktiv, solange er dem System nicht schadet; bei Netzbezug, SMA-Entladung, stale Daten, SOC-Limit oder Safe-State wird reduziert bzw. beendet.
+- V4-Measurement wurde um Harvest-Diagnosefelder erweitert, damit Entry, aktive Phase, Exit, Schwellen und Wirkung später sauber analysiert werden können.
+- `target_final_reason` kennt nun `REST_SURPLUS_HARVEST`.
+- Settings-Validierung prüft die wichtigsten Harvest-Querabhängigkeiten, z. B. fehlende maximale Primärspeicher-Ladeleistung, deaktivierten Cross-Charge-Schutz und ungünstige Schwellenkombinationen.
+- Die Statusseite zeigt in der Nachtmodus-Box eine Prognose für das voraussichtliche Nachtmodus-Ende inklusive prognostiziertem SOC, sofern Kapazität, SOC und Entladeleistung bekannt sind.
+- `/status` liefert die Controller-Version wieder explizit; Config-Snapshots werden bei Versionswechsel nicht mehr irreführend mit alter Version weitergeführt.
+- Analyse-Preflight bei sehr kleinen Dateien wurde entschärft und Browser-Confirm-Popups wurden durch eine eingebettete Bestätigung im ZEC-Stil ersetzt.
+- Timing-Detaildiagnose schreibt bei längeren Zyklen zusätzliche Phaseninformationen ins Runtime-Log.
+- Keine Änderung an MQTT-Topic-/Kommandostruktur, Nachtentladungsstrategie oder Local-API-Architektur.
 
 ## Wichtige Änderungen in V12.10.0-RC6
 
