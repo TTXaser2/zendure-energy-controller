@@ -506,6 +506,11 @@ def build_base_header(title: str, refresh: bool = False, cfg: Optional[Dict[str,
             .card.warning-card { background:#3a2a10; border-color:#fbbf24; }
             .card.warning-card input, .card.warning-card select { background:#201707; border-color:#fbbf24; color:#fde68a; }
             .warning-box, .section-warning { background:#3a2a10; color:#fde68a; border-color:#fbbf24; }
+            .info-box { background:#0f2a3f; color:#dbeafe; border-color:#38bdf8; }
+            .error-box, .section-error { background:#3b1d1d; color:#fecaca; border-color:#f87171; }
+            .subgroup-card { background:#172033; border-color:#334155; color:#e5e7eb; }
+            .subgroup-card h3 { color:#f8fafc; }
+            .subgroup-card .small { color:#cbd5e1; }
             .version-pill { background:#334155; }
             a { color:#7dd3fc; }
     """ if dark else ""
@@ -828,12 +833,21 @@ def night_mode_projection_text(cfg: Dict[str, Any], s: Dict[str, Any], current_m
         soc = s.get("battery_soc")
         capacity_wh = cfg.get("ZENDURE_BATTERY_CAPACITY_WH")
         night_power_w = int(cfg.get("NIGHT_DISCHARGE_POWER_W", 0) or 0)
-        if soc is None or capacity_wh in (None, "") or night_power_w <= 0:
-            return "Voraussichtliches Ende: nicht berechenbar – SOC, Kapazität oder Entladeleistung fehlt"
+        missing = []
+        if soc is None:
+            missing.append("Zendure-SOC")
+        if capacity_wh in (None, ""):
+            missing.append("Batteriekapazität für Prognose in Settings → Nachtmodus")
+        if night_power_w <= 0:
+            missing.append("Nachtentladeleistung in Settings → Nachtmodus")
+        if missing:
+            if missing == ["Batteriekapazität für Prognose in Settings → Nachtmodus"]:
+                return "Voraussichtliches Ende: nicht berechenbar – bitte in Settings → Nachtmodus die Zendure-Batteriekapazität für die Prognose eintragen"
+            return "Voraussichtliches Ende: nicht berechenbar – fehlend: " + ", ".join(missing)
         soc_f = float(soc)
         capacity_wh = float(capacity_wh)
         if capacity_wh <= 0:
-            return "Voraussichtliches Ende: nicht berechenbar – Batteriekapazität fehlt"
+            return "Voraussichtliches Ende: nicht berechenbar – Zendure-Batteriekapazität für Prognose in Settings → Nachtmodus muss größer als 0 Wh sein"
         reserve = cfg.get("NIGHT_DISCHARGE_STOP_SOC_PERCENT")
         reserve_soc = float(reserve) if reserve not in (None, "") else float(cfg.get("MIN_SOC_PERCENT", 0) or 0)
         reserve_soc = max(float(cfg.get("MIN_SOC_PERCENT", 0) or 0), reserve_soc)
@@ -850,6 +864,65 @@ def night_mode_projection_text(cfg: Dict[str, Any], s: Dict[str, Any], current_m
         return f"Voraussichtliches Ende: {end.strftime('%H:%M')} Uhr durch Nachtfenster-Ende mit vorauss. SOC von {projected_soc:.0f} %"
     except Exception as exc:
         return f"Voraussichtliches Ende: nicht berechenbar – {html.escape(str(exc))}"
+
+
+
+def rest_surplus_status_lines(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
+    """Human-readable status lines for the Restüberschuss-Ernte in the SMA/Zweitbatterie card."""
+    enabled = bool(cfg.get("REST_SURPLUS_HARVEST_ENABLED", False))
+    max_charge_raw = cfg.get("SECOND_BATTERY_MAX_CHARGE_POWER_W")
+    try:
+        max_charge = int(float(max_charge_raw)) if max_charge_raw not in (None, "") else 0
+    except Exception:
+        max_charge = 0
+    min_export = int(cfg.get("REST_SURPLUS_MIN_EXPORT_W", 80) or 80)
+    entry_confirm = int(cfg.get("REST_SURPLUS_ENTRY_CONFIRM_SECONDS", 30) or 30)
+    threshold = s.get("second_battery_charge_saturation_threshold_w")
+    if threshold in (None, "") and max_charge > 0:
+        threshold = max(0, max_charge - int(cfg.get("SECOND_BATTERY_CHARGE_SATURATION_MARGIN_W", 100) or 100))
+
+    if not enabled:
+        config_line = "deaktiviert"
+        ready_line = "nicht verfügbar – Funktion ist in den Settings ausgeschaltet"
+    else:
+        config_line = "aktiviert"
+        if max_charge <= 0:
+            ready_line = "nicht verfügbar – maximale Ladeleistung Primärspeicher fehlt"
+        elif not cross_charge_enabled(cfg):
+            ready_line = "nicht verfügbar – Cross-Charge-Schutz ist deaktiviert"
+        elif not bool(s.get("second_battery_data_valid")) or not bool(s.get("second_battery_data_fresh")):
+            ready_line = "nicht verfügbar – Zweitbatterie-Leistungsdaten fehlen oder sind veraltet"
+        else:
+            threshold_text = f"ab ca. {float(threshold):.0f} W Primärspeicher-Ladung" if threshold not in (None, "") else "Schwelle berechnet"
+            ready_line = f"bereit ({threshold_text}, Entry ab {min_export} W Export für ca. {entry_confirm} s)"
+
+    active = bool(s.get("rest_surplus_harvest_active"))
+    eligible = bool(s.get("rest_surplus_harvest_eligible"))
+    try:
+        progress = float(s.get("rest_surplus_entry_progress_s") or 0.0)
+    except Exception:
+        progress = 0.0
+    exit_reason = str(s.get("rest_surplus_exit_reason") or "")
+    if active:
+        activity = "aktiv – Restüberschuss-Ernte darf Ladeziel halten/führen"
+    elif enabled and progress > 0:
+        activity = f"Entry läuft – {progress:.0f} / {entry_confirm} s"
+    elif enabled and eligible:
+        activity = "Entry-Bedingung erfüllt – Bestätigungszeit läuft"
+    elif enabled and exit_reason and exit_reason not in {"DISABLED"}:
+        activity = f"inaktiv – letzter Grund: {html.escape(exit_reason)}"
+    elif enabled:
+        activity = "inaktiv – Entry-Bedingung nicht erfüllt"
+    else:
+        activity = "inaktiv"
+
+    return (
+        "<hr style='border:0;border-top:1px solid rgba(148,163,184,0.35);margin:10px 0;'>"
+        "<b>Restüberschuss-Ernte</b><br>"
+        f"Konfiguration: {config_line}<br>"
+        f"Bereitschaft: {ready_line}<br>"
+        f"Aktivität: {activity}"
+    )
 
 
 def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
@@ -1071,15 +1144,17 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
             f'Diese Anzeige bewertet, ob über MQTT aktuelle Zusatzbatterie-Werte für {second_name_html} eintreffen. Grün bedeutet: Die Werte sind vorhanden und jünger als der konfigurierte Daten-Timeout. Rot bedeutet: Es liegen keine oder zu alte Werte vor; je nach Config blockiert der Cross-Charge-Schutz dann die Zendure-Ladung konservativ.',
             settings_group='Zweitbatterie'
         )
+        harvest_lines = rest_surplus_status_lines(cfg, s)
         sma_card_html = status_card(
             second_name_html,
             f'{sma_display_power:.1f} W',
             f'Darstellung: positiv = Ladung, negativ = Entladung<br>'
             f'Entladung berechnet: {s["sma_battery_discharge_power"]:.1f} W<br>'
             f'SOC: {s["sma_battery_soc"] if s["sma_battery_soc"] is not None else "-"} %<br>'
-            f'MQTT Update: {s["last_sma_battery_update_time"]}',
+            f'MQTT Update: {s["last_sma_battery_update_time"]}'
+            f'{harvest_lines}',
             'gray',
-            f'Dieser Wert kommt per MQTT aus der generischen MQTT-Zusatzbatterie-Integration. Für die Anzeige wird die in den Settings konfigurierte Vorzeichenlogik berücksichtigt: positiv bedeutet Ladung von {second_name_html}, negativ bedeutet Entladung. Der positive Entladewert wird intern für den Cross-Charge-Schutz genutzt, um Batterie-zu-Batterie-Ladung zu vermeiden.',
+            f'Dieser Wert kommt per MQTT aus der generischen MQTT-Zusatzbatterie-Integration. Für die Anzeige wird die in den Settings konfigurierte Vorzeichenlogik berücksichtigt: positiv bedeutet Ladung von {second_name_html}, negativ bedeutet Entladung. Der positive Entladewert wird intern für den Cross-Charge-Schutz genutzt, um Batterie-zu-Batterie-Ladung zu vermeiden. Die Restüberschuss-Ernte wird hier angezeigt, weil sie fachlich nur zusammen mit dem Primärspeicher/Zweitbatterie-Signal sinnvoll ist.',
             settings_group='Zweitbatterie'
         )
 
@@ -1878,7 +1953,7 @@ def build_settings_page(cfg: Dict[str, Any], validation_issues: Optional[List[Va
             if subgroup and subgroup != current_subgroup:
                 if current_subgroup is not None:
                     page += "</div><div class='grid'>"
-                page += f"<div class='card' style='grid-column:1 / -1; background:#f6f8fa;'><h3 style='margin:0 0 6px 0;'>{html.escape(subgroup)}</h3>{subgroup_help_text(subgroup)}</div>"
+                page += f"<div class='card subgroup-card' style='grid-column:1 / -1;'><h3 style='margin:0 0 6px 0;'>{html.escape(subgroup)}</h3>{subgroup_help_text(subgroup)}</div>"
                 current_subgroup = subgroup
             page += build_setting_card(key, meta, cfg.get(key), key in error_keys, key in warning_keys)
         page += "</div>"

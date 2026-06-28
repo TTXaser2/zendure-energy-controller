@@ -1,6 +1,6 @@
-Zendure Energy Controller Version 12.10.0-RC9
+Zendure Energy Controller Version 12.10.0-RC10
 
-# Zendure Energy Controller V12.10.0-RC9
+# Zendure Energy Controller V12.10.0-RC10
 
 Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, ZEC-MEASUREMENT-V4-Messdaten-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
@@ -11,9 +11,11 @@ Lizenziert unter AGPL-3.0-or-later. Siehe `LICENSE`, `NOTICE` und `DISCLAIMER.md
 
 
 
-## Wichtige Änderungen in V12.10.0-RC9
+## Wichtige Änderungen in V12.10.0-RC10
 
-V12.10.0-RC9 ergänzt als einzige echte Regeländerung die Restüberschuss-Ernte bei Primärspeicher-Ladelimit. Wenn die Zweitbatterie/der SMA-Primärspeicher über eine bestätigte Zeit nahe seiner konfigurierten maximalen Ladeleistung lädt und trotzdem Netzexport übrig bleibt, darf Zendure diesen Restüberschuss zusätzlich laden. Die Funktion darf nur laden, niemals Entladung auslösen, und der Cross-Charge-Schutz bleibt übergeordnet.
+V12.10.0-RC10 ist ein kleiner Nacharbeits-RC zu RC9. Die Harvest-Regelstrategie bleibt unverändert; verbessert werden Kontrast der Settings-Seite, Statusanzeige der Restüberschuss-Ernte in der SMA-/Zweitbatterie-Box, der Hinweistext der Nachtmodus-Prognose und die Config-Snapshot-Reproduzierbarkeit für Harvest-Settings.
+
+V12.10.0-RC9 hat als einzige echte Regeländerung die Restüberschuss-Ernte bei Primärspeicher-Ladelimit eingeführt. V12.10.0-RC10 ändert diese Regelstrategie nicht, sondern verbessert Transparenz und Diagnose: Settings-Kontrast, Statusanzeige der Restüberschuss-Ernte, Nachtmodus-Prognosehinweise und Config-Snapshot-Reproduzierbarkeit.
 
 - Neuer Settings-Hauptbereich „Zweitbatterie“ mit Unterabschnitten „Zweitbatterie-Messwerte“, „Cross-Charge-Schutz“ und „Restüberschuss-Ernte“.
 - Restüberschuss-Ernte mit bewusst strengem Entry: Start erst nach stabiler Bestätigung, nicht nach einem einzelnen kurzen PV-/Last-Ausreißer.
@@ -26,7 +28,7 @@ V12.10.0-RC9 ergänzt als einzige echte Regeländerung die Restüberschuss-Ernte
 - `/status` liefert die Controller-Version wieder explizit; Config-Snapshots werden bei Versionswechsel nicht mehr irreführend mit alter Version weitergeführt.
 - Analyse-Preflight bei sehr kleinen Dateien wurde entschärft und Browser-Confirm-Popups wurden durch eine eingebettete Bestätigung im ZEC-Stil ersetzt.
 - Timing-Detaildiagnose schreibt bei längeren Zyklen zusätzliche Phaseninformationen ins Runtime-Log.
-- Keine Änderung an MQTT-Topic-/Kommandostruktur, Nachtentladungsstrategie oder Local-API-Architektur.
+- Keine Änderung an Harvest-Entry-/Stay-/Exit-Schwellen, MQTT-Topic-/Kommandostruktur, Nachtentladungsstrategie oder Local-API-Architektur.
 
 ## Wichtige Änderungen in V12.10.0-RC6
 

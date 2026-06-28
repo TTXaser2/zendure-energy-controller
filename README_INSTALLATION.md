@@ -1,4 +1,4 @@
-# Zendure Energy Controller V12.10.0-RC9 - Installation und Betrieb
+# Zendure Energy Controller V12.10.0-RC10 - Installation und Betrieb
 
 Diese Version ist für den Betrieb unter `/opt/zendure-controller` vorbereitet.
 
@@ -13,21 +13,21 @@ ln -sfn /opt/zendure-controller /home/pi/zendure-controller
 
 Danach kann bequem mit `cd ~/zendure-controller` gearbeitet werden, obwohl die Anwendung sauber unter `/opt` liegt.
 
-## Update auf V12.10.0-RC9 installieren
+## Update auf V12.10.0-RC10 installieren
 
 Ab V12.7 liegt das Update-Script ausschließlich unter `tools/`.
 
 ```bash
 cp /opt/zendure-controller/tools/update_zendure_controller.sh /home/pi/update_zendure_controller.sh
 chmod +x /home/pi/update_zendure_controller.sh
-/home/pi/update_zendure_controller.sh v12_10_0_rc9
+/home/pi/update_zendure_controller.sh v12_10_0_rc10
 ```
 
 Das Update-Script erhält die vorhandene `config.json`, sichert das Installationsverzeichnis, bereinigt alte Dopplungen (`Tools/`, `zendureController.py`) und installiert die systemd-Dateien für Live-Controller und optionalen Replay-Dienst.
 
 Das Paket enthält zusätzlich die finale Excel-Lernsimulation `tools/zendure_regelung_lernwerkzeug_v4_2_7_final.xlsx`. Diese Datei wird nur mitkopiert und nicht durch das Update-Script verändert.
 
-Hinweis: V12.10.0-RC9 schreibt bei `MEASUREMENT_SCHEMA_VERSION=4` gültige V4-Measurement-Dateien mit Manifest, Config-Snapshots und Runtime-Events. RC9 ergänzt die Restüberschuss-Ernte bei Primärspeicher-Ladelimit als einzige neue Regelstrategie. Die Funktion ist standardmäßig nicht wirksam, bis sie im Settings-Bereich „Zweitbatterie / Restüberschuss-Ernte“ aktiviert und die maximale Ladeleistung des Primärspeichers eingetragen wurde.
+Hinweis: V12.10.0-RC10 schreibt bei `MEASUREMENT_SCHEMA_VERSION=4` gültige V4-Measurement-Dateien mit Manifest, Config-Snapshots und Runtime-Events. Die in RC9 eingeführte Restüberschuss-Ernte bleibt unverändert; RC10 verbessert UI-/Diagnose-Transparenz und die Reproduzierbarkeit der Harvest-Settings im Config-Snapshot. Die Funktion ist standardmäßig nicht wirksam, bis sie im Settings-Bereich „Zweitbatterie / Restüberschuss-Ernte“ aktiviert und die maximale Ladeleistung des Primärspeichers eingetragen wurde.
 
 ## Syntaxcheck
 
