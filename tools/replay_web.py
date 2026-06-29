@@ -659,6 +659,88 @@ V4_VALUE_HELP = {
 }
 
 
+
+def _kwh(value: Any) -> str:
+    try:
+        return (f"{float(value):.2f} kWh").replace(".", ",")
+    except Exception:
+        return "- kWh"
+
+def _hours(value: Any) -> str:
+    try:
+        return (f"{float(value):.2f} h").replace(".", ",")
+    except Exception:
+        return "- h"
+
+def _harvest_summary_html(v4: Dict[str, Any]) -> str:
+    h = (v4.get("harvest_analysis") or {}) if isinstance(v4, dict) else {}
+    if not h:
+        return ""
+    active = h.get("active") or {}
+    direct = h.get("direct_reason") or {}
+    segments = h.get("segments") or []
+    cf1 = h.get("counterflow_sma_discharge_zendure_charge") or {}
+    cf2 = h.get("counterflow_sma_charge_zendure_discharge") or {}
+    seg_rows = ""
+    for seg in segments[:8]:
+        seg_rows += (
+            f"<tr><td>{html.escape(str(seg.get('start','-')))}</td>"
+            f"<td>{html.escape(str(seg.get('end','-')))}</td>"
+            f"<td>{_hours(float(seg.get('duration_s') or 0)/3600.0)}</td>"
+            f"<td>{html.escape(str(seg.get('rows',0)))}</td></tr>"
+        )
+    if not seg_rows:
+        seg_rows = "<tr><td colspan='4'>Keine Harvest-Segmente im ausgewählten Zeitraum.</td></tr>"
+    return f"""
+    <h2 id="harvest">Restüberschuss-Ernte – Wirkung</h2>
+    <p class="section-intro">Diese Auswertung trennt gemessene Harvest-Ladung, geschätzten vermiedenen Sofort-Export und die Tages-Einordnung. Die Schätzung ist ein Gegenfaktum-Modell, keine Messung: {html.escape(str(h.get('assumption','')))}</p>
+    <div class="cards">
+      <div class="card"><span>Harvest aktiv</span><b>{_hours(active.get('duration_h',0))}</b><small>{html.escape(str(h.get('segment_count',0)))} Segmente im Zeitraum.</small></div>
+      <div class="card"><span>Zendure-Ladung während Harvest</span><b>{_kwh(active.get('zendure_charge_kwh',0))}</b><small>Gemessene Ladung, während rest_surplus_harvest_active=1 war.</small></div>
+      <div class="card"><span>Vermiedener Sofort-Export</span><b>ca. {_kwh(active.get('estimated_avoided_immediate_export_kwh',0))}</b><small>Konservative Modellschätzung innerhalb der Harvest-Fenster.</small></div>
+      <div class="card"><span>Netzimport während Harvest</span><b>{_kwh(active.get('grid_import_kwh',0))}</b><small>Max. kurzer Import: {html.escape(str(active.get('max_grid_import_w',0)))} W.</small></div>
+    </div>
+    <div class="chartgrid">
+      <div class="chart-card"><h3>Direkte Harvest-Entscheidung</h3><table>
+        <tr><th>Kennzahl</th><th>Wert</th></tr>
+        <tr><td>Dauer target_final_reason=REST_SURPLUS_HARVEST</td><td>{_hours(direct.get('duration_h',0))}</td></tr>
+        <tr><td>Zendure-Ladung direkt</td><td>{_kwh(direct.get('zendure_charge_kwh',0))}</td></tr>
+        <tr><td>geschätzt vermiedener Sofort-Export direkt</td><td>ca. {_kwh(direct.get('estimated_avoided_immediate_export_kwh',0))}</td></tr>
+        <tr><td>Netzimport direkt</td><td>{_kwh(direct.get('grid_import_kwh',0))}</td></tr>
+      </table></div>
+      <div class="chart-card"><h3>Einordnung Tagesnutzen</h3><p class="small-help"><b>{html.escape(str(h.get('value_classification','-')))}</b><br>{html.escape(str(h.get('interpretation','')))}</p><table>
+        <tr><th>Kennzahl</th><th>Wert</th></tr>
+        <tr><td>Max. Zendure-SOC im Zeitraum</td><td>{html.escape(str(h.get('max_soc_percent','-')))} %</td></tr>
+        <tr><td>Zeitpunkt Max-SOC</td><td>{html.escape(str(h.get('max_soc_time','-')))}</td></tr>
+        <tr><td>Export nach Max-SOC</td><td>{_kwh(h.get('export_after_max_soc_kwh',0))}</td></tr>
+      </table></div>
+      <div class="chart-card"><h3>Harvest-Segmente</h3><table><tr><th>Start</th><th>Ende</th><th>Dauer</th><th>Zeilen</th></tr>{seg_rows}</table></div>
+      <div class="chart-card"><h3>Cross-Charge-/Transition-Diagnose während Harvest</h3><p class="small-help">Bewertung: <b>{html.escape(str(h.get('counterflow_status','-')))}</b>. Kurze Gegenflussphasen können bei Übergängen durch Mess- und Regelverzögerung entstehen.</p><table>
+        <tr><th>Richtung</th><th>Dauer</th><th>Energie</th><th>Max. Leistung</th></tr>
+        <tr><td>SMA entlädt + Zendure lädt</td><td>{html.escape(str(cf1.get('duration_s',0)))} s</td><td>{_kwh(cf1.get('energy_kwh',0))}</td><td>{html.escape(str(cf1.get('max_power_w',0)))} W</td></tr>
+        <tr><td>SMA lädt + Zendure entlädt</td><td>{html.escape(str(cf2.get('duration_s',0)))} s</td><td>{_kwh(cf2.get('energy_kwh',0))}</td><td>{html.escape(str(cf2.get('max_power_w',0)))} W</td></tr>
+      </table></div>
+    </div>
+    """
+
+def _timing_summary_html(v4: Dict[str, Any]) -> str:
+    t = (v4.get("timing_analysis") or {}) if isinstance(v4, dict) else {}
+    if not t:
+        return ""
+    top = t.get("slowest_step_top") or []
+    rows_html = "".join(f"<tr><td>{html.escape(str(i.get('name','-')))}</td><td>{html.escape(str(i.get('count',0)))}</td></tr>" for i in top) or "<tr><td>-</td><td>0</td></tr>"
+    return f"""
+    <h2 id="timing">Timing / Zendure Local API</h2>
+    <p class="section-intro">Diese Diagnose ordnet lange Regelzyklen den geloggten Teilphasen zu. Sie verändert keine Regelstrategie.</p>
+    <div class="cards">
+      <div class="card"><span>Zyklen > 1 s</span><b>{html.escape(str(t.get('cycles_gt_1000_ms',0)))}</b><small>Längere aktive Zyklen ohne geplante Schlafzeit.</small></div>
+      <div class="card"><span>Zyklen > 2 s</span><b>{html.escape(str(t.get('cycles_gt_2000_ms',0)))}</b><small>Für Pi 3B+ auffällige, aber nicht automatisch kritische Ausreißer.</small></div>
+      <div class="card"><span>Zyklen > 5 s</span><b>{html.escape(str(t.get('cycles_gt_5000_ms',0)))}</b><small>Harte Ausreißer, die näher geprüft werden sollten.</small></div>
+      <div class="card"><span>Local API p95/max</span><b>{html.escape(str(t.get('local_api_ms_p95',0)))} / {html.escape(str(t.get('local_api_ms_max',0)))} ms</b><small>Aus cycle_timing_json, falls vorhanden.</small></div>
+    </div>
+    <div class="chart-card"><h3>Häufigste langsamste Teilphasen</h3><table><tr><th>Teilphase</th><th>Anzahl</th></tr>{rows_html}</table></div>
+    """
+
 def _v4_summary_html(result: Dict[str, Any]) -> str:
     v4 = result.get("v4_analysis") or {}
     if not v4:
@@ -682,6 +764,8 @@ def _v4_summary_html(result: Dict[str, Any]) -> str:
       <div class="card"><span>Zyklusdauer Ø</span><b>{html.escape(str(v4.get('cycle_duration_ms_avg', 0)))} ms</b><small>Mittlere aktive Zyklusdauer ohne geplante Schlafzeit.</small></div>
       <div class="card"><span>Zyklusdauer p95/max</span><b>{html.escape(str(v4.get('cycle_duration_ms_p95', 0)))} / {html.escape(str(v4.get('cycle_duration_ms_max', 0)))} ms</b><small>p95 zeigt den typischen oberen Bereich; max zeigt Ausreißer.</small></div>
     </div>
+    {_harvest_summary_html(v4)}
+    {_timing_summary_html(v4)}
     <div class="chartgrid">
       <div class="chart-card"><h3>Operating Mode</h3><p class="small-help">Betriebszustand je Messpunkt. Zeigt, ob der Zeitraum überwiegend AUTO, HOLD, Nachtentladung oder Safe-State war.</p><table><tr><th>Wert</th><th>Anzahl</th><th>Info</th></tr>{rows(v4.get('operating_mode_top'))}</table></div>
       <div class="chart-card"><h3>Target Final Reason</h3><p class="small-help">Begründung für den finalen Zendure-Zielwert. Diese Tabelle erklärt, warum geladen, entladen, gehalten oder begrenzt wurde.</p><table><tr><th>Wert</th><th>Anzahl</th><th>Info</th></tr>{rows(v4.get('target_final_reason_top'))}</table></div>
@@ -695,7 +779,7 @@ def render_result_html(result: Dict[str, Any], job_id: str) -> str:
     return f"""
     <div class="toc" id="analysis-nav">
         <b>Navigation:</b>
-        <a href="#kurzfazit">Kurzfazit</a><a href="#v4">V4</a><a href="#empfehlungen">Empfehlungen</a><a href="#diagramme">Diagramme</a>
+        <a href="#kurzfazit">Kurzfazit</a><a href="#v4">V4</a><a href="#harvest">Harvest</a><a href="#timing">Timing</a><a href="#empfehlungen">Empfehlungen</a><a href="#diagramme">Diagramme</a>
         <a href="#datenqualitaet">Datenqualität</a><a href="#regler">Reglerqualität</a><a href="#stellreserve">Stellreserve</a>
         <a href="#tracking">Soll/Ist</a><a href="#deadband">Deadband</a><a href="#mqtt">MQTT</a>
         <a href="#cross">Cross-Charge</a><a href="#matrix">Matrix</a><a href="#ereignisse">Ereignisse</a>

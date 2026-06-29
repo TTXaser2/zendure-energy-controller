@@ -7,6 +7,7 @@
 import csv
 import html
 import io
+import json
 import os
 import shlex
 import subprocess
@@ -16,7 +17,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 import requests
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, JSONResponse
 
 from config_manager import CONFIG_SCHEMA, ConfigManager, validate_config
 from config_validator import ValidationIssue, restart_relevant_changes, split_issues, validate_config_semantics
@@ -338,7 +339,30 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
         saved = request.query_params.get("saved") == "1"
         restart_required = request.query_params.get("restart_required") == "1"
         restart_keys = request.query_params.get("restart_keys", "")
-        return html_or_headless(build_settings_page, cfg, saved=saved, restart_required=restart_required, restart_keys=restart_keys)
+        issues = validate_config_semantics(cfg, current=cfg, perform_live_checks=False, base_dir=os.getcwd())
+        return html_or_headless(build_settings_page, cfg, validation_issues=issues, saved=saved, restart_required=restart_required, restart_keys=restart_keys)
+
+    @app.post("/settings/validate")
+    async def validate_settings_preview(request: Request):
+        if config_manager.get().get("HEADLESS_MODE", False):
+            return JSONResponse({"status": "disabled", "issues": []}, status_code=403)
+        form = await request.form()
+        current_cfg = config_manager.get()
+        raw_cfg = dict(current_cfg)
+        for key, meta in CONFIG_SCHEMA.items():
+            if meta.get("type") == "bool":
+                raw_cfg[key] = key in form
+            elif key in form:
+                raw_cfg[key] = form.get(key)
+        issues = apply_night_time_form_fields(raw_cfg, form)
+        issues += validate_config_semantics(raw_cfg, current=current_cfg, perform_live_checks=False, base_dir=os.getcwd())
+        buckets = split_issues(issues)
+        return JSONResponse({
+            "errors": len(buckets.get("ERROR", [])),
+            "warnings": len(buckets.get("WARNING", [])),
+            "infos": len(buckets.get("INFO", [])),
+            "issues": [issue.as_dict() for issue in issues],
+        })
 
     @app.post("/save-config")
     async def save_config_web(request: Request):
@@ -509,7 +533,8 @@ def build_base_header(title: str, refresh: bool = False, cfg: Optional[Dict[str,
             .info-box { background:#0f2a3f; color:#dbeafe; border-color:#38bdf8; }
             .error-box, .section-error { background:#3b1d1d; color:#fecaca; border-color:#f87171; }
             .subgroup-card { background:#172033; border-color:#334155; color:#e5e7eb; }
-            .subgroup-card h3 { color:#f8fafc; }
+            .section-intro-card { background:#122033; border-color:#334155; color:#e5e7eb; }
+            .subgroup-card h3, .section-intro-card h3 { color:#f8fafc; }
             .subgroup-card .small { color:#cbd5e1; }
             .version-pill { background:#334155; }
             a { color:#7dd3fc; }
@@ -555,6 +580,9 @@ def build_base_header(title: str, refresh: bool = False, cfg: Optional[Dict[str,
             .info-box {{ background:#e3f2fd; border:2px solid #2196F3; color:#0d47a1; padding:14px; border-radius:10px; margin:14px 0; line-height:1.45; }}
             .section-error {{ background:#ffebee; border-left:6px solid #f44336; color:#b71c1c; padding:12px 14px; border-radius:8px; margin:12px 0 16px 0; line-height:1.45; }}
             .section-warning {{ background:#fff8e1; border-left:6px solid #f0ad00; color:#7a4b00; padding:12px 14px; border-radius:8px; margin:12px 0 16px 0; line-height:1.45; }}
+            .subgroup-card {{ grid-column:1 / -1; margin-top:22px; }}
+            .section-intro-card {{ grid-column:1 / -1; margin:0 0 4px 0; }}
+            .subgroup-card h3, .section-intro-card h3 {{ margin:0 0 6px 0; }}
             .card.error-card {{ border:2px solid #f44336; background:#fff5f5; }}
             .card.error-card input, .card.error-card select {{ border:2px solid #f44336; background:#fff8f8; }}
             .card.warning-card {{ border:2px solid #f0ad00; background:#fffaf0; }}
@@ -835,15 +863,15 @@ def night_mode_projection_text(cfg: Dict[str, Any], s: Dict[str, Any], current_m
         night_power_w = int(cfg.get("NIGHT_DISCHARGE_POWER_W", 0) or 0)
         missing = []
         if soc is None:
-            missing.append("Zendure-SOC")
+            missing.append("Zendure-MQTT-Werte enthalten keinen SOC oder der SOC-Wert ist nicht aktuell")
         if capacity_wh in (None, ""):
             missing.append("Batteriekapazität für Prognose in Settings → Nachtmodus")
         if night_power_w <= 0:
-            missing.append("Nachtentladeleistung in Settings → Nachtmodus")
+            missing.append("bitte in Settings → Nachtmodus eine plausible Nachtentladeleistung größer als 0 W eintragen")
         if missing:
             if missing == ["Batteriekapazität für Prognose in Settings → Nachtmodus"]:
                 return "Voraussichtliches Ende: nicht berechenbar – bitte in Settings → Nachtmodus die Zendure-Batteriekapazität für die Prognose eintragen"
-            return "Voraussichtliches Ende: nicht berechenbar – fehlend: " + ", ".join(missing)
+            return "Voraussichtliches Ende: nicht berechenbar – " + "; ".join(missing)
         soc_f = float(soc)
         capacity_wh = float(capacity_wh)
         if capacity_wh <= 0:
@@ -891,7 +919,7 @@ def rest_surplus_status_lines(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
         elif not cross_charge_enabled(cfg):
             ready_line = "nicht verfügbar – Cross-Charge-Schutz ist deaktiviert"
         elif not bool(s.get("second_battery_data_valid")) or not bool(s.get("second_battery_data_fresh")):
-            ready_line = "nicht verfügbar – Zweitbatterie-Leistungsdaten fehlen oder sind veraltet"
+            ready_line = "nicht verfügbar – Zweitbatterie-Leistungsdaten wurden nicht empfangen oder sind nicht aktuell"
         else:
             threshold_text = f"ab ca. {float(threshold):.0f} W Primärspeicher-Ladung" if threshold not in (None, "") else "Schwelle berechnet"
             ready_line = f"bereit ({threshold_text}, Entry ab {min_export} W Export für ca. {entry_confirm} s)"
@@ -1240,6 +1268,37 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
         f'{slowest_line}'
     )
 
+    config_issues = validate_config_semantics(cfg, current=cfg, perform_live_checks=False, base_dir=os.getcwd())
+    config_buckets = split_issues(config_issues)
+    config_errors = len(config_buckets.get("ERROR", []))
+    config_warnings = len(config_buckets.get("WARNING", []))
+    config_infos = len(config_buckets.get("INFO", []))
+    if config_errors:
+        config_status_value = badge(f"{config_errors} Fehler", "#f44336")
+        config_status_details = "Bitte Settings öffnen und rot markierte Punkte korrigieren."
+    elif config_warnings:
+        config_status_value = badge(f"{config_warnings} Warnungen", "#f0ad00")
+        config_status_details = "Konfiguration ist speicherbar, enthält aber prüfenswerte Kombinationen."
+    else:
+        config_status_value = badge("OK", "#4CAF50")
+        config_status_details = f"Keine blockierenden Fehler. Hinweise: {config_infos}."
+
+    local_api_mode = "deaktiviert"
+    if cfg.get("ZENDURE_LOCAL_API_USE_FOR_TELEMETRY"):
+        local_api_mode = "fallback-only" if cfg.get("ZENDURE_LOCAL_API_TELEMETRY_FALLBACK_ONLY", True) else "aktive Telemetriequelle"
+    elif cfg.get("ZENDURE_LOCAL_API_ENABLED"):
+        local_api_mode = "nur Diagnose"
+    try:
+        timing_obj = json.loads(str(s.get("last_cycle_timing_json") or "{}"))
+    except Exception:
+        timing_obj = {}
+    local_api_ms = timing_obj.get("zendure_local_api_ms")
+    local_api_details = (
+        f"Modus: {html.escape(local_api_mode)}<br>"
+        f"Letzter Zyklus: {html.escape(str(local_api_ms if local_api_ms is not None else '-'))} ms<br>"
+        f"Langsamster Teil letzter Zyklus: {html.escape(slowest_label)} {slowest_ms if slowest_label != '-' else '-'} ms"
+    )
+
     measurement_log_details = (
         f"Status: {measurement_status}<br>"
         f"Aktives Ziel: {active_target} · konfiguriert: {configured_target}<br>"
@@ -1259,6 +1318,14 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
         </div>
         <div class="section-tools"><a href="#" onclick="expandSectionInfo('status-overview'); return false;">Alle Infos auf- und zuklappen</a></div>
         <div class="grid" id="status-overview">
+            {status_card(
+                'Konfigurationsstatus',
+                config_status_value,
+                config_status_details,
+                'gray',
+                'Der Konfigurationsstatus fasst die semantische Settings-Prüfung zusammen. Fehler blockieren sichere Funktionen oder Speichern; Warnungen markieren auffällige, aber bewusst nutzbare Kombinationen. Details stehen in den Settings.',
+                settings_group='Regelung'
+            )}
             {status_card(
                 'Netzleistung',
                 grid_main_value,
@@ -1355,6 +1422,7 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
     <div class="section">{heading_link('Diagnose', 'Sicherheit / Fallback', 2)}<div class="section-tools"><a href="#" onclick="expandSectionInfo('status-diagnostics'); return false;">Alle Infos auf- und zuklappen</a></div><div class="grid" id="status-diagnostics">
         {status_card('Aktive Betriebslogik', html.escape(path_human), html.escape(str(s['last_control_action'])), 'gray', 'Die aktive Betriebslogik beschreibt den aktuell verwendeten Entscheidungsweg des Controllers in verständlicher Form. Der technische Code bleibt darunter sichtbar, damit man Events, Graphdaten und Logausgaben eindeutig zuordnen kann.', path_code)}
         {status_card('Aktive Zykluszeit', f'{active_cycle_ms} ms', timing_details, 'gray', 'Die aktive Zykluszeit ist die Zeit, in der der Controller für einen Regelzyklus tatsächlich arbeitet: Datenquellen prüfen, Regelentscheidung berechnen, MQTT-Kommandopfad ausführen, Status aktualisieren und Messdaten schreiben. Nicht enthalten ist die geplante Wartezeit bis zum nächsten Regelintervall. Der langsamste Teil zeigt, welcher echte Abschnitt innerhalb des letzten Zyklus am meisten Zeit benötigt hat.')}
+        {status_card('Zendure Local API Timing', html.escape(local_api_mode), local_api_details, 'gray', 'Zeigt, ob die lokale Zendure-API deaktiviert, nur als Diagnose, als Fallback oder als aktive Telemetriequelle genutzt wird. Lange lokale API-Antworten können einzelne Regelzyklen verlängern; dies ist Diagnose, keine Regelstrategieänderung.', settings_group='Netzwerk')}
         {status_card('Fehler', str(s['consecutive_errors']), f'Letzter Fehler: {html.escape(str(s["last_error"]))}<br>Zeitpunkt: {html.escape(str(s.get("last_error_time", "-")))}<br>Safe-State: {s["safe_state_counter"]}x', 'red', 'Der Fehlerzähler zählt direkt aufeinanderfolgende Fehler. Safe-State bedeutet: Lade- und Entladeleistung werden auf 0 W gesetzt, um bei unsicheren Daten oder Kommunikationsproblemen keine unkontrollierte Energieverschiebung auszulösen.')}
         {status_card('Messdaten-Logging', measurement_mode, measurement_log_details, 'gray', 'Messdaten-Logging ist optional und nachgelagert. Standard speichert vollständige Reglerdiagnose inklusive MQTT-Stale-Aggregat und Szenario ohne Zendure. Erweitert ergänzt große Detaildaten für Simulation, What-if und tiefe MQTT-/Freshness-Analyse. USB-/SD-Fallback-Details sind Betriebsdiagnose und werden im Runtime-Log dokumentiert; die Regelung läuft weiter, auch wenn Logging pausiert oder fehlschlägt.', settings_group='Messdaten / Historie')}
         {status_card('Analyse-Weboberfläche', f'Port {replay_port}', analysis_link_html, 'gray', 'Die Analyse läuft bewusst getrennt vom Live-Regler. Der Dienst wird mitgeliefert, aber nicht automatisch aktiviert.')}
@@ -1681,21 +1749,26 @@ def build_validation_messages(validation_issues: Optional[List[ValidationIssue]]
                 f"<ul>{info_rows}</ul>"
                 "</div>"
             )
+        modal = ""
+        if validation_state == "error":
+            modal = (
+                "<div id='validationModal' class='validation-modal' role='dialog' aria-modal='true'>"
+                "<div class='validation-modal-content'>"
+                "<h2>Konfiguration wurde nicht gespeichert</h2>"
+                "<p>Mindestens eine Einstellung ist unvollständig, widersprüchlich oder nicht erreichbar. "
+                "Die betroffenen Felder sind rot markiert. Warnungen werden erst nach Behebung der Fehler gesondert behandelt.</p>"
+                f"<ul>{error_rows}</ul>"
+                "<button type='button' onclick='closeValidationModal()'>Dialog schließen und Fehler prüfen</button>"
+                "</div></div>"
+            )
+        intro = "Konfiguration wurde nicht gespeichert." if validation_state == "error" else "Konfigurationsprüfung"
         parts.append(
             "<div class='error-box'>"
-            "<b>Konfiguration wurde nicht gespeichert.</b> "
+            f"<b>{intro}</b> "
             "Bitte korrigiere die folgenden Fehler. Die bisherigen Einstellungen bleiben unverändert."
             f"<ul>{error_rows}</ul>"
             "</div>"
-            + "".join(additional_parts) +
-            "<div id='validationModal' class='validation-modal' role='dialog' aria-modal='true'>"
-            "<div class='validation-modal-content'>"
-            "<h2>Konfiguration wurde nicht gespeichert</h2>"
-            "<p>Mindestens eine Einstellung ist unvollständig, widersprüchlich oder nicht erreichbar. "
-            "Die betroffenen Felder sind rot markiert. Warnungen werden erst nach Behebung der Fehler gesondert behandelt.</p>"
-            f"<ul>{error_rows}</ul>"
-            "<button type='button' onclick='closeValidationModal()'>Dialog schließen und Fehler prüfen</button>"
-            "</div></div>"
+            + "".join(additional_parts) + modal
         )
         return "".join(parts)
 
@@ -1715,15 +1788,17 @@ def build_validation_messages(validation_issues: Optional[List[ValidationIssue]]
             f"<ul>{rows}</ul>"
             f"{confirm_button}"
             "</div>"
-            "<div id='validationModal' class='validation-modal' role='dialog' aria-modal='true'>"
-            "<div class='validation-modal-content warning'>"
-            "<h2>Konfiguration enthält Warnungen</h2>"
-            "<p>Das Speichern ist möglich, aber die folgenden Punkte sollten bewusst bestätigt werden. "
-            "Betroffene Felder sind gelb markiert.</p>"
-            f"<ul>{rows}</ul>"
-            f"{confirm_button} "
-            "<button type='button' onclick='closeValidationModal()'>Zurück zur Prüfung</button>"
-            "</div></div>"
+            + ((
+                "<div id='validationModal' class='validation-modal' role='dialog' aria-modal='true'>"
+                "<div class='validation-modal-content warning'>"
+                "<h2>Konfiguration enthält Warnungen</h2>"
+                "<p>Das Speichern ist möglich, aber die folgenden Punkte sollten bewusst bestätigt werden. "
+                "Betroffene Felder sind gelb markiert.</p>"
+                f"<ul>{rows}</ul>"
+                f"{confirm_button} "
+                "<button type='button' onclick='closeValidationModal()'>Zurück zur Prüfung</button>"
+                "</div></div>"
+            ) if validation_state == "warning" else "")
         )
 
     if buckets.get("INFO"):
@@ -1847,6 +1922,28 @@ def build_restart_service_page(cfg: Dict[str, Any], enabled: bool = True, error:
     return page
 
 
+
+def section_intro_text(group: str) -> str:
+    texts = {
+        "Netzwerk": "Verbindungsparameter für Shelly/Uni-Meter, MQTT, Zendure-Local-API und Diagnosezugriffe. Änderungen an Broker, Topics, Ports oder lokalen API-Zielen können einen Dienstneustart erfordern.",
+        "Weboberfläche": "Darstellung und Bedienfunktionen der ZEC-Webseiten. Diese Einstellungen verändern die Oberfläche, nicht die eigentliche Regelstrategie.",
+        "Regelung": "Grundparameter der AUTO-Regelung: Totzone, Glättung, Schrittweite, Lade-/Entladegrenzen und SOC-Grenzen. Diese Werte bestimmen die Dynamik des Controllers.",
+        "Manueller Modus": "Manuelle Modi übersteuern die automatische Netzleistungsregelung bewusst. Feste Lade-/Entladevorgänge sollten nur zeitweise und mit passenden SOC-Zielen genutzt werden.",
+        "Zweitbatterie": "Dieser Bereich konfiguriert das Zusammenspiel zwischen Primärspeicher und Zendure: Messwerte des Primärspeichers, Cross-Charge-Schutz und Restüberschuss-Ernte.",
+        "Nachtmodus": "Der Nachtmodus entlädt Zendure in einem festen Zeitfenster mit fester Leistung. Die Reserve-SOC-Grenze schützt vor zu tiefer Entladung; die Prognose zeigt, ob die Entladung voraussichtlich bis zum Zeitfenster-Ende reicht.",
+        "Sicherheit / Fallback": "Sicherheitsgrenzen und Fehlerreaktionen. Diese Einstellungen bestimmen, wann der Controller bei fehlenden oder nicht aktuellen Daten vorsichtig wird.",
+        "Messdaten / Historie": "Legt fest, ob und wohin V4-Messdaten geschrieben werden. Logging darf die Live-Regelung nicht gefährden; bei Problemen läuft die Regelung weiter.",
+        "Analyse / Replay": "Grenzen für lokale Pi-sichere Analysen. Größere Datenmengen sollten bewusst bestätigt oder offline ausgewertet werden.",
+        "Logging": "Runtime-Textlogs und Debug-Ausgaben. Diese Logs dienen Fehlersuche und Betrieb, ersetzen aber nicht das strukturierte V4-Measurement.",
+    }
+    return texts.get(group, "")
+
+def section_intro_box(group: str) -> str:
+    text = section_intro_text(group)
+    if not text:
+        return ""
+    return f"<div class='card section-intro-card'><h3>{html.escape(group)} – Überblick</h3><div class='small'>{html.escape(text)}</div></div>"
+
 def subgroup_help_text(subgroup: str) -> str:
     texts = {
         "Zweitbatterie-Messwerte": "<div class='small'>Hier wird festgelegt, woher die Leistung der Zweitbatterie bzw. des Primärspeichers kommt und wie deren Vorzeichen zu interpretieren ist. Für ZEC gilt: positiv = Zweitbatterie lädt, negativ = Zweitbatterie entlädt.</div>",
@@ -1886,6 +1983,7 @@ def build_settings_page(cfg: Dict[str, Any], validation_issues: Optional[List[Va
             f"<div class='section-tools'><a href='#' onclick=\"expandSectionInfo('{section_id}'); return false;\">Alle Infos auf- und zuklappen</a> &nbsp;|&nbsp; <a href='#page-top'>nach oben</a></div>"
             + build_section_validation_messages(group, validation_issues)
         )
+        page += "<div class='grid'>" + section_intro_box(group) + "</div>"
         if group == "Messdaten / Historie":
             mode = measurement_log_mode(cfg)
             retention_h = estimate_retention_hours(cfg)
@@ -1925,6 +2023,9 @@ def build_settings_page(cfg: Dict[str, Any], validation_issues: Optional[List[Va
             )
         page += "<div class='grid'>"
         if group == "Nachtmodus":
+            if "NIGHT_DISCHARGE_ENABLED" in CONFIG_SCHEMA:
+                meta = CONFIG_SCHEMA["NIGHT_DISCHARGE_ENABLED"]
+                page += build_setting_card("NIGHT_DISCHARGE_ENABLED", meta, cfg.get("NIGHT_DISCHARGE_ENABLED"), "NIGHT_DISCHARGE_ENABLED" in error_keys, "NIGHT_DISCHARGE_ENABLED" in warning_keys)
             page += build_night_time_card(
                 "NIGHT_START_TIME",
                 "Startzeit",
@@ -1947,13 +2048,15 @@ def build_settings_page(cfg: Dict[str, Any], validation_issues: Optional[List[Va
         for key, meta in CONFIG_SCHEMA.items():
             if meta.get("group") != group:
                 continue
-            if group == "Nachtmodus" and key in {"NIGHT_START_HOUR", "NIGHT_START_MINUTE", "NIGHT_END_HOUR", "NIGHT_END_MINUTE"}:
+            if meta.get("hidden"):
+                continue
+            if group == "Nachtmodus" and key in {"NIGHT_DISCHARGE_ENABLED", "NIGHT_START_HOUR", "NIGHT_START_MINUTE", "NIGHT_END_HOUR", "NIGHT_END_MINUTE"}:
                 continue
             subgroup = str(meta.get("subgroup", "") or "")
             if subgroup and subgroup != current_subgroup:
                 if current_subgroup is not None:
                     page += "</div><div class='grid'>"
-                page += f"<div class='card subgroup-card' style='grid-column:1 / -1;'><h3 style='margin:0 0 6px 0;'>{html.escape(subgroup)}</h3>{subgroup_help_text(subgroup)}</div>"
+                page += f"<div class='card subgroup-card'><h3>{html.escape(subgroup)}</h3>{subgroup_help_text(subgroup)}</div>"
                 current_subgroup = subgroup
             page += build_setting_card(key, meta, cfg.get(key), key in error_keys, key in warning_keys)
         page += "</div>"

@@ -372,6 +372,183 @@ def _detect_schema_family(path: str) -> str:
     return "unknown"
 
 
+
+def _truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+def _energy_kwh(power_w: float, dt_s: float) -> float:
+    return power_w * max(0.0, dt_s) / 3600.0 / 1000.0
+
+def _segment_summary(rows: Sequence[Dict[str, Any]], flag_field: str, predicate: Optional[Callable[[Dict[str, Any]], bool]] = None) -> List[Dict[str, Any]]:
+    segments: List[Dict[str, Any]] = []
+    current: Optional[Dict[str, Any]] = None
+    for row in rows:
+        active = _truthy(row.get(flag_field)) if predicate is None else bool(predicate(row))
+        ts = str(row.get("measurement_time_utc") or row.get("datetime_local") or "-")
+        dt = _float(row.get("dt_s"), 0.0)
+        if active:
+            if current is None:
+                current = {"start": ts, "end": ts, "duration_s": 0.0, "rows": 0}
+            current["end"] = ts
+            current["duration_s"] = float(current.get("duration_s", 0.0)) + dt
+            current["rows"] = int(current.get("rows", 0)) + 1
+        elif current is not None:
+            segments.append(current)
+            current = None
+    if current is not None:
+        segments.append(current)
+    return segments
+
+def _v4_harvest_analysis(all_rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    harvest_rows = [r for r in all_rows if _truthy(r.get("rest_surplus_harvest_active"))]
+    reason_rows = [r for r in all_rows if str(r.get("target_final_reason") or "") == "REST_SURPLUS_HARVEST"]
+
+    def metrics(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+        duration_s = 0.0
+        zendure_charge_kwh = 0.0
+        zendure_discharge_kwh = 0.0
+        second_charge_kwh = 0.0
+        grid_export_kwh = 0.0
+        grid_import_kwh = 0.0
+        max_grid_import_w = 0.0
+        estimated_export_without_harvest_kwh = 0.0
+        avoided_export_kwh = 0.0
+        additional_storage_window_kwh = 0.0
+        for r in rows:
+            dt = _float(r.get("dt_s"), 0.0)
+            duration_s += dt
+            z = _float(r.get("zendure_actual_power_w"), 0.0)
+            # V4 convention: Zendure + = Ladung, - = Entladung.
+            if z > 0:
+                zendure_charge_kwh += _energy_kwh(z, dt)
+            elif z < 0:
+                zendure_discharge_kwh += _energy_kwh(-z, dt)
+            sb = _float(r.get("second_battery_power_w"), 0.0)
+            if sb > 0:
+                second_charge_kwh += _energy_kwh(sb, dt)
+            g = _float(r.get("grid_power_w"), 0.0)
+            if g < 0:
+                grid_export_kwh += _energy_kwh(-g, dt)
+            elif g > 0:
+                grid_import_kwh += _energy_kwh(g, dt)
+                max_grid_import_w = max(max_grid_import_w, g)
+            max_primary = _float(r.get("second_battery_charge_saturation_threshold_w"), 0.0) + _float(r.get("SECOND_BATTERY_CHARGE_SATURATION_MARGIN_W"), 0.0)
+            if max_primary <= 0:
+                max_primary = _float(r.get("second_battery_charge_saturation_threshold_w"), 0.0) + 100.0
+            if max_primary <= 100:
+                max_primary = 2300.0
+            # Conservative counterfactual: without Zendure charge, primary battery could absorb free headroom up to max_primary.
+            z_charge = max(0.0, z)
+            primary_headroom = max(0.0, max_primary - max(0.0, sb))
+            extra_export_w = max(0.0, z_charge - primary_headroom)
+            estimated_export_without_harvest_kwh += _energy_kwh(max(0.0, -g) + extra_export_w, dt)
+            avoided_export_kwh += _energy_kwh(extra_export_w, dt)
+            additional_storage_window_kwh += _energy_kwh(max(0.0, z_charge - min(z_charge, primary_headroom)), dt)
+        return {
+            "rows": int(len(rows)),
+            "duration_s": _round(duration_s, 1),
+            "duration_h": _round(duration_s / 3600.0, 2),
+            "zendure_charge_kwh": _round(zendure_charge_kwh, 3),
+            "zendure_discharge_kwh": _round(zendure_discharge_kwh, 3),
+            "second_battery_charge_kwh": _round(second_charge_kwh, 3),
+            "grid_export_kwh": _round(grid_export_kwh, 3),
+            "grid_import_kwh": _round(grid_import_kwh, 3),
+            "max_grid_import_w": _round(max_grid_import_w, 1),
+            "estimated_export_without_harvest_kwh": _round(estimated_export_without_harvest_kwh, 3),
+            "estimated_avoided_immediate_export_kwh": _round(avoided_export_kwh, 3),
+            "estimated_additional_storage_window_kwh": _round(additional_storage_window_kwh, 3),
+        }
+
+    max_soc_time = ""
+    max_soc = 0.0
+    for r in all_rows:
+        soc = _float(r.get("control_soc_percent") or r.get("zendure_soc_percent") or r.get("norm_zendure_soc_percent"), -1.0)
+        if soc > max_soc:
+            max_soc = soc
+            max_soc_time = str(r.get("measurement_time_utc") or r.get("datetime_local") or "")
+    export_after_max_soc_kwh = 0.0
+    max_soc_seen = False
+    for r in all_rows:
+        soc = _float(r.get("control_soc_percent") or r.get("zendure_soc_percent") or r.get("norm_zendure_soc_percent"), -1.0)
+        if soc >= 99.0:
+            max_soc_seen = True
+        if max_soc_seen:
+            g = _float(r.get("grid_power_w"), 0.0)
+            if g < 0:
+                export_after_max_soc_kwh += _energy_kwh(-g, _float(r.get("dt_s"), 0.0))
+
+    def counterflow(predicate: Callable[[Dict[str, Any]], bool]) -> Dict[str, Any]:
+        rows = [r for r in harvest_rows if predicate(r)]
+        duration_s = sum(_float(r.get("dt_s"), 0.0) for r in rows)
+        energy = 0.0
+        max_power = 0.0
+        for r in rows:
+            z = abs(_float(r.get("zendure_actual_power_w"), 0.0))
+            sb = abs(_float(r.get("second_battery_power_w"), 0.0))
+            max_power = max(max_power, z, sb)
+            energy += _energy_kwh(z, _float(r.get("dt_s"), 0.0))
+        return {"rows": len(rows), "duration_s": _round(duration_s, 1), "energy_kwh": _round(energy, 3), "max_power_w": _round(max_power, 1)}
+
+    cf_sma_discharge_zendure_charge = counterflow(lambda r: _float(r.get("second_battery_power_w"), 0.0) < -80 and _float(r.get("zendure_actual_power_w"), 0.0) > 80)
+    cf_sma_charge_zendure_discharge = counterflow(lambda r: _float(r.get("second_battery_power_w"), 0.0) > 80 and _float(r.get("zendure_actual_power_w"), 0.0) < -80)
+    if cf_sma_discharge_zendure_charge["duration_s"] < 120 and cf_sma_discharge_zendure_charge["energy_kwh"] < 0.05 and cf_sma_charge_zendure_discharge["duration_s"] < 120 and cf_sma_charge_zendure_discharge["energy_kwh"] < 0.05:
+        cf_status = "OK"
+    elif cf_sma_discharge_zendure_charge["duration_s"] > 600 or cf_sma_charge_zendure_discharge["duration_s"] > 600 or cf_sma_discharge_zendure_charge["energy_kwh"] > 0.25 or cf_sma_charge_zendure_discharge["energy_kwh"] > 0.25:
+        cf_status = "KRITISCH"
+    else:
+        cf_status = "PRÜFEN"
+
+    if max_soc >= 99.0:
+        summer_note = "Zendure erreichte im Analysezeitraum den Max-SOC. Harvest reduzierte Sofort-Export und lud Zendure früher; ein Teil des Effekts kann im Sommer vorgezogene Speicherung sein."
+        value_class = "vorgezogene Speicherung / Mischfall"
+    else:
+        summer_note = "Zendure erreichte im Analysezeitraum keinen Max-SOC. Die Harvest-Ladung ist daher eher als echte zusätzliche Speicherung im betrachteten Fenster zu interpretieren, sofern später kein Nachladefenster folgt."
+        value_class = "wahrscheinlich zusätzliche Speicherung"
+
+    return {
+        "active": metrics(harvest_rows),
+        "direct_reason": metrics(reason_rows),
+        "segments": _segment_summary(all_rows, "rest_surplus_harvest_active")[:20],
+        "segment_count": len(_segment_summary(all_rows, "rest_surplus_harvest_active")),
+        "max_soc_percent": _round(max_soc, 1),
+        "max_soc_time": max_soc_time,
+        "export_after_max_soc_kwh": _round(export_after_max_soc_kwh, 3),
+        "value_classification": value_class,
+        "interpretation": summer_note,
+        "counterflow_status": cf_status,
+        "counterflow_sma_discharge_zendure_charge": cf_sma_discharge_zendure_charge,
+        "counterflow_sma_charge_zendure_discharge": cf_sma_charge_zendure_discharge,
+        "assumption": "Ohne Harvest hätte der Primärspeicher zusätzlichen Überschuss bis zur konfigurierten maximalen Ladeleistung aufnehmen können; darüber hinausgehender Überschuss wäre Netzexport geworden.",
+    }
+
+def _v4_timing_analysis(all_rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    cycle = [_float(r.get("cycle_duration_ms"), 0.0) for r in all_rows if r.get("cycle_duration_ms") not in (None, "")]
+    local = []
+    slowest = Counter()
+    for r in all_rows:
+        raw = str(r.get("cycle_timing_json") or r.get("last_cycle_timing_json") or "")
+        if raw:
+            try:
+                data = json.loads(raw)
+                if isinstance(data, dict):
+                    if data.get("zendure_local_api_ms") is not None:
+                        local.append(_float(data.get("zendure_local_api_ms"), 0.0))
+                    if data:
+                        key, _ = max(data.items(), key=lambda kv: _float(kv[1], 0.0))
+                        slowest[str(key)] += 1
+            except Exception:
+                pass
+    return {
+        "cycles_gt_1000_ms": int(sum(1 for v in cycle if v > 1000)),
+        "cycles_gt_2000_ms": int(sum(1 for v in cycle if v > 2000)),
+        "cycles_gt_5000_ms": int(sum(1 for v in cycle if v > 5000)),
+        "local_api_ms_max": _round(max(local), 1) if local else 0.0,
+        "local_api_ms_p95": _round(_p95(local), 1) if local else 0.0,
+        "slowest_step_top": [{"name": k, "count": v} for k, v in slowest.most_common(5)],
+    }
+
 def _v4_metadata(rows: Sequence[Dict[str, Any]], files: Sequence[CsvMeasurementFile], duplicate_rows_removed: int) -> Dict[str, Any]:
     all_rows: List[Dict[str, Any]] = []
     for mf in files:
@@ -386,6 +563,8 @@ def _v4_metadata(rows: Sequence[Dict[str, Any]], files: Sequence[CsvMeasurementF
     operating = c("operating_mode")
     def top(counter: Counter, limit: int = 12) -> List[Dict[str, Any]]:
         return [{"name": k if k != "" else "(leer)", "count": int(v)} for k, v in counter.most_common(limit)]
+    harvest = _v4_harvest_analysis(all_rows)
+    timing = _v4_timing_analysis(all_rows)
     return {
         "schema_family": "v4",
         "profile": "extended" if any(str(name).endswith("_json") for name in (all_rows[0].keys() if all_rows else [])) else "standard",
@@ -401,6 +580,8 @@ def _v4_metadata(rows: Sequence[Dict[str, Any]], files: Sequence[CsvMeasurementF
         "cycle_duration_ms_avg": _round(sum(cycle_ms) / len(cycle_ms), 1) if cycle_ms else 0.0,
         "cycle_duration_ms_max": _round(max(cycle_ms), 1) if cycle_ms else 0.0,
         "cycle_duration_ms_p95": _round(_p95(cycle_ms), 1) if cycle_ms else 0.0,
+        "harvest_analysis": harvest,
+        "timing_analysis": timing,
     }
 
 def read_measurement_csv_files(paths: Sequence[str], limits: Optional[AnalysisLimits] = None, cancel_check: Optional[Callable[[], bool]] = None) -> Tuple[List[CsvMeasurementFile], List[str], str]:

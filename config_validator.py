@@ -227,7 +227,12 @@ def validate_config_semantics(
     control_timeout_cap = _float_value(cfg, "ZENDURE_LOCAL_API_CONTROL_TIMEOUT_CAP_SECONDS", 1.5)
     interval_for_timeout = _int_value(cfg, "INTERVAL_SECONDS", 3)
     if use_local_api and control_timeout_cap >= max(1.0, interval_for_timeout * 0.75):
-        issues.append(_issue("WARNING", "Der Timeout-Cap der lokalen Zendure-API liegt nahe am Regelintervall. Langsame API-Antworten können einzelne Regelzyklen spürbar verlängern.", ["ZENDURE_LOCAL_API_CONTROL_TIMEOUT_CAP_SECONDS", "INTERVAL_SECONDS"], "Netzwerk", "LOCAL_API_TIMEOUT_NEAR_INTERVAL"))
+        issues.append(_issue("WARNING", "Der Timeout-Cap der lokalen Zendure-API liegt nahe am Regelintervall. Langsame API-Antworten können einzelne Regelzyklen spürbar verlängern. Das ist eine Laufzeit-/Datenquellenwarnung; bitte Timeout und Regelintervall bewusst aufeinander abstimmen.", ["ZENDURE_LOCAL_API_CONTROL_TIMEOUT_CAP_SECONDS", "INTERVAL_SECONDS"], "Netzwerk", "LOCAL_API_TIMEOUT_NEAR_INTERVAL"))
+
+
+    local_api_timeout = _float_value(cfg, "ZENDURE_LOCAL_API_TIMEOUT_SECONDS", 5.0)
+    if use_local_api and local_api_timeout >= max(1.0, float(interval_for_timeout)):
+        issues.append(_issue("WARNING", "Der vollständige Timeout der lokalen Zendure-API ist größer oder gleich dem Regelintervall. Wenn die API im Regelpfad genutzt wird oder der Fallback anspringt, können einzelne Zyklen deutlich länger dauern.", ["ZENDURE_LOCAL_API_TIMEOUT_SECONDS", "INTERVAL_SECONDS"], "Netzwerk", "LOCAL_API_FULL_TIMEOUT_ABOVE_INTERVAL"))
 
     if not _str_value(cfg, "SHELLY_IP"):
         issues.append(_issue("ERROR", "Die Shelly-/Uni-Meter-IP darf nicht leer sein, weil die Netzleistung die zentrale Regelgröße ist.", ["SHELLY_IP"], "Netzwerk", "SHELLY_IP_MISSING"))
@@ -390,23 +395,27 @@ def validate_config_semantics(
         entry_confirm = _int_value(cfg, "REST_SURPLUS_ENTRY_CONFIRM_SECONDS", 30)
         margin = _int_value(cfg, "SECOND_BATTERY_CHARGE_SATURATION_MARGIN_W", 100)
         if max_primary_charge is None or max_primary_charge <= 0:
-            issues.append(_issue("ERROR", "Restüberschuss-Ernte ist aktiv, aber die maximale Ladeleistung des Primärspeichers ist leer oder ungültig. Ohne diesen Wert kann der Controller nicht erkennen, wann der Primärspeicher nahe seiner Ladegrenze arbeitet.", ["REST_SURPLUS_HARVEST_ENABLED", "SECOND_BATTERY_MAX_CHARGE_POWER_W"], "Zweitbatterie", "HARVEST_MAX_CHARGE_MISSING"))
+            issues.append(_issue("ERROR", "Restüberschuss-Ernte ist aktiv, aber die maximale Ladeleistung des Primärspeichers ist nicht konfiguriert oder nicht plausibel. Bitte in Settings → Zweitbatterie → Restüberschuss-Ernte die maximale Ladeleistung in Watt eintragen; ohne diesen Wert kann der Controller nicht erkennen, wann der Primärspeicher nahe seiner Ladegrenze arbeitet.", ["REST_SURPLUS_HARVEST_ENABLED", "SECOND_BATTERY_MAX_CHARGE_POWER_W"], "Zweitbatterie", "HARVEST_MAX_CHARGE_MISSING"))
         elif max_primary_charge < 300:
             issues.append(_issue("ERROR", "Die maximale Ladeleistung des Primärspeichers ist für die Restüberschuss-Ernte unplausibel niedrig. Trage den technischen Maximalwert des Primärspeichers in Watt ein.", ["SECOND_BATTERY_MAX_CHARGE_POWER_W"], "Zweitbatterie", "HARVEST_MAX_CHARGE_TOO_LOW"))
+        elif max_primary_charge > 10000:
+            issues.append(_issue("WARNING", "Die maximale Ladeleistung des Primärspeichers wirkt ungewöhnlich hoch. Bitte prüfen, ob der Wert in Watt und nicht versehentlich in einer anderen Einheit eingetragen wurde.", ["SECOND_BATTERY_MAX_CHARGE_POWER_W"], "Zweitbatterie", "HARVEST_MAX_CHARGE_HIGH"))
         if not cross_charge_enabled(cfg):
             issues.append(_issue("ERROR", "Restüberschuss-Ernte benötigt den Cross-Charge-Schutz. Wenn der Primärspeicher während einer Erntephase in Entladung kippt, muss Zendure-Ladung sicher reduziert oder blockiert werden können.", ["REST_SURPLUS_HARVEST_ENABLED", "CROSS_CHARGE_ENABLED"], "Zweitbatterie", "HARVEST_NEEDS_CROSS_CHARGE"))
         profile = _str_value(cfg, "SECOND_BATTERY_SOURCE_PROFILE") or PROFILE_EVCC_STANDARD
         topics = second_battery_topics(cfg)
         if profile == PROFILE_EVCC_STANDARD and not _str_value(cfg, "SECOND_BATTERY_EVCC_BASE_TOPIC"):
-            issues.append(_issue("ERROR", "Restüberschuss-Ernte benötigt frische Leistungsdaten der Zweitbatterie, aber das EVCC Batterie-Basis-Topic ist leer.", ["REST_SURPLUS_HARVEST_ENABLED", "SECOND_BATTERY_EVCC_BASE_TOPIC"], "Zweitbatterie", "HARVEST_SECOND_BATTERY_TOPIC_MISSING"))
+            issues.append(_issue("ERROR", "Restüberschuss-Ernte benötigt aktuelle Leistungsdaten der Zweitbatterie, aber das EVCC Batterie-Basis-Topic ist nicht konfiguriert. Bitte in Settings → Zweitbatterie → Zweitbatterie-Messwerte das EVCC-Basis-Topic eintragen.", ["REST_SURPLUS_HARVEST_ENABLED", "SECOND_BATTERY_EVCC_BASE_TOPIC"], "Zweitbatterie", "HARVEST_SECOND_BATTERY_TOPIC_MISSING"))
         if profile == PROFILE_CUSTOM and not topics.get("power"):
-            issues.append(_issue("ERROR", "Restüberschuss-Ernte benötigt frische Leistungsdaten der Zweitbatterie, aber im benutzerdefinierten Profil fehlt das Leistungs-Topic.", ["REST_SURPLUS_HARVEST_ENABLED", "SECOND_BATTERY_POWER_TOPIC"], "Zweitbatterie", "HARVEST_SECOND_BATTERY_POWER_TOPIC_MISSING"))
+            issues.append(_issue("ERROR", "Restüberschuss-Ernte benötigt aktuelle Leistungsdaten der Zweitbatterie, aber im benutzerdefinierten Profil ist kein Leistungs-Topic konfiguriert. Bitte in Settings → Zweitbatterie → Zweitbatterie-Messwerte das Leistungs-Topic eintragen.", ["REST_SURPLUS_HARVEST_ENABLED", "SECOND_BATTERY_POWER_TOPIC"], "Zweitbatterie", "HARVEST_SECOND_BATTERY_POWER_TOPIC_MISSING"))
         if min_export <= 0:
             issues.append(_issue("ERROR", "Der Mindest-Netzexport für die Restüberschuss-Ernte muss größer als 0 W sein.", ["REST_SURPLUS_MIN_EXPORT_W"], "Zweitbatterie", "HARVEST_MIN_EXPORT_ZERO"))
-        if entry_confirm < interval * 3:
+        if entry_confirm < interval * 2:
             issues.append(_issue("WARNING", "Die Entry-Bestätigungszeit der Restüberschuss-Ernte ist sehr kurz. Kurze Wolkenlücken oder Lastspitzen könnten den Modus unnötig starten.", ["REST_SURPLUS_ENTRY_CONFIRM_SECONDS", "INTERVAL_SECONDS"], "Zweitbatterie", "HARVEST_ENTRY_CONFIRM_SHORT"))
+        if entry_confirm > 180:
+            issues.append(_issue("WARNING", "Die Entry-Bestätigungszeit der Restüberschuss-Ernte ist sehr lang. Kurze, wertvolle Überschussfenster können dadurch verpasst werden.", ["REST_SURPLUS_ENTRY_CONFIRM_SECONDS"], "Zweitbatterie", "HARVEST_ENTRY_CONFIRM_LONG"))
         if margin <= 0 or (max_primary_charge and margin >= max_primary_charge):
-            issues.append(_issue("ERROR", "Die interne Marge zur Erkennung der Primärspeicher-Ladegrenze ist ungültig.", ["SECOND_BATTERY_CHARGE_SATURATION_MARGIN_W", "SECOND_BATTERY_MAX_CHARGE_POWER_W"], "Zweitbatterie", "HARVEST_MARGIN_INVALID"))
+            issues.append(_issue("ERROR", "Die interne Marge zur Erkennung der Primärspeicher-Ladegrenze ist nicht plausibel. Sie muss größer als 0 W und kleiner als die maximale Ladeleistung des Primärspeichers sein.", ["SECOND_BATTERY_CHARGE_SATURATION_MARGIN_W", "SECOND_BATTERY_MAX_CHARGE_POWER_W"], "Zweitbatterie", "HARVEST_MARGIN_INVALID"))
         if min_command_change > min_export:
             issues.append(_issue("WARNING", "Die MQTT-Mindeständerung ist größer als der Mindest-Netzexport der Restüberschuss-Ernte. Die Funktion kann zwar aktiv werden, kleine Korrekturen werden aber möglicherweise durch die Mindeständerung unterdrückt.", ["MIN_COMMAND_CHANGE_W", "REST_SURPLUS_MIN_EXPORT_W"], "Zweitbatterie", "HARVEST_MIN_COMMAND_ABOVE_MIN_EXPORT"))
         if min_export < deadband:
@@ -420,9 +429,15 @@ def validate_config_semantics(
     if _bool_value(cfg.get("NIGHT_DISCHARGE_ENABLED", False)):
         night_power = _int_value(cfg, "NIGHT_DISCHARGE_POWER_W", 0)
         if night_power <= 0:
-            issues.append(_issue("ERROR", "Die Nachtleistung muss bei aktivem Nachtmodus größer als 0 Watt sein.", ["NIGHT_DISCHARGE_POWER_W", "NIGHT_DISCHARGE_ENABLED"], "Nachtmodus", "NIGHT_POWER_ZERO"))
+            issues.append(_issue("ERROR", "Die Nachtentladeleistung ist in Settings → Nachtmodus nicht plausibel. Bitte bei aktivem Nachtmodus einen Wert größer als 0 W eintragen.", ["NIGHT_DISCHARGE_POWER_W", "NIGHT_DISCHARGE_ENABLED"], "Nachtmodus", "NIGHT_POWER_ZERO"))
         if night_power > max_discharge:
-            issues.append(_issue("ERROR", "Die Nachtleistung darf nicht größer sein als die maximale Zendure-Entladeleistung.", ["NIGHT_DISCHARGE_POWER_W", "MAX_DISCHARGE_POWER_W"], "Nachtmodus", "NIGHT_POWER_TOO_HIGH"))
+            issues.append(_issue("ERROR", "Die Nachtentladeleistung ist höher als die maximale Zendure-Entladeleistung. Bitte in Settings → Nachtmodus oder Settings → Regelung prüfen.", ["NIGHT_DISCHARGE_POWER_W", "MAX_DISCHARGE_POWER_W"], "Nachtmodus", "NIGHT_POWER_TOO_HIGH"))
+
+        capacity_wh = _optional_int_value(cfg, "ZENDURE_BATTERY_CAPACITY_WH")
+        if capacity_wh is None:
+            issues.append(_issue("INFO", "Die Nachtmodus-Prognose ist nicht verfügbar, weil die Zendure-Batteriekapazität für die Prognose nicht konfiguriert ist. Bitte in Settings → Nachtmodus eintragen, wenn die Statusseite ein voraussichtliches Nachtmodus-Ende berechnen soll.", ["ZENDURE_BATTERY_CAPACITY_WH"], "Nachtmodus", "NIGHT_PROJECTION_CAPACITY_MISSING"))
+        elif capacity_wh <= 0 or capacity_wh > 50000:
+            issues.append(_issue("WARNING", "Die Zendure-Batteriekapazität für die Nachtmodus-Prognose ist nicht plausibel. Bitte in Settings → Nachtmodus einen realistischen Wh-Wert prüfen.", ["ZENDURE_BATTERY_CAPACITY_WH"], "Nachtmodus", "NIGHT_PROJECTION_CAPACITY_IMPLAUSIBLE"))
 
         night_stop_soc = _optional_int_value(cfg, "NIGHT_DISCHARGE_STOP_SOC_PERCENT")
         if night_stop_soc is not None and night_stop_soc < min_soc:

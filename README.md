@@ -1,12 +1,29 @@
-Zendure Energy Controller Version 12.10.0-RC10
+Zendure Energy Controller Version 12.11.0-RC1
 
-# Zendure Energy Controller V12.10.0-RC10
+# Zendure Energy Controller V12.11.0-RC1
 
 Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, ZEC-MEASUREMENT-V4-Messdaten-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
 Copyright (c) 2026 Eduard Fuchs <info@eduardfuchs.de>
 
 Lizenziert unter AGPL-3.0-or-later. Siehe `LICENSE`, `NOTICE` und `DISCLAIMER.md`.
+
+## Wichtige Änderungen in V12.11.0-RC1
+
+V12.11.0-RC1 ist ein Analyse-/Diagnose-/UI-/Validierungsrelease auf Basis von V12.10.0-RC10. Die Live-Regelstrategie bleibt unverändert: keine Änderung an AUTO, Restüberschuss-Ernte Entry/Stay/Exit, Cross-Charge, Nachtmodus oder MQTT-Kommandostruktur.
+
+- Semantischer Settings-Validator erweitert: ERROR/WARNING/INFO unterscheiden blockierende Fehler, bewusst prüfbare Warnungen und reine Hinweise.
+- Settings-Validierung trennt handlungsorientiert zwischen in Settings korrigierbaren Problemen und temporären Datenquellenproblemen, z. B. nicht aktuellen Zendure-MQTT-SOC-Werten.
+- Statusseite zeigt einen kompakten Konfigurationsstatus und zusätzliche Local-API-Timing-Informationen.
+- Analyse-/Replay-Seite wertet die Restüberschuss-Ernte automatisch aus: Harvest-Dauer, Zendure-/SMA-Ladung, Netzimport/-export, Segmente und direkte `REST_SURPLUS_HARVEST`-Phasen.
+- Gegenfaktische Harvest-Schätzung ergänzt: geschätzter vermiedener Sofort-Export mit klar ausgewiesener Annahme, dass der Primärspeicher ohne Harvest zusätzlichen Überschuss bis zur Maximalleistung aufgenommen hätte.
+- Harvest-Nutzen wird für Sommer-/Vollspeicher-Fälle verständlicher eingeordnet: vorgezogene Speicherung vs. wahrscheinlich dauerhaft zusätzliche Speicherung.
+- Cross-Charge-/Harvest-Transition-Auswertung ergänzt: kurze Gegenflussphasen während Harvest werden mit Dauer, Energie und Maximalleistung bewertet.
+- Local-API-Timing-Auswertung in der Analyse zeigt Zyklen >1s/>2s/>5s, Local-API-p95/max und häufigste langsamste Teilphasen.
+- Settings-Seite strukturell bereinigt: Bereichs-Erläuterungsboxen, klarere Abstände vor Unterabschnitten, sinnvolle Einführung des Bereichs „Zweitbatterie“, Nachtmodus-Master-Schalter zuerst.
+- Legacy-Parameter `SMA_DISCHARGE_BLOCK_W` / „Entlade-Blockgrenze (Legacy)“ wird nicht mehr in der normalen Settings-UI angezeigt; Migration/Kompatibilität bleiben erhalten.
+- Keine Änderung an Harvest-Schwellen, Cross-Charge-Regelwirkung, MQTT-Topics oder Local-API-Architektur.
+
 
 
 
