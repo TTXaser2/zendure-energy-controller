@@ -55,6 +55,8 @@ class ControllerState:
     grid_power_used_for_control: bool = False
     grid_power_age_seconds: Optional[int] = None
     grid_power_validity_reason: str = "GRID_MISSING"
+    grid_meter_source: str = "shelly_http"
+    raw_grid_source: str = "Shelly-kompatible HTTP-Quelle"
     last_input_power: int = 0
     last_output_power: int = 0
     # Zendure Headunit/System-Istleistung. Historisch wurden packInputPower
@@ -186,6 +188,22 @@ class ControllerState:
     sma_energy_meter_selected_device_matched: bool = False
     sma_energy_meter_detected_device_count: int = 0
     sma_energy_meter_devices_json: str = "{}"
+    sma_energy_meter_socket_mode: str = "rc3_compatible"
+    sma_energy_meter_effective_socket_mode: str = "rc3_compatible"
+    sma_energy_meter_bind_address: str = ""
+    sma_energy_meter_bind_mode: str = ""
+    sma_energy_meter_reuseaddr_enabled: bool = False
+    sma_energy_meter_reuseport_requested: bool = False
+    sma_energy_meter_reuseport_supported: bool = False
+    sma_energy_meter_reuseport_enabled: bool = False
+    sma_energy_meter_reuseport_error: str = ""
+    sma_energy_meter_multicast_if_set: bool = False
+    sma_energy_meter_packet_rate_per_min: float = 0.0
+    sma_energy_meter_packet_gap_warn_s: float = 5.0
+    sma_energy_meter_last_packet_gap_s: Optional[float] = None
+    sma_energy_meter_max_packet_gap_s: Optional[float] = None
+    sma_energy_meter_last_large_gap_s: Optional[float] = None
+    sma_energy_meter_last_large_gap_age_seconds: Optional[int] = None
 
     # Einheitliches Freshness-/Validitätsmodell pro Regelzyklus.
     # Diese Felder ändern nicht die Regellogik selbst, sondern machen sichtbar,
@@ -955,7 +973,7 @@ class ControllerState:
                 "grid_power_used_for_control": self.grid_power_used_for_control,
                 "grid_power_age_s": self.grid_power_age_seconds,
                 "grid_power_validity_reason": self.grid_power_validity_reason,
-                "raw_grid_source": "Shelly/UniMeter",
+                "raw_grid_source": self.raw_grid_source,
                 "raw_grid_age_s": self.grid_power_age_seconds,
                 "raw_zendure_soc_percent": self.battery_soc,
                 "raw_zendure_soc_source": self.zendure_telemetry_source,
@@ -1208,6 +1226,8 @@ class ControllerState:
                 "grid_power_used_for_control": self.grid_power_used_for_control,
                 "grid_power_age_seconds": self.grid_power_age_seconds,
                 "grid_power_validity_reason": self.grid_power_validity_reason,
+                "grid_meter_source": self.grid_meter_source,
+                "raw_grid_source": self.raw_grid_source,
                 "last_input_power": self.last_input_power,
                 "last_output_power": self.last_output_power,
                 "actual_zendure_charge_power": self.actual_zendure_charge_power,
@@ -1353,6 +1373,22 @@ class ControllerState:
                 "sma_energy_meter_selected_device_matched": self.sma_energy_meter_selected_device_matched,
                 "sma_energy_meter_detected_device_count": self.sma_energy_meter_detected_device_count,
                 "sma_energy_meter_devices_json": self.sma_energy_meter_devices_json,
+                "sma_energy_meter_socket_mode": self.sma_energy_meter_socket_mode,
+                "sma_energy_meter_effective_socket_mode": self.sma_energy_meter_effective_socket_mode,
+                "sma_energy_meter_bind_address": self.sma_energy_meter_bind_address,
+                "sma_energy_meter_bind_mode": self.sma_energy_meter_bind_mode,
+                "sma_energy_meter_reuseaddr_enabled": self.sma_energy_meter_reuseaddr_enabled,
+                "sma_energy_meter_reuseport_requested": self.sma_energy_meter_reuseport_requested,
+                "sma_energy_meter_reuseport_supported": self.sma_energy_meter_reuseport_supported,
+                "sma_energy_meter_reuseport_enabled": self.sma_energy_meter_reuseport_enabled,
+                "sma_energy_meter_reuseport_error": self.sma_energy_meter_reuseport_error,
+                "sma_energy_meter_multicast_if_set": self.sma_energy_meter_multicast_if_set,
+                "sma_energy_meter_packet_rate_per_min": self.sma_energy_meter_packet_rate_per_min,
+                "sma_energy_meter_packet_gap_warn_s": self.sma_energy_meter_packet_gap_warn_s,
+                "sma_energy_meter_last_packet_gap_s": self.sma_energy_meter_last_packet_gap_s,
+                "sma_energy_meter_max_packet_gap_s": self.sma_energy_meter_max_packet_gap_s,
+                "sma_energy_meter_last_large_gap_s": self.sma_energy_meter_last_large_gap_s,
+                "sma_energy_meter_last_large_gap_age_seconds": self.sma_energy_meter_last_large_gap_age_seconds,
                 "rest_surplus_harvest_active": self.rest_surplus_harvest_active,
                 "rest_surplus_harvest_eligible": self.rest_surplus_harvest_eligible,
                 "rest_surplus_entry_progress_s": round(float(self.rest_surplus_entry_progress_s or 0.0), 1),

@@ -265,6 +265,55 @@ if [[ -d "$RUNTIME_DIR" ]]; then
   done
 fi
 
+WEB_PORT_FOR_STATUS="8080"
+if [[ -f "$INSTALL_DIR/config.json" ]]; then
+  WEB_PORT_FOR_STATUS="$(python3 - <<PY 2>/dev/null || echo 8080
+import json
+cfg=json.load(open(${INSTALL_DIR@Q} + '/config.json', encoding='utf-8'))
+print(cfg.get('WEB_PORT', 8080))
+PY
+)"
+fi
+if command -v curl >/dev/null 2>&1; then
+  if curl -fsS --max-time 2 "http://127.0.0.1:${WEB_PORT_FOR_STATUS}/status" -o "$WORKDIR/status_snapshot.json" 2>/dev/null; then
+    log "Included live /status snapshot for diagnostics"
+    python3 - <<PY > "$WORKDIR/SMA_DIAGNOSTICS_SUMMARY.txt" 2>/dev/null || true
+import json
+from pathlib import Path
+path=Path(${WORKDIR@Q})/'status_snapshot.json'
+data=json.load(open(path, encoding='utf-8'))
+keys=[
+ 'grid_meter_source','raw_grid_source','grid_power','raw_grid_power',
+ 'sma_energy_meter_enabled','sma_energy_meter_running','sma_energy_meter_power_w',
+ 'sma_energy_meter_last_update_age_seconds','sma_energy_meter_socket_mode',
+ 'sma_energy_meter_effective_socket_mode','sma_energy_meter_bind_address',
+ 'sma_energy_meter_bind_mode','sma_energy_meter_reuseaddr_enabled',
+ 'sma_energy_meter_reuseport_requested','sma_energy_meter_reuseport_supported',
+ 'sma_energy_meter_reuseport_enabled','sma_energy_meter_reuseport_error',
+ 'sma_energy_meter_multicast_if_set','sma_energy_meter_packet_count',
+ 'sma_energy_meter_decode_count','sma_energy_meter_ignored_count',
+ 'sma_energy_meter_error_count','sma_energy_meter_packet_rate_per_min',
+ 'sma_energy_meter_last_packet_gap_s','sma_energy_meter_max_packet_gap_s',
+ 'sma_energy_meter_last_large_gap_s','sma_energy_meter_last_large_gap_age_seconds',
+ 'sma_energy_meter_group','sma_energy_meter_port','sma_energy_meter_interface',
+ 'sma_energy_meter_resolved_interface_ip','sma_energy_meter_configured_susy_id',
+ 'sma_energy_meter_configured_serial','sma_energy_meter_selected_device_key',
+ 'sma_energy_meter_detected_device_count','sma_energy_meter_last_error',
+ 'last_cycle_timing_json'
+]
+print('ZEC SMA diagnostics snapshot')
+for k in keys:
+    print(f'{k}={data.get(k)!r}')
+PY
+  else
+    warn "Could not fetch live /status snapshot from localhost:${WEB_PORT_FOR_STATUS}"
+  fi
+fi
+
+if compgen -G "$WORKDIR/runtime_logs/*.log*" > /dev/null; then
+  grep -h -E 'SMA_DIAG|SMA Energy Meter|SMA_DIRECT|SMA_GRID|SMA packet|packet gap' "$WORKDIR"/runtime_logs/*.log* > "$WORKDIR/sma_runtime_events.txt" 2>/dev/null || true
+fi
+
 cat > "$WORKDIR/PACKAGE_INFO.txt" <<EOFINFO
 ZEC analysis package
 created_utc=$STAMP

@@ -969,6 +969,7 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
     raw_grid_value = float(s.get("raw_grid_power", 0.0) or 0.0)
     smoothed_grid_value = float(s.get("grid_power", 0.0) or 0.0)
     grid_age = s.get("grid_power_age_seconds")
+    grid_source_text = html.escape(str(s.get("raw_grid_source") or "unbekannt"))
     grid_valid = bool(s.get("grid_power_valid", False))
     grid_reason = str(s.get("grid_power_validity_reason", ""))
     grid_used_for_control = bool(s.get("grid_power_used_for_control", False))
@@ -987,13 +988,14 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
     if grid_valid:
         grid_details = (
             f"{grid_status_line}<br>"
-            f"Quelle: Shelly/UniMeter · Alter: {age_text(grid_age)}<br>"
+            f"Quelle: {grid_source_text} · Alter: {age_text(grid_age)}<br>"
             f"{auto_rule_line}<br>"
             f'positiv = <span class="red">Netzbezug</span>, negativ = <span class="green">Einspeisung</span>'
         )
     else:
         grid_details = (
             f"{grid_status_line}<br>"
+            f"Quelle: {grid_source_text}<br>"
             f"Letzter Messwert: {raw_grid_value:.1f} W · Alter: {age_text(grid_age)}<br>"
             f"{auto_rule_line}<br>"
             f'positiv = <span class="red">Netzbezug</span>, negativ = <span class="green">Einspeisung</span>'
@@ -1342,11 +1344,34 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
     devices_line = ""
     if device_lines:
         devices_line = "Geräte: " + " · ".join(device_lines) + "<br>"
+    sma_control_line = (
+        "ja, Listener automatisch aktiv" if sma_direct_is_control
+        else "nein, nur zusätzliche passive Beobachtung"
+    )
+    sma_socket_line = (
+        f"Socket: Modus {html.escape(str(s.get('sma_energy_meter_socket_mode') or cfg.get('SMA_ENERGY_METER_SOCKET_MODE', 'rc3_compatible')))} "
+        f"/ effektiv {html.escape(str(s.get('sma_energy_meter_effective_socket_mode') or '-'))} · "
+        f"Bind {html.escape(str(s.get('sma_energy_meter_bind_address') or '-'))}:{html.escape(str(s.get('sma_energy_meter_port', 9522)))} "
+        f"({html.escape(str(s.get('sma_energy_meter_bind_mode') or '-'))})<br>"
+        f"Reuse: addr {html.escape('ja' if s.get('sma_energy_meter_reuseaddr_enabled') else 'nein')} · "
+        f"port angefordert {html.escape('ja' if s.get('sma_energy_meter_reuseport_requested') else 'nein')} · "
+        f"port aktiv {html.escape('ja' if s.get('sma_energy_meter_reuseport_enabled') else 'nein')} · "
+        f"multicast_if {html.escape('ja' if s.get('sma_energy_meter_multicast_if_set') else 'nein')}<br>"
+    )
+    sma_gap_line = (
+        f"Rate: {html.escape(str(s.get('sma_energy_meter_packet_rate_per_min', '-')))} Pakete/min · "
+        f"letzte Lücke: {html.escape(str(s.get('sma_energy_meter_last_packet_gap_s') if s.get('sma_energy_meter_last_packet_gap_s') is not None else '-'))} s · "
+        f"max. Lücke: {html.escape(str(s.get('sma_energy_meter_max_packet_gap_s') if s.get('sma_energy_meter_max_packet_gap_s') is not None else '-'))} s · "
+        f"letzte große Lücke: {html.escape(str(s.get('sma_energy_meter_last_large_gap_s') if s.get('sma_energy_meter_last_large_gap_s') is not None else '-'))} s "
+        f"(vor {html.escape(str(s.get('sma_energy_meter_last_large_gap_age_seconds') if s.get('sma_energy_meter_last_large_gap_age_seconds') is not None else '-'))} s)<br>"
+    )
     sma_direct_details = (
-        f"Regelquelle: {'ja' if sma_direct_is_control else 'nein, nur Diagnose'}<br>"
+        f"Regelquelle: {sma_control_line}<br>"
         f"Direktwert: {html.escape(str(round(float(sma_direct_power), 1)) + ' W') if sma_direct_power is not None else '-'}<br>"
         f"Alter: {html.escape(str(sma_direct_age if sma_direct_age is not None else '-'))} s · Pakete: {html.escape(str(s.get('sma_energy_meter_packet_count', 0)))} · dekodiert: {html.escape(str(s.get('sma_energy_meter_decode_count', 0)))} · ignoriert: {html.escape(str(s.get('sma_energy_meter_ignored_count', 0)))}<br>"
         f"Quelle: {html.escape(str(s.get('sma_energy_meter_group', '239.12.255.254')))}:{html.escape(str(s.get('sma_energy_meter_port', 9522)))} · Interface: {html.escape(str(s.get('sma_energy_meter_interface') or '-'))} → {html.escape(str(s.get('sma_energy_meter_resolved_interface_ip') or '-'))}<br>"
+        f"{sma_socket_line}"
+        f"{sma_gap_line}"
         f"{sma_filter_line}"
         f"Erkannte Geräte: {html.escape(str(s.get('sma_energy_meter_detected_device_count', 0)))}<br>"
         f"{devices_line}"
@@ -1385,7 +1410,7 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
                 sma_direct_badge,
                 sma_direct_details,
                 'gray',
-                'Passiver oder optional produktiver Direktleser für SMA Energy Meter / Sunny Home Manager 2.0 per UDP-Multicast. Standardmäßig bleibt Shelly/UniMeter die Regelquelle; die Direktquelle kann zunächst parallel beobachtet werden, um Zuverlässigkeit, Alter und Vorzeichen zu prüfen.',
+                'Passiver oder optional produktiver Direktleser für SMA Energy Meter / Sunny Home Manager 2.0 per UDP-Multicast. Bei SMA als Netzleistungsquelle ist der Listener automatisch aktiv; der zusätzliche Passivschalter ist nur für Shelly-kompatible Regelquelle relevant. Die Karte zeigt Socket-Modus, Reuse-Optionen, Paketlücken und erkannte Geräte zur Koexistenzdiagnose mit EVCC/weiteren Listenern.',
                 settings_group='Netzwerk'
             )}
             {status_card(
@@ -1987,7 +2012,7 @@ def build_restart_service_page(cfg: Dict[str, Any], enabled: bool = True, error:
 
 def section_intro_text(group: str) -> str:
     texts = {
-        "Netzwerk": "Verbindungsparameter für Shelly/Uni-Meter, MQTT, Zendure-Local-API und Diagnosezugriffe. Änderungen an Broker, Topics, Ports oder lokalen API-Zielen können einen Dienstneustart erfordern.",
+        "Netzwerk": "Verbindungsparameter für Shelly-kompatible HTTP-Quelle, SMA-Direktquelle, MQTT, Zendure-Local-API und Diagnosezugriffe. Änderungen an Broker, Topics, Ports oder lokalen API-Zielen können einen Dienstneustart erfordern.",
         "Weboberfläche": "Darstellung und Bedienfunktionen der ZEC-Webseiten. Diese Einstellungen verändern die Oberfläche, nicht die eigentliche Regelstrategie.",
         "Regelung": "Grundparameter der AUTO-Regelung: Totzone, Glättung, Schrittweite, Lade-/Entladegrenzen und SOC-Grenzen. Diese Werte bestimmen die Dynamik des Controllers.",
         "Manueller Modus": "Manuelle Modi übersteuern die automatische Netzleistungsregelung bewusst. Feste Lade-/Entladevorgänge sollten nur zeitweise und mit passenden SOC-Zielen genutzt werden.",

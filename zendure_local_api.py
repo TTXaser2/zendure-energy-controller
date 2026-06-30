@@ -17,21 +17,30 @@ class ZendureLocalApiClient:
     configuration; it only retrieves the locally reported device state so it
     can be used as a telemetry fallback when Zendure MQTT sensor topics are
     missing after a broker/Raspberry restart.
+
+    RC4 makes this client neighbour-friendly: failed requests count as poll
+    attempts, repeated failures enter a backoff window, and the master telemetry
+    flag is respected before any cyclic /properties/report request is made.
     """
 
     def __init__(self) -> None:
         self.session = requests.Session()
         self.last_poll_epoch: Optional[float] = None
+        self.backoff_until_epoch: Optional[float] = None
+        self.consecutive_error_count: int = 0
 
     def should_poll(self, config: Dict[str, Any]) -> bool:
         if not config.get("ZENDURE_LOCAL_API_USE_FOR_TELEMETRY", False):
             return False
         if not str(config.get("ZENDURE_LOCAL_IP", "")).strip():
             return False
+        now = time.time()
+        if self.backoff_until_epoch is not None and now < self.backoff_until_epoch:
+            return False
         interval = max(1, int(config.get("ZENDURE_LOCAL_API_POLL_INTERVAL_SECONDS", 5)))
         if self.last_poll_epoch is None:
             return True
-        return (time.time() - self.last_poll_epoch) >= interval
+        return (now - self.last_poll_epoch) >= interval
 
     def fetch_report(self, config: Dict[str, Any]) -> Dict[str, Any]:
         ip = str(config.get("ZENDURE_LOCAL_IP", "")).strip()
@@ -45,13 +54,27 @@ class ZendureLocalApiClient:
         timeout_cap = float(config.get("ZENDURE_LOCAL_API_CONTROL_TIMEOUT_CAP_SECONDS", 1.5))
         timeout = max(0.2, min(configured_timeout, timeout_cap))
         url = f"http://{ip}/properties/report"
-        response = self.session.get(url, timeout=timeout)
-        response.raise_for_status()
         self.last_poll_epoch = time.time()
         try:
-            return response.json()
+            response = self.session.get(url, timeout=timeout)
+            response.raise_for_status()
+        except Exception:
+            self._register_failure(config)
+            raise
+        try:
+            payload = response.json()
         except Exception as exc:
+            self._register_failure(config)
             raise RuntimeError(f"Ungültige JSON-Antwort von {url}: {exc}")
+        self.consecutive_error_count = 0
+        self.backoff_until_epoch = None
+        return payload
+
+    def _register_failure(self, config: Dict[str, Any]) -> None:
+        self.consecutive_error_count += 1
+        backoff = max(0, int(config.get("ZENDURE_LOCAL_API_ERROR_BACKOFF_SECONDS", 30) or 0))
+        if backoff > 0:
+            self.backoff_until_epoch = time.time() + backoff
 
 
 def zendure_temp_to_celsius(value: Any) -> Optional[float]:

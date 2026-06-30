@@ -7,11 +7,12 @@
 """Passive SMA Energy Meter / Sunny Home Manager 2.0 UDP listener.
 
 The SMA Energy Meter protocol is broadcast locally via UDP multicast, commonly
-239.12.255.254:9522.  This client runs as a background listener, stores the
+239.12.255.254:9522. This client runs as a background listener, stores the
 latest decoded grid power and never blocks the controller cycle waiting for a
-packet.  RC3 adds the safeguards required for installations with multiple SMA
-Energy Meters: interface-name handling, SUSy-ID/serial decoding and optional
-filtering for the selected meter at the grid connection point.
+packet. RC5 keeps the multi-meter safeguards and restores the RC3-compatible
+socket default because the live setup showed EVCC + ZEC stability with that
+mode. Additional socket modes and packet-gap diagnostics are exposed for
+controlled coexistence testing with further local SMA listeners.
 """
 
 from __future__ import annotations
@@ -75,6 +76,22 @@ class SmaEnergyMeterSnapshot:
     ignored_count: int = 0
     error_count: int = 0
     last_error: str = "none"
+    configured_socket_mode: str = "rc3_compatible"
+    effective_socket_mode: str = "rc3_compatible"
+    bind_address: str = ""
+    bind_mode: str = ""
+    reuseaddr_enabled: bool = False
+    reuseport_requested: bool = False
+    reuseport_supported: bool = False
+    reuseport_enabled: bool = False
+    reuseport_error: str = ""
+    multicast_if_set: bool = False
+    packet_rate_per_min: float = 0.0
+    packet_gap_warn_s: float = 5.0
+    last_packet_gap_s: Optional[float] = None
+    max_packet_gap_s: Optional[float] = None
+    last_large_gap_s: Optional[float] = None
+    last_large_gap_epoch: Optional[float] = None
 
     @property
     def age_s(self) -> Optional[int]:
@@ -216,6 +233,32 @@ def _device_record(reading: SmaEnergyMeterReading) -> Dict[str, Any]:
     }
 
 
+SUPPORTED_SOCKET_MODES = {
+    "auto",
+    "rc3_compatible",
+    "reuseport",
+    "reuseaddr_only",
+    "unimeter_like",
+    "group_bind",
+}
+
+
+def normalize_socket_mode(value: Any) -> str:
+    text = str(value or "rc3_compatible").strip().lower().replace("-", "_")
+    if text == "auto":
+        return "rc3_compatible"
+    if text not in SUPPORTED_SOCKET_MODES:
+        return "rc3_compatible"
+    return text
+
+
+def _cfg_float(cfg: Dict[str, Any], key: str, default: float) -> float:
+    try:
+        return float(cfg.get(key, default))
+    except Exception:
+        return float(default)
+
+
 class SmaEnergyMeterClient:
     def __init__(self) -> None:
         self._lock = threading.RLock()
@@ -233,7 +276,9 @@ class SmaEnergyMeterClient:
         interface = str(cfg.get("SMA_ENERGY_METER_INTERFACE", "") or "")
         susy_filter = str(cfg.get("SMA_ENERGY_METER_SUSY_ID", "") or "").strip()
         serial_filter = str(cfg.get("SMA_ENERGY_METER_SERIAL", "") or "").strip()
-        key = (group, port, interface, susy_filter, serial_filter)
+        socket_mode = normalize_socket_mode(cfg.get("SMA_ENERGY_METER_SOCKET_MODE", "rc3_compatible"))
+        gap_warn_s = max(1.0, _cfg_float(cfg, "SMA_ENERGY_METER_PACKET_GAP_WARN_SECONDS", 5.0))
+        key = (group, port, interface, susy_filter, serial_filter, socket_mode, gap_warn_s)
         with self._lock:
             self._snapshot.enabled = enabled
             self._snapshot.configured_group = group
@@ -241,6 +286,8 @@ class SmaEnergyMeterClient:
             self._snapshot.configured_interface = interface
             self._snapshot.configured_susy_id = susy_filter
             self._snapshot.configured_serial = serial_filter
+            self._snapshot.configured_socket_mode = socket_mode
+            self._snapshot.packet_gap_warn_s = gap_warn_s
         if not enabled:
             self.stop()
             return
@@ -256,6 +303,15 @@ class SmaEnergyMeterClient:
             self._snapshot.last_error = "starting"
             self._snapshot.devices_json = "{}"
             self._snapshot.detected_device_count = 0
+            self._snapshot.packet_count = 0
+            self._snapshot.decode_count = 0
+            self._snapshot.ignored_count = 0
+            self._snapshot.error_count = 0
+            self._snapshot.packet_rate_per_min = 0.0
+            self._snapshot.last_packet_gap_s = None
+            self._snapshot.max_packet_gap_s = None
+            self._snapshot.last_large_gap_s = None
+            self._snapshot.last_large_gap_epoch = None
         self._thread = threading.Thread(target=self._listen_loop, args=(key,), name="sma-energy-meter-listener", daemon=True)
         self._thread.start()
 
@@ -287,35 +343,72 @@ class SmaEnergyMeterClient:
         with self._lock:
             return SmaEnergyMeterSnapshot(**self._snapshot.__dict__)
 
-    def _listen_loop(self, key: Tuple[str, int, str, str, str]) -> None:
-        group, port, interface, susy_filter_text, serial_filter_text = key
+    def _listen_loop(self, key: Tuple[Any, ...]) -> None:
+        group, port, interface, susy_filter_text, serial_filter_text, socket_mode, gap_warn_s = key
         susy_filter = int(susy_filter_text, 0) if susy_filter_text else None
         serial_filter = int(serial_filter_text, 0) if serial_filter_text else None
         try:
             iface_ip = _get_interface_ipv4(interface)
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+            reuseaddr_enabled = False
+            reuseport_requested = socket_mode in {"rc3_compatible", "reuseport"}
+            reuseport_supported = bool(hasattr(socket, "SO_REUSEPORT"))
+            reuseport_enabled = False
+            reuseport_error = ""
+            bind_address = ""
+            bind_mode = ""
+            multicast_if_set = False
+
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            if hasattr(socket, "SO_REUSEPORT"):
+            reuseaddr_enabled = True
+            if reuseport_requested and reuseport_supported:
                 try:
                     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-                except OSError:
-                    pass
+                    reuseport_enabled = True
+                except OSError as exc:
+                    reuseport_error = str(exc)
+            elif reuseport_requested and not reuseport_supported:
+                reuseport_error = "SO_REUSEPORT not supported"
+
             try:
-                sock.bind(("", port))
-            except OSError:
+                if socket_mode == "group_bind":
+                    sock.bind((group, port))
+                    bind_address = group
+                    bind_mode = "group"
+                else:
+                    sock.bind(("", port))
+                    bind_address = "0.0.0.0"
+                    bind_mode = "wildcard"
+            except OSError as exc:
                 sock.bind((group, port))
+                bind_address = group
+                bind_mode = f"fallback_group_after_{exc.__class__.__name__}"
+
             mreq = socket.inet_aton(group) + socket.inet_aton(iface_ip)
             sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
-            try:
-                sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(iface_ip))
-            except OSError:
-                pass
+            if socket_mode != "unimeter_like":
+                try:
+                    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(iface_ip))
+                    multicast_if_set = True
+                except OSError:
+                    multicast_if_set = False
             sock.settimeout(1.0)
+            listener_started = time.time()
+            last_packet_epoch: Optional[float] = None
             with self._lock:
                 self._sock = sock
                 self._snapshot.running = True
                 self._snapshot.resolved_interface_ip = iface_ip
                 self._snapshot.last_error = "none"
+                self._snapshot.effective_socket_mode = str(socket_mode)
+                self._snapshot.bind_address = bind_address
+                self._snapshot.bind_mode = bind_mode
+                self._snapshot.reuseaddr_enabled = reuseaddr_enabled
+                self._snapshot.reuseport_requested = reuseport_requested
+                self._snapshot.reuseport_supported = reuseport_supported
+                self._snapshot.reuseport_enabled = reuseport_enabled
+                self._snapshot.reuseport_error = reuseport_error
+                self._snapshot.multicast_if_set = multicast_if_set
             while not self._stop.is_set():
                 try:
                     packet, addr = sock.recvfrom(4096)
@@ -326,10 +419,22 @@ class SmaEnergyMeterClient:
                         self._record_error(str(exc))
                     break
                 now = time.time()
+                packet_gap = None if last_packet_epoch is None else max(0.0, now - last_packet_epoch)
+                last_packet_epoch = now
                 source_ip = addr[0] if addr else ""
                 reading = parse_sma_energy_meter_packet(packet, now, source_ip=source_ip)
                 with self._lock:
                     self._snapshot.packet_count += 1
+                    elapsed = max(1.0, now - listener_started)
+                    self._snapshot.packet_rate_per_min = round(float(self._snapshot.packet_count) * 60.0 / elapsed, 1)
+                    if packet_gap is not None:
+                        rounded_gap = round(float(packet_gap), 3)
+                        self._snapshot.last_packet_gap_s = rounded_gap
+                        if self._snapshot.max_packet_gap_s is None or rounded_gap > float(self._snapshot.max_packet_gap_s):
+                            self._snapshot.max_packet_gap_s = rounded_gap
+                        if rounded_gap >= float(gap_warn_s):
+                            self._snapshot.last_large_gap_s = rounded_gap
+                            self._snapshot.last_large_gap_epoch = now
                     if reading is not None:
                         self._snapshot.decode_count += 1
                         self._record_device_locked(reading)

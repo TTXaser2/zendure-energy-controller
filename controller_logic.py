@@ -47,6 +47,9 @@ class ZendureController:
         # 0 W.  If the first AUTO decision falls into HOLD/DEADBAND, publish one
         # explicit neutral command so UI, state and physical device cannot drift.
         self._startup_deadband_neutralized = False
+        self._last_sma_diag_log_epoch = 0.0
+        self._last_sma_diag_key = None
+        self._last_sma_large_gap_epoch = None
 
     def log(self, message: str) -> None:
         cfg = self.config_manager.get()
@@ -144,7 +147,7 @@ class ZendureController:
 
         # SOC-/Zendure-Telemetrie darf vor fest vorgegebenen Betriebsarten aktualisiert
         # werden, weil diese Betriebsarten ohne Netzanschlusspunktmessung funktionieren.
-        # Grid/Shelly/UniMeter wird für die Statusseite in festen Modi zusätzlich
+        # Grid/Shelly-kompatible HTTP-/SMA-Daten werden für die Statusseite in festen Modi zusätzlich
         # best-effort aktualisiert, aber nicht als Pflichtquelle für diese Modi benutzt.
         self._timed_phase("zendure_local_api_ms", self.update_zendure_telemetry_from_local_api, cfg)
         self._timed_phase("sma_energy_meter_ms", self.update_sma_energy_meter_status, cfg)
@@ -241,15 +244,99 @@ class ZendureController:
                 self.state.sma_energy_meter_selected_device_matched = snap.selected_device_matched
                 self.state.sma_energy_meter_detected_device_count = snap.detected_device_count
                 self.state.sma_energy_meter_devices_json = snap.devices_json
+                self.state.sma_energy_meter_socket_mode = snap.configured_socket_mode
+                self.state.sma_energy_meter_effective_socket_mode = snap.effective_socket_mode
+                self.state.sma_energy_meter_bind_address = snap.bind_address
+                self.state.sma_energy_meter_bind_mode = snap.bind_mode
+                self.state.sma_energy_meter_reuseaddr_enabled = snap.reuseaddr_enabled
+                self.state.sma_energy_meter_reuseport_requested = snap.reuseport_requested
+                self.state.sma_energy_meter_reuseport_supported = snap.reuseport_supported
+                self.state.sma_energy_meter_reuseport_enabled = snap.reuseport_enabled
+                self.state.sma_energy_meter_reuseport_error = snap.reuseport_error
+                self.state.sma_energy_meter_multicast_if_set = snap.multicast_if_set
+                self.state.sma_energy_meter_packet_rate_per_min = snap.packet_rate_per_min
+                self.state.sma_energy_meter_packet_gap_warn_s = snap.packet_gap_warn_s
+                self.state.sma_energy_meter_last_packet_gap_s = snap.last_packet_gap_s
+                self.state.sma_energy_meter_max_packet_gap_s = snap.max_packet_gap_s
+                self.state.sma_energy_meter_last_large_gap_s = snap.last_large_gap_s
+                self.state.sma_energy_meter_last_large_gap_age_seconds = (
+                    max(0, int(time.time() - snap.last_large_gap_epoch)) if snap.last_large_gap_epoch is not None else None
+                )
+            self._log_sma_diagnostics_if_needed(cfg, snap)
         except Exception as exc:
             with self.state.lock:
                 self.state.sma_energy_meter_error_count += 1
                 self.state.sma_energy_meter_last_error = str(exc)
 
+    def _log_sma_diagnostics_if_needed(self, cfg: Dict[str, Any], snap) -> None:
+        """Write compact SMA coexistence diagnostics to runtime log when enabled.
+
+        Requires FILE_LOG_ENABLED=true to persist in zendure_runtime.log. DEBUG=true
+        additionally mirrors the line to stdout via self.log().
+        """
+        if not snap.enabled:
+            return
+        if not cfg.get("SMA_ENERGY_METER_LOG_DIAGNOSTICS", False):
+            return
+        now = time.time()
+        interval_s = max(10, int(cfg.get("SMA_ENERGY_METER_LOG_INTERVAL_SECONDS", 60) or 60))
+        diag_key = (
+            snap.enabled, snap.running, snap.configured_socket_mode, snap.effective_socket_mode,
+            snap.bind_address, snap.bind_mode, snap.reuseport_enabled, snap.resolved_interface_ip,
+            snap.configured_serial, snap.configured_susy_id,
+        )
+        gap_epoch = snap.last_large_gap_epoch
+        should_log = False
+        if diag_key != self._last_sma_diag_key:
+            should_log = True
+            self._last_sma_diag_key = diag_key
+        if gap_epoch is not None and gap_epoch != self._last_sma_large_gap_epoch:
+            should_log = True
+            self._last_sma_large_gap_epoch = gap_epoch
+        if now - float(self._last_sma_diag_log_epoch or 0.0) >= interval_s:
+            should_log = True
+        if not should_log:
+            return
+        self._last_sma_diag_log_epoch = now
+        age = snap.age_s
+        parts = [
+            "[SMA_DIAG]",
+            f"enabled={int(bool(snap.enabled))}",
+            f"running={int(bool(snap.running))}",
+            f"source={cfg.get('GRID_METER_SOURCE', '')}",
+            f"socket_mode={snap.configured_socket_mode}",
+            f"effective_socket_mode={snap.effective_socket_mode}",
+            f"bind={snap.bind_address or '-'}:{snap.configured_port}",
+            f"bind_mode={snap.bind_mode or '-'}",
+            f"group={snap.configured_group}",
+            f"iface={snap.configured_interface or '-'}",
+            f"iface_ip={snap.resolved_interface_ip or '-'}",
+            f"reuseaddr={int(bool(snap.reuseaddr_enabled))}",
+            f"reuseport_requested={int(bool(snap.reuseport_requested))}",
+            f"reuseport_supported={int(bool(snap.reuseport_supported))}",
+            f"reuseport_enabled={int(bool(snap.reuseport_enabled))}",
+            f"multicast_if={int(bool(snap.multicast_if_set))}",
+            f"packets={snap.packet_count}",
+            f"decoded={snap.decode_count}",
+            f"ignored={snap.ignored_count}",
+            f"errors={snap.error_count}",
+            f"rate_per_min={snap.packet_rate_per_min}",
+            f"age_s={age if age is not None else '-'}",
+            f"last_gap_s={snap.last_packet_gap_s if snap.last_packet_gap_s is not None else '-'}",
+            f"max_gap_s={snap.max_packet_gap_s if snap.max_packet_gap_s is not None else '-'}",
+            f"large_gap_s={snap.last_large_gap_s if snap.last_large_gap_s is not None else '-'}",
+            f"selected={snap.selected_device_key or '-'}",
+            f"detected_devices={snap.detected_device_count}",
+            f"last_error={str(snap.last_error).replace(' ', '_')}",
+        ]
+        if snap.reuseport_error:
+            parts.append(f"reuseport_error={str(snap.reuseport_error).replace(' ', '_')}")
+        self.log(" ".join(parts))
+
     def read_grid_power(self, cfg: Dict[str, Any], *, for_control: bool = True) -> bool:
         """Read the configured grid power source.
 
-        Default remains Shelly/UniMeter HTTP.  RC2 adds an optional direct SMA
+        Default remains the Shelly-compatible HTTP source.  RC2 adds an optional direct SMA
         Energy Meter / Sunny Home Manager UDP source.  The direct SMA listener
         is cached/asynchronous, so this read never waits for a fresh UDP packet.
 
@@ -260,7 +347,12 @@ class ZendureController:
         refresh must never stop those modes.
         """
         source = str(cfg.get("GRID_METER_SOURCE", "shelly_http") or "shelly_http")
-        source_label = "SMA Energy Meter" if source == "sma_energy_meter_udp" else "Shelly/Uni-Meter"
+        if source == "sma_energy_meter_udp":
+            source_label = "SMA Home Manager direkt"
+            source_display = "SMA Home Manager direkt (UDP)"
+        else:
+            source_label = "Shelly-kompatible HTTP-Quelle"
+            source_display = "Shelly-kompatible HTTP-Quelle"
         stale_timeout_key = "SMA_ENERGY_METER_STALE_TIMEOUT_SECONDS" if source == "sma_energy_meter_udp" else "SHELLY_STALE_TIMEOUT_SECONDS"
         limiter_code = "SMA_GRID_STALE" if source == "sma_energy_meter_udp" else "SHELLY_STALE"
         try:
@@ -278,6 +370,7 @@ class ZendureController:
                 self.state.last_shelly_update_epoch = now
                 self.state.last_shelly_update_time = now_text
                 self.state.grid_meter_source = source
+                self.state.raw_grid_source = source_display
                 self.state.grid_power_valid = True
                 self.state.grid_power_used_for_control = bool(for_control)
                 self.state.grid_power_age_seconds = 0
@@ -289,6 +382,8 @@ class ZendureController:
         except Exception as exc:
             self.state.set_error(f"{source_label} Fehler: {exc}")
             with self.state.lock:
+                self.state.grid_meter_source = source
+                self.state.raw_grid_source = source_display
                 self.state.grid_power_used_for_control = False
                 if self.state.last_shelly_update_epoch is not None:
                     self.state.grid_power_age_seconds = max(0, int(time.time() - self.state.last_shelly_update_epoch))
@@ -497,7 +592,7 @@ class ZendureController:
 
         Requires a current grid measurement. It must not be called from fixed
         modes or night mode, because those modes deliberately do not depend on
-        Shelly/UniMeter data.
+        Shelly-compatible HTTP grid data.
         """
         with self.state.lock:
             grid_power = self.state.grid_power

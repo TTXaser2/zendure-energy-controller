@@ -1,4 +1,4 @@
-# Zendure Energy Controller V12.11.0-RC3
+# Zendure Energy Controller V12.11.0-RC5
 
 Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, ZEC-MEASUREMENT-V4-Messdaten-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
@@ -6,9 +6,27 @@ Copyright (c) 2026 Eduard Fuchs <info@eduardfuchs.de>
 
 Lizenziert unter AGPL-3.0-or-later. Siehe `LICENSE`, `NOTICE` und `DISCLAIMER.md`.
 
+## Wichtige Änderungen in V12.11.0-RC5
+
+V12.11.0-RC5 ist ein Hotfix-/Diagnoserelease nach dem RC4-Livetest. RC5 stellt das im Setup mit EVCC stabile RC3-kompatible SMA-Socketverhalten als Default wieder her (`SMA_ENERGY_METER_SOCKET_MODE=rc3_compatible`) und ergänzt Diagnosefelder für Socket-Modus, Reuse-Optionen, Bind-Adresse, Paketlücken und Paket-/Minutenrate.
+
+Neu sind außerdem `SMA_ENERGY_METER_LOG_DIAGNOSTICS`, `SMA_ENERGY_METER_LOG_INTERVAL_SECONDS` und `SMA_ENERGY_METER_PACKET_GAP_WARN_SECONDS`. Bei aktivem Datei-Logging schreibt ZEC kompakte `[SMA_DIAG]`-Zeilen ins Runtime-Log. Das Diagnosepaket nimmt zusätzlich einen Status-Snapshot, eine SMA-Diagnosezusammenfassung und gefilterte SMA-Runtime-Ereignisse auf.
+
+Bei `GRID_METER_SOURCE=sma_energy_meter_udp` ist der SMA-Listener automatisch aktiv. Der bisherige Passivschalter ist nur noch als zusätzliche passive SMA-Beobachtung relevant, wenn weiterhin die Shelly-kompatible HTTP-Quelle als Regelquelle genutzt wird.
+
+## Wichtige Änderungen in V12.11.0-RC4
+
+V12.11.0-RC4 ist eine Integrations- und Diagnose-Nacharbeit zu RC3. Der Live-Regelalgorithmus, Nachtmodus, Cross-Charge, Restüberschuss-Ernte, MQTT-Subscriptions und MQTT-Kommandostruktur bleiben unverändert.
+
+- SMA-Direktlistener koexistenzfreundlicher: `SO_REUSEPORT` wird nicht mehr standardmäßig gesetzt.
+- Die Netzleistungsquelle wird auf Statusseite, State und V4-Measurement dynamisch angezeigt/geschrieben. Bei `GRID_METER_SOURCE=sma_energy_meter_udp` steht nicht mehr fälschlich `Shelly/UniMeter` bzw. `UNIMETER`, sondern SMA.
+- Shelly-Kompatibilität bleibt erhalten: `GRID_METER_SOURCE=shelly_http` heißt nun neutral Shelly-kompatible HTTP-Quelle und kann echte Shelly Pro 3EM oder kompatible HTTP-Endpunkte nutzen.
+- Die lokale Zendure-API-Telemetrie ist in Defaults/Beispielkonfiguration deaktiviert und erhält Fehler-Backoff, damit Timeouts nicht zu aggressiven Wiederholungsabfragen führen.
+- UniMeter ist nicht mehr als bevorzugter UI-Begriff formuliert. Im getesteten Setup kann UniMeter deaktiviert bleiben, wenn ZEC direkt SMA liest und keine andere Komponente die Shelly-Emulation benötigt.
+
 ## Wichtige Änderungen in V12.11.0-RC3
 
-V12.11.0-RC3 ergänzt auf Basis von RC2 die notwendige Absicherung der direkten SMA-Home-Manager-/SMA-Energy-Meter-Quelle für die Netzleistungsdaten. Shelly/UniMeter HTTP bleibt der unveränderte Default und damit die sichere Regelquelle. Die neue SMA-Direktquelle kann zunächst passiv parallel beobachtet werden, um Zuverlässigkeit, Paketalter, Vorzeichen und Abweichungen zum bisherigen UniMeter-/Shelly-Pfad zu prüfen. Optional kann `GRID_METER_SOURCE=sma_energy_meter_udp` als experimentelle direkte Regelquelle gewählt werden; bei mehreren SMA Energy Metern wird die produktive Nutzung ohne Seriennummernfilter blockiert. Empfohlen ist zuerst ein Parallelvergleich über mehrere Stunden oder Tage.
+V12.11.0-RC3 ergänzt auf Basis von RC2 die notwendige Absicherung der direkten SMA-Home-Manager-/SMA-Energy-Meter-Quelle für die Netzleistungsdaten. Die Shelly-kompatible HTTP-Quelle bleibt als alternative Regelquelle erhalten. Die neue SMA-Direktquelle kann zunächst passiv parallel beobachtet werden, um Zuverlässigkeit, Paketalter, Vorzeichen und Abweichungen zum bisherigen Shelly-kompatiblen HTTP-Pfad zu prüfen. Optional kann `GRID_METER_SOURCE=sma_energy_meter_udp` als experimentelle direkte Regelquelle gewählt werden; bei mehreren SMA Energy Metern wird die produktive Nutzung ohne Seriennummernfilter blockiert. Empfohlen ist zuerst ein Parallelvergleich über mehrere Stunden oder Tage.
 
 Weitere RC3-Nacharbeit:
 

@@ -1,4 +1,4 @@
-# Zendure Energy Controller V12.11.0-RC3 - Installation und Betrieb
+# Zendure Energy Controller V12.11.0-RC5 - Installation und Betrieb
 
 Diese Version ist für den Betrieb unter `/opt/zendure-controller` vorbereitet.
 
@@ -13,21 +13,21 @@ ln -sfn /opt/zendure-controller /home/pi/zendure-controller
 
 Danach kann bequem mit `cd ~/zendure-controller` gearbeitet werden, obwohl die Anwendung sauber unter `/opt` liegt.
 
-## Update auf V12.11.0-RC3 installieren
+## Update auf V12.11.0-RC5 installieren
 
 Ab V12.7 liegt das Update-Script ausschließlich unter `tools/`.
 
 ```bash
 cp /opt/zendure-controller/tools/update_zendure_controller.sh /home/pi/update_zendure_controller.sh
 chmod +x /home/pi/update_zendure_controller.sh
-/home/pi/update_zendure_controller.sh v12_11_0_rc3
+/home/pi/update_zendure_controller.sh v12_11_0_rc5
 ```
 
 Das Update-Script erhält die vorhandene `config.json`, sichert das Installationsverzeichnis, bereinigt alte Dopplungen (`Tools/`, `zendureController.py`) und installiert die systemd-Dateien für Live-Controller und optionalen Replay-Dienst.
 
 Das Paket enthält zusätzlich die finale Excel-Lernsimulation `tools/zendure_regelung_lernwerkzeug_v4_2_7_final.xlsx`. Diese Datei wird nur mitkopiert und nicht durch das Update-Script verändert.
 
-Hinweis: V12.11.0-RC3 ergänzt die direkte SMA-Home-Manager-/SMA-Energy-Meter-Quelle um Interface-Namen wie eth0, Geräteerkennung und Seriennummernfilter. Shelly/UniMeter bleibt Default. V12.11.0-RC1 schreibt weiterhin gültige V4-Measurement-Dateien mit Manifest, Config-Snapshots und Runtime-Events. Die Restüberschuss-Ernte-Regelstrategie bleibt gegenüber RC10 unverändert. Neu sind semantische Settings-Validierung, automatische Harvest-Wirkungsanalyse, Local-API-Timing-Auswertung und eine bereinigte Settings-Struktur. Die Restüberschuss-Ernte ist standardmäßig nicht wirksam, bis sie im Settings-Bereich „Zweitbatterie / Restüberschuss-Ernte“ aktiviert und die maximale Ladeleistung des Primärspeichers eingetragen wurde.
+Hinweis: V12.11.0-RC5 stellt das im Live-Test stabile RC3-kompatible SMA-Socketverhalten als Default wieder her und ergänzt SMA-Diagnosefelder sowie Runtime-Log-Auswertung im Diagnosepaket. V12.11.0-RC4 übernimmt die direkte SMA-Home-Manager-/SMA-Energy-Meter-Quelle aus RC3 und macht sie koexistenzfreundlicher. Die Shelly-kompatible HTTP-Quelle bleibt als alternative Netzleistungsquelle erhalten. V12.11.0-RC1 schreibt weiterhin gültige V4-Measurement-Dateien mit Manifest, Config-Snapshots und Runtime-Events. Die Restüberschuss-Ernte-Regelstrategie bleibt gegenüber RC10 unverändert. Neu sind semantische Settings-Validierung, automatische Harvest-Wirkungsanalyse, Local-API-Timing-Auswertung und eine bereinigte Settings-Struktur. Die Restüberschuss-Ernte ist standardmäßig nicht wirksam, bis sie im Settings-Bereich „Zweitbatterie / Restüberschuss-Ernte“ aktiviert und die maximale Ladeleistung des Primärspeichers eingetragen wurde.
 
 ## Syntaxcheck
 
@@ -176,7 +176,7 @@ Im Bereich `Messdaten / Historie` kann das Speicherziel für Messdaten ausgewäh
 
 ### SMA Home Manager direkt parallel prüfen
 
-Nach der Installation kann die direkte SMA-Quelle zunächst passiv aktiviert werden. Die Live-Regelung bleibt dabei auf Shelly/UniMeter HTTP, solange `GRID_METER_SOURCE=shelly_http` gesetzt ist.
+Nach der Installation kann die direkte SMA-Quelle zunächst passiv aktiviert werden. Die Live-Regelung bleibt dabei auf Shelly-kompatibler HTTP-Quelle, solange `GRID_METER_SOURCE=shelly_http` gesetzt ist.
 
 Empfohlene erste Testkonfiguration:
 
@@ -189,3 +189,17 @@ SMA_ENERGY_METER_INTERFACE = leer lassen
 ```
 
 Danach auf der Statusseite die Karte „SMA Direktquelle“ prüfen: aktueller Direktwert, Alter, Paketanzahl, dekodierte Pakete und Fehler. Erst wenn Alter, Vorzeichen und Vergleich zur bisherigen Netzleistung plausibel sind, sollte die direkte SMA-Quelle als Regelquelle erwogen werden.
+
+### Empfohlene SMA-Diagnose bei Koexistenztests
+
+Für normale Tests mit Runtime-Log-Auswertung:
+
+```text
+FILE_LOG_ENABLED=true
+SMA_ENERGY_METER_LOG_DIAGNOSTICS=true
+SMA_ENERGY_METER_LOG_INTERVAL_SECONDS=30
+SMA_ENERGY_METER_PACKET_GAP_WARN_SECONDS=5
+SMA_ENERGY_METER_SOCKET_MODE=rc3_compatible
+```
+
+`DEBUG=true` ist nur für kurze Live-Fehlersuche nötig, wenn die `[SMA_DIAG]`-Zeilen zusätzlich im systemd-Journal sichtbar sein sollen. Für Diagnosepakete reicht das Datei-Logging.
