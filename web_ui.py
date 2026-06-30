@@ -1299,6 +1299,26 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
         f"Langsamster Teil letzter Zyklus: {html.escape(slowest_label)} {slowest_ms if slowest_label != '-' else '-'} ms"
     )
 
+    sma_direct_enabled = bool(s.get("sma_energy_meter_enabled"))
+    sma_direct_running = bool(s.get("sma_energy_meter_running"))
+    sma_direct_age = s.get("sma_energy_meter_last_update_age_seconds")
+    sma_direct_source = str(cfg.get("GRID_METER_SOURCE", "shelly_http") or "shelly_http")
+    sma_direct_is_control = sma_direct_source == "sma_energy_meter_udp"
+    if sma_direct_running and sma_direct_age is not None and int(sma_direct_age) <= int(cfg.get("SMA_ENERGY_METER_STALE_TIMEOUT_SECONDS", 15)):
+        sma_direct_badge = badge("Aktuell", "#4CAF50")
+    elif sma_direct_enabled:
+        sma_direct_badge = badge("Wartet", "#f0ad00")
+    else:
+        sma_direct_badge = badge("Aus", "#888888")
+    sma_direct_power = s.get("sma_energy_meter_power_w")
+    sma_direct_details = (
+        f"Regelquelle: {'ja' if sma_direct_is_control else 'nein, nur Diagnose'}<br>"
+        f"Direktwert: {html.escape(str(round(float(sma_direct_power), 1)) + ' W') if sma_direct_power is not None else '-'}<br>"
+        f"Alter: {html.escape(str(sma_direct_age if sma_direct_age is not None else '-'))} s · Pakete: {html.escape(str(s.get('sma_energy_meter_packet_count', 0)))} · dekodiert: {html.escape(str(s.get('sma_energy_meter_decode_count', 0)))}<br>"
+        f"Quelle: {html.escape(str(s.get('sma_energy_meter_group', '239.12.255.254')))}:{html.escape(str(s.get('sma_energy_meter_port', 9522)))}<br>"
+        f"Fehler: {html.escape(str(s.get('sma_energy_meter_last_error', 'none')))}"
+    )
+
     measurement_log_details = (
         f"Status: {measurement_status}<br>"
         f"Aktives Ziel: {active_target} · konfiguriert: {configured_target}<br>"
@@ -1319,20 +1339,20 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
         <div class="section-tools"><a href="#" onclick="expandSectionInfo('status-overview'); return false;">Alle Infos auf- und zuklappen</a></div>
         <div class="grid" id="status-overview">
             {status_card(
-                'Konfigurationsstatus',
-                config_status_value,
-                config_status_details,
-                'gray',
-                'Der Konfigurationsstatus fasst die semantische Settings-Prüfung zusammen. Fehler blockieren sichere Funktionen oder Speichern; Warnungen markieren auffällige, aber bewusst nutzbare Kombinationen. Details stehen in den Settings.',
-                settings_group='Regelung'
-            )}
-            {status_card(
                 'Netzleistung',
                 grid_main_value,
                 grid_details,
                 grid_class,
-                'Der Hauptwert ist der aktuelle Shelly-/UniMeter-Messwert am Netzanschlusspunkt. AUTO-spezifische Diagnosewerte wie der geglättete Regelwert werden nur als Diagnose gezeigt und in festen Modi als nicht aktiv markiert. Feste Nachtentladung oder Stop/Hold hängen dadurch nicht von Grid-Daten ab, die Statusseite zeigt sie aber best-effort aktuell an.',
+                'Der Hauptwert ist der aktuelle Messwert der konfigurierten Netzleistungsquelle am Netzanschlusspunkt. AUTO-spezifische Diagnosewerte wie der geglättete Regelwert werden nur als Diagnose gezeigt und in festen Modi als nicht aktiv markiert. Feste Nachtentladung oder Stop/Hold hängen dadurch nicht von Grid-Daten ab, die Statusseite zeigt sie aber best-effort aktuell an.',
                 settings_group='Regelung'
+            )}
+            {status_card(
+                'SMA Direktquelle',
+                sma_direct_badge,
+                sma_direct_details,
+                'gray',
+                'Passiver oder optional produktiver Direktleser für SMA Energy Meter / Sunny Home Manager 2.0 per UDP-Multicast. Standardmäßig bleibt Shelly/UniMeter die Regelquelle; die Direktquelle kann zunächst parallel beobachtet werden, um Zuverlässigkeit, Alter und Vorzeichen zu prüfen.',
+                settings_group='Netzwerk'
             )}
             {status_card(
                 'Zendure SOC',
@@ -1415,6 +1435,14 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
                 temp_value_class,
                 'Zeigt die höchste aktuell bekannte Temperatur aus Headunit und Akkupacks. Grün bedeutet bis einschließlich 49 °C, gelb 50-55 °C, rot ab 56 °C. Für jede erkannte Batterie werden aktuelle Temperatur sowie Highest/Lowest seit Programmstart mit Zeitstempel angezeigt.',
                 settings_group='Netzwerk'
+            )}
+            {status_card(
+                'Konfigurationsstatus',
+                config_status_value,
+                config_status_details,
+                'gray',
+                'Der Konfigurationsstatus fasst die semantische Settings-Prüfung zusammen. Fehler blockieren sichere Funktionen oder Speichern; Warnungen markieren auffällige, aber bewusst nutzbare Kombinationen. Details stehen in den Settings.',
+                settings_group='Regelung'
             )}
         </div>
     </div>
@@ -1588,7 +1616,7 @@ def build_graph_page(cfg: Dict[str, Any]) -> str:
         <h2>Legende zum großen Graphen</h2>
         <ul class="small legend-list">
             <li><b>Netzleistung (Watt)</b>: Geglättete Netzleistung am Hausanschlusspunkt in Watt. Positive Werte bedeuten Netzbezug, negative Werte Einspeisung.</li>
-            <li><b>Netzleistung Rohwert (Watt)</b>: Ungefilterter Shelly-/Uni-Meter-Messwert in Watt. Hilfreich, um Lastsprünge und Filterwirkung zu beurteilen.</li>
+            <li><b>Netzleistung Rohwert (Watt)</b>: Ungefilterter Messwert der Netzleistungsquelle in Watt. Hilfreich, um Lastsprünge und Filterwirkung zu beurteilen.</li>
             <li><b>Zendure Sollleistung (Watt)</b>: Vom Controller angeforderte signierte Leistung. Positive Werte bedeuten Laden, negative Werte Entladen.</li>
             <li><b>Zendure Istleistung (Watt)</b>: Aus den Headunit-Sensoren abgeleitete reale signierte Systemleistung. Positive Werte bedeuten Laden, negative Werte Entladen. Bei aktiver Entladeanforderung wird eine positive interne Pack-&gt;Headunit-Leistung als Entladung interpretiert, damit Nachtentladung nicht fälschlich als Ladung erscheint.</li>
             <li><b>Pack/DC Rohleistung (Watt)</b>: Zendure-Rohsensor <code>packInputPower</code> bzw. Pack-<code>power</code>. Dieser Wert beschreibt interne DC-/Pack-Flüsse und ist nicht immer identisch mit der externen Systemleistung. Im Nachtmodus kann ein positiver Rohwert bedeuten: Pack liefert Leistung an die Headunit.</li>

@@ -234,8 +234,19 @@ def validate_config_semantics(
     if use_local_api and local_api_timeout >= max(1.0, float(interval_for_timeout)):
         issues.append(_issue("WARNING", "Der vollständige Timeout der lokalen Zendure-API ist größer oder gleich dem Regelintervall. Wenn die API im Regelpfad genutzt wird oder der Fallback anspringt, können einzelne Zyklen deutlich länger dauern.", ["ZENDURE_LOCAL_API_TIMEOUT_SECONDS", "INTERVAL_SECONDS"], "Netzwerk", "LOCAL_API_FULL_TIMEOUT_ABOVE_INTERVAL"))
 
-    if not _str_value(cfg, "SHELLY_IP"):
-        issues.append(_issue("ERROR", "Die Shelly-/Uni-Meter-IP darf nicht leer sein, weil die Netzleistung die zentrale Regelgröße ist.", ["SHELLY_IP"], "Netzwerk", "SHELLY_IP_MISSING"))
+    grid_source = str(cfg.get("GRID_METER_SOURCE", "shelly_http") or "shelly_http")
+    if grid_source not in {"shelly_http", "sma_energy_meter_udp"}:
+        issues.append(_issue("ERROR", "Die Netzleistungsquelle ist unbekannt. Bitte Shelly/UniMeter HTTP oder SMA Home Manager direkt auswählen.", ["GRID_METER_SOURCE"], "Netzwerk", "GRID_SOURCE_INVALID"))
+    if grid_source == "shelly_http" and not _str_value(cfg, "SHELLY_IP"):
+        issues.append(_issue("ERROR", "Die Shelly-/Uni-Meter-IP darf nicht leer sein, solange Shelly/UniMeter HTTP als Netzleistungsquelle verwendet wird.", ["SHELLY_IP", "GRID_METER_SOURCE"], "Netzwerk", "SHELLY_IP_MISSING"))
+    if grid_source == "sma_energy_meter_udp":
+        if not _str_value(cfg, "SMA_ENERGY_METER_GROUP"):
+            issues.append(_issue("ERROR", "Für die direkte SMA-Netzleistungsquelle muss die Multicast-Gruppe konfiguriert sein, typischerweise 239.12.255.254.", ["SMA_ENERGY_METER_GROUP"], "Netzwerk", "SMA_ENERGY_METER_GROUP_MISSING"))
+        if _int_value(cfg, "SMA_ENERGY_METER_PORT", 0) <= 0:
+            issues.append(_issue("ERROR", "Für die direkte SMA-Netzleistungsquelle muss ein gültiger UDP-Port konfiguriert sein, typischerweise 9522.", ["SMA_ENERGY_METER_PORT"], "Netzwerk", "SMA_ENERGY_METER_PORT_INVALID"))
+        issues.append(_issue("WARNING", "SMA Home Manager direkt ist als produktive Netzleistungsquelle ausgewählt. Bitte erst mehrere Stunden/Tage parallel gegen Shelly/UniMeter prüfen: Vorzeichen, Paketalter, Aussetzer und Regelverhalten.", ["GRID_METER_SOURCE"], "Netzwerk", "SMA_DIRECT_AS_CONTROL_SOURCE"))
+    elif bool(cfg.get("SMA_ENERGY_METER_PASSIVE_ENABLED", False)):
+        issues.append(_issue("INFO", "SMA Home Manager Direktdiagnose ist passiv aktiv. Die Regelung verwendet weiterhin die gewählte Netzleistungsquelle; die direkten SMA-Werte dienen zum Vergleich von Zuverlässigkeit, Vorzeichen und Paketalter.", ["SMA_ENERGY_METER_PASSIVE_ENABLED"], "Netzwerk", "SMA_DIRECT_PASSIVE_ENABLED"))
     if not _str_value(cfg, "MQTT_BROKER"):
         issues.append(_issue("ERROR", "Der MQTT-Broker darf nicht leer sein, weil Zendure-Steuerbefehle per MQTT gesendet werden.", ["MQTT_BROKER"], "Netzwerk", "MQTT_BROKER_MISSING"))
     if not _str_value(cfg, "DEVICE_ID"):

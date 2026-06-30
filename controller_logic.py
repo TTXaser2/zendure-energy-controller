@@ -13,6 +13,7 @@ from csv_logger import CsvRotatingLogger
 from app_logger import RotatingAppLogger
 from mqtt_bridge import MqttBridge
 from shelly_client import ShellyClient
+from sma_energy_meter import SmaEnergyMeterClient
 from measurement import classify_charge_acceptance
 from state import ControllerState
 from zendure_local_api import ZendureLocalApiClient, zendure_temp_to_celsius
@@ -29,11 +30,13 @@ class ZendureController:
         csv_logger: CsvRotatingLogger,
         zendure_api_client: ZendureLocalApiClient,
         app_logger: RotatingAppLogger = None,
+        sma_energy_meter_client: Optional[SmaEnergyMeterClient] = None,
     ) -> None:
         self.config_manager = config_manager
         self.state = state
         self.mqtt = mqtt_bridge
         self.shelly = shelly_client
+        self.sma_energy_meter = sma_energy_meter_client or SmaEnergyMeterClient()
         self.csv_logger = csv_logger
         self.zendure_api = zendure_api_client
         self.app_logger = app_logger or RotatingAppLogger()
@@ -65,6 +68,10 @@ class ZendureController:
     def close(self) -> None:
         try:
             self.csv_logger.close()
+        except Exception:
+            pass
+        try:
+            self.sma_energy_meter.stop()
         except Exception:
             pass
 
@@ -140,6 +147,7 @@ class ZendureController:
         # Grid/Shelly/UniMeter wird für die Statusseite in festen Modi zusätzlich
         # best-effort aktualisiert, aber nicht als Pflichtquelle für diese Modi benutzt.
         self._timed_phase("zendure_local_api_ms", self.update_zendure_telemetry_from_local_api, cfg)
+        self._timed_phase("sma_energy_meter_ms", self.update_sma_energy_meter_status, cfg)
         # Per-cycle housekeeping: display/CSV metrics that are derived from
         # asynchronous MQTT/API raw values must be refreshed before any early
         # return path (manual modes, night mode, safe-state). Cross-charge
@@ -204,8 +212,36 @@ class ZendureController:
 
         self.handle_charge(cfg, grid_power)
 
+    def update_sma_energy_meter_status(self, cfg: Dict[str, Any]) -> None:
+        """Keep the passive SMA direct source listener and status snapshot current."""
+        try:
+            self.sma_energy_meter.ensure_started(cfg)
+            snap = self.sma_energy_meter.snapshot()
+            with self.state.lock:
+                self.state.sma_energy_meter_enabled = snap.enabled
+                self.state.sma_energy_meter_running = snap.running
+                self.state.sma_energy_meter_power_w = snap.last_power_w
+                self.state.sma_energy_meter_consumption_power_w = snap.last_consumption_power_w
+                self.state.sma_energy_meter_feedin_power_w = snap.last_feedin_power_w
+                self.state.sma_energy_meter_last_epoch = snap.last_received_epoch
+                self.state.sma_energy_meter_packet_count = snap.packet_count
+                self.state.sma_energy_meter_decode_count = snap.decode_count
+                self.state.sma_energy_meter_error_count = snap.error_count
+                self.state.sma_energy_meter_last_error = snap.last_error
+                self.state.sma_energy_meter_group = snap.configured_group
+                self.state.sma_energy_meter_port = snap.configured_port
+                self.state.sma_energy_meter_interface = snap.configured_interface
+        except Exception as exc:
+            with self.state.lock:
+                self.state.sma_energy_meter_error_count += 1
+                self.state.sma_energy_meter_last_error = str(exc)
+
     def read_grid_power(self, cfg: Dict[str, Any], *, for_control: bool = True) -> bool:
-        """Read the Shelly/UniMeter grid value.
+        """Read the configured grid power source.
+
+        Default remains Shelly/UniMeter HTTP.  RC2 adds an optional direct SMA
+        Energy Meter / Sunny Home Manager UDP source.  The direct SMA listener
+        is cached/asynchronous, so this read never waits for a fresh UDP packet.
 
         for_control=True keeps the historical AUTO safety behavior: stale grid
         data may move AUTO into Safe-State. for_control=False is a best-effort
@@ -213,8 +249,15 @@ class ZendureController:
         require grid data, e.g. fixed night discharge or STOP/HOLD. A display
         refresh must never stop those modes.
         """
+        source = str(cfg.get("GRID_METER_SOURCE", "shelly_http") or "shelly_http")
+        source_label = "SMA Energy Meter" if source == "sma_energy_meter_udp" else "Shelly/Uni-Meter"
+        stale_timeout_key = "SMA_ENERGY_METER_STALE_TIMEOUT_SECONDS" if source == "sma_energy_meter_udp" else "SHELLY_STALE_TIMEOUT_SECONDS"
+        limiter_code = "SMA_GRID_STALE" if source == "sma_energy_meter_udp" else "SHELLY_STALE"
         try:
-            raw = self.shelly.read_grid_power(cfg)
+            if source == "sma_energy_meter_udp":
+                raw = self.sma_energy_meter.read_grid_power(cfg)
+            else:
+                raw = self.shelly.read_grid_power(cfg)
             smoothed = self.state.update_power_history(raw, int(cfg["MOVING_AVERAGE_SAMPLES"]))
             now = time.time()
             now_text = datetime.now().strftime("%H:%M:%S")
@@ -224,28 +267,30 @@ class ZendureController:
                 self.state.current_rule_deviation = round(smoothed, 1)
                 self.state.last_shelly_update_epoch = now
                 self.state.last_shelly_update_time = now_text
+                self.state.grid_meter_source = source
                 self.state.grid_power_valid = True
                 self.state.grid_power_used_for_control = bool(for_control)
                 self.state.grid_power_age_seconds = 0
                 self.state.grid_power_validity_reason = "OK"
             if cfg.get("LOG_VALUES", False):
                 suffix = "Regelung" if for_control else "Anzeige"
-                self.log(f"[GRID/{suffix}] Rohwert: {raw:.1f} W | Mittelwert: {smoothed:.1f} W")
+                self.log(f"[GRID/{suffix}/{source_label}] Rohwert: {raw:.1f} W | Mittelwert: {smoothed:.1f} W")
             return True
         except Exception as exc:
-            self.state.set_error(f"Shelly/Uni-Meter Fehler: {exc}")
+            self.state.set_error(f"{source_label} Fehler: {exc}")
             with self.state.lock:
                 self.state.grid_power_used_for_control = False
                 if self.state.last_shelly_update_epoch is not None:
                     self.state.grid_power_age_seconds = max(0, int(time.time() - self.state.last_shelly_update_epoch))
+                self.state.grid_power_validity_reason = f"{source_label} nicht aktuell"
             with self.state.lock:
                 last_update = self.state.last_shelly_update_epoch
             if not for_control:
                 return False
             if cfg.get("SAFE_STATE_ON_SHELLY_ERROR", True):
-                if last_update is None or time.time() - last_update > cfg.get("SHELLY_STALE_TIMEOUT_SECONDS", 15):
-                    self.state.add_limiter("SHELLY_STALE")
-                    self.safe_state("Shelly/Uni-Meter Daten veraltet")
+                if last_update is None or time.time() - last_update > cfg.get(stale_timeout_key, 15):
+                    self.state.add_limiter(limiter_code)
+                    self.safe_state(f"{source_label} Netzleistungsdaten nicht aktuell")
                     return False
             raise
 

@@ -28,6 +28,7 @@ from controller_logic import ZendureController
 from csv_logger import CsvRotatingLogger
 from mqtt_bridge import MqttBridge
 from shelly_client import ShellyClient
+from sma_energy_meter import SmaEnergyMeterClient
 from state import ControllerState
 from web_ui import create_app
 from version import APP_VERSION_LABEL
@@ -70,6 +71,7 @@ def main() -> None:
         csv_logger=CsvRotatingLogger(),
         zendure_api_client=ZendureLocalApiClient(),
         app_logger=app_logger,
+        sma_energy_meter_client=SmaEnergyMeterClient(),
     )
 
     app = create_app(

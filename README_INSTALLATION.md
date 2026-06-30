@@ -1,4 +1,4 @@
-# Zendure Energy Controller V12.11.0-RC1 - Installation und Betrieb
+# Zendure Energy Controller V12.11.0-RC2 - Installation und Betrieb
 
 Diese Version ist für den Betrieb unter `/opt/zendure-controller` vorbereitet.
 
@@ -13,14 +13,14 @@ ln -sfn /opt/zendure-controller /home/pi/zendure-controller
 
 Danach kann bequem mit `cd ~/zendure-controller` gearbeitet werden, obwohl die Anwendung sauber unter `/opt` liegt.
 
-## Update auf V12.11.0-RC1 installieren
+## Update auf V12.11.0-RC2 installieren
 
 Ab V12.7 liegt das Update-Script ausschließlich unter `tools/`.
 
 ```bash
 cp /opt/zendure-controller/tools/update_zendure_controller.sh /home/pi/update_zendure_controller.sh
 chmod +x /home/pi/update_zendure_controller.sh
-/home/pi/update_zendure_controller.sh v12_11_0_rc1
+/home/pi/update_zendure_controller.sh v12_11_0_rc2
 ```
 
 Das Update-Script erhält die vorhandene `config.json`, sichert das Installationsverzeichnis, bereinigt alte Dopplungen (`Tools/`, `zendureController.py`) und installiert die systemd-Dateien für Live-Controller und optionalen Replay-Dienst.
@@ -173,3 +173,19 @@ Die Start- und Endzeit des Nachtmodus werden in der Weboberfläche als `hh:mm`-F
 ### Messdaten-Speicherziel in V12.9.4
 
 Im Bereich `Messdaten / Historie` kann das Speicherziel für Messdaten ausgewählt werden: interne SD, erkannter USB-/Mountpoint oder benutzerdefinierter Pfad. Bei externem Ziel kann ein begrenzter SD-Fallback aktiviert werden. Dieser Fallback wird sichtbar markiert und enger rotiert, damit bei USB-Ausfall nicht unbegrenzt auf die SD geschrieben wird.
+
+### SMA Home Manager direkt parallel prüfen
+
+Nach der Installation kann die direkte SMA-Quelle zunächst passiv aktiviert werden. Die Live-Regelung bleibt dabei auf Shelly/UniMeter HTTP, solange `GRID_METER_SOURCE=shelly_http` gesetzt ist.
+
+Empfohlene erste Testkonfiguration:
+
+```text
+GRID_METER_SOURCE = shelly_http
+SMA_ENERGY_METER_PASSIVE_ENABLED = true
+SMA_ENERGY_METER_GROUP = 239.12.255.254
+SMA_ENERGY_METER_PORT = 9522
+SMA_ENERGY_METER_INTERFACE = leer lassen
+```
+
+Danach auf der Statusseite die Karte „SMA Direktquelle“ prüfen: aktueller Direktwert, Alter, Paketanzahl, dekodierte Pakete und Fehler. Erst wenn Alter, Vorzeichen und Vergleich zur bisherigen Netzleistung plausibel sind, sollte die direkte SMA-Quelle als Regelquelle erwogen werden.

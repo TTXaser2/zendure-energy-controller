@@ -17,6 +17,13 @@ from typing import Any, Dict, Tuple
 DEFAULT_CONFIG: Dict[str, Any] = {
     # Netzwerk / Infrastruktur
     "SHELLY_IP": "192.168.0.40",
+    # Netzleistungsquelle / SMA Home Manager Direktdiagnose
+    "GRID_METER_SOURCE": "shelly_http",
+    "SMA_ENERGY_METER_PASSIVE_ENABLED": False,
+    "SMA_ENERGY_METER_GROUP": "239.12.255.254",
+    "SMA_ENERGY_METER_PORT": 9522,
+    "SMA_ENERGY_METER_INTERFACE": "",
+    "SMA_ENERGY_METER_STALE_TIMEOUT_SECONDS": 15,
     "MQTT_BROKER": "192.168.0.40",
     "MQTT_PORT": 1883,
     "MQTT_USER": "mqttuser",
@@ -176,6 +183,12 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 # UI und Defaults konsistent.
 CONFIG_SCHEMA: Dict[str, Dict[str, Any]] = {
     "SHELLY_IP": {"group": "Netzwerk", "label": "Shelly / Uni-Meter IP", "type": "str", "description": "IP-Adresse der Shelly-kompatiblen Messdatenquelle. In deinem Setup ist das typischerweise die IP des Raspberry/uni-meter."},
+    "GRID_METER_SOURCE": {"group": "Netzwerk", "label": "Netzleistungsquelle", "type": "select", "options": {"shelly_http": "Shelly/UniMeter HTTP", "sma_energy_meter_udp": "SMA Home Manager direkt (UDP)"}, "description": "Quelle für die Netzleistung am Hausanschlusspunkt. Standard ist Shelly/UniMeter HTTP. SMA direkt ist eine neue Option über das lokale SMA Energy Meter / Sunny Home Manager UDP-Multicast-Protokoll und sollte zunächst parallel beobachtet werden."},
+    "SMA_ENERGY_METER_PASSIVE_ENABLED": {"group": "Netzwerk", "label": "SMA Direktdiagnose passiv aktiv", "type": "bool", "description": "Startet einen passiven Listener für SMA Energy Meter / Sunny Home Manager 2.0 Multicast-Daten. Die Regelung bleibt weiterhin auf der gewählten Netzleistungsquelle; bei Shelly/UniMeter als Quelle dient dies nur zum Vergleich."},
+    "SMA_ENERGY_METER_GROUP": {"group": "Netzwerk", "label": "SMA Energy Meter Multicast-Gruppe", "type": "str", "description": "Multicast-Adresse der SMA Energy Meter Daten. Typischer Standard: 239.12.255.254."},
+    "SMA_ENERGY_METER_PORT": {"group": "Netzwerk", "label": "SMA Energy Meter UDP-Port", "type": "int", "min": 1, "max": 65535, "description": "UDP-Port für SMA Energy Meter / Sunny Home Manager 2.0 Multicast. Typischer Standard: 9522."},
+    "SMA_ENERGY_METER_INTERFACE": {"group": "Netzwerk", "label": "SMA Energy Meter Interface/IP", "type": "str", "description": "Optional: lokale IPv4-Adresse des Netzwerkinterfaces für den Multicast-Join. Leer lassen für automatische Auswahl. Interface-Namen wie eth0 werden toleriert, intern aber derzeit als automatische Auswahl behandelt."},
+    "SMA_ENERGY_METER_STALE_TIMEOUT_SECONDS": {"group": "Sicherheit / Fallback", "label": "SMA Direkt Timeout", "type": "int", "min": 5, "max": 600, "unit": "s", "description": "Maximales Alter eines direkt per SMA Energy Meter empfangenen Netzleistungswerts, falls die direkte SMA-Quelle als Regelquelle verwendet wird."},
     "MQTT_BROKER": {"group": "Netzwerk", "label": "MQTT Broker", "type": "str", "description": "Adresse des MQTT-Brokers. Meist der Raspberry Pi selbst."},
     "MQTT_PORT": {"group": "Netzwerk", "label": "MQTT Port", "type": "int", "min": 1, "max": 65535, "description": "Port des MQTT-Brokers. Standard ist 1883."},
     "MQTT_USER": {"group": "Netzwerk", "label": "MQTT Benutzer", "type": "str", "description": "Benutzername für MQTT. Leer lassen, wenn keine Authentifizierung verwendet wird."},
