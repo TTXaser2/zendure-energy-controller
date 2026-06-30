@@ -1,6 +1,4 @@
-Zendure Energy Controller Version 12.11.0-RC2
-
-# Zendure Energy Controller V12.11.0-RC2
+# Zendure Energy Controller V12.11.0-RC3
 
 Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, ZEC-MEASUREMENT-V4-Messdaten-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
@@ -8,9 +6,16 @@ Copyright (c) 2026 Eduard Fuchs <info@eduardfuchs.de>
 
 Lizenziert unter AGPL-3.0-or-later. Siehe `LICENSE`, `NOTICE` und `DISCLAIMER.md`.
 
-## Wichtige Änderungen in V12.11.0-RC2
+## Wichtige Änderungen in V12.11.0-RC3
 
-V12.11.0-RC2 ergänzt auf Basis von RC1 eine direkte SMA-Home-Manager-/SMA-Energy-Meter-Quelle für die Netzleistungsdaten. Shelly/UniMeter HTTP bleibt der unveränderte Default und damit die sichere Regelquelle. Die neue SMA-Direktquelle kann zunächst passiv parallel beobachtet werden, um Zuverlässigkeit, Paketalter, Vorzeichen und Abweichungen zum bisherigen UniMeter-/Shelly-Pfad zu prüfen. Optional kann `GRID_METER_SOURCE=sma_energy_meter_udp` als experimentelle direkte Regelquelle gewählt werden; empfohlen ist zuerst ein Parallelvergleich über mehrere Stunden oder Tage.
+V12.11.0-RC3 ergänzt auf Basis von RC2 die notwendige Absicherung der direkten SMA-Home-Manager-/SMA-Energy-Meter-Quelle für die Netzleistungsdaten. Shelly/UniMeter HTTP bleibt der unveränderte Default und damit die sichere Regelquelle. Die neue SMA-Direktquelle kann zunächst passiv parallel beobachtet werden, um Zuverlässigkeit, Paketalter, Vorzeichen und Abweichungen zum bisherigen UniMeter-/Shelly-Pfad zu prüfen. Optional kann `GRID_METER_SOURCE=sma_energy_meter_udp` als experimentelle direkte Regelquelle gewählt werden; bei mehreren SMA Energy Metern wird die produktive Nutzung ohne Seriennummernfilter blockiert. Empfohlen ist zuerst ein Parallelvergleich über mehrere Stunden oder Tage.
+
+Weitere RC3-Nacharbeit:
+
+- Interface-Namen wie `eth0` werden für den Multicast-Join zu ihrer IPv4-Adresse aufgelöst.
+- Empfangene SMA-Geräte werden mit Seriennummer/SUSy-ID in der Statuskarte angezeigt.
+- Filter auf `SMA_ENERGY_METER_SERIAL` und optional `SMA_ENERGY_METER_SUSY_ID` schützen Anlagen mit mehreren Energy Metern.
+- Produktive SMA-Direktregelung ohne Seriennummernfilter wird per Validator blockiert.
 
 Weitere UI-Nacharbeit: Die Statuskarte „Konfigurationsstatus“ wurde ans Ende der Statusübersicht verschoben, damit Warnungen sichtbar bleiben, aber die primären Betriebswerte nicht verdrängen.
 
@@ -21,7 +26,9 @@ GRID_METER_SOURCE = shelly_http | sma_energy_meter_udp
 SMA_ENERGY_METER_PASSIVE_ENABLED = true/false
 SMA_ENERGY_METER_GROUP = 239.12.255.254
 SMA_ENERGY_METER_PORT = 9522
-SMA_ENERGY_METER_INTERFACE = optional, leer lassen für automatische Auswahl
+SMA_ENERGY_METER_INTERFACE = optional, z. B. eth0 oder lokale IPv4
+SMA_ENERGY_METER_SUSY_ID = optional, z. B. 372
+SMA_ENERGY_METER_SERIAL = optional/empfohlen, z. B. 3011954105
 SMA_ENERGY_METER_STALE_TIMEOUT_SECONDS = 15
 ```
 

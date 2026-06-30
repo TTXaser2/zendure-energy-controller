@@ -224,13 +224,23 @@ class ZendureController:
                 self.state.sma_energy_meter_consumption_power_w = snap.last_consumption_power_w
                 self.state.sma_energy_meter_feedin_power_w = snap.last_feedin_power_w
                 self.state.sma_energy_meter_last_epoch = snap.last_received_epoch
+                self.state.sma_energy_meter_susy_id = snap.last_susy_id
+                self.state.sma_energy_meter_serial_number = snap.last_serial_number
                 self.state.sma_energy_meter_packet_count = snap.packet_count
                 self.state.sma_energy_meter_decode_count = snap.decode_count
+                self.state.sma_energy_meter_ignored_count = snap.ignored_count
                 self.state.sma_energy_meter_error_count = snap.error_count
                 self.state.sma_energy_meter_last_error = snap.last_error
                 self.state.sma_energy_meter_group = snap.configured_group
                 self.state.sma_energy_meter_port = snap.configured_port
                 self.state.sma_energy_meter_interface = snap.configured_interface
+                self.state.sma_energy_meter_resolved_interface_ip = snap.resolved_interface_ip
+                self.state.sma_energy_meter_configured_susy_id = snap.configured_susy_id
+                self.state.sma_energy_meter_configured_serial = snap.configured_serial
+                self.state.sma_energy_meter_selected_device_key = snap.selected_device_key
+                self.state.sma_energy_meter_selected_device_matched = snap.selected_device_matched
+                self.state.sma_energy_meter_detected_device_count = snap.detected_device_count
+                self.state.sma_energy_meter_devices_json = snap.devices_json
         except Exception as exc:
             with self.state.lock:
                 self.state.sma_energy_meter_error_count += 1

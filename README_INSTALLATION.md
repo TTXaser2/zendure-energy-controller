@@ -1,4 +1,4 @@
-# Zendure Energy Controller V12.11.0-RC2 - Installation und Betrieb
+# Zendure Energy Controller V12.11.0-RC3 - Installation und Betrieb
 
 Diese Version ist für den Betrieb unter `/opt/zendure-controller` vorbereitet.
 
@@ -13,21 +13,21 @@ ln -sfn /opt/zendure-controller /home/pi/zendure-controller
 
 Danach kann bequem mit `cd ~/zendure-controller` gearbeitet werden, obwohl die Anwendung sauber unter `/opt` liegt.
 
-## Update auf V12.11.0-RC2 installieren
+## Update auf V12.11.0-RC3 installieren
 
 Ab V12.7 liegt das Update-Script ausschließlich unter `tools/`.
 
 ```bash
 cp /opt/zendure-controller/tools/update_zendure_controller.sh /home/pi/update_zendure_controller.sh
 chmod +x /home/pi/update_zendure_controller.sh
-/home/pi/update_zendure_controller.sh v12_11_0_rc2
+/home/pi/update_zendure_controller.sh v12_11_0_rc3
 ```
 
 Das Update-Script erhält die vorhandene `config.json`, sichert das Installationsverzeichnis, bereinigt alte Dopplungen (`Tools/`, `zendureController.py`) und installiert die systemd-Dateien für Live-Controller und optionalen Replay-Dienst.
 
 Das Paket enthält zusätzlich die finale Excel-Lernsimulation `tools/zendure_regelung_lernwerkzeug_v4_2_7_final.xlsx`. Diese Datei wird nur mitkopiert und nicht durch das Update-Script verändert.
 
-Hinweis: V12.11.0-RC1 schreibt weiterhin gültige V4-Measurement-Dateien mit Manifest, Config-Snapshots und Runtime-Events. Die Restüberschuss-Ernte-Regelstrategie bleibt gegenüber RC10 unverändert. Neu sind semantische Settings-Validierung, automatische Harvest-Wirkungsanalyse, Local-API-Timing-Auswertung und eine bereinigte Settings-Struktur. Die Restüberschuss-Ernte ist standardmäßig nicht wirksam, bis sie im Settings-Bereich „Zweitbatterie / Restüberschuss-Ernte“ aktiviert und die maximale Ladeleistung des Primärspeichers eingetragen wurde.
+Hinweis: V12.11.0-RC3 ergänzt die direkte SMA-Home-Manager-/SMA-Energy-Meter-Quelle um Interface-Namen wie eth0, Geräteerkennung und Seriennummernfilter. Shelly/UniMeter bleibt Default. V12.11.0-RC1 schreibt weiterhin gültige V4-Measurement-Dateien mit Manifest, Config-Snapshots und Runtime-Events. Die Restüberschuss-Ernte-Regelstrategie bleibt gegenüber RC10 unverändert. Neu sind semantische Settings-Validierung, automatische Harvest-Wirkungsanalyse, Local-API-Timing-Auswertung und eine bereinigte Settings-Struktur. Die Restüberschuss-Ernte ist standardmäßig nicht wirksam, bis sie im Settings-Bereich „Zweitbatterie / Restüberschuss-Ernte“ aktiviert und die maximale Ladeleistung des Primärspeichers eingetragen wurde.
 
 ## Syntaxcheck
 

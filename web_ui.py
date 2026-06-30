@@ -12,6 +12,7 @@ import os
 import shlex
 import subprocess
 import threading
+import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -1311,11 +1312,44 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
     else:
         sma_direct_badge = badge("Aus", "#888888")
     sma_direct_power = s.get("sma_energy_meter_power_w")
+    sma_configured_serial = str(s.get("sma_energy_meter_configured_serial") or cfg.get("SMA_ENERGY_METER_SERIAL", "") or "")
+    sma_configured_susy = str(s.get("sma_energy_meter_configured_susy_id") or cfg.get("SMA_ENERGY_METER_SUSY_ID", "") or "")
+    sma_filter_line = ""
+    if sma_configured_serial or sma_configured_susy:
+        sma_filter_line = (
+            f"Filter: SUSy {html.escape(sma_configured_susy or '-')} · Seriennr. {html.escape(sma_configured_serial or '-')}<br>"
+            f"Ausgewählt: {html.escape(str(s.get('sma_energy_meter_serial_number') or '-'))} "
+            f"/ SUSy {html.escape(str(s.get('sma_energy_meter_susy_id') or '-'))}<br>"
+        )
+    try:
+        sma_devices = json.loads(str(s.get("sma_energy_meter_devices_json") or "{}"))
+    except Exception:
+        sma_devices = {}
+    device_lines = []
+    for _key, rec in sorted(sma_devices.items(), key=lambda item: str(item[0]))[:4]:
+        device_age_text = "-"
+        try:
+            if rec.get("last_received_epoch") is not None:
+                device_age_text = str(max(0, int(time.time() - float(rec.get("last_received_epoch"))))) + " s"
+        except Exception:
+            device_age_text = "-"
+        device_lines.append(
+            f"{html.escape(str(rec.get('serial_number') or '-'))}"
+            f"/SUSy {html.escape(str(rec.get('susy_id') or '-'))}: "
+            f"{html.escape(str(rec.get('last_power_w') if rec.get('last_power_w') is not None else '-'))} W "
+            f"({device_age_text})"
+        )
+    devices_line = ""
+    if device_lines:
+        devices_line = "Geräte: " + " · ".join(device_lines) + "<br>"
     sma_direct_details = (
         f"Regelquelle: {'ja' if sma_direct_is_control else 'nein, nur Diagnose'}<br>"
         f"Direktwert: {html.escape(str(round(float(sma_direct_power), 1)) + ' W') if sma_direct_power is not None else '-'}<br>"
-        f"Alter: {html.escape(str(sma_direct_age if sma_direct_age is not None else '-'))} s · Pakete: {html.escape(str(s.get('sma_energy_meter_packet_count', 0)))} · dekodiert: {html.escape(str(s.get('sma_energy_meter_decode_count', 0)))}<br>"
-        f"Quelle: {html.escape(str(s.get('sma_energy_meter_group', '239.12.255.254')))}:{html.escape(str(s.get('sma_energy_meter_port', 9522)))}<br>"
+        f"Alter: {html.escape(str(sma_direct_age if sma_direct_age is not None else '-'))} s · Pakete: {html.escape(str(s.get('sma_energy_meter_packet_count', 0)))} · dekodiert: {html.escape(str(s.get('sma_energy_meter_decode_count', 0)))} · ignoriert: {html.escape(str(s.get('sma_energy_meter_ignored_count', 0)))}<br>"
+        f"Quelle: {html.escape(str(s.get('sma_energy_meter_group', '239.12.255.254')))}:{html.escape(str(s.get('sma_energy_meter_port', 9522)))} · Interface: {html.escape(str(s.get('sma_energy_meter_interface') or '-'))} → {html.escape(str(s.get('sma_energy_meter_resolved_interface_ip') or '-'))}<br>"
+        f"{sma_filter_line}"
+        f"Erkannte Geräte: {html.escape(str(s.get('sma_energy_meter_detected_device_count', 0)))}<br>"
+        f"{devices_line}"
         f"Fehler: {html.escape(str(s.get('sma_energy_meter_last_error', 'none')))}"
     )
 

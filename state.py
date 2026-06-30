@@ -162,6 +162,31 @@ class ControllerState:
     second_battery_validity_reason: str = "SECOND_BATTERY_MISSING"
     evcc_data_available: bool = False
 
+    # Direkte SMA Energy Meter / Sunny Home Manager Netzleistungsquelle
+    sma_energy_meter_enabled: bool = False
+    sma_energy_meter_running: bool = False
+    sma_energy_meter_power_w: Optional[float] = None
+    sma_energy_meter_consumption_power_w: Optional[float] = None
+    sma_energy_meter_feedin_power_w: Optional[float] = None
+    sma_energy_meter_last_epoch: Optional[float] = None
+    sma_energy_meter_susy_id: Optional[int] = None
+    sma_energy_meter_serial_number: Optional[int] = None
+    sma_energy_meter_packet_count: int = 0
+    sma_energy_meter_decode_count: int = 0
+    sma_energy_meter_ignored_count: int = 0
+    sma_energy_meter_error_count: int = 0
+    sma_energy_meter_last_error: str = "none"
+    sma_energy_meter_group: str = "239.12.255.254"
+    sma_energy_meter_port: int = 9522
+    sma_energy_meter_interface: str = ""
+    sma_energy_meter_resolved_interface_ip: str = ""
+    sma_energy_meter_configured_susy_id: str = ""
+    sma_energy_meter_configured_serial: str = ""
+    sma_energy_meter_selected_device_key: str = ""
+    sma_energy_meter_selected_device_matched: bool = False
+    sma_energy_meter_detected_device_count: int = 0
+    sma_energy_meter_devices_json: str = "{}"
+
     # Einheitliches Freshness-/Validitätsmodell pro Regelzyklus.
     # Diese Felder ändern nicht die Regellogik selbst, sondern machen sichtbar,
     # welche externen Daten vorhanden, frisch, gültig und tatsächlich für die
@@ -1305,6 +1330,29 @@ class ControllerState:
                 "second_battery_data_age_seconds": self.second_battery_data_age_seconds,
                 "second_battery_validity_reason": self.second_battery_validity_reason,
                 "evcc_data_available": self.evcc_data_available,
+                "sma_energy_meter_enabled": self.sma_energy_meter_enabled,
+                "sma_energy_meter_running": self.sma_energy_meter_running,
+                "sma_energy_meter_power_w": self.sma_energy_meter_power_w,
+                "sma_energy_meter_consumption_power_w": self.sma_energy_meter_consumption_power_w,
+                "sma_energy_meter_feedin_power_w": self.sma_energy_meter_feedin_power_w,
+                "sma_energy_meter_last_update_age_seconds": age_seconds(self.sma_energy_meter_last_epoch),
+                "sma_energy_meter_susy_id": self.sma_energy_meter_susy_id,
+                "sma_energy_meter_serial_number": self.sma_energy_meter_serial_number,
+                "sma_energy_meter_packet_count": self.sma_energy_meter_packet_count,
+                "sma_energy_meter_decode_count": self.sma_energy_meter_decode_count,
+                "sma_energy_meter_ignored_count": self.sma_energy_meter_ignored_count,
+                "sma_energy_meter_error_count": self.sma_energy_meter_error_count,
+                "sma_energy_meter_last_error": self.sma_energy_meter_last_error,
+                "sma_energy_meter_group": self.sma_energy_meter_group,
+                "sma_energy_meter_port": self.sma_energy_meter_port,
+                "sma_energy_meter_interface": self.sma_energy_meter_interface,
+                "sma_energy_meter_resolved_interface_ip": self.sma_energy_meter_resolved_interface_ip,
+                "sma_energy_meter_configured_susy_id": self.sma_energy_meter_configured_susy_id,
+                "sma_energy_meter_configured_serial": self.sma_energy_meter_configured_serial,
+                "sma_energy_meter_selected_device_key": self.sma_energy_meter_selected_device_key,
+                "sma_energy_meter_selected_device_matched": self.sma_energy_meter_selected_device_matched,
+                "sma_energy_meter_detected_device_count": self.sma_energy_meter_detected_device_count,
+                "sma_energy_meter_devices_json": self.sma_energy_meter_devices_json,
                 "rest_surplus_harvest_active": self.rest_surplus_harvest_active,
                 "rest_surplus_harvest_eligible": self.rest_surplus_harvest_eligible,
                 "rest_surplus_entry_progress_s": round(float(self.rest_surplus_entry_progress_s or 0.0), 1),

@@ -239,14 +239,30 @@ def validate_config_semantics(
         issues.append(_issue("ERROR", "Die Netzleistungsquelle ist unbekannt. Bitte Shelly/UniMeter HTTP oder SMA Home Manager direkt auswählen.", ["GRID_METER_SOURCE"], "Netzwerk", "GRID_SOURCE_INVALID"))
     if grid_source == "shelly_http" and not _str_value(cfg, "SHELLY_IP"):
         issues.append(_issue("ERROR", "Die Shelly-/Uni-Meter-IP darf nicht leer sein, solange Shelly/UniMeter HTTP als Netzleistungsquelle verwendet wird.", ["SHELLY_IP", "GRID_METER_SOURCE"], "Netzwerk", "SHELLY_IP_MISSING"))
+    sma_serial = _str_value(cfg, "SMA_ENERGY_METER_SERIAL")
+    sma_susy = _str_value(cfg, "SMA_ENERGY_METER_SUSY_ID")
+    if sma_serial:
+        try:
+            int(sma_serial, 0)
+        except Exception:
+            issues.append(_issue("ERROR", "Die SMA Energy Meter Seriennummer muss eine Zahl sein. Bitte die Seriennummer des Energy Meters am Netzbezugspunkt eintragen, z. B. aus der UniMeter-Konfiguration.", ["SMA_ENERGY_METER_SERIAL"], "Netzwerk", "SMA_DIRECT_SERIAL_INVALID"))
+    if sma_susy:
+        try:
+            int(sma_susy, 0)
+        except Exception:
+            issues.append(_issue("ERROR", "Die SMA Energy Meter SUSy-ID muss eine Zahl sein. Beispiel aus der UniMeter-Konfiguration: 372.", ["SMA_ENERGY_METER_SUSY_ID"], "Netzwerk", "SMA_DIRECT_SUSY_INVALID"))
     if grid_source == "sma_energy_meter_udp":
         if not _str_value(cfg, "SMA_ENERGY_METER_GROUP"):
             issues.append(_issue("ERROR", "Für die direkte SMA-Netzleistungsquelle muss die Multicast-Gruppe konfiguriert sein, typischerweise 239.12.255.254.", ["SMA_ENERGY_METER_GROUP"], "Netzwerk", "SMA_ENERGY_METER_GROUP_MISSING"))
         if _int_value(cfg, "SMA_ENERGY_METER_PORT", 0) <= 0:
             issues.append(_issue("ERROR", "Für die direkte SMA-Netzleistungsquelle muss ein gültiger UDP-Port konfiguriert sein, typischerweise 9522.", ["SMA_ENERGY_METER_PORT"], "Netzwerk", "SMA_ENERGY_METER_PORT_INVALID"))
+        if not sma_serial:
+            issues.append(_issue("ERROR", "SMA Home Manager direkt ist als produktive Netzleistungsquelle ausgewählt, aber es ist keine SMA Energy Meter Seriennummer gesetzt. Bei mehreren SMA Energy Metern darf ZEC nicht ohne eindeutigen Filter regeln. Bitte die Seriennummer des Netzbezugszählers eintragen und vorher passiv vergleichen.", ["GRID_METER_SOURCE", "SMA_ENERGY_METER_SERIAL"], "Netzwerk", "SMA_DIRECT_CONTROL_WITHOUT_SERIAL"))
         issues.append(_issue("WARNING", "SMA Home Manager direkt ist als produktive Netzleistungsquelle ausgewählt. Bitte erst mehrere Stunden/Tage parallel gegen Shelly/UniMeter prüfen: Vorzeichen, Paketalter, Aussetzer und Regelverhalten.", ["GRID_METER_SOURCE"], "Netzwerk", "SMA_DIRECT_AS_CONTROL_SOURCE"))
     elif bool(cfg.get("SMA_ENERGY_METER_PASSIVE_ENABLED", False)):
         issues.append(_issue("INFO", "SMA Home Manager Direktdiagnose ist passiv aktiv. Die Regelung verwendet weiterhin die gewählte Netzleistungsquelle; die direkten SMA-Werte dienen zum Vergleich von Zuverlässigkeit, Vorzeichen und Paketalter.", ["SMA_ENERGY_METER_PASSIVE_ENABLED"], "Netzwerk", "SMA_DIRECT_PASSIVE_ENABLED"))
+        if not sma_serial:
+            issues.append(_issue("INFO", "Bei mehreren SMA Energy Metern bitte zusätzlich die Seriennummer des Netzbezugszählers als Filter eintragen, damit ZEC nicht versehentlich den PV-Zaun-Zähler auswertet.", ["SMA_ENERGY_METER_SERIAL"], "Netzwerk", "SMA_DIRECT_PASSIVE_WITHOUT_SERIAL"))
     if not _str_value(cfg, "MQTT_BROKER"):
         issues.append(_issue("ERROR", "Der MQTT-Broker darf nicht leer sein, weil Zendure-Steuerbefehle per MQTT gesendet werden.", ["MQTT_BROKER"], "Netzwerk", "MQTT_BROKER_MISSING"))
     if not _str_value(cfg, "DEVICE_ID"):
