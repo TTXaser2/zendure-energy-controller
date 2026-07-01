@@ -253,7 +253,7 @@ def validate_config_semantics(
             issues.append(_issue("ERROR", "Die SMA Energy Meter SUSy-ID muss eine Zahl sein. Beispiel aus der UniMeter-Konfiguration: 372.", ["SMA_ENERGY_METER_SUSY_ID"], "Netzwerk", "SMA_DIRECT_SUSY_INVALID"))
 
     allowed_sma_socket_modes = {"rc3_compatible", "reuseaddr_only", "unimeter_like", "group_bind"}
-    sma_socket_mode = _str_value(cfg, "SMA_ENERGY_METER_SOCKET_MODE") or "rc3_compatible"
+    sma_socket_mode = _str_value(cfg, "SMA_ENERGY_METER_SOCKET_MODE") or "group_bind"
     if sma_socket_mode not in allowed_sma_socket_modes:
         issues.append(_issue("ERROR", "Ungültiger SMA Socket-Modus. Erlaubt sind rc3_compatible, reuseaddr_only, unimeter_like und group_bind.", ["SMA_ENERGY_METER_SOCKET_MODE"], "Netzwerk", "SMA_SOCKET_MODE_INVALID"))
     if grid_source == "sma_energy_meter_udp":
@@ -263,7 +263,7 @@ def validate_config_semantics(
             issues.append(_issue("ERROR", "Für die direkte SMA-Netzleistungsquelle muss ein gültiger UDP-Port konfiguriert sein, typischerweise 9522.", ["SMA_ENERGY_METER_PORT"], "Netzwerk", "SMA_ENERGY_METER_PORT_INVALID"))
         if not sma_serial:
             issues.append(_issue("ERROR", "SMA Home Manager direkt ist als produktive Netzleistungsquelle ausgewählt, aber es ist keine SMA Energy Meter Seriennummer gesetzt. Bei mehreren SMA Energy Metern darf ZEC nicht ohne eindeutigen Filter regeln. Bitte die Seriennummer des Netzbezugszählers eintragen und vorher passiv vergleichen.", ["GRID_METER_SOURCE", "SMA_ENERGY_METER_SERIAL"], "Netzwerk", "SMA_DIRECT_CONTROL_WITHOUT_SERIAL"))
-        issues.append(_issue("WARNING", "SMA Home Manager direkt ist als produktive Netzleistungsquelle ausgewählt. Der SMA-Listener wird automatisch aktiviert; der Passiv-Schalter ist hierfür nicht erforderlich. Im getesteten Setup war socket_mode=rc3_compatible mit EVCC stabil, während zusätzliche SMA-Listener wie UniMeter Konflikte auslösen können.", ["GRID_METER_SOURCE", "SMA_ENERGY_METER_SOCKET_MODE"], "Netzwerk", "SMA_DIRECT_AS_CONTROL_SOURCE"))
+        issues.append(_issue("WARNING", "SMA Home Manager direkt ist als produktive Netzleistungsquelle ausgewählt. Der SMA-Listener wird automatisch aktiviert; der Passiv-Schalter ist hierfür nicht erforderlich. Im getesteten Setup mit EVCC auf demselben Host war socket_mode=group_bind stabil; Wildcard-Modi auf 0.0.0.0:9522 können EVCC-SMA/PV-Abfragen stören und sollten nur gezielt diagnostisch verwendet werden.", ["GRID_METER_SOURCE", "SMA_ENERGY_METER_SOCKET_MODE"], "Netzwerk", "SMA_DIRECT_AS_CONTROL_SOURCE"))
     elif bool(cfg.get("SMA_ENERGY_METER_PASSIVE_ENABLED", False)):
         issues.append(_issue("INFO", "SMA-Direktquelle wird zusätzlich passiv beobachtet. Die Regelung verwendet weiterhin die Shelly-kompatible HTTP-Quelle; die direkten SMA-Werte dienen zum Vergleich von Zuverlässigkeit, Vorzeichen und Paketalter.", ["SMA_ENERGY_METER_PASSIVE_ENABLED"], "Netzwerk", "SMA_DIRECT_PASSIVE_ENABLED"))
         if not sma_serial:

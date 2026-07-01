@@ -304,6 +304,28 @@ keys=[
 print('ZEC SMA diagnostics snapshot')
 for k in keys:
     print(f'{k}={data.get(k)!r}')
+
+mode=str(data.get('sma_energy_meter_effective_socket_mode') or data.get('sma_energy_meter_socket_mode') or '')
+bind=str(data.get('sma_energy_meter_bind_address') or '')
+bind_mode=str(data.get('sma_energy_meter_bind_mode') or '')
+reuseport=bool(data.get('sma_energy_meter_reuseport_enabled'))
+large_gap=data.get('sma_energy_meter_last_large_gap_s')
+rate=data.get('sma_energy_meter_packet_rate_per_min')
+selected=bool(data.get('sma_energy_meter_selected_device_matched'))
+print('')
+print('ZEC SMA diagnostics assessment')
+if mode == 'group_bind' and bind_mode == 'group':
+    print('socket_assessment=OK_GROUP_BIND')
+    print('socket_assessment_text=group_bind bindet auf die SMA-Multicast-Gruppe und ist der bevorzugte EVCC-Koexistenzmodus.')
+elif bind in ('0.0.0.0', '') or bind_mode == 'wildcard' or reuseport:
+    print('socket_assessment=WILDCARD_BIND_RISK')
+    print('socket_assessment_text=Wildcard-Bind/SO_REUSEPORT-Modus erkannt. Diese Modi haben im EVCC+ZEC-Livetest EVCC-SMA/PV-Timeouts ausgelöst und sollten nur kurz diagnostisch verwendet werden.')
+else:
+    print('socket_assessment=CHECK_MANUALLY')
+    print('socket_assessment_text=Socketmodus ist nicht der bestätigte group_bind-Modus; bitte EVCC-Log und Paketlücken prüfen.')
+print(f'selected_device_assessment={"OK" if selected else "CHECK_FILTER"}')
+print(f'packet_rate_assessment={"OK" if isinstance(rate, (int, float)) and rate > 0 else "CHECK_NO_PACKETS"}')
+print(f'large_gap_assessment={"OK" if large_gap in (None, "", 0) else "CHECK_PACKET_GAP"}')
 PY
   else
     warn "Could not fetch live /status snapshot from localhost:${WEB_PORT_FOR_STATUS}"

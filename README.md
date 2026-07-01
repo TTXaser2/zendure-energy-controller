@@ -1,4 +1,4 @@
-# Zendure Energy Controller V12.11.0-RC5
+# Zendure Energy Controller V12.11.0-RC6
 
 Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, ZEC-MEASUREMENT-V4-Messdaten-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
@@ -6,13 +6,19 @@ Copyright (c) 2026 Eduard Fuchs <info@eduardfuchs.de>
 
 Lizenziert unter AGPL-3.0-or-later. Siehe `LICENSE`, `NOTICE` und `DISCLAIMER.md`.
 
+## Wichtige Änderungen in V12.11.0-RC6
+
+V12.11.0-RC6 ist ein Hotfix-/Stabilisierungsrelease nach den RC5-Sockettests. Der Nachtlauf zeigte: EVCC blieb über viele Stunden fehlerfrei, wenn ZEC die SMA-Speedwire-Daten mit `SMA_ENERGY_METER_SOCKET_MODE=group_bind` empfängt. Die Wildcard-Modi auf `0.0.0.0:9522` (`rc3_compatible`, `reuseaddr_only`, `unimeter_like`) störten EVCC im Test reproduzierbar mit SMA-/PV-Timeouts.
+
+Daher ist `group_bind` nun der Default und die empfohlene Einstellung für SMA-Direktquelle, besonders wenn EVCC auf demselben Raspberry Pi läuft. Die alternativen Modi bleiben als Experten-/Diagnoseoptionen erhalten, sind aber nicht mehr der empfohlene Betriebsmodus.
+
+Die RC5-Diagnose bleibt erhalten: `SMA_ENERGY_METER_LOG_DIAGNOSTICS`, `SMA_ENERGY_METER_LOG_INTERVAL_SECONDS` und `SMA_ENERGY_METER_PACKET_GAP_WARN_SECONDS`. Bei aktivem Datei-Logging schreibt ZEC kompakte `[SMA_DIAG]`-Zeilen ins Runtime-Log. Das Diagnosepaket nimmt zusätzlich einen Status-Snapshot, eine SMA-Diagnosezusammenfassung und gefilterte SMA-Runtime-Ereignisse auf und markiert Wildcard-Bind-Modi als Koexistenzrisiko.
+
+Bei `GRID_METER_SOURCE=sma_energy_meter_udp` ist der SMA-Listener automatisch aktiv. Der Passivschalter ist nur noch als zusätzliche passive SMA-Beobachtung relevant, wenn weiterhin die Shelly-kompatible HTTP-Quelle als Regelquelle genutzt wird.
+
 ## Wichtige Änderungen in V12.11.0-RC5
 
-V12.11.0-RC5 ist ein Hotfix-/Diagnoserelease nach dem RC4-Livetest. RC5 stellt das im Setup mit EVCC stabile RC3-kompatible SMA-Socketverhalten als Default wieder her (`SMA_ENERGY_METER_SOCKET_MODE=rc3_compatible`) und ergänzt Diagnosefelder für Socket-Modus, Reuse-Optionen, Bind-Adresse, Paketlücken und Paket-/Minutenrate.
-
-Neu sind außerdem `SMA_ENERGY_METER_LOG_DIAGNOSTICS`, `SMA_ENERGY_METER_LOG_INTERVAL_SECONDS` und `SMA_ENERGY_METER_PACKET_GAP_WARN_SECONDS`. Bei aktivem Datei-Logging schreibt ZEC kompakte `[SMA_DIAG]`-Zeilen ins Runtime-Log. Das Diagnosepaket nimmt zusätzlich einen Status-Snapshot, eine SMA-Diagnosezusammenfassung und gefilterte SMA-Runtime-Ereignisse auf.
-
-Bei `GRID_METER_SOURCE=sma_energy_meter_udp` ist der SMA-Listener automatisch aktiv. Der bisherige Passivschalter ist nur noch als zusätzliche passive SMA-Beobachtung relevant, wenn weiterhin die Shelly-kompatible HTTP-Quelle als Regelquelle genutzt wird.
+V12.11.0-RC5 ergänzte die SMA-Socket-Diagnose und mehrere wählbare Socket-Modi. Der anschließende Live-Test zeigte, dass `group_bind` im konkreten EVCC+ZEC-Setup stabil ist, während Wildcard-Bind-Modi EVCC stören können.
 
 ## Wichtige Änderungen in V12.11.0-RC4
 

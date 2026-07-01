@@ -1349,7 +1349,7 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
         else "nein, nur zusätzliche passive Beobachtung"
     )
     sma_socket_line = (
-        f"Socket: Modus {html.escape(str(s.get('sma_energy_meter_socket_mode') or cfg.get('SMA_ENERGY_METER_SOCKET_MODE', 'rc3_compatible')))} "
+        f"Socket: Modus {html.escape(str(s.get('sma_energy_meter_socket_mode') or cfg.get('SMA_ENERGY_METER_SOCKET_MODE', 'group_bind')))} "
         f"/ effektiv {html.escape(str(s.get('sma_energy_meter_effective_socket_mode') or '-'))} · "
         f"Bind {html.escape(str(s.get('sma_energy_meter_bind_address') or '-'))}:{html.escape(str(s.get('sma_energy_meter_port', 9522)))} "
         f"({html.escape(str(s.get('sma_energy_meter_bind_mode') or '-'))})<br>"

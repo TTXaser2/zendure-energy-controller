@@ -6,11 +6,11 @@ from state import ControllerState
 
 
 class Rc5SmaSocketModeTests(unittest.TestCase):
-    def test_default_socket_mode_is_rc3_compatible(self):
-        self.assertEqual(normalize_socket_mode(None), "rc3_compatible")
-        self.assertEqual(normalize_socket_mode("auto"), "rc3_compatible")
+    def test_default_socket_mode_is_group_bind_after_rc6(self):
+        self.assertEqual(normalize_socket_mode(None), "group_bind")
+        self.assertEqual(normalize_socket_mode("auto"), "group_bind")
         self.assertEqual(normalize_socket_mode("reuseaddr_only"), "reuseaddr_only")
-        self.assertEqual(normalize_socket_mode("bad-value"), "rc3_compatible")
+        self.assertEqual(normalize_socket_mode("bad-value"), "group_bind")
 
     def test_invalid_socket_mode_is_config_error(self):
         cfg = {
@@ -25,7 +25,7 @@ class Rc5SmaSocketModeTests(unittest.TestCase):
 
     def test_snapshot_contains_socket_and_gap_fields(self):
         snap = SmaEnergyMeterSnapshot()
-        self.assertEqual(snap.configured_socket_mode, "rc3_compatible")
+        self.assertEqual(snap.configured_socket_mode, "group_bind")
         self.assertFalse(snap.reuseport_enabled)
         self.assertEqual(snap.packet_rate_per_min, 0.0)
 

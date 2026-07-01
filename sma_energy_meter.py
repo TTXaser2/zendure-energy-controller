@@ -76,8 +76,8 @@ class SmaEnergyMeterSnapshot:
     ignored_count: int = 0
     error_count: int = 0
     last_error: str = "none"
-    configured_socket_mode: str = "rc3_compatible"
-    effective_socket_mode: str = "rc3_compatible"
+    configured_socket_mode: str = "group_bind"
+    effective_socket_mode: str = "group_bind"
     bind_address: str = ""
     bind_mode: str = ""
     reuseaddr_enabled: bool = False
@@ -244,11 +244,11 @@ SUPPORTED_SOCKET_MODES = {
 
 
 def normalize_socket_mode(value: Any) -> str:
-    text = str(value or "rc3_compatible").strip().lower().replace("-", "_")
+    text = str(value or "group_bind").strip().lower().replace("-", "_")
     if text == "auto":
-        return "rc3_compatible"
+        return "group_bind"
     if text not in SUPPORTED_SOCKET_MODES:
-        return "rc3_compatible"
+        return "group_bind"
     return text
 
 
@@ -276,7 +276,7 @@ class SmaEnergyMeterClient:
         interface = str(cfg.get("SMA_ENERGY_METER_INTERFACE", "") or "")
         susy_filter = str(cfg.get("SMA_ENERGY_METER_SUSY_ID", "") or "").strip()
         serial_filter = str(cfg.get("SMA_ENERGY_METER_SERIAL", "") or "").strip()
-        socket_mode = normalize_socket_mode(cfg.get("SMA_ENERGY_METER_SOCKET_MODE", "rc3_compatible"))
+        socket_mode = normalize_socket_mode(cfg.get("SMA_ENERGY_METER_SOCKET_MODE", "group_bind"))
         gap_warn_s = max(1.0, _cfg_float(cfg, "SMA_ENERGY_METER_PACKET_GAP_WARN_SECONDS", 5.0))
         key = (group, port, interface, susy_filter, serial_filter, socket_mode, gap_warn_s)
         with self._lock:

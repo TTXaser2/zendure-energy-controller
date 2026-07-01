@@ -188,8 +188,8 @@ class ControllerState:
     sma_energy_meter_selected_device_matched: bool = False
     sma_energy_meter_detected_device_count: int = 0
     sma_energy_meter_devices_json: str = "{}"
-    sma_energy_meter_socket_mode: str = "rc3_compatible"
-    sma_energy_meter_effective_socket_mode: str = "rc3_compatible"
+    sma_energy_meter_socket_mode: str = "group_bind"
+    sma_energy_meter_effective_socket_mode: str = "group_bind"
     sma_energy_meter_bind_address: str = ""
     sma_energy_meter_bind_mode: str = ""
     sma_energy_meter_reuseaddr_enabled: bool = False
