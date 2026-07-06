@@ -12,7 +12,7 @@ from measurement_v4_contract import (
 
 class MeasurementV4ContractTests(unittest.TestCase):
     def test_standard_header_is_exact_and_unique(self):
-        self.assertEqual(123, len(STANDARD_HEADER))
+        self.assertEqual(139, len(STANDARD_HEADER))
         self.assertEqual(len(STANDARD_HEADER), len(set(STANDARD_HEADER)))
         self.assertEqual("schema_version", STANDARD_HEADER[0])
         self.assertEqual("command_delta_w", STANDARD_HEADER[-1])

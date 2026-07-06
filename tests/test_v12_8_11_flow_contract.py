@@ -108,7 +108,7 @@ class V12811MqttDiagnosticFilterTests(unittest.TestCase):
         state = fresh_state()
         bridge = MqttBridge(state, lambda: cfg)
 
-        bridge.on_message(None, None, DummyMsg("Zendure/sensor/HEC4NENCN492025/electricLevel", "80"))
+        bridge.on_message(None, None, DummyMsg("Zendure/sensor/TEST_DEVICE_001/electricLevel", "80"))
         bridge.on_message(None, None, DummyMsg("evcc/site/battery/devices/1/power", "120"))
 
         rows = state.snapshot()["mqtt_topic_diagnostics"]
@@ -141,11 +141,11 @@ class V12811MqttDiagnosticFilterTests(unittest.TestCase):
         state = fresh_state()
         bridge = MqttBridge(state, lambda: cfg)
 
-        bridge.on_message(None, None, DummyMsg("Zendure/sensor/HEC4NENCN492025/electricLevel", "80"))
+        bridge.on_message(None, None, DummyMsg("Zendure/sensor/TEST_DEVICE_001/electricLevel", "80"))
 
         rows = state.snapshot()["mqtt_topic_diagnostics"]
         self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0]["topic"], "Zendure/sensor/HEC4NENCN492025/electricLevel")
+        self.assertEqual(rows[0]["topic"], "Zendure/sensor/TEST_DEVICE_001/electricLevel")
         self.assertEqual(rows[0]["diagnostic_view_mode"], "all")
         self.assertFalse(rows[0]["diagnostic_filter_matched"])
 

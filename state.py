@@ -88,9 +88,25 @@ class ControllerState:
     rest_surplus_harvest_eligible: bool = False
     rest_surplus_entry_progress_s: float = 0.0
     rest_surplus_exit_reason: str = ""
+    rest_surplus_harvest_reason: str = "NONE"
+    rest_surplus_harvest_block_reason: str = ""
+    rest_surplus_harvest_profile: str = "default"
+    rest_surplus_hold_remaining_s: float = 0.0
     rest_surplus_export_w: float = 0.0
     second_battery_charge_pressure_w: float = 0.0
     second_battery_charge_saturation_threshold_w: float = 0.0
+    harvest_primary_floor_w: float = 0.0
+    harvest_primary_restart_w: float = 0.0
+    harvest_primary_near_limit_w: float = 0.0
+    harvest_primary_target_share: float = 0.0
+    harvest_primary_required_w: float = 0.0
+    harvest_primary_share_reserve_w: float = 0.0
+    harvest_candidate_raw_w: float = 0.0
+    harvest_candidate_after_primary_w: float = 0.0
+    harvest_limiter_reason: str = ""
+    harvest_capacity_mode: str = "off"
+    primary_remaining_capacity_kwh: Optional[float] = None
+    zendure_remaining_capacity_kwh: Optional[float] = None
 
     # Modus / Diagnose
     current_mode: str = "STARTUP"
@@ -275,6 +291,17 @@ class ControllerState:
     measurement_fallback_count_since_start: int = 0
     measurement_last_fallback_time: str = ""
     measurement_last_fallback_reason: str = ""
+
+    # RC17: SQLite Graph-/Measurement-Store, parallel zu CSV/V4.
+    measurement_db_status: str = "idle"
+    measurement_db_reason: str = "Noch kein DB-Schreibversuch."
+    measurement_db_path: str = ""
+    measurement_db_queue_depth: int = 0
+    measurement_db_last_write_epoch_s: Any = ""
+    measurement_db_error: str = ""
+    measurement_db_rows_written: int = 0
+    measurement_db_rows_dropped: int = 0
+    measurement_db_size_bytes: int = 0
 
     # ZEC-MEASUREMENT-V3: Istleistungs-Freshness.
     actual_zendure_power_valid: bool = False
@@ -536,6 +563,27 @@ class ControllerState:
                 pass
             self.measurement_last_fallback_time = str(status.get("measurement_last_fallback_time", self.measurement_last_fallback_time) or "")
             self.measurement_last_fallback_reason = str(status.get("measurement_last_fallback_reason", self.measurement_last_fallback_reason) or "")
+            self.measurement_db_status = str(status.get("measurement_db_status", self.measurement_db_status) or "")
+            self.measurement_db_reason = str(status.get("measurement_db_reason", self.measurement_db_reason) or "")
+            self.measurement_db_path = str(status.get("measurement_db_path", self.measurement_db_path) or "")
+            try:
+                self.measurement_db_queue_depth = int(status.get("measurement_db_queue_depth", self.measurement_db_queue_depth) or 0)
+            except Exception:
+                pass
+            self.measurement_db_last_write_epoch_s = status.get("measurement_db_last_write_epoch_s", self.measurement_db_last_write_epoch_s)
+            self.measurement_db_error = str(status.get("measurement_db_error", self.measurement_db_error) or "")
+            try:
+                self.measurement_db_rows_written = int(status.get("measurement_db_rows_written", self.measurement_db_rows_written) or 0)
+            except Exception:
+                pass
+            try:
+                self.measurement_db_rows_dropped = int(status.get("measurement_db_rows_dropped", self.measurement_db_rows_dropped) or 0)
+            except Exception:
+                pass
+            try:
+                self.measurement_db_size_bytes = int(status.get("measurement_db_size_bytes", self.measurement_db_size_bytes) or 0)
+            except Exception:
+                pass
 
     def set_error(self, message: str) -> None:
         with self.lock:
@@ -1062,11 +1110,27 @@ class ControllerState:
                 "effective_export_meaning": "Für Zendure-Ladung verfügbarer Überschuss nach Zusatzbatterie-Abzug und Sicherheitsreserve",
                 "rest_surplus_harvest_active": self.rest_surplus_harvest_active,
                 "rest_surplus_harvest_eligible": self.rest_surplus_harvest_eligible,
+                "rest_surplus_harvest_reason": self.rest_surplus_harvest_reason,
+                "rest_surplus_harvest_block_reason": self.rest_surplus_harvest_block_reason,
+                "rest_surplus_harvest_profile": self.rest_surplus_harvest_profile,
                 "rest_surplus_entry_progress_s": round(float(self.rest_surplus_entry_progress_s or 0.0), 1),
+                "rest_surplus_hold_remaining_s": round(float(self.rest_surplus_hold_remaining_s or 0.0), 1),
                 "rest_surplus_exit_reason": self.rest_surplus_exit_reason,
                 "second_battery_charge_pressure_w": round(float(self.second_battery_charge_pressure_w or 0.0), 1),
                 "second_battery_charge_saturation_threshold_w": round(float(self.second_battery_charge_saturation_threshold_w or 0.0), 1),
                 "rest_surplus_export_w": round(float(self.rest_surplus_export_w or 0.0), 1),
+                "harvest_primary_floor_w": round(float(self.harvest_primary_floor_w or 0.0), 1),
+                "harvest_primary_restart_w": round(float(self.harvest_primary_restart_w or 0.0), 1),
+                "harvest_primary_near_limit_w": round(float(self.harvest_primary_near_limit_w or 0.0), 1),
+                "harvest_primary_target_share": round(float(self.harvest_primary_target_share or 0.0), 3),
+                "harvest_primary_required_w": round(float(self.harvest_primary_required_w or 0.0), 1),
+                "harvest_primary_share_reserve_w": round(float(self.harvest_primary_share_reserve_w or 0.0), 1),
+                "harvest_candidate_raw_w": round(float(self.harvest_candidate_raw_w or 0.0), 1),
+                "harvest_candidate_after_primary_w": round(float(self.harvest_candidate_after_primary_w or 0.0), 1),
+                "harvest_limiter_reason": self.harvest_limiter_reason,
+                "harvest_capacity_mode": self.harvest_capacity_mode,
+                "primary_remaining_capacity_kwh": None if self.primary_remaining_capacity_kwh is None else round(float(self.primary_remaining_capacity_kwh), 3),
+                "zendure_remaining_capacity_kwh": None if self.zendure_remaining_capacity_kwh is None else round(float(self.zendure_remaining_capacity_kwh), 3),
 
                 # SOC / Modus / Reglerpfad
                 "zendure_soc_percent": self.battery_soc,
@@ -1187,6 +1251,15 @@ class ControllerState:
                 "measurement_fallback_count_since_start": self.measurement_fallback_count_since_start,
                 "measurement_last_fallback_time": self.measurement_last_fallback_time,
                 "measurement_last_fallback_reason": self.measurement_last_fallback_reason,
+                "measurement_db_status": self.measurement_db_status,
+                "measurement_db_reason": self.measurement_db_reason,
+                "measurement_db_path": self.measurement_db_path,
+                "measurement_db_queue_depth": self.measurement_db_queue_depth,
+                "measurement_db_last_write_epoch_s": self.measurement_db_last_write_epoch_s,
+                "measurement_db_error": self.measurement_db_error,
+                "measurement_db_rows_written": self.measurement_db_rows_written,
+                "measurement_db_rows_dropped": self.measurement_db_rows_dropped,
+                "measurement_db_size_bytes": self.measurement_db_size_bytes,
                 "zendure_unit_count": 1,
                 "zendure_aggregate_target_w": target_signed,
                 "zendure_aggregate_actual_power_w": self.actual_zendure_system_signed_power,
@@ -1284,6 +1357,15 @@ class ControllerState:
                 "measurement_fallback_count_since_start": self.measurement_fallback_count_since_start,
                 "measurement_last_fallback_time": self.measurement_last_fallback_time,
                 "measurement_last_fallback_reason": self.measurement_last_fallback_reason,
+                "measurement_db_status": self.measurement_db_status,
+                "measurement_db_reason": self.measurement_db_reason,
+                "measurement_db_path": self.measurement_db_path,
+                "measurement_db_queue_depth": self.measurement_db_queue_depth,
+                "measurement_db_last_write_epoch_s": self.measurement_db_last_write_epoch_s,
+                "measurement_db_error": self.measurement_db_error,
+                "measurement_db_rows_written": self.measurement_db_rows_written,
+                "measurement_db_rows_dropped": self.measurement_db_rows_dropped,
+                "measurement_db_size_bytes": self.measurement_db_size_bytes,
                 "safe_state_counter": self.safe_state_counter,
                 "last_loop_duration_ms": self.last_loop_duration_ms,
                 "last_cycle_total_ms": self.last_cycle_total_ms,
@@ -1391,11 +1473,27 @@ class ControllerState:
                 "sma_energy_meter_last_large_gap_age_seconds": self.sma_energy_meter_last_large_gap_age_seconds,
                 "rest_surplus_harvest_active": self.rest_surplus_harvest_active,
                 "rest_surplus_harvest_eligible": self.rest_surplus_harvest_eligible,
+                "rest_surplus_harvest_reason": self.rest_surplus_harvest_reason,
+                "rest_surplus_harvest_block_reason": self.rest_surplus_harvest_block_reason,
+                "rest_surplus_harvest_profile": self.rest_surplus_harvest_profile,
                 "rest_surplus_entry_progress_s": round(float(self.rest_surplus_entry_progress_s or 0.0), 1),
+                "rest_surplus_hold_remaining_s": round(float(self.rest_surplus_hold_remaining_s or 0.0), 1),
                 "rest_surplus_exit_reason": self.rest_surplus_exit_reason,
                 "second_battery_charge_pressure_w": round(float(self.second_battery_charge_pressure_w or 0.0), 1),
                 "second_battery_charge_saturation_threshold_w": round(float(self.second_battery_charge_saturation_threshold_w or 0.0), 1),
                 "rest_surplus_export_w": round(float(self.rest_surplus_export_w or 0.0), 1),
+                "harvest_primary_floor_w": round(float(self.harvest_primary_floor_w or 0.0), 1),
+                "harvest_primary_restart_w": round(float(self.harvest_primary_restart_w or 0.0), 1),
+                "harvest_primary_near_limit_w": round(float(self.harvest_primary_near_limit_w or 0.0), 1),
+                "harvest_primary_target_share": round(float(self.harvest_primary_target_share or 0.0), 3),
+                "harvest_primary_required_w": round(float(self.harvest_primary_required_w or 0.0), 1),
+                "harvest_primary_share_reserve_w": round(float(self.harvest_primary_share_reserve_w or 0.0), 1),
+                "harvest_candidate_raw_w": round(float(self.harvest_candidate_raw_w or 0.0), 1),
+                "harvest_candidate_after_primary_w": round(float(self.harvest_candidate_after_primary_w or 0.0), 1),
+                "harvest_limiter_reason": self.harvest_limiter_reason,
+                "harvest_capacity_mode": self.harvest_capacity_mode,
+                "primary_remaining_capacity_kwh": None if self.primary_remaining_capacity_kwh is None else round(float(self.primary_remaining_capacity_kwh), 3),
+                "zendure_remaining_capacity_kwh": None if self.zendure_remaining_capacity_kwh is None else round(float(self.zendure_remaining_capacity_kwh), 3),
                 "graph_history": list(self.graph_history),
                 "event_history": list(self.event_history),
                 "mqtt_topic_diagnostics": list(self.mqtt_topic_diagnostics),

@@ -95,7 +95,7 @@ def base_row():
         "zendure_mqtt_missing_critical_groups": "",
         "zendure_mqtt_stale_critical_groups": "",
         "zendure_pack_data_json": json.dumps([
-            {"pack_sn": "HEC4NENCN492025", "temperature_c": 61.4},
+            {"pack_sn": "HEC_TEST_DEVICE", "temperature_c": 61.4},
             {"pack_sn": "pack_1", "temperature_c": 27.8},
             {"pack_sn": "pack_2", "temperature_c": 31.4},
         ]),
@@ -159,7 +159,7 @@ class MeasurementV4WriterTests(unittest.TestCase):
             headunit_json = json.loads(rows[0]["zendure_headunit_temperatures_json"])
             mqtt_json = json.loads(rows[0]["zendure_mqtt_group_status_json"])
             self.assertEqual(2, pack_json["pack_count"])
-            self.assertEqual("HEC4NENCN492025", headunit_json["max_sensor_id"])
+            self.assertEqual("HEC_TEST_DEVICE", headunit_json["max_sensor_id"])
             self.assertEqual("ZENDURE_MQTT_OK", mqtt_json["overall_status"])
 
 

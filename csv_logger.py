@@ -573,6 +573,7 @@ class CsvRotatingLogger:
         self._last_fallback_reason = ""
         self._last_fallback_signature = ""
         self._v4_logger = None
+        self._db_writer = None
 
     def close(self) -> None:
         if self._fh is not None:
@@ -591,6 +592,11 @@ class CsvRotatingLogger:
         if self._v4_logger is not None:
             try:
                 self._v4_logger.close()
+            except Exception:
+                pass
+        if self._db_writer is not None:
+            try:
+                self._db_writer.close()
             except Exception:
                 pass
 
@@ -618,15 +624,42 @@ class CsvRotatingLogger:
             self._rows_since_flush = 0
             self._last_flush_epoch = now
 
+    def _enqueue_measurement_db(self, config: Dict[str, Any], row: Dict[str, Any]) -> Dict[str, Any]:
+        """Queue one measurement row for the optional SQLite graph store.
+
+        This path is intentionally independent of CSV/V4 logging mode so the
+        status/graph UI can keep a lightweight local history even when the
+        heavy measurement CSV logging is switched off.  The call is non-blocking
+        by design; on queue/full errors the regulator cycle continues.
+        """
+        try:
+            if self._db_writer is None:
+                from measurement_db import MeasurementDbWriter
+                self._db_writer = MeasurementDbWriter()
+            return self._db_writer.enqueue(config, row)
+        except Exception as exc:
+            return {
+                "measurement_db_status": "error",
+                "measurement_db_reason": str(exc),
+                "measurement_db_error": str(exc),
+            }
+
+    def _merge_db_status(self, status: Dict[str, Any], db_status: Dict[str, Any]) -> Dict[str, Any]:
+        merged = dict(status or {})
+        merged.update(db_status or {})
+        return merged
+
     def log(self, config: Dict[str, Any], row: Dict[str, Any]) -> Dict[str, Any]:
         if measurement_schema_version(config) == "4":
+            db_status = self._enqueue_measurement_db(config, row)
             if self._v4_logger is None:
                 from measurement_v4 import MeasurementV4Logger
                 self._v4_logger = MeasurementV4Logger()
-            return self._v4_logger.log(config, row)
+            return self._merge_db_status(self._v4_logger.log(config, row), db_status)
         mode = measurement_log_mode(config)
         if mode == "off":
-            return self.status(config, "disabled", "MEASUREMENT_LOG_MODE=off")
+            db_status = self._enqueue_measurement_db(config, row)
+            return self._merge_db_status(self.status(config, "disabled", "MEASUREMENT_LOG_MODE=off"), db_status)
 
         # Resolve path/fallback once per cycle and use that same decision for
         # directory checks, rotation, row contents and returned status. This
@@ -667,6 +700,7 @@ class CsvRotatingLogger:
         else:
             reason = "OK"
         out_row = self.prepare_row(config, row, path=path, free_mb=free_mb, log_status=status, log_status_reason=reason)
+        db_status = self._enqueue_measurement_db(config, out_row)
         row_size = _serialized_row_length(out_row)
         out_row["measurement_estimated_retention_hours"] = estimate_retention_hours(config, row_size)
 
@@ -676,7 +710,7 @@ class CsvRotatingLogger:
         self._rows_since_flush += 1
         self._flush_if_due(config)
 
-        return self.status(config, status, reason, path=path, free_mb=free_mb, row_size_bytes=row_size, target_info=target_info, fallback_event=fallback_event)
+        return self._merge_db_status(self.status(config, status, reason, path=path, free_mb=free_mb, row_size_bytes=row_size, target_info=target_info, fallback_event=fallback_event), db_status)
 
     def prepare_row(self, config: Dict[str, Any], row: Dict[str, Any], *, path: Optional[str] = None, free_mb: Optional[int] = None, log_status: str = "active", log_status_reason: str = "OK") -> Dict[str, Any]:
         mode = measurement_log_mode(config)

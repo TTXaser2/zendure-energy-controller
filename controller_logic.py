@@ -206,6 +206,13 @@ class ZendureController:
             return
 
         if abs(grid_power) <= cfg["DEADBAND_W"]:
+            # High-SOC/Parallel-Harvest darf im Deadband weiter allokieren:
+            # Wenn der Primärspeicher stark lädt, aber am Netzanschlusspunkt schon
+            # nahe 0 W erreicht ist, soll Zendure kontrolliert Ladeleistung
+            # übernehmen dürfen, statt in HOLD bei einem alten Ziel zu verharren.
+            if self._rest_surplus_is_active() and bool(cfg.get("HARVEST_HIGH_SMA_SOC_ENABLED", True)):
+                self.handle_charge(cfg, grid_power)
+                return
             self.handle_deadband(cfg)
             return
 
@@ -360,6 +367,11 @@ class ZendureController:
                 raw = self.sma_energy_meter.read_grid_power(cfg)
             else:
                 raw = self.shelly.read_grid_power(cfg)
+            plausibility_limit = float(cfg.get("GRID_POWER_PLAUSIBILITY_MAX_ABS_W", 30000) or 30000)
+            if plausibility_limit > 0 and abs(float(raw)) > plausibility_limit:
+                raise RuntimeError(
+                    f"Netzleistungswert unplausibel: {float(raw):.1f} W überschreitet absolute Grenze {plausibility_limit:.0f} W"
+                )
             smoothed = self.state.update_power_history(raw, int(cfg["MOVING_AVERAGE_SAMPLES"]))
             now = time.time()
             now_text = datetime.now().strftime("%H:%M:%S")
@@ -387,7 +399,8 @@ class ZendureController:
                 self.state.grid_power_used_for_control = False
                 if self.state.last_shelly_update_epoch is not None:
                     self.state.grid_power_age_seconds = max(0, int(time.time() - self.state.last_shelly_update_epoch))
-                self.state.grid_power_validity_reason = f"{source_label} nicht aktuell"
+                exc_text = str(exc)
+                self.state.grid_power_validity_reason = exc_text if "unplausibel" in exc_text.lower() else f"{source_label} nicht aktuell"
             with self.state.lock:
                 last_update = self.state.last_shelly_update_epoch
             if not for_control:
@@ -791,13 +804,61 @@ class ZendureController:
         value = self._optional_int(cfg.get("SECOND_BATTERY_MAX_CHARGE_POWER_W"))
         return value if value is not None and value > 0 else None
 
-    def _rest_surplus_thresholds(self, cfg: Dict[str, Any]) -> Dict[str, int]:
+    def _cfg_float(self, cfg: Dict[str, Any], key: str, default: float) -> float:
+        try:
+            value = cfg.get(key, default)
+            if value is None or (isinstance(value, str) and value.strip() == ""):
+                return float(default)
+            return float(value)
+        except Exception:
+            return float(default)
+
+    def _cfg_optional_w(self, cfg: Dict[str, Any], key: str) -> Optional[int]:
+        value = self._optional_int(cfg.get(key))
+        return value if value is not None and value >= 0 else None
+
+    def _profile_clock_minutes(self) -> int:
+        now = datetime.now()
+        return now.hour * 60 + now.minute
+
+    def _harvest_time_profile(self, cfg: Dict[str, Any]) -> Dict[str, Any]:
+        if not bool(cfg.get("HARVEST_HIGH_SMA_SOC_TIME_PROFILE_ENABLED", True)):
+            return {
+                "name": "default",
+                "share": self._cfg_float(cfg, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY", 0.50),
+                "reserve_w": int(cfg.get("HARVEST_HIGH_SMA_SOC_MIN_EXPORT_W", 300) or 300),
+                "entry_confirm_s": int(cfg.get("HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS", 30) or 30),
+            }
+        minutes = self._profile_clock_minutes()
+        if 9 * 60 + 30 <= minutes < 11 * 60 + 30:
+            return {"name": "morning", "share": self._cfg_float(cfg, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MORNING", 0.60), "reserve_w": 250, "entry_confirm_s": 60}
+        if 11 * 60 + 30 <= minutes < 14 * 60 + 30:
+            return {"name": "midday", "share": self._cfg_float(cfg, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY", 0.50), "reserve_w": 150, "entry_confirm_s": 30}
+        if 14 * 60 + 30 <= minutes < 18 * 60:
+            return {"name": "afternoon", "share": self._cfg_float(cfg, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_AFTERNOON", 0.35), "reserve_w": 100, "entry_confirm_s": 15}
+        return {"name": "default", "share": self._cfg_float(cfg, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY", 0.50), "reserve_w": int(cfg.get("HARVEST_HIGH_SMA_SOC_MIN_EXPORT_W", 300) or 300), "entry_confirm_s": int(cfg.get("HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS", 30) or 30)}
+
+    def _primary_threshold_w(self, cfg: Dict[str, Any], absolute_key: str, ratio_key: str, fallback_ratio: float) -> int:
+        max_charge = self._rest_surplus_max_charge_w(cfg) or 0
+        explicit = self._cfg_optional_w(cfg, absolute_key)
+        if explicit is not None and explicit > 0:
+            return int(explicit)
+        ratio = self._cfg_float(cfg, ratio_key, fallback_ratio)
+        return max(0, int(round(max_charge * ratio))) if max_charge > 0 else 0
+
+    def _rest_surplus_thresholds(self, cfg: Dict[str, Any]) -> Dict[str, Any]:
         max_charge = self._rest_surplus_max_charge_w(cfg) or 0
         margin = max(0, int(cfg.get("SECOND_BATTERY_CHARGE_SATURATION_MARGIN_W", 100) or 100))
         min_export = max(1, int(cfg.get("REST_SURPLUS_MIN_EXPORT_W", 80) or 80))
         entry_confirm_s = max(1, int(cfg.get("REST_SURPLUS_ENTRY_CONFIRM_SECONDS", 30) or 30))
-        saturation = max(0, max_charge - margin) if max_charge > 0 else 0
-        critical_floor = max(200, int(round(max_charge * 0.10))) if max_charge > 0 else 0
+        saturation = self._primary_threshold_w(cfg, "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_W", "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_RATIO", 0.95)
+        if saturation <= 0 and max_charge > 0:
+            saturation = max(0, max_charge - margin)
+        critical_floor = self._primary_threshold_w(cfg, "HARVEST_PRIMARY_CHARGE_FLOOR_W", "HARVEST_PRIMARY_CHARGE_FLOOR_RATIO", 0.30)
+        restart = self._primary_threshold_w(cfg, "HARVEST_PRIMARY_CHARGE_RESTART_W", "HARVEST_PRIMARY_CHARGE_RESTART_RATIO", 0.85)
+        high_min_export = max(1, int(cfg.get("HARVEST_HIGH_SMA_SOC_MIN_EXPORT_W", 300) or 300))
+        profile = self._harvest_time_profile(cfg)
+        high_entry_confirm_s = max(1, int(profile.get("entry_confirm_s") or cfg.get("HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS", 30) or 30))
         return {
             "max_charge": max_charge,
             "margin": margin,
@@ -805,6 +866,15 @@ class ZendureController:
             "entry_confirm_s": entry_confirm_s,
             "saturation": saturation,
             "critical_floor": critical_floor,
+            "restart": restart,
+            "high_enabled": bool(cfg.get("HARVEST_HIGH_SMA_SOC_ENABLED", True)),
+            "high_enter_soc": float(cfg.get("HARVEST_HIGH_SMA_SOC_ENTER_PERCENT", 75) or 75),
+            "high_exit_soc": float(cfg.get("HARVEST_HIGH_SMA_SOC_EXIT_PERCENT", 70) or 70),
+            "high_min_export": high_min_export,
+            "high_entry_confirm_s": high_entry_confirm_s,
+            "high_hold_s": max(0, int(cfg.get("HARVEST_HIGH_SMA_SOC_HOLD_SECONDS", 180) or 180)),
+            "full_soc": float(cfg.get("HARVEST_SMA_FULL_SOC_PERCENT", 98) or 98),
+            "profile": profile,
         }
 
     def _reset_rest_surplus_harvest(self, reason: str) -> None:
@@ -812,25 +882,50 @@ class ZendureController:
             self.state.rest_surplus_harvest_active = False
             self.state.rest_surplus_harvest_eligible = False
             self.state.rest_surplus_entry_progress_s = 0.0
+            self.state.rest_surplus_hold_remaining_s = 0.0
             self.state.rest_surplus_exit_reason = str(reason or "")
+            self.state.rest_surplus_harvest_reason = "NONE"
+            self.state.rest_surplus_harvest_block_reason = str(reason or "")
+
+    def _update_harvest_capacity_diagnostics(self, cfg: Dict[str, Any]) -> None:
+        with self.state.lock:
+            primary_soc = self.state.sma_battery_soc
+            primary_capacity = self.state.sma_battery_capacity_kwh
+            zendure_soc = self.state.battery_soc
+        zendure_capacity = self._cfg_float(cfg, "ZENDURE_BATTERY_CAPACITY_KWH", 0.0)
+        max_soc = self._cfg_float(cfg, "MAX_SOC_PERCENT", 100.0)
+        primary_remaining = None
+        zendure_remaining = None
+        try:
+            if primary_capacity is not None and primary_soc is not None:
+                primary_remaining = max(0.0, float(primary_capacity) * max(0.0, max_soc - float(primary_soc)) / 100.0)
+        except Exception:
+            primary_remaining = None
+        try:
+            if zendure_capacity > 0 and zendure_soc is not None:
+                zendure_remaining = max(0.0, float(zendure_capacity) * max(0.0, max_soc - float(zendure_soc)) / 100.0)
+        except Exception:
+            zendure_remaining = None
+        with self.state.lock:
+            self.state.harvest_capacity_mode = str(cfg.get("HARVEST_CAPACITY_WEIGHTING_MODE", "diagnostic") or "diagnostic")
+            self.state.primary_remaining_capacity_kwh = primary_remaining
+            self.state.zendure_remaining_capacity_kwh = zendure_remaining
 
     def update_rest_surplus_harvest_state(self, cfg: Dict[str, Any], grid_power: float) -> None:
-        """Update Entry/Stay diagnostics for the Restüberschuss-Ernte state machine.
-
-        This method deliberately does not publish commands. It only qualifies the
-        strict entry condition and keeps the active latch generous. The command
-        decision remains in handle_charge()/ramp_down paths so the live cycle
-        stays readable and cheap.
-        """
+        """Update Entry/Stay diagnostics for Basis- and High-SOC Restüberschuss-Ernte."""
         thresholds = self._rest_surplus_thresholds(cfg)
+        profile = thresholds.get("profile") or {}
         export_w = max(0.0, -float(grid_power or 0.0))
+        self._update_harvest_capacity_diagnostics(cfg)
         with self.state.lock:
             second_power = float(self.state.sma_battery_display_power or 0.0)
+            second_soc = self.state.sma_battery_soc
             second_valid = bool(self.state.second_battery_data_valid and self.state.second_battery_data_fresh)
-            soc = self.state.battery_soc
+            zendure_soc = self.state.battery_soc
             zendure_actual = float(self.state.actual_zendure_system_signed_power or 0.0)
             zendure_target = float(self.state.last_input_power or 0.0)
             active = bool(self.state.rest_surplus_harvest_active)
+            current_reason = self.state.rest_surplus_harvest_reason or "NONE"
         zendure_charge = max(0.0, zendure_actual if zendure_actual > 0 else zendure_target)
         charge_pressure = max(0.0, second_power) + zendure_charge + export_w
 
@@ -838,6 +933,11 @@ class ZendureController:
             self.state.second_battery_charge_pressure_w = round(charge_pressure, 1)
             self.state.second_battery_charge_saturation_threshold_w = float(thresholds["saturation"])
             self.state.rest_surplus_export_w = round(export_w, 1)
+            self.state.harvest_primary_floor_w = float(thresholds["critical_floor"])
+            self.state.harvest_primary_restart_w = float(thresholds["restart"])
+            self.state.harvest_primary_near_limit_w = float(thresholds["saturation"])
+            self.state.harvest_primary_target_share = float(profile.get("share", 0.50) or 0.50)
+            self.state.rest_surplus_harvest_profile = str(profile.get("name", "default") or "default")
 
         if not bool(cfg.get("REST_SURPLUS_HARVEST_ENABLED", False)):
             self._reset_rest_surplus_harvest("DISABLED")
@@ -851,36 +951,135 @@ class ZendureController:
         if not second_valid:
             self._reset_rest_surplus_harvest("SECOND_BATTERY_DATA_INVALID")
             return
-        if soc is None or float(soc) >= float(cfg.get("MAX_SOC_PERCENT", 100)):
+        if zendure_soc is None or float(zendure_soc) >= float(cfg.get("MAX_SOC_PERCENT", 100)):
             self._reset_rest_surplus_harvest("MAX_SOC_LIMIT")
             return
         if not self.state.mqtt_connected and cfg.get("MQTT_DISCONNECTED_SAFE_STATE", False):
             self._reset_rest_surplus_harvest("MQTT_DISCONNECTED")
             return
 
-        eligible_now = bool(
-            second_power >= thresholds["saturation"]
-            and export_w >= thresholds["min_export"]
+        soc_ok = second_soc is not None and float(second_soc) >= float(thresholds["high_enter_soc"])
+        soc_stay_ok = second_soc is not None and float(second_soc) >= float(thresholds["high_exit_soc"])
+        full_soc = second_soc is not None and float(second_soc) >= float(thresholds["full_soc"])
+
+        near_limit = bool(second_power >= thresholds["saturation"] and export_w >= thresholds["min_export"])
+        high_soc_parallel = bool(
+            thresholds["high_enabled"]
+            and soc_ok
+            and (export_w >= thresholds["high_min_export"] or second_power >= thresholds["restart"])
+            and second_power >= thresholds["critical_floor"]
         )
+        full_or_idle = bool(
+            thresholds["high_enabled"]
+            and full_soc
+            and export_w >= thresholds["high_min_export"]
+        )
+
+        eligible_now = bool(near_limit or high_soc_parallel or full_or_idle)
+        if full_or_idle:
+            reason = "SMA_FULL_OR_IDLE"
+        elif near_limit and high_soc_parallel:
+            reason = "HIGH_SMA_SOC_SMA_NEAR_LIMIT"
+        elif high_soc_parallel:
+            reason = "HIGH_SMA_SOC"
+        elif near_limit:
+            reason = "SMA_NEAR_LIMIT"
+        else:
+            reason = "NONE"
+
+        entry_confirm_s = thresholds["high_entry_confirm_s"] if reason in {"HIGH_SMA_SOC", "HIGH_SMA_SOC_SMA_NEAR_LIMIT", "SMA_FULL_OR_IDLE"} else thresholds["entry_confirm_s"]
         step_s = max(1.0, float(cfg.get("INTERVAL_SECONDS", 3) or 3))
         with self.state.lock:
             self.state.rest_surplus_harvest_eligible = eligible_now
+            self.state.rest_surplus_harvest_reason = reason if eligible_now or active else "NONE"
+            self.state.rest_surplus_harvest_block_reason = "" if eligible_now else ("SOC_BELOW_EXIT" if active and not soc_stay_ok else "NOT_ELIGIBLE")
             if eligible_now:
-                self.state.rest_surplus_entry_progress_s = min(
-                    float(thresholds["entry_confirm_s"]),
-                    float(self.state.rest_surplus_entry_progress_s or 0.0) + step_s,
-                )
-                if self.state.rest_surplus_entry_progress_s >= thresholds["entry_confirm_s"]:
+                self.state.rest_surplus_entry_progress_s = min(float(entry_confirm_s), float(self.state.rest_surplus_entry_progress_s or 0.0) + step_s)
+                self.state.rest_surplus_hold_remaining_s = float(thresholds["high_hold_s"])
+                if self.state.rest_surplus_entry_progress_s >= entry_confirm_s:
                     self.state.rest_surplus_harvest_active = True
                     self.state.rest_surplus_exit_reason = ""
+                    self.state.rest_surplus_harvest_reason = reason
+            elif active and soc_stay_ok and float(self.state.rest_surplus_hold_remaining_s or 0.0) > 0.0:
+                self.state.rest_surplus_hold_remaining_s = max(0.0, float(self.state.rest_surplus_hold_remaining_s or 0.0) - step_s)
+                self.state.rest_surplus_harvest_reason = current_reason if current_reason != "NONE" else "EXPORT_HOLD"
+                self.state.rest_surplus_harvest_block_reason = "EXPORT_HOLD"
+            elif active and not soc_stay_ok:
+                self.state.rest_surplus_harvest_active = False
+                self.state.rest_surplus_entry_progress_s = 0.0
+                self.state.rest_surplus_hold_remaining_s = 0.0
+                self.state.rest_surplus_exit_reason = "HIGH_SMA_SOC_EXIT"
+                self.state.rest_surplus_harvest_reason = "NONE"
+            elif active:
+                # Aktiver High-SOC-Harvest bleibt diagnostisch im letzten Grund,
+                # damit handle_charge die Primär-Floor/Share-Rückregelung ausführen
+                # kann. Kein blindes Watt-Halten bei BELOW_FLOOR/RESTART_WAIT.
+                if thresholds.get("high_enabled"):
+                    self.state.rest_surplus_harvest_reason = current_reason if current_reason != "NONE" else "EXPORT_HOLD"
+                    self.state.rest_surplus_harvest_block_reason = "PRIMARY_BAND_LIMIT"
+                else:
+                    self.state.rest_surplus_harvest_reason = current_reason
+                    self.state.rest_surplus_harvest_block_reason = "NOT_ELIGIBLE"
             elif not active:
-                # Soft decay: one short outlier should not destroy progress, but
-                # a short cloud window should still fail to qualify.
                 self.state.rest_surplus_entry_progress_s = max(0.0, float(self.state.rest_surplus_entry_progress_s or 0.0) - step_s)
 
     def _rest_surplus_is_active(self) -> bool:
         with self.state.lock:
             return bool(self.state.rest_surplus_harvest_active)
+
+
+    def _rest_surplus_charge_pressure_target(self, cfg: Dict[str, Any], grid_power: float, last_input: int) -> Dict[str, Any]:
+        thresholds = self._rest_surplus_thresholds(cfg)
+        profile = thresholds.get("profile") or {}
+        export_w = max(0.0, -float(grid_power or 0.0))
+        with self.state.lock:
+            second_power = float(self.state.sma_battery_display_power or 0.0)
+            reason = str(self.state.rest_surplus_harvest_reason or "NONE")
+            zendure_actual = float(self.state.actual_zendure_system_signed_power or 0.0)
+        zendure_charge = max(0.0, zendure_actual if zendure_actual > 0 else float(last_input or 0))
+        charge_pressure = max(0.0, second_power) + zendure_charge + export_w
+        share = max(0.0, min(1.0, float(profile.get("share", 0.50) or 0.50)))
+        floor_w = float(thresholds.get("critical_floor", 0) or 0)
+        restart_w = float(thresholds.get("restart", 0) or 0)
+        reserve_w = float(profile.get("reserve_w", thresholds.get("high_min_export", 300)) or 0)
+        share_reserve = charge_pressure * share
+        primary_required = max(floor_w, share_reserve)
+        limiter = ""
+
+        if reason == "SMA_FULL_OR_IDLE" and export_w >= thresholds.get("high_min_export", 300):
+            # Wenn der Primärspeicher voll/idle ist, darf der Floor nicht den
+            # echten Export-Latch erneut auf 0 halten. In diesem Zweig wird nur
+            # realer Export geerntet, nicht Primärspeicher-Ladeleistung verdrängt.
+            raw_candidate = export_w - reserve_w
+            primary_required = 0.0
+            share_reserve = 0.0
+            limiter = "SMA_FULL_OR_IDLE"
+        else:
+            raw_candidate = charge_pressure - primary_required - reserve_w
+            if second_power < floor_w and second_power >= 0:
+                limiter = "PRIMARY_FLOOR_LIMIT"
+            elif primary_required > floor_w:
+                limiter = "PRIMARY_SHARE_LIMIT"
+            if reason in {"HIGH_SMA_SOC", "EXPORT_HOLD"} and restart_w > 0 and second_power < restart_w:
+                # Unterhalb Restart bleibt Laden möglich, aber die Share/Floor-Reserve
+                # wirkt begrenzend; der Reason ist für Diagnose/Parametrierung sichtbar.
+                limiter = limiter or "PRIMARY_RESTART_WAIT"
+
+        candidate = max(0, int(round(raw_candidate)))
+        with self.state.lock:
+            self.state.second_battery_charge_pressure_w = round(charge_pressure, 1)
+            self.state.harvest_primary_required_w = round(primary_required, 1)
+            self.state.harvest_primary_share_reserve_w = round(share_reserve, 1)
+            self.state.harvest_candidate_raw_w = round(raw_candidate, 1)
+            self.state.harvest_candidate_after_primary_w = float(candidate)
+            self.state.harvest_limiter_reason = limiter
+        return {
+            "target": candidate,
+            "reason": reason,
+            "charge_pressure_w": charge_pressure,
+            "primary_required_w": primary_required,
+            "limiter": limiter,
+        }
 
     def _rest_surplus_should_reduce_in_hold(self, cfg: Dict[str, Any]) -> bool:
         if not self._rest_surplus_is_active():
@@ -1309,12 +1508,33 @@ class ZendureController:
 
         if harvest_active:
             self.state.add_limiter("REST_SURPLUS_HARVEST")
-            if harvest_near_saturation:
+            harvest_target = self._rest_surplus_charge_pressure_target(cfg, grid_power, int(last_input or 0))
+            harvest_reason = str(harvest_target.get("reason") or "NONE")
+            if harvest_reason in {"HIGH_SMA_SOC", "HIGH_SMA_SOC_SMA_NEAR_LIMIT", "SMA_FULL_OR_IDLE", "EXPORT_HOLD"}:
+                raw_target = int(harvest_target.get("target", 0))
+                if raw_target <= 0 and export_w >= thresholds.get("high_min_export", thresholds.get("min_export", 80)) and harvest_reason in {"HIGH_SMA_SOC", "SMA_FULL_OR_IDLE"}:
+                    raw_target = int(round(export_w))
+                    with self.state.lock:
+                        self.state.rest_surplus_harvest_reason = "LATCH_RECOVERY"
+                        self.state.harvest_limiter_reason = "LATCH_RECOVERY"
+                control_reason = f"Restüberschuss-Ernte: {harvest_reason} per Charge-Pressure-Allokation"
+            elif harvest_near_saturation:
                 raw_target = last_input + int(round(export_w))
                 control_reason = "Restüberschuss-Ernte: Primärspeicher nahe Ladegrenze, Netzexport wird Richtung 0 W geerntet"
             else:
-                raw_target = last_input
-                control_reason = "Restüberschuss-Ernte: Ladeziel wird gehalten; Primärspeicher ist nicht mehr nahe Ladegrenze"
+                # RC1: kein blindes 0-W-Halten mehr, wenn echter Export im aktiven
+                # Harvest-State vorhanden ist. Ohne gültigen High-SOC-/Near-Limit-
+                # Grund darf normale AUTO-Exportregelung wieder entscheiden.
+                if export_w >= thresholds.get("min_export", 80):
+                    raw_target = last_input + int(effective * cfg.get("CONTROL_GAIN", 0.30))
+                    with self.state.lock:
+                        self.state.rest_surplus_exit_reason = "LATCH_RECOVERY_TO_AUTO_GRID_EXPORT"
+                        self.state.rest_surplus_harvest_active = False
+                        self.state.rest_surplus_harvest_reason = "LATCH_RECOVERY"
+                    control_reason = "Restüberschuss-Ernte: Latch-Recovery, AUTO_GRID_EXPORT übernimmt"
+                else:
+                    raw_target = last_input
+                    control_reason = "Restüberschuss-Ernte: Ladeziel wird gehalten; kein bestätigter Export-/High-SOC-Grund"
         else:
             raw_target = last_input + int(effective * cfg.get("CONTROL_GAIN", 0.30))
             control_reason = "PV-Überschuss erkannt -> Zendure lädt"

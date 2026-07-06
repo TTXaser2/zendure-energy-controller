@@ -1,4 +1,61 @@
-# Zendure Energy Controller V12.11.0-RC6
+# Zendure Energy Controller V12.11.1-RC1
+
+## Wichtige Änderungen in V12.11.1-RC1
+
+V12.11.1-RC1 erweitert die bestehende Restüberschuss-Ernte um `HARVEST_HIGH_SMA_SOC` als tageszeitabhängigen Parallel-Harvest-Regelzweig. Ab konfigurierbarem Primärspeicher-SOC, standardmäßig 75 %, darf Zendure aggressiver Lade-/Überschussleistung übernehmen, solange Primärspeicher-Floor, Restart-/Near-Limit-Schwellen, Cross-Charge, SOC-Grenzen, Rampen und MQTT-/Freshness-Bedingungen eingehalten werden.
+
+Der reale Fehlerfall „Harvest aktiv, SMA voll, massiver Export, Zendure aufnahmefähig, Ziel bleibt 0 W“ wird durch `SMA_FULL_OR_IDLE`/`LATCH_RECOVERY` behoben. Zusätzlich protokolliert V4 neue Harvest-Diagnosefelder wie `rest_surplus_harvest_reason`, `harvest_primary_required_w`, `harvest_primary_target_share`, `harvest_limiter_reason` und freie Restkapazitäten. Kapazität ist in RC1 nur diagnostisch, nicht als harter Echtzeit-Regler aktiv.
+
+
+## Wichtige Änderungen in V12.11.0-RC18
+
+V12.11.0-RC18 ergänzt auf Basis von RC17 ein kleines Offline-Migrationstool für den SQLite-Graphspeicher. Vorhandene ZEC-Measurement-CSV-Dateien können damit in `zec_measurements.sqlite3` importiert werden, sodass Status- und Graph-Webseiten sofort mit Echtdaten aus der strukturierten Datenbasis geprüft werden können.
+
+Das Tool `tools/import_measurements_to_db.py` liest CSV-Dateien streaming-basiert, schreibt in kleinen Batches in die vorhandenen Tabellen `measurement_raw` und `measurement_1min` und ist für den Raspberry Pi bewusst ressourcenschonend ausgelegt. Es verändert die Live-Regelung nicht und läuft nur bei explizitem manuellem Start.
+
+Beispiel:
+
+```bash
+cd /opt/zendure-controller
+python3 tools/import_measurements_to_db.py --log-dir /mnt/zec-usb/ZEC/logs
+```
+
+Optional kann mit `--dry-run` nur geprüft und mit `--reset` eine vorhandene SQLite-Datei vor dem Import neu aufgebaut werden.
+
+Die Live-Regelstrategie bleibt unverändert: keine Änderung an AUTO, Nachtmodus-Regelwirkung, Cross-Charge, Restüberschuss-Ernte, Zendure-MQTT-Kommandostruktur oder Measurement-V4-CSV-Schema.
+
+## Wichtige Änderungen in V12.11.0-RC14
+
+V12.11.0-RC14 ist ein UI-Polish- und Diagnosekomfort-Release auf Basis von RC13. Die moderne Statusseite wurde gezielt weniger „hölzern“ gestaltet: ein konsistentes lokales SVG-Iconset ersetzt gemischte Unicode-/Emoji-Symbole, die Hauptkarten sind ruhiger abgestimmt und der Netzleistungs-Mini-Graph zeigt nun Achsen, Skalenhinweise, Min/Max und aktuellen Wert statt einer unskalierten Dekolinie.
+
+Die Nachtmodusinformation in der Betriebsmodus-Karte wurde entdramatisiert. Statt gelber Prognosebox erscheint sie als neutrale Kontextzeile, z. B. „Nachtmodus: aktuell nicht aktiv · Fenster 21:30–05:30 · Leistung 400 W“. Warnfarben bleiben echten Warnungen vorbehalten.
+
+Zusätzlich ergänzt RC14 das in RC13 begonnene Debugging-Workflow-Konzept um `tools/collect_zec_crash_package.sh` und einen dritten Desktop-Link „ZEC Crashpaket erstellen“. Dieses Paket sammelt Kernel-, Storage-, Service- und Vorboot-Logs für Raspberry-Pi-Hänger, Reboots, mmc-/USB-/Dateisystemprobleme.
+
+Die Live-Regelstrategie bleibt unverändert: keine Änderung an AUTO, Nachtmodus-Regelwirkung, Cross-Charge, Restüberschuss-Ernte, Zendure-MQTT-Kommandostruktur oder Measurement-V4-Schema.
+
+
+## Wichtige Änderungen in V12.11.0-RC10
+
+V12.11.0-RC10 ist ein konsequenter Modern-UI-Pixel-Pass auf Basis von RC9. Die neue Status- und Graph-Oberfläche orientiert sich kompromisslos an den zuvor abgestimmten Mock-ups: dunkles Produktdashboard, eigener Header mit ZENDURE-Branding, kuratierte Hauptkarten, Energieflussbereich, SOC-Tagesgraph und modernisierte Verlaufsdiagnose. Die moderne UI ist unabhängig vom bisherigen hell/dunkel-Schalter im neuen Mock-up-Stil gestaltet. Legacy-Seiten bleiben unter `/status_old` und `/graph_old` erreichbar.
+
+Die Live-Regelstrategie bleibt unverändert: keine Änderung an AUTO, Nachtmodus, Cross-Charge, Restüberschuss-Ernte, Zendure-MQTT-Kommandostruktur oder Measurement-V4-Schema.
+
+## Wichtige Änderungen in V12.11.0-RC9
+
+V12.11.0-RC9 ist ein UI-Refactor-Release auf Basis von RC8. Der Release zieht einen klaren Schnitt zwischen Legacy-UI und moderner Standard-UI: Die alten Status-/Graph-Seiten bleiben als Fallback unter `/status_old` und `/graph_old` erreichbar, während `/` und `/graph` neu komponierte moderne Ansichten erhalten. Ein Expertenmenü macht die Legacy-Seiten ohne manuelle URL-Eingabe erreichbar.
+
+Die neue Statusseite wird nicht mehr additiv aus alten Detailkarten aufgebaut, sondern zeigt eine kuratierte Standardansicht mit fünf Hauptkarten, kompakter Energieflussübersicht, Nachtmodus-Prognose, SOC-Tageskurve und einem kleinen Diagnose-/Fallbackbereich. Die neue Graph-Seite wird als Live-/Verlaufsdiagnose mit Toolbar, Hauptgraph, KPI-Leiste, Marker-/Ereignisbereich, aktiven Signalen und Legacy-Fallback aufgebaut.
+
+Mehrere geöffnete Browser-Tabs sollen den Pi nicht unnötig belasten: Die neue Graph-Seite nutzt Page-Visibility-Pausierung, und die Statusseite verzichtet auf automatische komplette Seitenreloads. Teure Messdaten-/CSV-Arbeiten bleiben auf die bestehenden gecachten Endpunkte bzw. explizite Benutzeraktionen beschränkt.
+
+Die Live-Regelstrategie bleibt unverändert: keine Änderung an AUTO, Nachtmodus, Cross-Charge, Restüberschuss-Ernte, Zendure-MQTT-Kommandostruktur oder Measurement-V4-Schema. Die geplante PRIMARY_CHARGE_WINDOW_HARVEST-Strategie bleibt vorgemerkt, ist aber nicht Bestandteil von RC9.
+
+## Wichtige Änderungen in V12.11.0-RC8
+
+V12.11.0-RC8 ist ein Stabilitäts- und UI-Korrekturrelease auf Basis von RC7. Enthalten sind: feste 00:00-24:00-SOC-Tagesachse, gecachter SOC-Measurement-Bootstrap, robuster Analyse-Service-Link mit Browser-Host, eine zusätzliche kompakte Dashboard-Kartenreihe auf der Statusseite sowie ein Netzleistungs-Plausibilitätsfilter gegen extreme SMA-/Shelly-Ausreißer.
+
+Die Live-Regelstrategie bleibt unverändert: keine Änderung an AUTO, Nachtmodus, Cross-Charge, Restüberschuss-Ernte oder Zendure-MQTT-Kommandostruktur. Die geplante PRIMARY_CHARGE_WINDOW_HARVEST-Strategie mit Monatsgruppen und konfigurierbaren Zeitfenstern ist vorgemerkt, aber nicht Bestandteil von RC8.
 
 Lokaler MQTT-basierter Controller für Zendure SolarFlow 2400 AC+ mit Weboberfläche, Regelalgorithmus, ZEC-MEASUREMENT-V4-Messdaten-Logging, Cross-Charge-Schutz, lokaler Zendure-API als Telemetrie-Fallback, optionaler Analyse-Weboberfläche und systemd-Betrieb.
 
@@ -51,8 +108,8 @@ SMA_ENERGY_METER_PASSIVE_ENABLED = true/false
 SMA_ENERGY_METER_GROUP = 239.12.255.254
 SMA_ENERGY_METER_PORT = 9522
 SMA_ENERGY_METER_INTERFACE = optional, z. B. eth0 oder lokale IPv4
-SMA_ENERGY_METER_SUSY_ID = optional, z. B. 372
-SMA_ENERGY_METER_SERIAL = optional/empfohlen, z. B. 3011954105
+SMA_ENERGY_METER_SUSY_ID = optional, z. B. <SMA-SUSY-ID>
+SMA_ENERGY_METER_SERIAL = optional/empfohlen, z. B. <SMA-SERIENNUMMER>
 SMA_ENERGY_METER_STALE_TIMEOUT_SECONDS = 15
 ```
 
@@ -441,3 +498,79 @@ Das vollständige DOCX/PDF-Handbuch wurde für diesen Zwischenstand bewusst noch
 ## Wichtige Änderungen in V12.9.3
 
 V12.9.3 korrigiert die V3-SOC-Auswertung der Analyse, justiert die lokale Pi-RAM-Preflight-Bewertung für kleine V3-Analysen nach und erweitert das Messdaten-Logging um SD-schonendere Schreibweise. Bool-Felder werden als `1`/`0` geschrieben, der Logger puffert ohne hartes `fsync` pro Messzeile und Messdaten können über Settings auf interne SD, externen Mountpoint/USB-Ziel oder benutzerdefinierten Pfad geschrieben werden. Bei externem Ziel ist ein begrenzter, sichtbarer SD-Fallback möglich. Die Regelstrategie bleibt unverändert.
+
+## V12.11.0-RC7 Kurzüberblick
+
+V12.11.0-RC7 modernisiert Status- und Graph-Seite, ergänzt eine 24h-Zendure-SOC-Tageskurve, führt eine Messdaten-Exportseite mit Zeitraumsauswahl ein und anonymisiert Default-/Example-Konfigurationen. Die Live-Regelung, MQTT-Kommandos, Nachtmodus, Cross-Charge und Restüberschuss-Ernte bleiben unverändert.
+
+
+### V12.11.0-RC12
+
+- Mock-up-Fidelity-Pass für die moderne UI.
+- Moderne Statusseite nutzt bei `UI_DARK_MODE=false` ein helles Dashboard-Layout näher am Status-Mock-up.
+- Fünf Top-Karten, SOC-Ring in der Zendure-Karte, Netzleistungs-Sparkline und Footer-Systemkarten.
+- Graph-Seite bleibt am dunklen Graph-Mock-up orientiert.
+- Keine Änderung an Regellogik, MQTT-Kommandos oder Measurement-Schema.
+
+
+### V12.11.0-RC14
+
+- UI-Polish für die moderne Statusseite: konsistentes lokales SVG-Iconset statt gemischter Unicode-/Emoji-Symbole.
+- Netzleistungs-Mini-Graph mit Achsen, Skalenhinweisen, Min/Max und aktuellem Wert; keine unskalierte Dekolinie.
+- Nachtmodus-Kontext in der Betriebsmoduskarte neutralisiert; keine gelbe Prognosebox für normale Kontextinformation.
+- Neues Tool `tools/collect_zec_crash_package.sh` für Kernel-/Storage-/Vorboot-/Service-Diagnose bei Hängern oder Reboots.
+- Desktop-Verknüpfungen umfassen nun Trace, Diagnosepaket und Crashpaket.
+- Keine Änderung an Regellogik, MQTT-Kommandos oder Measurement-Schema.
+
+
+### V12.11.0-RC13
+
+- Support-/Debugging-Workflow-Release auf Basis von RC12.
+- Neues Tool `tools/collect_zec_trace.sh` sammelt Service-Status, Journal, Runtime-Log, Version, Mount-/Disk-Status und HTTP-Ready-/Statusauszüge in eine Datei unter `/home/pi/Downloads`.
+- Neues Tool `tools/create_desktop_shortcuts.sh` erstellt Desktop-Verknüpfungen für „ZEC Trace sammeln“ und „ZEC Diagnosepaket erstellen“.
+- Neues Tool `tools/run_zec_analysis_package_interactive.sh` startet das bestehende Diagnosepaket terminalfreundlich und hält das Fenster offen.
+- Keine Änderung an Regellogik, MQTT-Kommandos oder Measurement-Schema.
+
+
+### V12.11.0-RC16
+
+- Performance-Fix für Status-/Graph-Weboberfläche: Measurement-V4-Daten werden für aktuelle Zeitfenster nicht mehr vollständig pro Request gescannt.
+- `/soc-day-data` und `/graph-view-data` nutzen Cache und Single-Flight-Schutz gegen parallele teure Rebuilds.
+- Status- und Graphseite zeigen Timeout-/Fallbackmeldungen statt endlosem „lädt…“.
+- Graphseite vermeidet überlappende Auto-Refresh-Requests.
+- Der Netzleistungs-Mini-Graph der Statusseite wird live über `/grid-mini-sparkline` aktualisiert.
+- `collect_zec_trace.sh` enthält nun HTTP-Timingmessungen für `/`, `/status`, `/soc-day-data` und `/graph-view-data`.
+- Keine Änderung an Regellogik, MQTT-Kommandos oder Measurement-Schema.
+
+
+### V12.11.0-RC15
+
+- UI-Polish für die Zendure-Batteriekarte: SOC-Ringtext, Schriftgrößen, Abstände und Wertehierarchie wurden nachgeschärft.
+- Kartenspezifische Warnhinweise werden nun in der thematisch passenden Karte angezeigt; globale Warnleisten bleiben systemweiten Hinweisen vorbehalten.
+- SOC-Tooltips auf Status- und Graph-Seite reagieren jetzt auf die X-Achsenposition, statt die Linie exakt treffen zu müssen.
+- Die moderne Graph-Seite trennt jetzt angefordertes Achsenfenster und vorhandene Datenpunkte. „Letzte 24 Stunden“ liefert eine echte 24h-Achse auch bei Datenlücken.
+- Graph-Achsenmetadaten und Zeitraumlabel wurden ergänzt; lange Zeitfenster zeigen klarere Datum/Uhrzeit-Ticks.
+- Keine Änderung an Regellogik, MQTT-Kommandos oder Measurement-Schema.
+
+## V12.11.0-RC17
+
+V12.11.0-RC17 ergänzt einen SQLite-basierten Graph-/Measurement-Store als schnelle parallele Datenbasis für Status- und Graph-Webseiten.
+
+Ziel ist, historische UI-Abfragen wie SOC-Tagesgraph und 24h-Graph nicht mehr über teure CSV-/Measurement-Scans im HTTP-Request-Pfad aufzubauen. CSV/V4 bleibt unverändert erhalten; SQLite wird zusätzlich geschrieben und bevorzugt für GUI-Graphen gelesen.
+
+### Enthalten
+
+- Neuer SQLite-Graphspeicher `zec_measurements.sqlite3`.
+- Asynchroner DB-Writer mit Queue.
+- DB läuft auch bei `MEASUREMENT_LOG_MODE=off` weiter, sofern `MEASUREMENT_DB_ENABLED=true`.
+- 1-Minuten-Aggregation für schnelle Web-Grafiken.
+- `/graph-view-data` und `/soc-day-data` bevorzugen SQLite, wenn Daten vorhanden sind.
+- Neuer Endpoint `/measurement-db-status`.
+- Messdaten-/Logging-Karte zeigt SQLite-Graphspeicher.
+- Trace-Tool misst zusätzlich `/grid-mini-sparkline` und `/measurement-db-status`.
+
+### Nicht enthalten
+
+- Kein Abschalten der CSV-/V4-Messdaten.
+- Kein Pflichtimport alter CSVs.
+- Keine Änderung an Regelungslogik, MQTT-Kommandos oder Measurement-V4-CSV-Schema.

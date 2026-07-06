@@ -31,7 +31,7 @@ class Rc6GroupBindDefaultTests(unittest.TestCase):
             "GRID_METER_SOURCE": "sma_energy_meter_udp",
             "SMA_ENERGY_METER_GROUP": "239.12.255.254",
             "SMA_ENERGY_METER_PORT": 9522,
-            "SMA_ENERGY_METER_SERIAL": "3011954105",
+            "SMA_ENERGY_METER_SERIAL": "1234567890",
             "SMA_ENERGY_METER_SOCKET_MODE": "group_bind",
             "MQTT_BROKER": "127.0.0.1",
             "DEVICE_ID": "dev",

@@ -6,7 +6,7 @@ from config_validator import validate_config_semantics
 from sma_energy_meter import SmaEnergyMeterClient, parse_sma_energy_meter_packet, _get_interface_ipv4
 
 
-def make_packet(susy=372, serial=3011954105, import_w=1234.5, export_w=234.5):
+def make_packet(susy=999, serial=1234567890, import_w=1234.5, export_w=234.5):
     packet = bytearray(b"SMA\x00" + b"x" * 28)
     # Known multicast frame placement used by common SMA Energy Meter integrations.
     packet[18:20] = int(susy).to_bytes(2, "big")
@@ -21,8 +21,8 @@ class SmaRc3ParserTests(unittest.TestCase):
     def test_parser_extracts_susy_and_serial(self):
         reading = parse_sma_energy_meter_packet(make_packet(), received_epoch=1000.0, source_ip="192.168.0.10")
         self.assertIsNotNone(reading)
-        self.assertEqual(reading.susy_id, 372)
-        self.assertEqual(reading.serial_number, 3011954105)
+        self.assertEqual(reading.susy_id, 999)
+        self.assertEqual(reading.serial_number, 1234567890)
         self.assertEqual(reading.source_ip, "192.168.0.10")
         self.assertEqual(reading.grid_power_w, 1000.0)
 
@@ -35,10 +35,10 @@ class SmaRc3ParserTests(unittest.TestCase):
 class SmaRc3ClientTests(unittest.TestCase):
     def test_filter_accepts_only_configured_serial(self):
         client = SmaEnergyMeterClient()
-        selected = parse_sma_energy_meter_packet(make_packet(serial=3011954105, import_w=1000, export_w=0), 1000.0, "192.168.0.10")
+        selected = parse_sma_energy_meter_packet(make_packet(serial=1234567890, import_w=1000, export_w=0), 1000.0, "192.168.0.10")
         other = parse_sma_energy_meter_packet(make_packet(serial=1901402945, import_w=3000, export_w=0), 1001.0, "192.168.0.11")
-        self.assertTrue(client._matches_filter(selected, 372, 3011954105))
-        self.assertFalse(client._matches_filter(other, 372, 3011954105))
+        self.assertTrue(client._matches_filter(selected, 999, 1234567890))
+        self.assertFalse(client._matches_filter(other, 999, 1234567890))
 
 
 class SmaRc3ValidatorTests(unittest.TestCase):
@@ -58,7 +58,7 @@ class SmaRc3ValidatorTests(unittest.TestCase):
             "GRID_METER_SOURCE": "sma_energy_meter_udp",
             "SMA_ENERGY_METER_GROUP": "239.12.255.254",
             "SMA_ENERGY_METER_PORT": 9522,
-            "SMA_ENERGY_METER_SERIAL": "3011954105",
+            "SMA_ENERGY_METER_SERIAL": "1234567890",
             "MQTT_BROKER": "127.0.0.1",
             "DEVICE_ID": "dev",
         }

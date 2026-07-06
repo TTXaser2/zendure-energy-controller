@@ -234,6 +234,12 @@ def validate_config_semantics(
     if use_local_api and local_api_timeout >= max(1.0, float(interval_for_timeout)):
         issues.append(_issue("WARNING", "Der vollständige Timeout der lokalen Zendure-API ist größer oder gleich dem Regelintervall. Wenn die API im Regelpfad genutzt wird oder der Fallback anspringt, können einzelne Zyklen deutlich länger dauern.", ["ZENDURE_LOCAL_API_TIMEOUT_SECONDS", "INTERVAL_SECONDS"], "Netzwerk", "LOCAL_API_FULL_TIMEOUT_ABOVE_INTERVAL"))
 
+    grid_plausibility_max = _int_value(cfg, "GRID_POWER_PLAUSIBILITY_MAX_ABS_W", 30000)
+    if grid_plausibility_max < 1000:
+        issues.append(_issue("ERROR", "Die Netzleistungs-Plausibilitätsgrenze ist zu niedrig. Bitte mindestens 1000 W eintragen; empfohlen sind z. B. 30000 W.", ["GRID_POWER_PLAUSIBILITY_MAX_ABS_W"], "Sicherheit / Fallback", "GRID_POWER_PLAUSIBILITY_LIMIT_TOO_LOW"))
+    elif grid_plausibility_max > 250000:
+        issues.append(_issue("WARNING", "Die Netzleistungs-Plausibilitätsgrenze ist sehr hoch. Extreme Ausreißer werden dann möglicherweise nicht verworfen. Empfohlen sind z. B. 30000 W.", ["GRID_POWER_PLAUSIBILITY_MAX_ABS_W"], "Sicherheit / Fallback", "GRID_POWER_PLAUSIBILITY_LIMIT_HIGH"))
+
     grid_source = str(cfg.get("GRID_METER_SOURCE", "shelly_http") or "shelly_http")
     if grid_source not in {"shelly_http", "sma_energy_meter_udp"}:
         issues.append(_issue("ERROR", "Die Netzleistungsquelle ist unbekannt. Bitte Shelly-kompatible HTTP-Quelle oder SMA Home Manager direkt auswählen.", ["GRID_METER_SOURCE"], "Netzwerk", "GRID_SOURCE_INVALID"))
@@ -250,7 +256,7 @@ def validate_config_semantics(
         try:
             int(sma_susy, 0)
         except Exception:
-            issues.append(_issue("ERROR", "Die SMA Energy Meter SUSy-ID muss eine Zahl sein. Beispiel aus der UniMeter-Konfiguration: 372.", ["SMA_ENERGY_METER_SUSY_ID"], "Netzwerk", "SMA_DIRECT_SUSY_INVALID"))
+            issues.append(_issue("ERROR", "Die SMA Energy Meter SUSy-ID muss eine Zahl sein. Beispiel: numerische SUSy-ID des gewünschten Zählers.", ["SMA_ENERGY_METER_SUSY_ID"], "Netzwerk", "SMA_DIRECT_SUSY_INVALID"))
 
     allowed_sma_socket_modes = {"rc3_compatible", "reuseaddr_only", "unimeter_like", "group_bind"}
     sma_socket_mode = _str_value(cfg, "SMA_ENERGY_METER_SOCKET_MODE") or "group_bind"
