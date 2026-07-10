@@ -127,6 +127,25 @@ class ControllerState:
     last_mqtt_command: str = "-"
     last_mqtt_command_skipped: str = "-"
     mqtt_commands_sent: int = 0
+    # RC3: Command-Lifecycle-Diagnose.  Ein erfolgreicher MQTT-Publish belegt
+    # nur, dass der Broker die Nachricht angenommen hat; er belegt nicht, dass
+    # die Zendure-Headunit den Befehl wirksam übernommen hat.  Diese Felder
+    # machen unsichere Sends nach Restore/Broker-Neustart und ausbleibende
+    # Gerätewirkung für UI/V4/Analyse sichtbar.
+    command_uncertain_mqtt_active: bool = False
+    command_uncertain_mqtt_since_epoch: Optional[float] = None
+    command_uncertain_mqtt_since_time: str = "-"
+    command_uncertain_mqtt_status: str = ""
+    command_uncertain_mqtt_target_w: int = 0
+    command_uncertain_mqtt_reason: str = ""
+    command_resync_count: int = 0
+    command_resync_last_time: str = "-"
+    command_resync_reason: str = ""
+    command_not_effective_active: bool = False
+    command_not_effective_since_epoch: Optional[float] = None
+    command_not_effective_since_time: str = "-"
+    command_not_effective_duration_s: int = 0
+    command_not_effective_reason: str = ""
     consecutive_errors: int = 0
     last_error: str = "none"
     last_error_time: str = "-"
@@ -981,6 +1000,12 @@ class ControllerState:
                 effect_category = "no_command"
                 effect_reason = self.last_mqtt_command_skipped or "Kein neues MQTT-Kommando gesendet."
                 effect_valid = False
+                if self.command_uncertain_mqtt_active:
+                    effect_category = "uncertain_mqtt_command"
+                    effect_reason = self.command_uncertain_mqtt_reason or "Aktiver Sollwert wurde bei unsicherem Zendure-MQTT-Zustand gesendet."
+                if self.command_not_effective_active:
+                    effect_category = "command_not_effective"
+                    effect_reason = self.command_not_effective_reason or "Aktiver Sollwert zeigt keine erkennbare Gerätewirkung."
             else:
                 effect_category = "not_evaluable"
                 effect_reason = "Momentwert gespeichert; robuste Wirkung wird im Analyse-/Replay-Tool über Folgezyklen bewertet."
@@ -1219,6 +1244,14 @@ class ControllerState:
                 "mqtt_last_command_skipped": self.last_mqtt_command_skipped,
                 "last_mqtt_command": self.last_mqtt_command,
                 "last_mqtt_command_skipped": self.last_mqtt_command_skipped,
+                "command_uncertain_mqtt_active": self.command_uncertain_mqtt_active,
+                "command_uncertain_mqtt_since_time": self.command_uncertain_mqtt_since_time,
+                "command_uncertain_mqtt_status": self.command_uncertain_mqtt_status,
+                "command_uncertain_mqtt_target_w": self.command_uncertain_mqtt_target_w,
+                "command_uncertain_mqtt_reason": self.command_uncertain_mqtt_reason,
+                "command_resync_count": self.command_resync_count,
+                "command_resync_last_time": self.command_resync_last_time,
+                "command_resync_reason": self.command_resync_reason,
                 "loop_duration_ms": self.last_loop_duration_ms,
                 "cycle_total_without_sleep_ms": self.last_cycle_total_ms,
                 "cycle_slowest_step": self.last_cycle_slowest_step,
@@ -1239,6 +1272,10 @@ class ControllerState:
                 "command_effect_valid": effect_valid,
                 "command_effect_category": effect_category,
                 "command_effect_reason": effect_reason,
+                "command_not_effective_active": self.command_not_effective_active,
+                "command_not_effective_since_time": self.command_not_effective_since_time,
+                "command_not_effective_duration_s": self.command_not_effective_duration_s,
+                "command_not_effective_reason": self.command_not_effective_reason,
                 "measurement_log_status": self.measurement_log_status,
                 "measurement_log_status_reason": self.measurement_log_status_reason,
                 "measurement_estimated_retention_hours": self.measurement_estimated_retention_hours,
@@ -1342,6 +1379,18 @@ class ControllerState:
                 "last_mqtt_command": self.last_mqtt_command,
                 "last_mqtt_command_skipped": self.last_mqtt_command_skipped,
                 "mqtt_commands_sent": self.mqtt_commands_sent,
+                "command_uncertain_mqtt_active": self.command_uncertain_mqtt_active,
+                "command_uncertain_mqtt_since_time": self.command_uncertain_mqtt_since_time,
+                "command_uncertain_mqtt_status": self.command_uncertain_mqtt_status,
+                "command_uncertain_mqtt_target_w": self.command_uncertain_mqtt_target_w,
+                "command_uncertain_mqtt_reason": self.command_uncertain_mqtt_reason,
+                "command_resync_count": self.command_resync_count,
+                "command_resync_last_time": self.command_resync_last_time,
+                "command_resync_reason": self.command_resync_reason,
+                "command_not_effective_active": self.command_not_effective_active,
+                "command_not_effective_since_time": self.command_not_effective_since_time,
+                "command_not_effective_duration_s": self.command_not_effective_duration_s,
+                "command_not_effective_reason": self.command_not_effective_reason,
                 "consecutive_errors": self.consecutive_errors,
                 "last_error": self.last_error,
                 "last_error_time": self.last_error_time,

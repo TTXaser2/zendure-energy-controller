@@ -50,6 +50,11 @@ class ZendureController:
         self._last_sma_diag_log_epoch = 0.0
         self._last_sma_diag_key = None
         self._last_sma_large_gap_epoch = None
+        self._last_zendure_mqtt_status = ""
+        self._command_effect_watch_target: int = 0
+        self._command_effect_watch_start_epoch: Optional[float] = None
+        self._command_effect_last_resend_epoch: float = 0.0
+        self._last_command_effect_log_epoch: float = 0.0
 
     def log(self, message: str) -> None:
         cfg = self.config_manager.get()
@@ -749,19 +754,176 @@ class ZendureController:
         })
         return result
 
-    def _publish_signed_target(self, signed_target_w: int, *, force_zero: bool = False) -> None:
+    def _zendure_mqtt_uncertain_for_active_command(self, status: str, live_confirmed: bool) -> bool:
+        status = str(status or "").upper()
+        return (not live_confirmed) or status in {
+            "ZENDURE_MQTT_AFTER_BROKER_RESTART_NO_LIVE_UPDATES",
+            "ZENDURE_MQTT_RETAINED_ONLY",
+            "ZENDURE_MQTT_STALE",
+            "ZENDURE_MQTT_PARTIAL_STALE",
+            "ZENDURE_MQTT_NO_LIVE",
+            "ZENDURE_MQTT_UNKNOWN",
+        }
+
+    def _mark_active_command_mqtt_uncertain(self, signed_target_w: int, status: str, live_confirmed: bool) -> None:
+        if int(signed_target_w or 0) == 0:
+            return
+        if not self._zendure_mqtt_uncertain_for_active_command(status, live_confirmed):
+            return
+        now = time.time()
+        with self.state.lock:
+            self.state.command_uncertain_mqtt_active = True
+            if self.state.command_uncertain_mqtt_since_epoch is None:
+                self.state.command_uncertain_mqtt_since_epoch = now
+                self.state.command_uncertain_mqtt_since_time = datetime.now().strftime("%H:%M:%S")
+            self.state.command_uncertain_mqtt_status = str(status or "UNKNOWN")
+            self.state.command_uncertain_mqtt_target_w = int(signed_target_w or 0)
+            self.state.command_uncertain_mqtt_reason = (
+                f"Aktiver Sollwert {int(signed_target_w)} W wurde bei unsicherem Zendure-MQTT-Zustand "
+                f"({status or 'UNKNOWN'}) gesendet/angefordert. Falls keine Gerätewirkung sichtbar ist: "
+                "MQTT in der Zendure-App erneut speichern/aktivieren; ZEC sendet bei Recovery automatisch erneut."
+            )
+
+    def _publish_signed_target(self, signed_target_w: int, *, force_zero: bool = False, force: bool = False) -> None:
         signed_target_w = int(signed_target_w or 0)
+        with self.state.lock:
+            mqtt_status = self.state.zendure_mqtt_overall_status
+            live_confirmed = bool(self.state.zendure_mqtt_live_confirmed)
+        self._mark_active_command_mqtt_uncertain(signed_target_w, mqtt_status, live_confirmed)
         if signed_target_w > 0:
-            self.mqtt.set_ac_mode("Input mode")
-            self.mqtt.set_output_limit(0)
-            self.mqtt.set_input_limit(signed_target_w)
+            self.mqtt.set_ac_mode("Input mode", force=force)
+            self.mqtt.set_output_limit(0, force=force)
+            self.mqtt.set_input_limit(signed_target_w, force=force)
         elif signed_target_w < 0:
-            self.mqtt.set_ac_mode("Output mode")
-            self.mqtt.set_input_limit(0)
-            self.mqtt.set_output_limit(abs(signed_target_w))
+            self.mqtt.set_ac_mode("Output mode", force=force)
+            self.mqtt.set_input_limit(0, force=force)
+            self.mqtt.set_output_limit(abs(signed_target_w), force=force)
         else:
-            self.mqtt.set_input_limit(0, force=force_zero)
-            self.mqtt.set_output_limit(0, force=force_zero)
+            self.mqtt.set_input_limit(0, force=(force or force_zero))
+            self.mqtt.set_output_limit(0, force=(force or force_zero))
+
+    def _force_resend_signed_target(self, signed_target_w: int, reason: str) -> None:
+        signed_target_w = int(signed_target_w or 0)
+        if signed_target_w == 0:
+            return
+        self._publish_signed_target(signed_target_w, force=True)
+        now_text = datetime.now().strftime("%H:%M:%S")
+        with self.state.lock:
+            self.state.command_resync_count += 1
+            self.state.command_resync_last_time = now_text
+            self.state.command_resync_reason = str(reason or "COMMAND_RESYNC")
+            self.state.command_uncertain_mqtt_active = False
+            self.state.command_uncertain_mqtt_reason = ""
+            self.state.command_uncertain_mqtt_status = ""
+            self.state.command_uncertain_mqtt_target_w = 0
+            self.state.command_uncertain_mqtt_since_epoch = None
+            self.state.command_uncertain_mqtt_since_time = "-"
+        self.state.add_event(f"Zendure Command-Resync: {signed_target_w} W ({reason})")
+        self.log(f"[COMMAND_RESYNC] target={signed_target_w}W reason={reason}")
+
+    def _current_signed_target(self) -> int:
+        with self.state.lock:
+            if self.state.last_input_power > 0 and self.state.last_output_power <= 0:
+                return int(self.state.last_input_power)
+            if self.state.last_output_power > 0 and self.state.last_input_power <= 0:
+                return -int(self.state.last_output_power)
+        return 0
+
+    def update_command_effect_monitor(self, cfg: Dict[str, Any]) -> None:
+        """RC3: detect active targets that do not become physically effective.
+
+        This does not replace safety/control decisions.  It makes the Zendure
+        command lifecycle robust after restore/Broker/Zendure-App MQTT hiccups:
+        publish-to-broker success is not treated as proof of device effect.
+        """
+        target = self._current_signed_target()
+        now = time.time()
+        with self.state.lock:
+            status = self.state.zendure_mqtt_overall_status
+            live_confirmed = bool(self.state.zendure_mqtt_live_confirmed)
+            actual = int(self.state.actual_zendure_system_signed_power or 0)
+            actual_valid = bool(self.state.actual_zendure_power_valid or self.state.last_zendure_power_update_epoch is not None)
+            uncertainty_active = bool(self.state.command_uncertain_mqtt_active)
+
+        previous_status = self._last_zendure_mqtt_status
+        recovered_to_ok = (
+            bool(previous_status)
+            and previous_status != "ZENDURE_MQTT_OK"
+            and status == "ZENDURE_MQTT_OK"
+            and live_confirmed
+        )
+        if target != 0 and recovered_to_ok and (uncertainty_active or bool(cfg.get("COMMAND_RESYNC_ON_MQTT_RECOVERY_ALWAYS", True))):
+            self._force_resend_signed_target(target, f"Zendure-MQTT-Recovery {previous_status}->OK")
+            self._command_effect_last_resend_epoch = now
+
+        self._last_zendure_mqtt_status = status
+
+        if target == 0:
+            self._command_effect_watch_target = 0
+            self._command_effect_watch_start_epoch = None
+            with self.state.lock:
+                self.state.command_not_effective_active = False
+                self.state.command_not_effective_since_epoch = None
+                self.state.command_not_effective_since_time = "-"
+                self.state.command_not_effective_duration_s = 0
+                self.state.command_not_effective_reason = ""
+            return
+
+        if target != self._command_effect_watch_target:
+            self._command_effect_watch_target = target
+            self._command_effect_watch_start_epoch = now
+
+        threshold_w = max(30, int(cfg.get("COMMAND_EFFECT_MIN_W", 80) or 80))
+        if target > 0:
+            effect_ok = actual_valid and actual >= threshold_w
+            direction = "Ladung"
+        else:
+            effect_ok = actual_valid and actual <= -threshold_w
+            direction = "Entladung"
+
+        if effect_ok:
+            self._command_effect_watch_start_epoch = None
+            with self.state.lock:
+                self.state.command_uncertain_mqtt_active = False
+                self.state.command_uncertain_mqtt_reason = ""
+                self.state.command_uncertain_mqtt_status = ""
+                self.state.command_uncertain_mqtt_target_w = 0
+                self.state.command_uncertain_mqtt_since_epoch = None
+                self.state.command_uncertain_mqtt_since_time = "-"
+                self.state.command_not_effective_active = False
+                self.state.command_not_effective_since_epoch = None
+                self.state.command_not_effective_since_time = "-"
+                self.state.command_not_effective_duration_s = 0
+                self.state.command_not_effective_reason = ""
+            return
+
+        if self._command_effect_watch_start_epoch is None:
+            self._command_effect_watch_start_epoch = now
+        elapsed_s = max(0, int(now - float(self._command_effect_watch_start_epoch)))
+        timeout_s = max(10, int(cfg.get("COMMAND_EFFECT_TIMEOUT_SECONDS", 90) or 90))
+        resend_s = max(timeout_s, int(cfg.get("COMMAND_EFFECT_FORCE_RESEND_SECONDS", 120) or 120))
+
+        with self.state.lock:
+            since_time = self.state.command_not_effective_since_time
+            if elapsed_s >= timeout_s:
+                self.state.command_not_effective_active = True
+                if self.state.command_not_effective_since_epoch is None:
+                    self.state.command_not_effective_since_epoch = self._command_effect_watch_start_epoch
+                    self.state.command_not_effective_since_time = since_time if since_time not in ("", "-") else datetime.fromtimestamp(self._command_effect_watch_start_epoch).strftime("%H:%M:%S")
+                self.state.command_not_effective_duration_s = elapsed_s
+                self.state.command_not_effective_reason = (
+                    f"Soll {target:+d} W ({direction}), Ist {actual:+d} W seit {elapsed_s} s nicht plausibel. "
+                    "Mögliche Ursache: Zendure-MQTT-Kopplung/Command-State hängt."
+                )
+                self.state.add_limiter("COMMAND_NOT_EFFECTIVE")
+
+        if elapsed_s >= timeout_s and now - self._last_command_effect_log_epoch >= 120:
+            self._last_command_effect_log_epoch = now
+            self.log(f"[COMMAND_EFFECT] target={target}W actual={actual}W elapsed_s={elapsed_s} mqtt={status}")
+
+        if elapsed_s >= resend_s and now - self._command_effect_last_resend_epoch >= resend_s:
+            self._force_resend_signed_target(target, f"COMMAND_NOT_EFFECTIVE_{elapsed_s}s")
+            self._command_effect_last_resend_epoch = now
 
     def _store_signed_target(self, signed_target_w: int, reason: str, path: str, action_prefix: str) -> None:
         signed_target_w = int(signed_target_w or 0)
@@ -893,6 +1055,13 @@ class ZendureController:
             primary_capacity = self.state.sma_battery_capacity_kwh
             zendure_soc = self.state.battery_soc
         zendure_capacity = self._cfg_float(cfg, "ZENDURE_BATTERY_CAPACITY_KWH", 0.0)
+        if zendure_capacity <= 0:
+            try:
+                zendure_capacity_wh = cfg.get("ZENDURE_BATTERY_CAPACITY_WH")
+                if zendure_capacity_wh not in (None, ""):
+                    zendure_capacity = max(0.0, float(zendure_capacity_wh) / 1000.0)
+            except Exception:
+                zendure_capacity = 0.0
         max_soc = self._cfg_float(cfg, "MAX_SOC_PERCENT", 100.0)
         primary_remaining = None
         zendure_remaining = None
@@ -1758,6 +1927,7 @@ class ZendureController:
         required_sources = self.determine_cycle_required_sources(cfg)
         self.state.set_control_source_requirements(required_sources)
         self.state.update_data_validity_model(cfg)
+        self._timed_phase("command_effect_monitor_ms", self.update_command_effect_monitor, cfg)
         self._timed_phase("charge_acceptance_diag_ms", self.update_charge_acceptance_diagnostic, cfg)
         self._timed_phase("graph_snapshot_ms", self.state.record_graph_point, int(cfg.get("GRAPH_HISTORY_LIMIT", 300)))
         try:

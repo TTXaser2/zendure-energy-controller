@@ -269,6 +269,15 @@ def build_v4_row(config: Dict[str, Any], row: Dict[str, Any], previous_effective
     if target_final is not None and previous_effective_command_w is not None:
         command_delta = round(target_final - previous_effective_command_w, 1)
 
+    cross_charge_detected = (
+        _bool01(row.get("cross_charge_guard_active")) == "1"
+        or target_reason in {"CROSS_CHARGE_REDUCED", "CROSS_CHARGE_BLOCKED"}
+    )
+    cross_charge_limited = (
+        _bool01(row.get("cross_charge_guard_limited")) == "1"
+        or target_reason in {"CROSS_CHARGE_REDUCED", "CROSS_CHARGE_BLOCKED"}
+    )
+
     scenario_without = _safe_float(row.get("scenario_grid_without_zendure_w"))
     effective_surplus = ""
     if scenario_without is not None:
@@ -394,8 +403,8 @@ def build_v4_row(config: Dict[str, Any], row: Dict[str, Any], previous_effective
         "primary_remaining_capacity_kwh": _round1(row.get("primary_remaining_capacity_kwh")),
         "zendure_remaining_capacity_kwh": _round1(row.get("zendure_remaining_capacity_kwh")),
         "control_deadband_active": _bool01(row.get("deadband_active")),
-        "control_cross_charge_detected": "1" if target_reason in {"CROSS_CHARGE_REDUCED", "CROSS_CHARGE_BLOCKED"} else "0",
-        "control_cross_charge_limited": "1" if target_reason in {"CROSS_CHARGE_REDUCED", "CROSS_CHARGE_BLOCKED"} else "0",
+        "control_cross_charge_detected": "1" if cross_charge_detected else "0",
+        "control_cross_charge_limited": "1" if cross_charge_limited else "0",
         "control_mode_change_lock_active": "1" if "MODE_CHANGE" in str(row.get("technical_path", row.get("control_path", ""))).upper() else "0",
         "target_raw_w": _round1(row.get("target_raw_w")),
         "target_filtered_w": _round1(row.get("target_after_smoothing_w", row.get("target_filtered_w"))),
@@ -408,7 +417,7 @@ def build_v4_row(config: Dict[str, Any], row: Dict[str, Any], previous_effective
         "target_changed_by_step_limit": "1" if "RAMP" in control_reason.upper() or "STEP" in control_reason.upper() else "0",
         "target_changed_by_soc_limit": "1" if any(x in active_limiters for x in ("MIN_SOC", "MAX_SOC")) else "0",
         "target_changed_by_power_limit": "1" if any(x in active_limiters for x in ("MAX_CHARGE", "MAX_DISCHARGE", "POWER_LIMIT")) else "0",
-        "target_changed_by_cross_charge": "1" if "CROSS_CHARGE" in target_reason else "0",
+        "target_changed_by_cross_charge": "1" if cross_charge_limited else "0",
         "target_changed_by_mode": "1" if operating_mode in {"NIGHT_DISCHARGE", "FIXED_CHARGE", "FIXED_DISCHARGE", "STOP_HOLD"} else "0",
         "target_changed_by_safe_state": "1" if target_reason == "SAFE_STATE" else "0",
         "command_action": command_action,
@@ -420,6 +429,14 @@ def build_v4_row(config: Dict[str, Any], row: Dict[str, Any], previous_effective
         "command_mqtt_connected": mqtt_connected,
         "command_mqtt_success": "1" if command_sent else ("0" if command_action == "FAILED" else ""),
         "command_delta_w": _round1(command_delta),
+        "command_effect_category": str(row.get("command_effect_category", "") or ""),
+        "command_effect_reason": str(row.get("command_effect_reason", "") or ""),
+        "command_uncertain_mqtt_active": _bool01(row.get("command_uncertain_mqtt_active")),
+        "command_uncertain_mqtt_status": str(row.get("command_uncertain_mqtt_status", "") or ""),
+        "command_not_effective_active": _bool01(row.get("command_not_effective_active")),
+        "command_not_effective_duration_s": _round1(row.get("command_not_effective_duration_s")),
+        "command_resync_count": _round1(row.get("command_resync_count")),
+        "command_resync_reason": str(row.get("command_resync_reason", "") or ""),
     }
     # Normalize None to empty strings.
     for key in list(v4.keys()):
@@ -514,6 +531,14 @@ def _map_mqtt_status(value: Any, row: Dict[str, Any]) -> str:
 def _map_target_reason(reason: str, operating_mode: str, target_final: Optional[float], active_limiters: List[str], row: Dict[str, Any]) -> str:
     raw = str(reason or "").upper()
     upper_limiters = {str(item).upper() for item in active_limiters}
+    cross_charge_active = (
+        _bool01(row.get("cross_charge_guard_active")) == "1"
+        or _bool01(row.get("cross_charge_guard_limited")) == "1"
+        or "CROSS_CHARGE" in upper_limiters
+        or "SMA_DISCHARGE" in upper_limiters
+        or "CROSS_CHARGE" in raw
+        or "BLOCKED_BY_SMA" in raw
+    )
     if operating_mode == "NIGHT_DISCHARGE":
         return "NIGHT_BASE_DISCHARGE"
     stop_reason = str(row.get("night_discharge_stop_reason", "") or "").upper()
@@ -533,10 +558,10 @@ def _map_target_reason(reason: str, operating_mode: str, target_final: Optional[
         return "MAX_SOC_LIMIT"
     if str(operating_mode or "").upper() == "SAFE_STATE":
         return "SAFE_STATE"
+    if cross_charge_active:
+        return "CROSS_CHARGE_BLOCKED" if target_final == 0 else "CROSS_CHARGE_REDUCED"
     if "REST_SURPLUS" in raw or "HARVEST" in raw or "RESTÜBERSCHUSS" in raw or "RESTUEBERSCHUSS" in raw or "ERNTE" in raw:
         return "REST_SURPLUS_HARVEST"
-    if "BLOCKED_BY_SMA" in raw or "SMA" in raw or "CROSS_CHARGE" in raw:
-        return "CROSS_CHARGE_BLOCKED" if target_final == 0 else "CROSS_CHARGE_REDUCED"
     if "DEADBAND" in raw:
         return "DEADBAND"
     if "DISCONNECT" in raw or "MQTT" in raw:

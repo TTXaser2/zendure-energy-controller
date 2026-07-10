@@ -262,8 +262,8 @@ class MqttBridge:
             self.state.mqtt_commands_sent += 1
         return True
 
-    def set_ac_mode(self, mode: str) -> None:
-        self.publish(self.topics()["ac_mode"], mode, force=False, numeric=False)
+    def set_ac_mode(self, mode: str, force: bool = False) -> None:
+        self.publish(self.topics()["ac_mode"], mode, force=force, numeric=False)
 
     def set_input_limit(self, watts: int, force: bool = False) -> None:
         self.publish(self.topics()["input_limit"], int(watts), force=force, numeric=True)

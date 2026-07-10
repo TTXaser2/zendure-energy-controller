@@ -7,7 +7,7 @@ import version
 
 class TestRC15UiGraphPolish(unittest.TestCase):
     def test_version_label_rc15(self):
-        self.assertEqual(version.APP_VERSION_LABEL, "V12.11.1-RC1")
+        self.assertEqual(version.APP_VERSION_LABEL, "V12.11.1-RC3")
 
     def test_zendure_mqtt_warning_is_card_local_not_global_strip(self):
         cfg = {"UI_DARK_MODE": False, "NIGHT_DISCHARGE_ENABLED": False}

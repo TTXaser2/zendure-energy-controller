@@ -1942,6 +1942,51 @@ def night_mode_projection_text(cfg: Dict[str, Any], s: Dict[str, Any], current_m
         return f"Voraussichtliches Ende: nicht berechenbar – {html.escape(str(exc))}"
 
 
+def fixed_mode_projection_text(cfg: Dict[str, Any], s: Dict[str, Any], current_mode: str) -> str:
+    """Projection for manual fixed charge/discharge modes, mirroring night mode UX."""
+    if current_mode not in {"MANUAL_FIXED_DISCHARGE", "MANUAL_FIXED_CHARGE", "FIXED_DISCHARGE", "FIXED_CHARGE"}:
+        return ""
+    try:
+        soc = s.get("battery_soc")
+        capacity_wh = cfg.get("ZENDURE_BATTERY_CAPACITY_WH")
+        missing = []
+        if soc is None:
+            missing.append("Zendure-SOC fehlt oder ist nicht aktuell")
+        if capacity_wh in (None, ""):
+            missing.append("Batteriekapazität für Prognose in Settings → Nachtmodus")
+        if missing:
+            return "Prognose: nicht berechenbar – " + "; ".join(missing)
+        soc_f = float(soc)
+        capacity_wh_f = float(capacity_wh)
+        if capacity_wh_f <= 0:
+            return "Prognose: nicht berechenbar – Zendure-Batteriekapazität muss größer als 0 Wh sein"
+
+        if current_mode in {"MANUAL_FIXED_DISCHARGE", "FIXED_DISCHARGE"}:
+            target_soc = max(float(cfg.get("MIN_SOC_PERCENT", 0) or 0), float(cfg.get("MANUAL_FIXED_DISCHARGE_TARGET_SOC", cfg.get("MIN_SOC_PERCENT", 0)) or 0))
+            power_w = min(float(cfg.get("MANUAL_FIXED_DISCHARGE_POWER_W", 0) or 0), float(cfg.get("MAX_DISCHARGE_POWER_W", 0) or 0))
+            after = "STOP_HOLD" if str(cfg.get("MANUAL_DISCHARGE_AFTER_TARGET", "AUTO")) == "STOP_HOLD" else "Automatik-Modus"
+            if power_w <= 0:
+                return f"Manuelle feste Entladung bis {target_soc:.0f} % SOC · Prognose nicht berechenbar – Entladeleistung ist 0 W"
+            if soc_f <= target_soc:
+                return f"Manuelle feste Entladung bis {target_soc:.0f} % SOC · Ziel erreicht, danach {after}"
+            rest_wh = capacity_wh_f * max(0.0, soc_f - target_soc) / 100.0
+            eta = datetime.now() + timedelta(hours=rest_wh / power_w)
+            return f"Manuelle feste Entladung bis {target_soc:.0f} % SOC, voraussichtlich erreicht um {eta.strftime('%H:%M')} Uhr · danach {after}"
+
+        target_soc = min(float(cfg.get("MAX_SOC_PERCENT", 100) or 100), float(cfg.get("MANUAL_FIXED_CHARGE_TARGET_SOC", cfg.get("MAX_SOC_PERCENT", 100)) or 100))
+        power_w = min(float(cfg.get("MANUAL_FIXED_CHARGE_POWER_W", 0) or 0), float(cfg.get("MAX_CHARGE_POWER_W", 0) or 0))
+        after = "STOP_HOLD" if str(cfg.get("MANUAL_CHARGE_AFTER_TARGET", "AUTO")) == "STOP_HOLD" else "Automatik-Modus"
+        if power_w <= 0:
+            return f"Manuelle feste Ladung bis {target_soc:.0f} % SOC · Prognose nicht berechenbar – Ladeleistung ist 0 W"
+        if soc_f >= target_soc:
+            return f"Manuelle feste Ladung bis {target_soc:.0f} % SOC · Ziel erreicht, danach {after}"
+        need_wh = capacity_wh_f * max(0.0, target_soc - soc_f) / 100.0
+        eta = datetime.now() + timedelta(hours=need_wh / power_w)
+        return f"Manuelle feste Ladung bis {target_soc:.0f} % SOC, voraussichtlich erreicht um {eta.strftime('%H:%M')} Uhr · danach {after}"
+    except Exception as exc:
+        return f"Prognose: nicht berechenbar – {html.escape(str(exc))}"
+
+
 
 def rest_surplus_status_lines(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
     """Human-readable status lines for the Restüberschuss-Ernte in the SMA/Zweitbatterie card."""
@@ -2088,6 +2133,7 @@ def build_status_page_legacy(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
     night_status_text = "aktiv" if current_mode == "NIGHT_DISCHARGE" else (("pausiert" if night_paused_for_reserve else "gestoppt") if night_stopped else ("bereit" if cfg.get("NIGHT_DISCHARGE_ENABLED") else "aus"))
     night_status_color = "#9C27B0" if current_mode == "NIGHT_DISCHARGE" else ("#ff9800" if night_stopped else ("#4CAF50" if cfg.get("NIGHT_DISCHARGE_ENABLED") else "#777"))
     night_projection = night_mode_projection_text(cfg, s, current_mode)
+    fixed_projection = fixed_mode_projection_text(cfg, s, current_mode)
     night_details = (
         f"Zeitfenster: {int(cfg.get('NIGHT_START_HOUR', 0)):02d}:{int(cfg.get('NIGHT_START_MINUTE', 0)):02d}–{int(cfg.get('NIGHT_END_HOUR', 0)):02d}:{int(cfg.get('NIGHT_END_MINUTE', 0)):02d}<br>"
         f"Leistung: {int(cfg.get('NIGHT_DISCHARGE_POWER_W', 0))} W<br>"
@@ -2844,6 +2890,7 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
     """
     m = _modern_status_summary(cfg, s)
     current_mode = str(m["mode"])
+    fixed_projection = fixed_mode_projection_text(cfg, s, current_mode)
     grid = float(m["grid"] or 0.0)
     actual = float(m["actual"] or 0.0)
     target = float(m["target"] or 0.0)
@@ -2903,12 +2950,19 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
             f"Fenster {int(cfg.get('NIGHT_START_HOUR',0)):02d}:{int(cfg.get('NIGHT_START_MINUTE',0)):02d}–{int(cfg.get('NIGHT_END_HOUR',0)):02d}:{int(cfg.get('NIGHT_END_MINUTE',0)):02d} · "
             f"Leistung {int(cfg.get('NIGHT_DISCHARGE_POWER_W',0))} W{night_extra}</div>"
         )
+    fixed_line = ""
+    if fixed_projection:
+        fixed_line = f"<div class='zec-mode-context'><b>Fester Modus:</b> {html.escape(fixed_projection)}</div>"
     grid_warning_html = ""
     if not m["grid_valid"]:
         grid_warning_html = "<div class='zec-card-warning'><b>Hinweis:</b> Netzleistungswert prüfen.</div>"
     zendure_warning_html = ""
     if not m["mqtt_ok"]:
         zendure_warning_html = "<div class='zec-card-warning'><b>Hinweis:</b> Zendure-MQTT nicht vollständig frisch. SOC/Leistung bitte prüfen.</div>"
+    if s.get("command_uncertain_mqtt_active"):
+        zendure_warning_html += "<div class='zec-card-warning'><b>Hinweis:</b> Aktiver Zendure-Sollwert wurde bei unsicherem MQTT-Zustand gesendet. Falls keine Leistung sichtbar ist: MQTT in der Zendure-App erneut speichern/aktivieren; ZEC sendet bei Recovery automatisch erneut.</div>"
+    if s.get("command_not_effective_active"):
+        zendure_warning_html += "<div class='zec-card-warning'><b>Warnung:</b> Sollwert nicht wirksam. " + html.escape(str(s.get("command_not_effective_reason") or "Zendure-Istleistung folgt dem Sollwert nicht.")) + "</div>"
     logging_warning_html = ""
     if m["logging_mode"] == "off" or m["logging_status"] == "off":
         logging_warning_html = "<div class='zec-card-warning'><b>Hinweis:</b> Messdatenstatus: disabled.</div>"
@@ -2917,6 +2971,10 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
     global_warnings = []
     if m["errors"]:
         global_warnings.append(f"{m['errors']} Controllerfehler in Folge")
+    if s.get("command_not_effective_active"):
+        global_warnings.append("Zendure-Sollwert zeigt keine Gerätewirkung")
+    elif s.get("command_uncertain_mqtt_active"):
+        global_warnings.append("Zendure-MQTT/Command-State prüfen")
     warning_html = "" if not global_warnings else "<div class='zec-alert-strip'><b>Systemhinweis:</b> " + " · ".join(html.escape(w) for w in global_warnings) + "</div>"
     active_limiter = limiter_text(list(s.get("active_limiters", []))) or str(s.get("target_final_reason") or s.get("control_reason") or "-")
     mode_goal = str(s.get("control_reason") or s.get("target_final_reason") or "Eigenverbrauch optimieren")
@@ -2956,6 +3014,7 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
           <div class="zec-card-sub" style="font-size:18px;margin-top:10px">{html.escape(current_mode)}</div>
           <div class="zec-card-sub" style="margin-top:22px">⌁ Ziel: {html.escape(mode_goal)}<br>◴ Letzte Änderung: {html.escape(latest_change)}</div>
           {night_line}
+          {fixed_line}
         </div>
         <div class="zec-card mockup-top-card zec-battery-card">
           <div class="zec-card-label">{_ui_icon("battery")}<span>Zendure (Batterie)</span></div>

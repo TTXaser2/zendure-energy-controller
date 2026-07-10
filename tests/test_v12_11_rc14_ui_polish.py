@@ -12,7 +12,7 @@ TOOLS = ROOT / "tools"
 
 class TestRC14UiPolish(unittest.TestCase):
     def test_version_label_rc14(self):
-        self.assertEqual(version.APP_VERSION_LABEL, "V12.11.1-RC1")
+        self.assertEqual(version.APP_VERSION_LABEL, "V12.11.1-RC3")
 
     def test_status_page_uses_neutral_night_context_and_svg_icons(self):
         cfg = {

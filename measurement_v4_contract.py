@@ -146,6 +146,14 @@ STANDARD_HEADER: List[str] = [
     "command_mqtt_connected",
     "command_mqtt_success",
     "command_delta_w",
+    "command_effect_category",
+    "command_effect_reason",
+    "command_uncertain_mqtt_active",
+    "command_uncertain_mqtt_status",
+    "command_not_effective_active",
+    "command_not_effective_duration_s",
+    "command_resync_count",
+    "command_resync_reason",
 ]
 
 EXTENDED_FIELDS: List[str] = [

@@ -1,11 +1,8 @@
-# Zendure Energy Controller V12.11.1-RC1
+# Zendure Energy Controller V12.11.1-RC3
 
-## Wichtige Änderungen in V12.11.1-RC1
+## Wichtige Änderungen in V12.11.1-RC3
 
-V12.11.1-RC1 erweitert die bestehende Restüberschuss-Ernte um `HARVEST_HIGH_SMA_SOC` als tageszeitabhängigen Parallel-Harvest-Regelzweig. Ab konfigurierbarem Primärspeicher-SOC, standardmäßig 75 %, darf Zendure aggressiver Lade-/Überschussleistung übernehmen, solange Primärspeicher-Floor, Restart-/Near-Limit-Schwellen, Cross-Charge, SOC-Grenzen, Rampen und MQTT-/Freshness-Bedingungen eingehalten werden.
-
-Der reale Fehlerfall „Harvest aktiv, SMA voll, massiver Export, Zendure aufnahmefähig, Ziel bleibt 0 W“ wird durch `SMA_FULL_OR_IDLE`/`LATCH_RECOVERY` behoben. Zusätzlich protokolliert V4 neue Harvest-Diagnosefelder wie `rest_surplus_harvest_reason`, `harvest_primary_required_w`, `harvest_primary_target_share`, `harvest_limiter_reason` und freie Restkapazitäten. Kapazität ist in RC1 nur diagnostisch, nicht als harter Echtzeit-Regler aktiv.
-
+V12.11.1-RC3 behebt einen Restore-/Zendure-MQTT-Robustheitsfall: Ein aktiver Sollwert kann bei unsicherem Zendure-MQTT an den Broker publiziert werden, ohne dass die Headunit ihn wirksam übernimmt. Bei MQTT-Recovery sendet ZEC aktive Nicht-Null-Sollwerte jetzt erzwungen erneut. Zusätzlich überwacht ZEC, ob ein aktiver Sollwert eine plausible Istleistung erzeugt, und warnt bei `COMMAND_NOT_EFFECTIVE`. Für manuelle feste Lade-/Entlademodi wird eine SOC-Zeitprognose analog zum Nachtmodus angezeigt.
 
 ## Wichtige Änderungen in V12.11.0-RC18
 
