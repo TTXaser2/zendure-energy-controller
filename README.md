@@ -1,8 +1,8 @@
-# Zendure Energy Controller V12.11.2-RC1
+# Zendure Energy Controller V12.11.2-RC2
 
-## Wichtige Änderungen in V12.11.2-RC1
+## Wichtige Änderungen in V12.11.2-RC2
 
-V12.11.2-RC1 ist ein Statusseiten-/Diagnose-Release auf Basis von V12.11.1-RC3. Die bestehende Regelstrategie bleibt unverändert; der Fokus liegt auf einer neuen, snapshot-basierten Statusseite und auf einer robusteren COMMAND_RESYNC-/COMMAND_NOT_EFFECTIVE-Diagnose.
+V12.11.2-RC2 ist ein Statusseiten-/Diagnose-Release auf Basis von V12.11.1-RC3. Die bestehende Regelstrategie bleibt unverändert; der Fokus liegt auf einer neuen, snapshot-basierten Statusseite und auf einer robusteren COMMAND_RESYNC-/COMMAND_NOT_EFFECTIVE-Diagnose.
 
 ### Neue Statusseite
 

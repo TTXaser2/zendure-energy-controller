@@ -1,4 +1,4 @@
-# Zendure Energy Controller V12.11.2-RC1 - Installation und Betrieb
+# Zendure Energy Controller V12.11.2-RC2 - Installation und Betrieb
 
 ## Update installieren
 

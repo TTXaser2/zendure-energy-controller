@@ -1376,7 +1376,7 @@ def build_base_header(title: str, refresh: bool = False, cfg: Optional[Dict[str,
             .path-dir { color:#cbd5e1; }
             th { background:#263244; color:#e5e7eb; }
             th, td { border-color:#475569; }
-            input[type="number"], input[type="text"], input[type="password"], select { background:#0b1220; color:#e5e7eb; border:1px solid #64748b; }
+            input[type="number"], input[type="text"], input[type="password"], select { background:var(--zec-ring-inner-bg); color:#e5e7eb; border:1px solid #64748b; }
             .section-heading-link { color:#e5e7eb; }
             .validation-modal-content { background:#111827; color:#e5e7eb; }
             .save { background:#243244; color:#e5e7eb; border-color:#475569; }
@@ -1471,7 +1471,7 @@ def build_base_header(title: str, refresh: bool = False, cfg: Optional[Dict[str,
             .modern-card h3 {{ margin:0 0 10px 0; color:#e2e8f0; font-size:14px; letter-spacing:.01em; }}
             .modern-card .big {{ font-size:30px; line-height:1.05; font-weight:900; letter-spacing:-.03em; overflow-wrap:anywhere; }}
             .modern-card .sub {{ color:#9fb3c8; font-size:13px; line-height:1.45; margin-top:10px; }}
-            .modern-section {{ background:#0b1220; border:1px solid rgba(148,163,184,.14); border-radius:24px; padding:22px; margin-bottom:22px; box-shadow:0 12px 36px rgba(0,0,0,.32); }}
+            .modern-section {{ background:var(--zec-ring-inner-bg); border:1px solid rgba(148,163,184,.14); border-radius:24px; padding:22px; margin-bottom:22px; box-shadow:0 12px 36px rgba(0,0,0,.32); }}
             .modern-section-header {{ display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:16px; flex-wrap:wrap; }}
             .modern-section h2 {{ margin:0; font-size:22px; letter-spacing:-.02em; }}
             .modern-flow {{ display:grid; grid-template-columns:1fr auto 1fr; gap:18px; align-items:center; }}
@@ -1481,12 +1481,12 @@ def build_base_header(title: str, refresh: bool = False, cfg: Optional[Dict[str,
             .flow-center {{ width:112px; height:112px; border-radius:999px; display:flex; flex-direction:column; align-items:center; justify-content:center; background:radial-gradient(circle at 50% 50%, rgba(45,212,191,.22), rgba(15,23,42,.96) 62%); border:1px solid rgba(45,212,191,.35); text-align:center; }}
             .flow-center b {{ font-size:24px; }}
             .soc-ring {{ width:150px; height:150px; border-radius:999px; display:flex; align-items:center; justify-content:center; margin:2px auto 14px; background:conic-gradient(#22c55e var(--soc,0%), rgba(148,163,184,.16) 0); position:relative; }}
-            .soc-ring:after {{ content:""; position:absolute; inset:13px; border-radius:999px; background:#0b1220; border:1px solid rgba(148,163,184,.12); }}
+            .soc-ring:after {{ content:""; position:absolute; inset:13px; border-radius:999px; background:var(--zec-ring-inner-bg); border:1px solid rgba(148,163,184,.12); }}
             .soc-ring span {{ position:relative; z-index:1; font-size:34px; font-weight:900; }}
             .modern-table {{ width:100%; border-collapse:collapse; font-size:13px; }} .modern-table th,.modern-table td {{ border:0; border-bottom:1px solid rgba(148,163,184,.14); text-align:left; padding:9px 6px; }} .modern-table th {{ background:transparent; color:#94a3b8; font-weight:700; }}
             .modern-warning {{ border:1px solid rgba(245,158,11,.42); background:rgba(245,158,11,.09); color:#fde68a; border-radius:16px; padding:13px 14px; margin-top:14px; }}
             .legacy-note {{ margin-top:14px; color:#94a3b8; font-size:13px; }} .legacy-note a {{ color:#7dd3fc; }}
-            .expert-menu {{ position:relative; display:inline-flex; }} .expert-menu-button {{ border:0; border-radius:10px; padding:8px 10px; background:rgba(21,101,192,.08); color:#7dd3fc; cursor:pointer; font:inherit; }} .expert-menu-panel {{ display:none; position:absolute; right:0; top:calc(100% + 8px); min-width:180px; background:#0b1220; border:1px solid #334155; border-radius:14px; padding:8px; z-index:50; box-shadow:0 12px 30px rgba(0,0,0,.4); }} .expert-menu.open .expert-menu-panel {{ display:block; }} .expert-menu-panel a {{ display:block; background:transparent; padding:9px 10px; }}
+            .expert-menu {{ position:relative; display:inline-flex; }} .expert-menu-button {{ border:0; border-radius:10px; padding:8px 10px; background:rgba(21,101,192,.08); color:#7dd3fc; cursor:pointer; font:inherit; }} .expert-menu-panel {{ display:none; position:absolute; right:0; top:calc(100% + 8px); min-width:180px; background:var(--zec-ring-inner-bg); border:1px solid #334155; border-radius:14px; padding:8px; z-index:50; box-shadow:0 12px 30px rgba(0,0,0,.4); }} .expert-menu.open .expert-menu-panel {{ display:block; }} .expert-menu-panel a {{ display:block; background:transparent; padding:9px 10px; }}
             .modern-toolbar {{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between; margin:10px 0 18px; }}
             .modern-toolbar-left {{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }}
             .modern-toolbar select,.modern-toolbar button,.modern-toolbar a.button {{ width:auto; padding:9px 11px; border-radius:12px; border:1px solid rgba(148,163,184,.28); background:#0f172a; color:#e5e7eb; }}
@@ -1543,7 +1543,7 @@ def build_base_header(title: str, refresh: bool = False, cfg: Optional[Dict[str,
             .zec-control-group {{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }}
             .zec-control {{ display:inline-flex; gap:8px; align-items:center; border:1px solid rgba(148,163,184,.22); background:rgba(15,23,42,.72); border-radius:12px; padding:9px 11px; color:#dbeafe; font-size:13px; }}
             .zec-control select,.zec-control button,.zec-control a {{ background:transparent; border:0; color:#f8fafc; font-weight:800; width:auto; padding:0; }}
-            .zec-control select option {{ background:#0b1220; color:#f8fafc; }}
+            .zec-control select option {{ background:var(--zec-ring-inner-bg); color:#f8fafc; }}
             .zec-btn {{ display:inline-flex; align-items:center; gap:7px; padding:10px 14px; border:1px solid rgba(148,163,184,.24); border-radius:12px; background:rgba(15,23,42,.62); color:#e5f3ff !important; font-weight:800; text-decoration:none !important; cursor:pointer; }}
             .zec-chart-card {{ background:linear-gradient(180deg,rgba(10,20,34,.88),rgba(7,14,26,.9)); border:1px solid rgba(148,163,184,.14); border-radius:16px; padding:18px; min-height:420px; }}
             .zec-kpi-strip {{ display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:0; border:1px solid rgba(148,163,184,.14); border-radius:14px; overflow:hidden; background:rgba(11,20,33,.72); }}
@@ -2705,7 +2705,7 @@ def _modern_topbar(active: str, cfg: Dict[str, Any]) -> str:
         {nav('/manual.pdf', 'Handbuch', 'book', 'manual')}
         <span class="zec-dropdown"><button type="button" onclick="this.parentElement.classList.toggle('open')">Experte ▾</button><span class="zec-dropdown-panel"><a href="/status_old">Alte Statusseite</a><a href="/graph_old">Alter Graph</a><a href="/status#modern-diagnostics">Moderne Diagnose</a></span></span>
       </nav>
-      <div class="zec-top-actions"><span class="zec-system-pill">System aktiv</span><span class="modern-pill">V{APP_VERSION}</span><span class="zec-clock" id="zecClock">--:--:--</span></div>
+      <div class="zec-top-actions"><button type="button" id="systemPill" class="zec-system-pill ok" aria-label="Systemstatus">System OK</button><span class="modern-pill">V{APP_VERSION}</span><span class="zec-clock" id="zecClock">--:--:--</span></div>
     </div>
     <script>
       (function(){{
@@ -2788,6 +2788,13 @@ def _mini_svg_sparkline(values: List[Any], stroke: str = "#2ca24d", width: int =
         zero_line = f'<line class="mini-zero" x1="{left}" y1="{zy:.1f}" x2="{width-right}" y2="{zy:.1f}"/>'
     points_attr = " ".join(pts)
     last_x, last_y = pts[-1].split(',')
+    hit_targets = []
+    for i, (pt, value) in enumerate(zip(pts, nums)):
+        x, y = pt.split(',')
+        seconds_ago = (len(nums) - 1 - i) * 3
+        status = 'Bezug aus Netz' if value > 50 else ('Einspeisung / Export' if value < -50 else 'ausgeglichen')
+        hit_targets.append(f'<circle cx="{x}" cy="{y}" r="6" fill="transparent" tabindex="0"><title>vor ca. {seconds_ago} s · {html.escape(fmt(value))} · {status}</title></circle>')
+    hit_targets_html = ''.join(hit_targets)
     return (
         f'<svg class="sparkline" viewBox="0 0 {width} {height}" role="img" '
         f'aria-label="Mini-Verlauf: Minimum {html.escape(fmt(lo))}, Maximum {html.escape(fmt(hi))}, aktuell {html.escape(fmt(nums[-1]))}">'
@@ -2797,7 +2804,7 @@ def _mini_svg_sparkline(values: List[Any], stroke: str = "#2ca24d", width: int =
         f'<line class="mini-axis" x1="{left}" y1="{height-bottom}" x2="{width-right}" y2="{height-bottom}"/>'
         f'{zero_line}'
         f'<polyline class="mini-line" points="{points_attr}" stroke="{html.escape(stroke)}"/>'
-        f'<circle class="mini-dot" cx="{last_x}" cy="{last_y}" r="3" stroke="{html.escape(stroke)}"/>'
+        f'<circle class="mini-dot" cx="{last_x}" cy="{last_y}" r="3" stroke="{html.escape(stroke)}"/>' f'{hit_targets_html}'
         f'<text class="mini-label" x="0" y="{top+3}">{html.escape(fmt(hi))}</text>'
         f'<text class="mini-label" x="0" y="{height-bottom+3}">{html.escape(fmt(lo))}</text>'
         f'<text class="mini-label" x="{left}" y="{height-4}">letzte 48 Punkte</text>'
@@ -3006,7 +3013,7 @@ def _soc_ring_html(label: str, soc: Any, cfg: Dict[str, Any], subtitle: str = ""
     val = max(0, min(100, safe_soc if safe_soc is not None else 0))
     cls = _soc_color_class(soc, cfg)
     return f'''<div class="soc-ring-wrap {cls}" title="{html.escape(label)}">
-      <div class="soc-ring" style="--soc:{val:.1f}"><div class="soc-ring-inner"><b>{_zec_num(soc, '%')}</b><span>{html.escape(label)}</span></div></div>
+      <div class="soc-ring" data-ring="{html.escape(label.lower())}" style="--soc:{val:.1f}"><div class="soc-ring-inner"><b class="soc-ring-value">{_zec_num(soc, '%')}</b><span>{html.escape(label)}</span></div></div>
       <div class="soc-ring-caption">{html.escape(subtitle)}</div>
     </div>'''
 
@@ -3039,8 +3046,8 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any]) -> Dict[st
     status_kind = "bad" if mode == "SAFE_STATE" else ("warn" if warnings else "ok")
     system_status = "Safe-State" if mode == "SAFE_STATE" else (f"Warnung {len(warnings)}" if warnings else "System OK")
 
-    primary_power = _safe_float(s.get("sma_battery_power", s.get("second_battery_power_w")))
-    primary_soc = _safe_float(s.get("sma_battery_soc", s.get("second_battery_soc_percent")))
+    primary_power = _safe_float(s.get("sma_battery_power", s.get("second_battery_power_w", s.get("second_battery_power"))))
+    primary_soc = _safe_float(s.get("sma_battery_soc", s.get("second_battery_soc_percent", s.get("second_battery_soc"))))
     primary_status = "nicht verfügbar"
     if primary_power is not None:
         primary_status = "lädt stark" if primary_power > 1500 else ("lädt" if primary_power > 50 else ("trägt Hauslast" if primary_power < -50 else "voll / idle" if primary_soc and primary_soc >= 99 else "nahe neutral"))
@@ -3139,9 +3146,9 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
                 "minute": minute,
                 "time": now.strftime("%H:%M"),
                 "zendure_soc": snap.get("battery_soc"),
-                "primary_soc": snap.get("sma_battery_soc"),
+                "primary_soc": snap.get("sma_battery_soc", snap.get("second_battery_soc_percent", snap.get("second_battery_soc"))),
                 "zendure_power_w": snap.get("zendure_system_signed_power"),
-                "primary_power_w": snap.get("sma_battery_power"),
+                "primary_power_w": snap.get("sma_battery_power", snap.get("second_battery_power_w", snap.get("second_battery_power"))),
                 "mode": snap.get("current_mode"),
                 "reason": snap.get("control_reason"),
                 "safe_state": snap.get("current_mode") == "SAFE_STATE",
@@ -3168,11 +3175,11 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
     return payload
 
 def _status_info(title: str, text: str) -> str:
-    return f'<button class="info-dot" title="{html.escape(text)}" aria-label="Info {html.escape(title)}">i</button>'
+    return f'<button class="info-dot" data-tooltip="{html.escape(text, quote=True)}" aria-label="Info {html.escape(title)}">i</button>'
 
 
 def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
-    # V12.11.2-RC1 status page with snapshot refresh.
+    # V12.11.2-RC2 status page with compact snapshot refresh.
     payload = build_status_view_payload(cfg, s)
     # Compatibility-visible values also document the old text-heavy information inventory.
     measurement_log_details = (
@@ -3220,7 +3227,7 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
       <section class="zec-ui-card" data-card="primary">
         <div class="card-head">{_ui_icon('battery')}<h2>Primärspeicher</h2>{_status_info('Primärspeicher','Diese Karte zeigt den SMA-/Primärspeicher. ZEC steuert ihn nicht direkt, berücksichtigt aber SOC und Leistung für Harvest, Cross-Charge und Nachtstrategie.')}</div>
         <div class="card-split">
-          {_soc_ring_html('SMA', payload['primary'].get('soc'), cfg, 'Primärspeicher')}
+          {_soc_ring_html('primary', payload['primary'].get('soc'), cfg, 'Primärspeicher')}
           <div class="kv-block">
             <div><span>Ist</span><b data-zec="primary.actual">{html.escape(payload['primary']['actual'])}</b></div>
             <div><span>Status</span><b data-zec="primary.status">{html.escape(payload['primary']['status'])}</b></div>
@@ -3235,13 +3242,19 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
     <style>
       :root {{ --zec-page-bg:#f5f7fb; --zec-card-bg:#ffffff; --zec-text-main:#0f172a; --zec-text-muted:#64748b; --zec-accent-blue:#2563eb; --zec-status-ok:#16a34a; --zec-status-warn:#f59e0b; --zec-status-error:#dc2626; --zec-status-unknown:#94a3b8; --zec-ring-track:#e5e7eb; --zec-ring-inner-bg:var(--zec-card-bg); --zec-card-border:#e5e7eb; }}
       body.zec-modern-body.modern-dark {{ --zec-page-bg:#0f172a; --zec-card-bg:#172033; --zec-text-main:#e5e7eb; --zec-text-muted:#94a3b8; --zec-ring-track:#334155; --zec-ring-inner-bg:var(--zec-card-bg); --zec-card-border:#334155; }}
-      .zec-dashboard {{ max-width:1500px; margin:0 auto; padding:0 8px 36px; color:var(--zec-text-main); }}
-      .zec-dashboard-title {{ display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin:14px 0 18px; }} .zec-dashboard-title h1 {{ margin:0; font-size:30px; color:var(--zec-text-main); }}
-      .zec-system-status-pill {{ border-radius:999px; padding:8px 13px; font-weight:850; border:1px solid var(--zec-card-border); background:var(--zec-card-bg); }} .zec-system-status-pill.ok {{ color:var(--zec-status-ok); }} .zec-system-status-pill.warn {{ color:#a16207; }} .zec-system-status-pill.bad {{ color:var(--zec-status-error); }}
+      .zec-dashboard {{ max-width:1500px; margin:0 auto; padding:10px 8px 28px; color:var(--zec-text-main); }}
+      
+      .zec-system-pill {{ cursor:pointer; border:1px solid rgba(34,197,94,.25); }}
+      .zec-system-pill.ok {{ color:var(--zec-status-ok); background:rgba(34,197,94,.08); }}
+      .zec-system-pill.warn {{ color:#a16207; background:rgba(245,158,11,.10); border-color:rgba(245,158,11,.3); }}
+      .zec-system-pill.bad {{ color:var(--zec-status-error); background:rgba(220,38,38,.08); border-color:rgba(220,38,38,.3); }}
       .zec-main-grid {{ display:grid; grid-template-columns: repeat(5, minmax(215px,1fr)); gap:14px; }}
-      .zec-ui-card,.zec-wide-card {{ background:var(--zec-card-bg); border:1px solid var(--zec-card-border); border-radius:18px; padding:18px; box-shadow:0 12px 28px rgba(15,23,42,.06); }} .zec-ui-card {{ min-height:250px; }}
-      .card-head {{ display:flex; align-items:center; gap:9px; margin-bottom:14px; }} .card-head h2 {{ margin:0; font-size:17px; flex:1; }} .card-head .zec-icon {{ width:20px; height:20px; color:var(--zec-accent-blue); }}
-      .info-dot {{ width:23px; height:23px; border-radius:50%; border:1px solid var(--zec-card-border); background:transparent; color:var(--zec-text-muted); font-weight:800; cursor:help; }}
+      .zec-ui-card,.zec-wide-card {{ background:var(--zec-card-bg); border:1px solid var(--zec-card-border); border-radius:18px; padding:14px; box-shadow:0 12px 28px rgba(15,23,42,.06); }} .zec-ui-card {{ min-height:236px; }}
+      .card-head {{ display:flex; align-items:center; gap:9px; margin-bottom:10px; }} .card-head h2 {{ margin:0; font-size:17px; flex:1; }} .card-head .zec-icon {{ width:20px; height:20px; color:var(--zec-accent-blue); }}
+      .info-dot {{ position:relative; width:23px; height:23px; border-radius:50%; border:1px solid var(--zec-card-border); background:transparent; color:var(--zec-text-muted); font-weight:800; cursor:help; flex:0 0 auto; }}
+      .info-dot::after {{ content:attr(data-tooltip); position:absolute; z-index:1000; top:calc(100% + 8px); right:0; width:max-content; max-width:min(360px, calc(100vw - 32px)); padding:10px 12px; border-radius:10px; background:var(--zec-text-main); color:var(--zec-card-bg); font-size:13px; line-height:1.45; font-weight:500; white-space:normal; overflow-wrap:anywhere; box-shadow:0 12px 30px rgba(15,23,42,.25); opacity:0; visibility:hidden; pointer-events:none; transform:translateY(-4px); transition:.12s ease; text-align:left; }}
+      .info-dot:hover::after,.info-dot:focus-visible::after {{ opacity:1; visibility:visible; transform:translateY(0); }}
+      .zec-main-grid .zec-ui-card:nth-child(n+4) .info-dot::after {{ right:0; left:auto; }}
       .big-value {{ text-align:center; font-size:34px; font-weight:850; margin:18px 0 4px; }} .big-sub {{ text-align:center; color:var(--zec-text-muted); font-weight:650; }} .mode-name {{ text-align:center; font-size:30px; font-weight:850; margin-top:18px; }} .mode-text {{ text-align:center; color:var(--zec-text-muted); font-size:16px; font-weight:650; margin-bottom:12px; }}
       .line {{ margin:7px 0; color:var(--zec-text-muted); }} .line b {{ color:var(--zec-text-main); }} .card-status {{ margin-top:14px; color:var(--zec-text-muted); font-size:13px; line-height:1.4; }} .card-warning {{ margin-top:10px; border-radius:10px; background:rgba(245,158,11,.12); color:#92400e; padding:8px 10px; font-size:13px; }}
       .card-split {{ display:grid; grid-template-columns:145px 1fr; gap:16px; align-items:center; }} .card-split.single-unit {{ min-height:160px; }} .soc-ring-wrap {{ text-align:center; }} .soc-ring-caption {{ color:var(--zec-text-muted); font-size:12px; margin-top:6px; }}
@@ -3252,13 +3265,13 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
       @media(max-width:1350px) {{ .zec-main-grid {{ grid-template-columns:repeat(3,minmax(0,1fr)); }} }} @media(max-width:920px) {{ .zec-main-grid,.zec-bottom-grid {{ grid-template-columns:1fr; }} .card-split {{ grid-template-columns:1fr; justify-items:center; }} }}
     </style>
     <main class="zec-dashboard">
-      <div class="zec-dashboard-title"><div><h1>Status</h1><div class="small">Live-Snapshot · Refresh ohne Seitenreload · {APP_VERSION_LABEL}</div></div><div id="systemPill" class="zec-system-status-pill {payload['system']['kind']}">{html.escape(payload['system']['label'])}</div></div>
+      
       <section class="zec-main-grid">
         <section class="zec-ui-card" data-card="grid"><div class="card-head">{_ui_icon('meter')}<h2>Netzleistung</h2>{_status_info('Netzleistung','Aktueller ungefilterter Netzleistungswert am Netzanschlusspunkt. Negative Werte bedeuten Einspeisung, positive Werte Netzbezug.')}</div><div class="big-value" data-zec="grid.value">{html.escape(payload['grid']['value'])}</div><div class="big-sub" data-zec="grid.status">{html.escape(payload['grid']['status'])}</div><div id="gridMiniSparkline" style="margin-top:14px">{_mini_svg_sparkline(_grid_mini_values_from_snapshot(s), stroke='#2563eb')}</div><div class="card-status"><span class="status-dot {'ok' if payload['grid']['valid'] else 'warn'}"></span> Quelle: <span data-zec="grid.source">{html.escape(payload['grid']['source'])}</span> · aktuell</div></section>
         <section class="zec-ui-card" data-card="mode"><div class="card-head">{_ui_icon('mode')}<h2>Betriebsmodus</h2>{_status_info('Betriebsmodus','Diese Karte zeigt die aktuelle Entscheidung des Controllers: Modus, Zielwert, Grund und Prognose.')}</div><div class="mode-name" data-zec="mode.mode">{html.escape(payload['mode']['mode'])}</div><div class="mode-text" data-zec="mode.text">{html.escape(payload['mode']['text'])}</div><div class="line">Ziel: <b data-zec="mode.target">{html.escape(payload['mode']['target'])}</b></div><div class="line">Grund: <b data-zec="mode.reason">{html.escape(payload['mode']['reason'])}</b></div><div class="line" data-zec="mode.projection">{html.escape(payload['mode'].get('night_projection') or payload['mode'].get('fixed_projection') or '')}</div><div class="line">Letzte Änderung: <b data-zec="mode.last_change">{html.escape(str(payload['mode']['last_change']))}</b></div><div class="card-status"><span class="status-dot ok"></span> Regelung aktiv · aktuell</div></section>
         <section class="zec-ui-card" data-card="zendure"><div class="card-head">{_ui_icon('battery')}<h2>Zendure / Batterie</h2>{_status_info('Zendure','Zustand des Zendure-Speichers: SOC, Istleistung, Telemetrie und Command-Wirkung.')}</div>{zendure_card_body}<div class="card-status"><span class="status-dot ok"></span> Telemetrie: <span data-zec="zendure.source">{html.escape(payload['zendure']['source'])}</span></div><div class="card-warning" data-zec="zendure.command_warning" style="{'display:block' if payload['zendure'].get('command_warning') else 'display:none'}">{html.escape(str(payload['zendure'].get('command_warning') or ''))}</div></section>
         {primary_card}
-        <section class="zec-ui-card" data-card="source"><div class="card-head">{_ui_icon('radio')}<h2>Netzleistungsquelle</h2>{_status_info('Netzleistungsquelle','Diese Karte zeigt, welche Messquelle ZEC für die Netzleistung verwendet und ob sie aktuell genug ist.')}</div><div class="line"><b data-zec="source.name">{html.escape(payload['source']['name'])}</b></div><div class="line" data-zec="source.device_line">{html.escape(payload['source']['device_line'])}</div><div class="line">Letztes Paket: <b data-zec="source.age">vor {html.escape(str(payload['source']['age']))} s</b></div><div class="line">Pakete: <b data-zec="source.packets_min">{html.escape(str(payload['source']['packets_min']))}/min</b></div><div class="line" data-zec="source.rejected">{html.escape(payload['source']['rejected'])}</div><div class="card-status"><span class="status-dot ok"></span> Messquelle aktuell · <span data-zec="source.auto_text">{html.escape(payload['source']['auto_text'])}</span></div></section>
+        <section class="zec-ui-card" data-card="source"><div class="card-head">{_ui_icon('radio')}<h2>Netzleistungsquelle</h2>{_status_info('Netzleistungsquelle','Diese Karte zeigt, welche Messquelle ZEC für die Netzleistung verwendet und ob sie aktuell genug ist.')}</div><div class="line"><b data-zec="source.name">{html.escape(payload['source']['name'])}</b></div><div class="line" data-zec="source.device_line">{html.escape(payload['source']['device_line'])}</div><div class="line">Letztes Paket: <b data-zec="source.age">vor {html.escape(str(payload['source']['age']))} s</b></div><div class="line">Pakete: <b data-zec="source.packets_min">{html.escape(str(payload['source']['packets_min']))}/min</b></div><div class="line" data-zec="source.rejected">{html.escape(payload['source']['rejected'])}</div><div class="card-status"><span class="status-dot ok"></span> <span data-zec="source.auto_text">{html.escape(payload['source']['auto_text'])}</span></div></section>
       </section>
       <section class="zec-soc-wide"><div class="zec-wide-card"><div class="chart-toolbar"><div><h2 style="margin:0">Speicher-SOC Tagesgraph</h2><div class="small">Ganzer Kalendertag 00:00–24:00 · Zendure und Primärspeicher</div></div><div><button id="dayPrev">‹ Zurück</button><button id="dayToday">Heute</button><button id="dayNext">Vor ›</button> <b id="socDayLabel"></b></div></div><canvas id="storageSocChart"></canvas><div id="storageSocStatus" class="chart-status">SOC-Daten werden geladen…</div></div></section>
       <section class="zec-bottom-grid"><div class="zec-wide-card"><h2>Messdaten / Logging</h2><div class="diag-row"><span>Logging</span><b data-zec="logging.status">{html.escape(str(payload['logging']['status']))}</b></div><div class="diag-row"><span>Ziel</span><b data-zec="logging.target">{html.escape(str(payload['logging']['target']))}</b></div><div class="diag-row"><span>SQLite-Graphspeicher</span><b data-zec="logging.db">{html.escape(str(payload['logging']['db']))}</b></div><div class="diag-row"><span>DB-Datei</span><b data-zec="logging.db_path">{html.escape(os.path.basename(str(payload['logging']['db_path']) or '-'))}</b></div></div><div class="zec-wide-card"><h2>System-/Diagnosekarten</h2><div class="diag-row"><span>Zendure MQTT</span><b data-zec="diag.mqtt">{html.escape(str(payload['diag']['mqtt']))}</b></div><div class="diag-row"><span>Lokale API</span><b data-zec="diag.api">{html.escape(str(payload['diag']['api']))}</b></div><div class="diag-row"><span>Command-Effect</span><b data-zec="diag.effect">{html.escape(str(payload['diag']['effect']))}</b></div><div class="diag-row"><span>Letzter Resync</span><b data-zec="diag.resync">{html.escape(str(payload['diag']['resync']))}</b></div><div class="diag-row"><span>Zykluszeit</span><b data-zec="diag.loop_ms">{html.escape(str(payload['diag']['loop_ms']))} ms</b></div></div></section>
@@ -3271,11 +3284,11 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
     (function(){{
       const q=(s)=>document.querySelector(s); const qa=(s)=>Array.from(document.querySelectorAll(s));
       function setVal(path,val){{ qa('[data-zec="'+path+'"]').forEach(e=>{{ e.textContent=(val===null||val===undefined||val==='')?'—':String(val); }}); }}
-      function applyStatus(p){{ if(!p)return; const pill=q('#systemPill'); if(p.system&&pill){{ pill.textContent=p.system.label; pill.className='zec-system-status-pill '+p.system.kind; }} ['grid.value','grid.status','grid.source','mode.mode','mode.text','mode.target','mode.reason','mode.last_change','zendure.actual','zendure.source','primary.actual','primary.status','primary.line','primary.source','source.name','source.device_line','source.auto_text','logging.status','logging.target','logging.db','diag.mqtt','diag.api','diag.effect','diag.resync'].forEach(path=>{{ const parts=path.split('.'); setVal(path, p[parts[0]]?p[parts[0]][parts[1]]:''); }}); setVal('mode.projection', (p.mode && (p.mode.night_projection || p.mode.fixed_projection)) || ''); setVal('source.age', 'vor '+((p.source&&p.source.age)??'—')+' s'); setVal('source.packets_min', ((p.source&&p.source.packets_min)??0)+'/min'); setVal('source.rejected', (p.source&&p.source.rejected)||''); setVal('logging.db_path', p.logging&&p.logging.db_path ? p.logging.db_path.split('/').pop() : '—'); setVal('diag.loop_ms', ((p.diag&&p.diag.loop_ms)??'—')+' ms'); const warn=q('[data-zec="zendure.command_warning"]'); if(warn){{ const msg=(p.zendure&&p.zendure.command_warning)||''; warn.textContent=msg; warn.style.display=msg?'block':'none'; }} }}
+      function applyStatus(p){{ if(!p)return; const pill=q('#systemPill'); if(p.system&&pill){{ pill.textContent=p.system.label; pill.className='zec-system-pill '+p.system.kind; }} ['grid.value','grid.status','grid.source','mode.mode','mode.text','mode.target','mode.reason','mode.last_change','zendure.actual','zendure.source','primary.actual','primary.status','primary.line','primary.source','source.name','source.device_line','source.auto_text','logging.status','logging.target','logging.db','diag.mqtt','diag.api','diag.effect','diag.resync'].forEach(path=>{{ const parts=path.split('.'); setVal(path, p[parts[0]]?p[parts[0]][parts[1]]:''); }}); setVal('mode.projection', (p.mode && (p.mode.night_projection || p.mode.fixed_projection)) || ''); setVal('source.age', 'vor '+((p.source&&p.source.age)??'—')+' s'); setVal('source.packets_min', ((p.source&&p.source.packets_min)??0)+'/min'); setVal('source.rejected', (p.source&&p.source.rejected)||''); setVal('logging.db_path', p.logging&&p.logging.db_path ? p.logging.db_path.split('/').pop() : '—'); setVal('diag.loop_ms', ((p.diag&&p.diag.loop_ms)??'—')+' ms'); setVal('zendure.remaining', (p.zendure&&p.zendure.remaining!==null&&p.zendure.remaining!==undefined)?Number(p.zendure.remaining).toLocaleString('de-DE',{{maximumFractionDigits:2}})+' kWh':'nicht berechenbar'); function updateRing(key,soc){{ const ring=q('[data-ring="'+key+'"]'); if(!ring)return; const n=Number(soc); const valid=Number.isFinite(n); ring.style.setProperty('--soc',valid?Math.max(0,Math.min(100,n)):0); const val=ring.querySelector('.soc-ring-value'); if(val) val.textContent=valid?Math.round(n)+' %':'—'; }} updateRing('zendure',p.zendure&&p.zendure.soc); updateRing('primary',p.primary&&p.primary.soc); const warn=q('[data-zec="zendure.command_warning"]'); if(warn){{ const msg=(p.zendure&&p.zendure.command_warning)||''; warn.textContent=msg; warn.style.display=msg?'block':'none'; }} }}
       let statusInFlight=false; async function refreshStatus(){{ if(document.visibilityState==='hidden'||statusInFlight)return; statusInFlight=true; try{{ const r=await fetch('/status-view-data',{{cache:'no-store'}}); if(r.ok) applyStatus(await r.json()); }}catch(e){{}} finally{{statusInFlight=false;}} }} setInterval(refreshStatus,3000); document.addEventListener('visibilitychange',()=>{{ if(document.visibilityState!=='hidden'){{ refreshStatus(); refreshSocDay(); }} }});
       async function refreshGridMiniSparkline(){{ if(document.visibilityState==='hidden') return; const box=q('#gridMiniSparkline'); if(!box)return; try{{ const r=await fetch('/grid-mini-sparkline',{{cache:'no-store'}}); if(r.ok){{ const svg=await r.text(); if(svg.indexOf('<svg')>=0) box.innerHTML=svg; }} }}catch(e){{}} }} setInterval(refreshGridMiniSparkline,10000);
       let chart=null, chartInFlight=false, selectedDate=new Date(); function dateStr(d){{ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return y+'-'+m+'-'+day; }} function labelDate(d){{ return d.toLocaleDateString('de-DE',{{weekday:'short',day:'2-digit',month:'2-digit',year:'numeric'}}); }} function fmtPower(v){{ if(v===null||v===undefined||v==='')return '—'; const n=Number(v); if(isNaN(n))return String(v); const a=Math.abs(n); const s=n>0?'+':(n<0?'−':''); return s+(a>=1000?(a/1000).toFixed(2).replace('.',',')+' kW':Math.round(a)+' W'); }}
-      async function refreshSocDay(){{ if(document.visibilityState==='hidden'||chartInFlight)return; chartInFlight=true; const status=q('#storageSocStatus'); try{{ const ds=dateStr(selectedDate); q('#socDayLabel').textContent=labelDate(selectedDate); q('#dayNext').disabled=ds>=dateStr(new Date()); const r=await fetch('/storage-soc-day-data?date='+encodeURIComponent(ds),{{cache:'no-store'}}); const p=await r.json(); const points=p.points||[]; const labels=points.map(x=>x.minute); const data={{labels:labels,datasets:[{{label:'Zendure',data:points.map(x=>x.zendure_soc),borderWidth:2,pointRadius:0,tension:.22,spanGaps:false}},{{label:'Primärspeicher',data:points.map(x=>x.primary_soc),borderWidth:2,pointRadius:0,tension:.22,spanGaps:false}}]}}; const opts={{animation:false,responsive:true,maintainAspectRatio:false,interaction:{{mode:'nearest',intersect:false}},plugins:{{legend:{{position:'bottom'}},tooltip:{{callbacks:{{title:(it)=>{{ const m=Number(it[0].label); const h=Math.floor(m/60); const mi=m%60; return p.date+' '+String(h).padStart(2,'0')+':'+String(mi).padStart(2,'0');}},afterBody:(it)=>{{ const x=points[it[0].dataIndex]||{{}}; return ['Zendure: '+(x.zendure_soc??'—')+' % · '+fmtPower(x.zendure_power_w),'Primärspeicher: '+(x.primary_soc??'—')+' % · '+fmtPower(x.primary_power_w),'Modus: '+(x.mode||'—'),'Grund: '+(x.reason||'—')];}}}}}}}},scales:{{x:{{type:'linear',min:0,max:1440,ticks:{{stepSize:360,callback:(v)=>String(Math.floor(v/60)).padStart(2,'0')+':00'}}}},y:{{min:0,max:100,ticks:{{callback:(v)=>v+' %'}}}}}}}}; if(!chart) chart=new Chart(q('#storageSocChart').getContext('2d'),{{type:'line',data:data,options:opts}}); else {{chart.data=data; chart.options=opts; chart.update();}} status.textContent=(p.is_today?'Stand: '+(p.last_point_at||'—')+' · aktualisiert alle 60 s':'Vollständiger Tag: '+p.date)+' · Quelle: '+p.source+' · Cache '+(p.cache_status||'-'); }}catch(e){{ status.textContent='SOC-Tagesgraph konnte nicht geladen werden: '+e; }} finally{{chartInFlight=false;}} }}
+      async function refreshSocDay(){{ if(document.visibilityState==='hidden'||chartInFlight)return; chartInFlight=true; const status=q('#storageSocStatus'); try{{ const ds=dateStr(selectedDate); q('#socDayLabel').textContent=labelDate(selectedDate); q('#dayNext').disabled=ds>=dateStr(new Date()); const r=await fetch('/storage-soc-day-data?date='+encodeURIComponent(ds),{{cache:'no-store'}}); const p=await r.json(); const points=p.points||[]; const data={{datasets:[{{label:'Zendure',data:points.map(x=>({{x:Number(x.minute),y:x.zendure_soc}})),borderWidth:2,pointRadius:0,pointHitRadius:12,pointHoverRadius:3,tension:.22,spanGaps:false}},{{label:'Primärspeicher',data:points.map(x=>({{x:Number(x.minute),y:x.primary_soc}})),borderWidth:2,pointRadius:0,pointHitRadius:12,pointHoverRadius:3,tension:.22,spanGaps:false}}]}}; const opts={{animation:false,responsive:true,maintainAspectRatio:false,interaction:{{mode:'nearest',intersect:false}},plugins:{{legend:{{position:'bottom'}},tooltip:{{callbacks:{{title:(it)=>{{ const m=Number(it[0].raw.x); const h=Math.floor(m/60); const mi=m%60; return p.date+' '+String(h).padStart(2,'0')+':'+String(mi).padStart(2,'0');}},afterBody:(it)=>{{ const x=points.find(pnt=>Number(pnt.minute)===Number(it[0].raw.x))||{{}}; return ['Zendure: '+(x.zendure_soc??'—')+' % · '+fmtPower(x.zendure_power_w),'Primärspeicher: '+(x.primary_soc??'—')+' % · '+fmtPower(x.primary_power_w),'Modus: '+(x.mode||'—'),'Grund: '+(x.reason||'—')];}}}}}}}},scales:{{x:{{type:'linear',min:0,max:1440,ticks:{{stepSize:360,callback:(v)=>String(Math.floor(v/60)).padStart(2,'0')+':00'}}}},y:{{min:0,max:100,ticks:{{callback:(v)=>v+' %'}}}}}}}}; if(!chart) chart=new Chart(q('#storageSocChart').getContext('2d'),{{type:'line',data:data,options:opts}}); else {{chart.data=data; chart.options=opts; chart.update();}} status.textContent=(p.is_today?'Stand: '+(p.last_point_at||'—')+' · aktualisiert alle 60 s':'Vollständiger Tag: '+p.date)+' · Quelle: '+p.source+' · Cache '+(p.cache_status||'-'); }}catch(e){{ status.textContent='SOC-Tagesgraph konnte nicht geladen werden: '+e; }} finally{{chartInFlight=false;}} }}
       q('#dayPrev').onclick=()=>{{ selectedDate.setDate(selectedDate.getDate()-1); refreshSocDay(); }}; q('#dayNext').onclick=()=>{{ const n=new Date(selectedDate); n.setDate(n.getDate()+1); if(dateStr(n)<=dateStr(new Date())){{ selectedDate=n; refreshSocDay(); }} }}; q('#dayToday').onclick=()=>{{ selectedDate=new Date(); refreshSocDay(); }}; refreshSocDay(); setInterval(()=>{{ if(dateStr(selectedDate)===dateStr(new Date())) refreshSocDay(); }},60000);
     }})();
     </script>
