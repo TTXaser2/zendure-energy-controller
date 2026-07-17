@@ -51,6 +51,11 @@ class ZendureController:
         self._last_sma_diag_key = None
         self._last_sma_large_gap_epoch = None
         self._last_zendure_mqtt_status = ""
+        self._mqtt_uncertain_since_epoch: Optional[float] = None
+        self._mqtt_uncertain_cycles: int = 0
+        self._mqtt_uncertain_had_hard_loss: bool = False
+        self._last_resync_signature: str = ""
+        self._last_resync_epoch: float = 0.0
         self._command_effect_watch_target: int = 0
         self._command_effect_watch_start_epoch: Optional[float] = None
         self._command_effect_last_resend_epoch: float = 0.0
@@ -829,59 +834,152 @@ class ZendureController:
                 return -int(self.state.last_output_power)
         return 0
 
-    def update_command_effect_monitor(self, cfg: Dict[str, Any]) -> None:
-        """RC3: detect active targets that do not become physically effective.
+    def _hard_mqtt_loss_status(self, status: str) -> bool:
+        status = str(status or "").upper()
+        return status in {
+            "ZENDURE_MQTT_NO_LIVE",
+            "ZENDURE_MQTT_RETAINED_ONLY",
+            "ZENDURE_MQTT_AFTER_BROKER_RESTART_NO_LIVE_UPDATES",
+            "ZENDURE_MQTT_UNKNOWN",
+        }
 
-        This does not replace safety/control decisions.  It makes the Zendure
-        command lifecycle robust after restore/Broker/Zendure-App MQTT hiccups:
-        publish-to-broker success is not treated as proof of device effect.
+    def _clear_command_not_effective_locked(self) -> None:
+        self.state.command_not_effective_active = False
+        self.state.command_not_effective_since_epoch = None
+        self.state.command_not_effective_since_time = "-"
+        self.state.command_not_effective_duration_s = 0
+        self.state.command_not_effective_reason = ""
+        if "COMMAND_NOT_EFFECTIVE" in self.state.active_limiters:
+            self.state.active_limiters = [x for x in self.state.active_limiters if x != "COMMAND_NOT_EFFECTIVE"]
+            self.state.last_limit_reason = ", ".join(self.state.active_limiters) if self.state.active_limiters else "none"
+
+    def _set_command_effect_state(self, category: str, reason: str) -> None:
+        with self.state.lock:
+            self.state.command_effect_category = str(category or "")
+            self.state.command_effect_reason = str(reason or "")
+
+    def _resync_permitted(self, target: int, reason: str, cfg: Dict[str, Any], *, confirmed_mismatch: bool = False) -> bool:
+        """Deduplicate only redundant resyncs, never required recovery.
+
+        Latch safety: the decision is not based on "same target already sent".
+        An identical command remains sendable whenever there is fresh uncertainty
+        or a confirmed mismatch.  The cooldown only suppresses duplicate recovery
+        attempts in a bounded time window; after cooldown a persistent mismatch is
+        eligible again.
+        """
+        now = time.time()
+        cooldown_s = max(0, int(cfg.get("COMMAND_RESYNC_COOLDOWN_SECONDS", 120) or 0))
+        signature = f"{int(target)}|{reason}"
+        if cooldown_s > 0 and signature == self._last_resync_signature and (now - self._last_resync_epoch) < cooldown_s:
+            if not confirmed_mismatch:
+                with self.state.lock:
+                    self.state.command_resync_reason = "RESYNC_SUPPRESSED_COOLDOWN"
+                return False
+        self._last_resync_signature = signature
+        self._last_resync_epoch = now
+        return True
+
+    def update_command_effect_monitor(self, cfg: Dict[str, Any]) -> None:
+        """Latch-safe RC3/RC2 command lifecycle monitor.
+
+        The monitor is deliberately a small in-memory state machine.  It performs
+        no MQTT reads, Zendure/API calls, sleeps, file/DB operations or history
+        scans.  Therefore it cannot block the regulation loop.  Dedupe suppresses
+        only redundant recovery attempts inside a cooldown; it never suppresses
+        a required resend when a confirmed mismatch or robust communication
+        uncertainty exists.
         """
         target = self._current_signed_target()
         now = time.time()
         with self.state.lock:
-            status = self.state.zendure_mqtt_overall_status
+            status = str(self.state.zendure_mqtt_overall_status or "")
             live_confirmed = bool(self.state.zendure_mqtt_live_confirmed)
             actual = int(self.state.actual_zendure_system_signed_power or 0)
-            actual_valid = bool(self.state.actual_zendure_power_valid or self.state.last_zendure_power_update_epoch is not None)
+            actual_valid = bool(self.state.actual_zendure_power_valid and self.state.last_zendure_power_update_epoch is not None)
+            actual_age = self.state.actual_zendure_power_age_s
             uncertainty_active = bool(self.state.command_uncertain_mqtt_active)
+            active_limiters = set(self.state.active_limiters)
 
+        mqtt_uncertain = self._zendure_mqtt_uncertain_for_active_command(status, live_confirmed)
+        hard_loss = self._hard_mqtt_loss_status(status)
         previous_status = self._last_zendure_mqtt_status
+        if mqtt_uncertain:
+            if self._mqtt_uncertain_since_epoch is None:
+                self._mqtt_uncertain_since_epoch = now
+                self._mqtt_uncertain_cycles = 0
+                self._mqtt_uncertain_had_hard_loss = False
+            self._mqtt_uncertain_cycles += 1
+            self._mqtt_uncertain_had_hard_loss = self._mqtt_uncertain_had_hard_loss or hard_loss
+        uncertainty_duration_s = 0
+        if self._mqtt_uncertain_since_epoch is not None:
+            uncertainty_duration_s = max(0, int(now - self._mqtt_uncertain_since_epoch))
         recovered_to_ok = (
             bool(previous_status)
             and previous_status != "ZENDURE_MQTT_OK"
             and status == "ZENDURE_MQTT_OK"
             and live_confirmed
         )
-        if target != 0 and recovered_to_ok and (uncertainty_active or bool(cfg.get("COMMAND_RESYNC_ON_MQTT_RECOVERY_ALWAYS", True))):
-            self._force_resend_signed_target(target, f"Zendure-MQTT-Recovery {previous_status}->OK")
-            self._command_effect_last_resend_epoch = now
-
+        long_stale_s = max(3, int(cfg.get("COMMAND_RESYNC_STALE_MIN_SECONDS", 30) or 30))
+        stale_cycles_min = max(1, int(cfg.get("COMMAND_RESYNC_STALE_MIN_CYCLES", 3) or 3))
+        robust_uncertainty = (
+            uncertainty_active
+            or self._mqtt_uncertain_had_hard_loss
+            or uncertainty_duration_s >= long_stale_s
+            or self._mqtt_uncertain_cycles >= stale_cycles_min
+            or bool(cfg.get("COMMAND_RESYNC_ON_MQTT_RECOVERY_ALWAYS", False))
+        )
+        if target != 0 and recovered_to_ok and robust_uncertainty:
+            reason = "RESYNC_AFTER_RECONNECT" if self._mqtt_uncertain_had_hard_loss else "RESYNC_AFTER_LONG_STALE"
+            if self._resync_permitted(target, reason, cfg):
+                self._force_resend_signed_target(target, reason)
+                self._command_effect_last_resend_epoch = now
+        if recovered_to_ok or not mqtt_uncertain:
+            self._mqtt_uncertain_since_epoch = None
+            self._mqtt_uncertain_cycles = 0
+            self._mqtt_uncertain_had_hard_loss = False
         self._last_zendure_mqtt_status = status
 
         if target == 0:
             self._command_effect_watch_target = 0
             self._command_effect_watch_start_epoch = None
             with self.state.lock:
-                self.state.command_not_effective_active = False
-                self.state.command_not_effective_since_epoch = None
-                self.state.command_not_effective_since_time = "-"
-                self.state.command_not_effective_duration_s = 0
-                self.state.command_not_effective_reason = ""
+                self._clear_command_not_effective_locked()
+                self.state.command_effect_category = "no_command"
+                self.state.command_effect_reason = "Kein aktiver Nicht-Null-Sollwert."
+            return
+
+        min_target_w = max(0, int(cfg.get("COMMAND_EFFECT_MIN_TARGET_W", 120) or 120))
+        if abs(target) < min_target_w:
+            self._command_effect_watch_start_epoch = None
+            with self.state.lock:
+                self._clear_command_not_effective_locked()
+                self.state.command_effect_category = "COMMAND_EFFECTIVE"
+                self.state.command_effect_reason = f"Sollwert {target:+d} W liegt unter der Diagnosegrenze {min_target_w} W."
             return
 
         if target != self._command_effect_watch_target:
             self._command_effect_watch_target = target
             self._command_effect_watch_start_epoch = now
+            with self.state.lock:
+                self._clear_command_not_effective_locked()
+                self.state.command_effect_category = "COMMAND_PENDING"
+                self.state.command_effect_reason = f"Neuer Sollwert {target:+d} W; Reaktionszeit läuft."
+
+        if mqtt_uncertain or not actual_valid:
+            with self.state.lock:
+                self._clear_command_not_effective_locked()
+                self.state.command_effect_category = "COMMAND_TELEMETRY_UNCERTAIN"
+                self.state.command_effect_reason = f"Wirksamkeit nicht bewertbar: Zendure-Telemetrie {status or 'UNKNOWN'}, live={live_confirmed}, Istwert gültig={actual_valid}."
+            return
 
         threshold_w = max(30, int(cfg.get("COMMAND_EFFECT_MIN_W", 80) or 80))
-        if target > 0:
-            effect_ok = actual_valid and actual >= threshold_w
-            direction = "Ladung"
-        else:
-            effect_ok = actual_valid and actual <= -threshold_w
-            direction = "Entladung"
-
-        if effect_ok:
+        tolerance_w = max(10, int(cfg.get("COMMAND_EFFECT_TOLERANCE_W", 80) or 80))
+        same_direction = (target > 0 and actual >= threshold_w) or (target < 0 and actual <= -threshold_w)
+        close_enough = same_direction and abs(int(target) - int(actual)) <= tolerance_w
+        effective_enough = same_direction and abs(actual) >= max(threshold_w, min(abs(target), threshold_w))
+        legitimate_limiters = {"MAX_SOC", "MIN_SOC", "NIGHT_RESERVE_SOC", "CROSS_CHARGE"}
+        limited_legitimately = bool(active_limiters.intersection(legitimate_limiters))
+        if close_enough or effective_enough or limited_legitimately:
             self._command_effect_watch_start_epoch = None
             with self.state.lock:
                 self.state.command_uncertain_mqtt_active = False
@@ -890,11 +988,14 @@ class ZendureController:
                 self.state.command_uncertain_mqtt_target_w = 0
                 self.state.command_uncertain_mqtt_since_epoch = None
                 self.state.command_uncertain_mqtt_since_time = "-"
-                self.state.command_not_effective_active = False
-                self.state.command_not_effective_since_epoch = None
-                self.state.command_not_effective_since_time = "-"
-                self.state.command_not_effective_duration_s = 0
-                self.state.command_not_effective_reason = ""
+                self._clear_command_not_effective_locked()
+                self.state.command_effect_category = "COMMAND_EFFECTIVE" if not limited_legitimately else "COMMAND_LIMITED_BY_SOC_OR_POWER"
+                if close_enough:
+                    self.state.command_effect_reason = f"Soll {target:+d} W und Ist {actual:+d} W liegen innerhalb {tolerance_w} W."
+                elif limited_legitimately:
+                    self.state.command_effect_reason = "Aktiver Sollwert wird durch legitime SOC-/Schutz-/Cross-Charge-Limiter begrenzt."
+                else:
+                    self.state.command_effect_reason = f"Istleistung {actual:+d} W zeigt plausible Gerätewirkung."
             return
 
         if self._command_effect_watch_start_epoch is None:
@@ -902,28 +1003,35 @@ class ZendureController:
         elapsed_s = max(0, int(now - float(self._command_effect_watch_start_epoch)))
         timeout_s = max(10, int(cfg.get("COMMAND_EFFECT_TIMEOUT_SECONDS", 90) or 90))
         resend_s = max(timeout_s, int(cfg.get("COMMAND_EFFECT_FORCE_RESEND_SECONDS", 120) or 120))
+        direction = "Ladung" if target > 0 else "Entladung"
 
         with self.state.lock:
-            since_time = self.state.command_not_effective_since_time
-            if elapsed_s >= timeout_s:
+            if elapsed_s < timeout_s:
+                self._clear_command_not_effective_locked()
+                self.state.command_effect_category = "COMMAND_PENDING"
+                self.state.command_effect_reason = f"Soll {target:+d} W ({direction}), Ist {actual:+d} W; Reaktionszeit {elapsed_s}/{timeout_s} s läuft."
+            else:
                 self.state.command_not_effective_active = True
                 if self.state.command_not_effective_since_epoch is None:
                     self.state.command_not_effective_since_epoch = self._command_effect_watch_start_epoch
-                    self.state.command_not_effective_since_time = since_time if since_time not in ("", "-") else datetime.fromtimestamp(self._command_effect_watch_start_epoch).strftime("%H:%M:%S")
+                    self.state.command_not_effective_since_time = datetime.fromtimestamp(self._command_effect_watch_start_epoch).strftime("%H:%M:%S")
                 self.state.command_not_effective_duration_s = elapsed_s
                 self.state.command_not_effective_reason = (
-                    f"Soll {target:+d} W ({direction}), Ist {actual:+d} W seit {elapsed_s} s nicht plausibel. "
+                    f"Soll {target:+d} W ({direction}), Ist {actual:+d} W seit {elapsed_s} s außerhalb Toleranz {tolerance_w} W. "
                     "Mögliche Ursache: Zendure-MQTT-Kopplung/Command-State hängt."
                 )
+                self.state.command_effect_category = "COMMAND_MISMATCH_CONFIRMED"
+                self.state.command_effect_reason = self.state.command_not_effective_reason
                 self.state.add_limiter("COMMAND_NOT_EFFECTIVE")
 
         if elapsed_s >= timeout_s and now - self._last_command_effect_log_epoch >= 120:
             self._last_command_effect_log_epoch = now
-            self.log(f"[COMMAND_EFFECT] target={target}W actual={actual}W elapsed_s={elapsed_s} mqtt={status}")
+            self.log(f"[COMMAND_EFFECT] category=COMMAND_MISMATCH_CONFIRMED target={target}W actual={actual}W elapsed_s={elapsed_s} mqtt={status}")
 
         if elapsed_s >= resend_s and now - self._command_effect_last_resend_epoch >= resend_s:
-            self._force_resend_signed_target(target, f"COMMAND_NOT_EFFECTIVE_{elapsed_s}s")
-            self._command_effect_last_resend_epoch = now
+            if self._resync_permitted(target, "RESYNC_AFTER_CONFIRMED_MISMATCH", cfg, confirmed_mismatch=True):
+                self._force_resend_signed_target(target, f"RESYNC_AFTER_CONFIRMED_MISMATCH_{elapsed_s}s")
+                self._command_effect_last_resend_epoch = now
 
     def _store_signed_target(self, signed_target_w: int, reason: str, path: str, action_prefix: str) -> None:
         signed_target_w = int(signed_target_w or 0)

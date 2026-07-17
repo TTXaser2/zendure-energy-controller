@@ -141,6 +141,8 @@ class ControllerState:
     command_resync_count: int = 0
     command_resync_last_time: str = "-"
     command_resync_reason: str = ""
+    command_effect_category: str = "no_command"
+    command_effect_reason: str = "Kein aktiver Nicht-Null-Sollwert."
     command_not_effective_active: bool = False
     command_not_effective_since_epoch: Optional[float] = None
     command_not_effective_since_time: str = "-"
@@ -1000,11 +1002,14 @@ class ControllerState:
                 effect_category = "no_command"
                 effect_reason = self.last_mqtt_command_skipped or "Kein neues MQTT-Kommando gesendet."
                 effect_valid = False
+                if self.command_effect_category:
+                    effect_category = self.command_effect_category
+                    effect_reason = self.command_effect_reason
                 if self.command_uncertain_mqtt_active:
-                    effect_category = "uncertain_mqtt_command"
+                    effect_category = "COMMAND_TELEMETRY_UNCERTAIN"
                     effect_reason = self.command_uncertain_mqtt_reason or "Aktiver Sollwert wurde bei unsicherem Zendure-MQTT-Zustand gesendet."
                 if self.command_not_effective_active:
-                    effect_category = "command_not_effective"
+                    effect_category = "COMMAND_MISMATCH_CONFIRMED"
                     effect_reason = self.command_not_effective_reason or "Aktiver Sollwert zeigt keine erkennbare Gerätewirkung."
             else:
                 effect_category = "not_evaluable"
@@ -1252,6 +1257,8 @@ class ControllerState:
                 "command_resync_count": self.command_resync_count,
                 "command_resync_last_time": self.command_resync_last_time,
                 "command_resync_reason": self.command_resync_reason,
+                "command_effect_state_category": self.command_effect_category,
+                "command_effect_state_reason": self.command_effect_reason,
                 "loop_duration_ms": self.last_loop_duration_ms,
                 "cycle_total_without_sleep_ms": self.last_cycle_total_ms,
                 "cycle_slowest_step": self.last_cycle_slowest_step,
@@ -1387,6 +1394,8 @@ class ControllerState:
                 "command_resync_count": self.command_resync_count,
                 "command_resync_last_time": self.command_resync_last_time,
                 "command_resync_reason": self.command_resync_reason,
+                "command_effect_state_category": self.command_effect_category,
+                "command_effect_state_reason": self.command_effect_reason,
                 "command_not_effective_active": self.command_not_effective_active,
                 "command_not_effective_since_time": self.command_not_effective_since_time,
                 "command_not_effective_duration_s": self.command_not_effective_duration_s,

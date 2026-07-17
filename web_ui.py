@@ -1048,6 +1048,11 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
         snap.pop("mqtt_topic_diagnostics", None)
         return snap
 
+    @app.get("/status-view-data")
+    def status_view_data():
+        snap = state.snapshot()
+        return build_status_view_payload(config_manager.get(), snap)
+
     @app.get("/graph-data")
     def graph_data():
         return state.snapshot()["graph_history"]
@@ -1067,8 +1072,15 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
         return build_graph_view_payload(config_manager.get(), state.snapshot(), range_name=range, resolution=resolution)
 
     @app.get("/soc-day-data")
-    def soc_day_data():
-        return build_soc_day_payload(config_manager.get(), state.snapshot())
+    def soc_day_data(date: Optional[str] = None):
+        # Legacy endpoint name now returns the improved storage day payload for
+        # the status page.  Older tests/tools still find /soc-day-data, while
+        # the new UI also uses /storage-soc-day-data explicitly.
+        return build_storage_soc_day_payload(config_manager.get(), state.snapshot(), date=date)
+
+    @app.get("/storage-soc-day-data")
+    def storage_soc_day_data(date: Optional[str] = None):
+        return build_storage_soc_day_payload(config_manager.get(), state.snapshot(), date=date)
 
     @app.get("/grid-mini-sparkline", response_class=HTMLResponse)
     def grid_mini_sparkline():
@@ -2881,214 +2893,395 @@ def build_modern_soc_day_section(cfg: Dict[str, Any]) -> str:
     """
 
 
-def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
-    """Modern status page.
 
-    RC12 intentionally treats the mock-up as the visual contract. The legacy
-    detail matrix stays available via /status_old, but the default page is a
-    curated dashboard instead of a transformed legacy card wall.
-    """
-    m = _modern_status_summary(cfg, s)
-    current_mode = str(m["mode"])
-    fixed_projection = fixed_mode_projection_text(cfg, s, current_mode)
-    grid = float(m["grid"] or 0.0)
-    actual = float(m["actual"] or 0.0)
-    target = float(m["target"] or 0.0)
-    sma_power = float(s.get('sma_battery_display_power', s.get('sma_battery_power', 0.0)) or 0.0)
-    soc_num = m["soc"] if m["soc"] is not None else None
-    soc_val = f"{soc_num} %" if soc_num is not None else "- %"
-    soc_ring = max(0, min(100, int(float(soc_num or 0))))
-    grid_kw = grid / 1000.0
-    actual_kw = actual / 1000.0
-    target_kw = target / 1000.0
-    sma_kw = sma_power / 1000.0
-    grid_cls = "zec-accent-blue" if abs(grid) < 0.1 else ("zec-accent-red" if grid > 0 else "zec-accent-green")
-    actual_cls = "zec-accent-blue" if abs(actual) < 0.1 else ("zec-accent-green" if actual > 0 else "zec-accent-blue")
-    graph_hist = list(s.get("graph_history", []) or [])
-    grid_sparkline = _mini_svg_sparkline([r.get("grid_power") if isinstance(r, dict) else None for r in graph_hist], stroke="#2ca24d")
-    mode_kind = "bad" if current_mode == "SAFE_STATE" else ("warn" if current_mode in {"HOLD", "STOP_HOLD", "BLOCKED_BY_SMA"} else "ok")
-    log_kind = "ok" if m["logging_status"] == "active" else "warn"
-    mqtt_kind = "ok" if m["mqtt_ok"] else "warn"
-    source_title = "Netzleistungsquelle"
-    source_device = "SMA Home Manager 2.0" if str(cfg.get("GRID_METER_SOURCE", "")) == "sma_energy_meter_udp" else "Shelly-kompatibel"
-    source_detail = _short_source_name(s.get("raw_grid_source") or s.get("grid_power_source") or source_device)
-    source_age = age_text(s.get("grid_power_age_seconds"))
-    packet_rate = s.get("sma_energy_meter_packet_rate_per_min") or s.get("sma_packet_rate_per_min")
-    packet_rate_line = f"{float(packet_rate)/60.0:.1f} Hz" if packet_rate is not None else "-"
-    socket_mode = str(s.get("sma_energy_meter_socket_mode") or s.get("sma_socket_mode") or cfg.get("SMA_ENERGY_METER_SOCKET_MODE", "-"))
-    measurement_target = str(s.get("measurement_log_active_target_type") or cfg.get("MEASUREMENT_LOG_STORAGE_TARGET", "-"))
-    measurement_log_details = f"Status: {m['logging_status']} · Ziel: {measurement_target}"
-    active_cycle_ms = int(s.get("last_cycle_total_ms") or s.get("last_loop_duration_ms") or 0)
-    slowest_key = str(s.get("last_cycle_slowest_step") or "")
-    slowest_ms = int(s.get("last_cycle_slowest_step_ms") or 0)
-    timing_step_labels = {"measurement_logging_ms": "Messdaten-Logging", "finish_cycle_ms": "Zyklusabschluss", "run_once_ms": "Regelentscheidung"}
-    slowest_label = timing_step_labels.get(slowest_key, slowest_key or "-")
-    grid_measurement_line = f"aktueller Messwert: {grid:.1f} W" if m["grid_valid"] else "aktueller Messwert: nicht gültig"
-    grid_relevance_line = "für AUTO-Regelung genutzt" if m["grid_used"] else "nicht regelrelevant"
-    auto_rule_line = f"Geglätteter AUTO-Regelwert: {float(s.get('grid_power', 0.0) or 0.0):.1f} W" if m["grid_used"] else "Geglätteter AUTO-Regelwert: n.a."
-    mqtt_recovery_hint = "" if m["mqtt_ok"] else "Zendure Live-Status prüfen. Falls nach Raspberry-/Mosquitto-Neustart keine Live-Werte kommen, MQTT in der Zendure-App erneut speichern/aktivieren."
-    compatibility_status_text = (
-        f"Aktive Zykluszeit {active_cycle_ms} ms · {slowest_label} {slowest_ms} ms · "
-        f"{grid_measurement_line} · {grid_relevance_line} · {auto_rule_line} · {measurement_log_details} · {mqtt_recovery_hint}"
-    )
-    measurement_interval = int(cfg.get("MEASUREMENT_LOG_INTERVAL_SECONDS", cfg.get("INTERVAL_SECONDS", 3)) or 0)
-    measurement_file = str(s.get("measurement_current_file_name") or s.get("measurement_current_file") or "-")
-    measurement_path = str(s.get("measurement_log_active_directory") or s.get("measurement_primary_path") or cfg.get("MEASUREMENT_LOG_DIR", "-"))
-    measurement_db_path = str(s.get("measurement_db_path") or resolve_measurement_db_path(cfg))
-    measurement_db_file = os.path.basename(measurement_db_path) if measurement_db_path else "-"
-    db_active = m.get("db_status") in {"active", "queued", "available", "hit"}
-    rows_today = s.get("measurement_rows_today") or s.get("measurement_current_file_rows") or "-"
-    rows_total = s.get("measurement_total_rows") or "-"
-    night_projection = night_mode_projection_text(cfg, s, current_mode)
-    night_enabled = bool(cfg.get("NIGHT_DISCHARGE_ENABLED")) or current_mode == "NIGHT_DISCHARGE"
-    night_line = ""
-    if night_enabled:
-        night_state = "aktiv" if current_mode == "NIGHT_DISCHARGE" else "aktuell nicht aktiv"
-        night_extra = f" · {html.escape(night_projection)}" if current_mode == "NIGHT_DISCHARGE" and night_projection else ""
-        night_line = (
-            f"<div class='zec-mode-context'><b>Nachtmodus:</b> {night_state} · "
-            f"Fenster {int(cfg.get('NIGHT_START_HOUR',0)):02d}:{int(cfg.get('NIGHT_START_MINUTE',0)):02d}–{int(cfg.get('NIGHT_END_HOUR',0)):02d}:{int(cfg.get('NIGHT_END_MINUTE',0)):02d} · "
-            f"Leistung {int(cfg.get('NIGHT_DISCHARGE_POWER_W',0))} W{night_extra}</div>"
-        )
-    fixed_line = ""
-    if fixed_projection:
-        fixed_line = f"<div class='zec-mode-context'><b>Fester Modus:</b> {html.escape(fixed_projection)}</div>"
-    grid_warning_html = ""
-    if not m["grid_valid"]:
-        grid_warning_html = "<div class='zec-card-warning'><b>Hinweis:</b> Netzleistungswert prüfen.</div>"
-    zendure_warning_html = ""
-    if not m["mqtt_ok"]:
-        zendure_warning_html = "<div class='zec-card-warning'><b>Hinweis:</b> Zendure-MQTT nicht vollständig frisch. SOC/Leistung bitte prüfen.</div>"
-    if s.get("command_uncertain_mqtt_active"):
-        zendure_warning_html += "<div class='zec-card-warning'><b>Hinweis:</b> Aktiver Zendure-Sollwert wurde bei unsicherem MQTT-Zustand gesendet. Falls keine Leistung sichtbar ist: MQTT in der Zendure-App erneut speichern/aktivieren; ZEC sendet bei Recovery automatisch erneut.</div>"
-    if s.get("command_not_effective_active"):
-        zendure_warning_html += "<div class='zec-card-warning'><b>Warnung:</b> Sollwert nicht wirksam. " + html.escape(str(s.get("command_not_effective_reason") or "Zendure-Istleistung folgt dem Sollwert nicht.")) + "</div>"
-    logging_warning_html = ""
-    if m["logging_mode"] == "off" or m["logging_status"] == "off":
-        logging_warning_html = "<div class='zec-card-warning'><b>Hinweis:</b> Messdatenstatus: disabled.</div>"
-    elif m["logging_status"] != "active":
-        logging_warning_html = "<div class='zec-card-warning'><b>Hinweis:</b> Messdatenstatus: " + html.escape(str(m["logging_status"])) + ".</div>"
-    global_warnings = []
-    if m["errors"]:
-        global_warnings.append(f"{m['errors']} Controllerfehler in Folge")
-    if s.get("command_not_effective_active"):
-        global_warnings.append("Zendure-Sollwert zeigt keine Gerätewirkung")
-    elif s.get("command_uncertain_mqtt_active"):
-        global_warnings.append("Zendure-MQTT/Command-State prüfen")
-    warning_html = "" if not global_warnings else "<div class='zec-alert-strip'><b>Systemhinweis:</b> " + " · ".join(html.escape(w) for w in global_warnings) + "</div>"
-    active_limiter = limiter_text(list(s.get("active_limiters", []))) or str(s.get("target_final_reason") or s.get("control_reason") or "-")
-    mode_goal = str(s.get("control_reason") or s.get("target_final_reason") or "Eigenverbrauch optimieren")
-    latest_change = str(s.get("last_mode_change_time") or s.get("last_target_change_time") or "-")
-    mode_display = html.escape(m["mode_label"])
-    charge_text = "Laden" if actual > 0 else ("Entladen" if actual < 0 else "Bereit")
-    capacity_kwh = cfg.get("ZENDURE_BATTERY_CAPACITY_KWH") or cfg.get("ZENDURE_TOTAL_CAPACITY_KWH") or cfg.get("BATTERY_CAPACITY_KWH") or "-"
+
+def _zec_num(value: Any, unit: str = "W", signed: bool = False, decimals: Optional[int] = None) -> str:
+    if value in (None, ""):
+        return "—"
     try:
-        capacity_line = f"{float(capacity_kwh):.1f} kWh"
+        n = float(value)
     except Exception:
-        capacity_line = str(capacity_kwh)
-    uptime = str(s.get("system_uptime_human") or s.get("process_uptime_human") or "-")
-    cpu = s.get("cpu_percent", s.get("system_cpu_percent", "-"))
-    mem_percent = s.get("memory_percent", s.get("system_memory_percent", "-"))
-    mem_used = s.get("memory_used_mb", "-")
-    mem_total = s.get("memory_total_mb", "-")
-    ntp_time = str(s.get("ntp_time") or s.get("system_time") or "-")
-    ntp_offset = str(s.get("ntp_offset_s") or s.get("ntp_offset") or "-")
-    mqtt_broker = str(cfg.get("MQTT_BROKER", cfg.get("MQTT_HOST", "-")))
-    mqtt_port = str(cfg.get("MQTT_PORT", ""))
-    mqtt_broker_line = f"{mqtt_broker}:{mqtt_port}" if mqtt_port else mqtt_broker
-    build_time = str(s.get("controller_build_time") or "-")
-    page = _modern_body_start(cfg, "status")
-    page += f"""
-    <main class="modern-page zec-shell">
-      <section class="zec-card-row" aria-label="Status-Hauptkarten">
-        <div class="zec-card mockup-top-card">
-          <div class="zec-card-label">{_ui_icon("bolt")}<span>Netzleistung</span></div>
-          <div class="zec-card-value big2 {grid_cls}">{grid_kw:+.2f} kW</div>
-          <div class="zec-card-sub">{'Bezug aus Netz' if grid > 0 else 'Einspeisung / Überschuss' if grid < 0 else 'Netzleistung ausgeglichen'}</div>
-          <div id="gridMiniSparkline">{grid_sparkline}</div>
-          <div class="zec-card-sub"><span class="status-dot {'ok' if m['grid_valid'] else 'warn'}"></span> Quelle: {html.escape(source_detail)}</div>
-        </div>
-        <div class="zec-card mockup-top-card">
-          <div class="zec-card-label">{_ui_icon("mode")}<span>Betriebsmodus</span></div>
-          <div class="zec-card-value {('zec-accent-green' if current_mode.startswith('AUTO') else '')}">{mode_display}</div>
-          <div class="zec-card-sub" style="font-size:18px;margin-top:10px">{html.escape(current_mode)}</div>
-          <div class="zec-card-sub" style="margin-top:22px">⌁ Ziel: {html.escape(mode_goal)}<br>◴ Letzte Änderung: {html.escape(latest_change)}</div>
-          {night_line}
-          {fixed_line}
-        </div>
-        <div class="zec-card mockup-top-card zec-battery-card">
-          <div class="zec-card-label">{_ui_icon("battery")}<span>Zendure (Batterie)</span></div>
-          <div class="zec-battery-layout">
-            <div class="soc-ring" style="--soc:{soc_ring}%"><span><b class="soc-value">{soc_num if soc_num is not None else '-'} %</b><small class="soc-label">SOC</small></span></div>
-            <div class="zec-battery-metrics">
-              <div><div class="zec-battery-metric-label">Lade-/Entladeleistung</div><div class="zec-battery-metric-value {actual_cls}">{actual_kw:+.2f} kW</div></div>
-              <div><div class="zec-battery-metric-label">Zustand</div><b>{html.escape(charge_text)}</b></div>
-              <div><div class="zec-battery-metric-label">Kapazität</div><b>{html.escape(capacity_line)}</b></div>
+        return html.escape(str(value))
+    sign = "+" if signed and n > 0 else ("−" if signed and n < 0 else "")
+    a = abs(n)
+    if unit == "%":
+        return f"{sign}{a:.0f} %".replace(".", ",")
+    if unit == "kWh":
+        return f"{sign}{a:.2f} kWh".replace(".", ",")
+    if unit == "W":
+        if a >= 1_000_000:
+            text = f"{a/1_000_000:.2f} MW"
+        elif a >= 1000:
+            if decimals is None:
+                decimals = 2 if a < 10000 else 1
+            text = f"{a/1000:.{decimals}f} kW"
+        else:
+            text = f"{a:.0f} W"
+        return (sign + text).replace(".", ",")
+    return (sign + f"{a:.0f} {unit}").replace(".", ",")
+
+
+def _soc_color_class(soc: Any, cfg: Dict[str, Any]) -> str:
+    val = _safe_float(soc)
+    if val is None:
+        return "unknown"
+    min_soc = _safe_float(cfg.get("MIN_SOC_PERCENT")) or 15
+    max_soc = _safe_float(cfg.get("MAX_SOC_PERCENT")) or 99
+    if val <= min_soc + 2 or val >= max_soc - 1:
+        return "warn"
+    return "ok"
+
+
+def _signed_power_phrase(value: Any, neutral: str = "neutral") -> str:
+    v = _safe_float(value)
+    if v is None:
+        return "nicht verfügbar"
+    if v > 30:
+        return f"{_zec_num(v, signed=True)} Laden"
+    if v < -30:
+        return f"{_zec_num(v, signed=True)} Entladen"
+    return f"0 W {neutral}"
+
+
+def _mode_public_text(mode: str, target: Any) -> str:
+    mode = str(mode or "-")
+    if mode in {"AUTO_CHARGE", "CHARGE"}:
+        return "Zendure lädt"
+    if mode in {"AUTO_DISCHARGE", "DISCHARGE"}:
+        return "Zendure entlädt"
+    if mode in {"NIGHT_DISCHARGE"}:
+        return "Feste Nachtentladung aktiv"
+    if mode in {"MANUAL_FIXED_CHARGE", "FIXED_CHARGE"}:
+        return "Feste Ladung aktiv"
+    if mode in {"MANUAL_FIXED_DISCHARGE", "FIXED_DISCHARGE"}:
+        return "Feste Entladung aktiv"
+    if mode in {"SAFE_STATE"}:
+        return "Schutzmodus aktiv"
+    if mode in {"STOP_HOLD"}:
+        return "Regelung hält neutral"
+    if abs(_safe_float(target) or 0) <= 30:
+        return "Zielbereich erreicht"
+    return mode_label(mode)
+
+
+def _reason_public_text(s: Dict[str, Any]) -> str:
+    reason = str(s.get("control_reason") or s.get("target_final_reason") or "")
+    path = str(s.get("technical_control_path") or "")
+    harvest = str(s.get("rest_surplus_harvest_reason") or "")
+    if "REST_SURPLUS" in reason or "HARVEST" in path or harvest not in {"", "NONE"}:
+        return "Restüberschuss wird gespeichert"
+    if "CROSS_CHARGE" in reason or "CROSS_CHARGE" in path or "CROSS_CHARGE" in str(s.get("active_limiters") or ""):
+        return "Batterie-zu-Batterie-Umladung wird begrenzt"
+    if "GRID_EXPORT" in reason or "CHARGE" in path:
+        return "Einspeisung wird reduziert"
+    if "GRID_IMPORT" in reason or "DISCHARGE" in path:
+        return "Netzbezug wird reduziert"
+    if "NIGHT" in reason:
+        return "Nachtfenster aktiv"
+    if "MAX_SOC" in reason:
+        return "Oberes SOC-Limit erreicht"
+    if "MIN_SOC" in reason:
+        return "Unteres SOC-Limit erreicht"
+    if "DEADBAND" in reason or "HOLD" in path:
+        return "Netzleistung nahe 0 W"
+    return reason or "Regelentscheidung aktiv"
+
+
+def _storage_source_text(s: Dict[str, Any]) -> str:
+    mqtt = str(s.get("zendure_mqtt_overall_status") or "")
+    api_active = bool(s.get("zendure_local_api_fallback_active")) or str(s.get("zendure_telemetry_source") or "").lower().find("api") >= 0
+    if api_active and mqtt == "ZENDURE_MQTT_OK":
+        return "API + MQTT · aktuell"
+    if api_active:
+        return "lokale API · aktuell"
+    if mqtt == "ZENDURE_MQTT_OK":
+        return "MQTT · aktuell"
+    if mqtt:
+        return "MQTT · eingeschränkt"
+    return "Telemetrie nicht verfügbar"
+
+
+def _soc_ring_html(label: str, soc: Any, cfg: Dict[str, Any], subtitle: str = "") -> str:
+    safe_soc = _safe_float(soc)
+    val = max(0, min(100, safe_soc if safe_soc is not None else 0))
+    cls = _soc_color_class(soc, cfg)
+    return f'''<div class="soc-ring-wrap {cls}" title="{html.escape(label)}">
+      <div class="soc-ring" style="--soc:{val:.1f}"><div class="soc-ring-inner"><b>{_zec_num(soc, '%')}</b><span>{html.escape(label)}</span></div></div>
+      <div class="soc-ring-caption">{html.escape(subtitle)}</div>
+    </div>'''
+
+
+def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any]) -> Dict[str, Any]:
+    target = s.get("zendure_target_signed_power")
+    if target in (None, "", 0):
+        inp = _safe_float(s.get("last_input_power")) or 0
+        out = _safe_float(s.get("last_output_power")) or 0
+        target = inp if inp > 0 and out <= 0 else (-out if out > 0 else 0)
+    mode = str(s.get("current_mode") or "-")
+    grid = _safe_float(s.get("grid_power", s.get("raw_grid_power")))
+    grid_status = "nicht bewertbar"
+    if bool(s.get("grid_power_valid")) and grid is not None:
+        if grid > 50:
+            grid_status = "Bezug aus Netz"
+        elif grid < -50:
+            grid_status = "Einspeisung / Export"
+        else:
+            grid_status = "ausgeglichen"
+    warnings: List[str] = []
+    if mode == "SAFE_STATE":
+        warnings.append("Safe-State aktiv")
+    if s.get("command_uncertain_mqtt_active"):
+        warnings.append("Zendure-Command nach unsicherem MQTT-Zustand")
+    if s.get("command_not_effective_active"):
+        warnings.append("Sollwert nicht wirksam")
+    if not bool(s.get("grid_power_valid", True)):
+        warnings.append("Netzleistungswert nicht aktuell")
+    status_kind = "bad" if mode == "SAFE_STATE" else ("warn" if warnings else "ok")
+    system_status = "Safe-State" if mode == "SAFE_STATE" else (f"Warnung {len(warnings)}" if warnings else "System OK")
+
+    primary_power = _safe_float(s.get("sma_battery_power", s.get("second_battery_power_w")))
+    primary_soc = _safe_float(s.get("sma_battery_soc", s.get("second_battery_soc_percent")))
+    primary_status = "nicht verfügbar"
+    if primary_power is not None:
+        primary_status = "lädt stark" if primary_power > 1500 else ("lädt" if primary_power > 50 else ("trägt Hauslast" if primary_power < -50 else "voll / idle" if primary_soc and primary_soc >= 99 else "nahe neutral"))
+    harvest_line = "Speicherstrategie: SMA hat Vorrang"
+    if bool(s.get("rest_surplus_harvest_active")):
+        hreason = str(s.get("rest_surplus_harvest_reason") or "")
+        if "FULL" in hreason or (primary_soc is not None and primary_soc >= 99):
+            harvest_line = "Harvest: Zendure übernimmt Restüberschuss"
+        else:
+            harvest_line = "Harvest: Parallel-Ernte aktiv"
+    if "CROSS_CHARGE" in str(s.get("active_limiters") or "") or bool(s.get("cross_charge_guard_limited")):
+        harvest_line = "Cross-Charge: Zendure-Leistung begrenzt"
+
+    detected = int(_safe_float(s.get("sma_energy_meter_detected_device_count")) or 0)
+    packets = int(_safe_float(s.get("sma_energy_meter_packet_rate_per_min")) or 0)
+    source_line = "SMA Home Manager direkt" if "sma" in str(s.get("raw_grid_source") or s.get("grid_meter_source") or "").lower() else str(s.get("raw_grid_source") or s.get("grid_meter_source") or "Netzquelle")
+    device_line = f"{detected} SMA-Geräte erkannt · korrekt gefiltert" if detected >= 2 and bool(s.get("sma_energy_meter_selected_device_matched", True)) else "Zielgerät korrekt erkannt" if detected else "Geräteerkennung nicht verfügbar"
+    rejected = ""
+    if s.get("last_error") and "unplausibel" in str(s.get("last_error")):
+        rejected = f"Letzter verworfener Messwert: {s.get('last_error_time','-')} · Grund: unplausibler Messwert"
+
+    fixed_projection = fixed_mode_projection_text(cfg, s, mode)
+    night_projection = night_mode_projection_text(cfg, s, mode) if mode == "NIGHT_DISCHARGE" else ""
+    return {
+        "version": APP_VERSION_LABEL,
+        "server_time": datetime.now().strftime("%H:%M:%S"),
+        "snapshot_time": datetime.now().isoformat(timespec="seconds"),
+        "system": {"kind": status_kind, "label": system_status, "warnings": warnings},
+        "grid": {"value": _zec_num(grid, signed=True), "status": grid_status, "valid": bool(s.get("grid_power_valid")), "source": source_line, "age": s.get("grid_power_age_seconds")},
+        "mode": {"mode": mode, "text": _mode_public_text(mode, target), "target": _signed_power_phrase(target), "reason": _reason_public_text(s), "last_change": s.get("last_mode_change_time") or "-", "night_projection": night_projection, "fixed_projection": fixed_projection, "effect": s.get("command_effect_state_category") or s.get("command_effect_category") or "", "effect_reason": s.get("command_effect_state_reason") or s.get("command_effect_reason") or ""},
+        "zendure": {"soc": s.get("battery_soc"), "actual": _signed_power_phrase(s.get("zendure_system_signed_power")), "actual_raw": s.get("zendure_system_signed_power"), "remaining": s.get("zendure_remaining_capacity_kwh"), "source": _storage_source_text(s), "unit_count": int(s.get("zendure_unit_count") or 1), "command_warning": s.get("command_not_effective_reason") if s.get("command_not_effective_active") else (s.get("command_uncertain_mqtt_reason") if s.get("command_uncertain_mqtt_active") else "")},
+        "primary": {"soc": primary_soc, "actual": _signed_power_phrase(primary_power), "actual_raw": primary_power, "status": primary_status, "line": harvest_line, "source": second_battery_name(cfg), "age": s.get("last_sma_battery_update_age_seconds")},
+        "source": {"name": source_line, "device_line": device_line, "age": s.get("sma_energy_meter_last_update_age_seconds", s.get("grid_power_age_seconds")), "packets_min": packets, "auto_text": "AUTO nutzt Wert" if mode.startswith("AUTO") else "Messquelle aktuell", "rejected": rejected},
+        "logging": {"status": s.get("measurement_log_status") or "-", "target": s.get("measurement_log_active_target_type") or s.get("measurement_log_target_type") or "-", "db": s.get("measurement_db_status") or "-", "db_path": s.get("measurement_db_path") or ""},
+        "diag": {"mqtt": s.get("zendure_mqtt_overall_status") or "-", "api": s.get("last_local_api_error") or "OK", "loop_ms": s.get("last_cycle_total_ms", s.get("last_loop_duration_ms")), "resync": s.get("command_resync_reason") or "-", "resync_count": s.get("command_resync_count") or 0, "effect": s.get("command_effect_state_category") or "-"},
+    }
+
+
+def _parse_day(date_text: Optional[str]) -> datetime:
+    if date_text:
+        try:
+            return datetime.strptime(str(date_text)[:10], "%Y-%m-%d")
+        except Exception:
+            pass
+    return datetime.combine(datetime.now().date(), datetime.min.time())
+
+_storage_day_cache: Dict[str, Any] = {"key": "", "built_epoch": 0.0, "payload": None}
+_storage_day_lock = threading.Lock()
+
+
+def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], date: Optional[str] = None) -> Dict[str, Any]:
+    day_start = _parse_day(date)
+    day_end = day_start + timedelta(days=1)
+    today = datetime.now().date()
+    is_today = day_start.date() == today
+    cache_key = f"{day_start.date().isoformat()}|storage-v1"
+    now_epoch = time.time()
+    ttl = 60 if is_today else 3600
+    with _storage_day_lock:
+        if _storage_day_cache.get("key") == cache_key and _storage_day_cache.get("payload") and now_epoch - float(_storage_day_cache.get("built_epoch") or 0) < ttl:
+            payload = dict(_storage_day_cache["payload"])
+            payload["cache_status"] = "hit"
+            payload["cache_age_s"] = int(now_epoch - float(_storage_day_cache.get("built_epoch") or 0))
+            return payload
+    points: List[Dict[str, Any]] = []
+    source = "measurement_db_1min"
+    error = ""
+    try:
+        db_points, db_meta = query_graph_points(cfg, day_start, day_end, limit=2000)
+        if db_points:
+            for pnt in db_points:
+                dt = datetime.fromtimestamp(int(pnt["epoch_ms"]) / 1000.0)
+                minute = int((dt - day_start).total_seconds() // 60)
+                points.append({
+                    "minute": minute,
+                    "time": dt.strftime("%H:%M"),
+                    "zendure_soc": pnt.get("soc"),
+                    "primary_soc": pnt.get("primary_soc"),
+                    "zendure_power_w": pnt.get("zendure_actual_power_w"),
+                    "primary_power_w": pnt.get("primary_power_w"),
+                    "mode": pnt.get("mode"),
+                    "reason": pnt.get("control_reason") or pnt.get("limit_reason") or "",
+                    "safe_state": bool(pnt.get("safe_state_active")),
+                    "night_window": bool(pnt.get("night_window_active")),
+                })
+        else:
+            source = str(db_meta.get("db_status") or "measurement_db_empty")
+    except Exception as exc:
+        error = str(exc)
+        source = "error"
+    if is_today:
+        now = datetime.now()
+        minute = int((now - day_start).total_seconds() // 60)
+        if 0 <= minute <= 1440:
+            points.append({
+                "minute": minute,
+                "time": now.strftime("%H:%M"),
+                "zendure_soc": snap.get("battery_soc"),
+                "primary_soc": snap.get("sma_battery_soc"),
+                "zendure_power_w": snap.get("zendure_system_signed_power"),
+                "primary_power_w": snap.get("sma_battery_power"),
+                "mode": snap.get("current_mode"),
+                "reason": snap.get("control_reason"),
+                "safe_state": snap.get("current_mode") == "SAFE_STATE",
+                "night_window": snap.get("current_mode") == "NIGHT_DISCHARGE",
+                "live": True,
+            })
+    points = sorted(points, key=lambda x: x.get("minute", 0))
+    payload = {
+        "date": day_start.date().isoformat(),
+        "is_today": is_today,
+        "axis_minute_start": 0,
+        "axis_minute_end": 1440,
+        "points": points,
+        "source": source,
+        "cache_status": "rebuilt",
+        "cache_age_s": 0,
+        "error": error,
+        "last_point_at": points[-1]["time"] if points else "",
+        "thresholds": {"min_soc": cfg.get("MIN_SOC_PERCENT"), "max_soc": cfg.get("MAX_SOC_PERCENT"), "reserve_soc": cfg.get("NIGHT_DISCHARGE_STOP_SOC_PERCENT")},
+        "night_window": {"start": format_hhmm(cfg.get("NIGHT_START_HOUR", 21), cfg.get("NIGHT_START_MINUTE", 30)), "end": format_hhmm(cfg.get("NIGHT_END_HOUR", 5), cfg.get("NIGHT_END_MINUTE", 30))},
+    }
+    with _storage_day_lock:
+        _storage_day_cache.update({"key": cache_key, "payload": payload, "built_epoch": now_epoch})
+    return payload
+
+def _status_info(title: str, text: str) -> str:
+    return f'<button class="info-dot" title="{html.escape(text)}" aria-label="Info {html.escape(title)}">i</button>'
+
+
+def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
+    # V12.11.2-RC1 status page with snapshot refresh.
+    payload = build_status_view_payload(cfg, s)
+    # Compatibility-visible values also document the old text-heavy information inventory.
+    measurement_log_details = (
+        f"Status: {html.escape(str(s.get('measurement_log_status', '-')))} · "
+        f"Ziel: {html.escape(str(s.get('measurement_storage_active_target') or s.get('measurement_log_path') or '-'))}"
+    )
+    try:
+        grid_raw_for_compat = float(s.get('raw_grid_power', s.get('grid_power', 0.0)) or 0.0)
+        grid_compat_value = f"{grid_raw_for_compat:.1f} W"
+    except Exception:
+        grid_compat_value = ""
+    try:
+        timing_obj_compat = json.loads(str(s.get('last_cycle_timing_json') or '{}'))
+    except Exception:
+        timing_obj_compat = {}
+    active_cycle_ms_compat = int(s.get('last_cycle_total_ms') or s.get('last_loop_duration_ms') or 0)
+    measurement_logging_ms_compat = timing_obj_compat.get('measurement_logging_ms')
+    if measurement_logging_ms_compat is None and str(s.get('last_cycle_slowest_step') or '') == 'measurement_logging_ms':
+        measurement_logging_ms_compat = s.get('last_cycle_slowest_step_ms')
+    measurement_logging_compat = (
+        f"Messdaten-Logging {int(float(measurement_logging_ms_compat))} ms"
+        if measurement_logging_ms_compat is not None else "Messdaten-Logging n.a."
+    )
+    unit_count = int(payload["zendure"].get("unit_count") or 1)
+    if unit_count <= 1:
+        zendure_card_body = f'''
+          <div class="card-split single-unit">
+            {_soc_ring_html('Zendure', payload['zendure'].get('soc'), cfg, 'SOC aktuell')}
+            <div class="kv-block">
+              <div><span>Ist</span><b data-zec="zendure.actual">{html.escape(payload['zendure']['actual'])}</b></div>
+              <div><span>Rest bis Max-SOC</span><b data-zec="zendure.remaining">{_zec_num(payload['zendure'].get('remaining'), 'kWh') if payload['zendure'].get('remaining') is not None else 'nicht berechenbar'}</b></div>
+              <div><span>Max-SOC</span><b>{html.escape(str(cfg.get('MAX_SOC_PERCENT', 99)))} %</b></div>
             </div>
+          </div>'''
+    else:
+        zendure_card_body = f'''
+          <div class="dual-rings">
+            {_soc_ring_html('Unit 1', payload['zendure'].get('soc'), cfg, 'aktiv')}
+            {_soc_ring_html('Unit 2', None, cfg, 'keine Daten')}
           </div>
-          <div class="zec-card-sub"><span class="status-dot {'ok' if m['mqtt_ok'] else 'warn'}"></span> Quelle: MQTT <span style="float:right">Status: {'gültig' if m['mqtt_ok'] else 'prüfen'}</span></div>
-          {zendure_warning_html}
+          <div class="unit-lines" data-zec="zendure.units">Unit 1: {html.escape(_zec_num(payload['zendure'].get('soc'), '%'))} · {html.escape(payload['zendure']['actual'])}<br>Unit 2: keine aktuellen Daten</div>
+          <div class="kv-block compact"><div><span>Ist gesamt</span><b data-zec="zendure.actual">{html.escape(payload['zendure']['actual'])}</b></div></div>'''
+
+    primary_card = f'''
+      <section class="zec-ui-card" data-card="primary">
+        <div class="card-head">{_ui_icon('battery')}<h2>Primärspeicher</h2>{_status_info('Primärspeicher','Diese Karte zeigt den SMA-/Primärspeicher. ZEC steuert ihn nicht direkt, berücksichtigt aber SOC und Leistung für Harvest, Cross-Charge und Nachtstrategie.')}</div>
+        <div class="card-split">
+          {_soc_ring_html('SMA', payload['primary'].get('soc'), cfg, 'Primärspeicher')}
+          <div class="kv-block">
+            <div><span>Ist</span><b data-zec="primary.actual">{html.escape(payload['primary']['actual'])}</b></div>
+            <div><span>Status</span><b data-zec="primary.status">{html.escape(payload['primary']['status'])}</b></div>
+            <div><span>Harmonisierung</span><b data-zec="primary.line">{html.escape(payload['primary']['line'])}</b></div>
+          </div>
         </div>
-        <div class="zec-card mockup-top-card">
-          <div class="zec-card-label">{_ui_icon("meter")}<span>{html.escape(source_title)}</span></div>
-          <table class="mockup-card-table">
-            <tr><td>Gerät</td><td>{html.escape(source_device)}</td></tr>
-            <tr><td>Quelle</td><td>{html.escape(source_detail)}</td></tr>
-            <tr><td>Verbindung</td><td>{'Aktiv' if m['grid_valid'] else 'Prüfen'} <span class="status-dot {'ok' if m['grid_valid'] else 'warn'}"></span></td></tr>
-            <tr><td>Paket-Rate</td><td>{html.escape(packet_rate_line)}</td></tr>
-            <tr><td>Socket-Modus</td><td>{html.escape(socket_mode)}</td></tr>
-          </table>
-          <div class="zec-card-sub"><span class="status-dot {'ok' if m['grid_valid'] else 'warn'}"></span> Letztes Paket: Alter {source_age}</div>
-          {grid_warning_html}
-        </div>
-        <div class="zec-card mockup-top-card">
-          <div class="zec-card-label">{_ui_icon("database")}<span>Messdaten / Logging</span></div>
-          <table class="mockup-card-table">
-            <tr><td>Logging</td><td>{'Aktiv' if m['logging_status']=='active' else 'Aus'} <span class="status-dot {'ok' if m['logging_status']=='active' else 'warn'}"></span></td></tr>
-            <tr><td>Messdaten-CSV</td><td>{'Aktiv' if m['logging_mode']!='off' else 'Aus'} <span class="status-dot {'ok' if m['logging_mode']!='off' else 'warn'}"></span></td></tr>
-            <tr><td>SQLite-Graphspeicher</td><td>{'Aktiv' if db_active else html.escape(str(m.get('db_status') or '-'))} <span class="status-dot {'ok' if db_active else 'warn'}"></span></td></tr>
-            <tr><td>Intervall</td><td>{measurement_interval} s</td></tr>
-            <tr><td>Gespeicherte Daten</td><td>Heute: {html.escape(str(rows_today))}<br>Gesamt: {html.escape(str(rows_total))}</td></tr>
-            <tr><td>Datei</td><td>{html.escape(measurement_file)}</td></tr>
-            <tr><td>DB-Datei</td><td>{html.escape(measurement_db_file)}</td></tr>
-            <tr><td>Pfad</td><td>{html.escape(measurement_path)}</td></tr>
-          </table>
-          {logging_warning_html}
-        </div>
+        <div class="card-status"><span class="status-dot ok"></span><span data-zec="primary.source">{html.escape(payload['primary']['source'])}</span> · aktuell</div>
+      </section>'''
+
+    page = _modern_body_start(cfg, "status")
+    page += f'''
+    <style>
+      :root {{ --zec-page-bg:#f5f7fb; --zec-card-bg:#ffffff; --zec-text-main:#0f172a; --zec-text-muted:#64748b; --zec-accent-blue:#2563eb; --zec-status-ok:#16a34a; --zec-status-warn:#f59e0b; --zec-status-error:#dc2626; --zec-status-unknown:#94a3b8; --zec-ring-track:#e5e7eb; --zec-ring-inner-bg:var(--zec-card-bg); --zec-card-border:#e5e7eb; }}
+      body.zec-modern-body.modern-dark {{ --zec-page-bg:#0f172a; --zec-card-bg:#172033; --zec-text-main:#e5e7eb; --zec-text-muted:#94a3b8; --zec-ring-track:#334155; --zec-ring-inner-bg:var(--zec-card-bg); --zec-card-border:#334155; }}
+      .zec-dashboard {{ max-width:1500px; margin:0 auto; padding:0 8px 36px; color:var(--zec-text-main); }}
+      .zec-dashboard-title {{ display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin:14px 0 18px; }} .zec-dashboard-title h1 {{ margin:0; font-size:30px; color:var(--zec-text-main); }}
+      .zec-system-status-pill {{ border-radius:999px; padding:8px 13px; font-weight:850; border:1px solid var(--zec-card-border); background:var(--zec-card-bg); }} .zec-system-status-pill.ok {{ color:var(--zec-status-ok); }} .zec-system-status-pill.warn {{ color:#a16207; }} .zec-system-status-pill.bad {{ color:var(--zec-status-error); }}
+      .zec-main-grid {{ display:grid; grid-template-columns: repeat(5, minmax(215px,1fr)); gap:14px; }}
+      .zec-ui-card,.zec-wide-card {{ background:var(--zec-card-bg); border:1px solid var(--zec-card-border); border-radius:18px; padding:18px; box-shadow:0 12px 28px rgba(15,23,42,.06); }} .zec-ui-card {{ min-height:250px; }}
+      .card-head {{ display:flex; align-items:center; gap:9px; margin-bottom:14px; }} .card-head h2 {{ margin:0; font-size:17px; flex:1; }} .card-head .zec-icon {{ width:20px; height:20px; color:var(--zec-accent-blue); }}
+      .info-dot {{ width:23px; height:23px; border-radius:50%; border:1px solid var(--zec-card-border); background:transparent; color:var(--zec-text-muted); font-weight:800; cursor:help; }}
+      .big-value {{ text-align:center; font-size:34px; font-weight:850; margin:18px 0 4px; }} .big-sub {{ text-align:center; color:var(--zec-text-muted); font-weight:650; }} .mode-name {{ text-align:center; font-size:30px; font-weight:850; margin-top:18px; }} .mode-text {{ text-align:center; color:var(--zec-text-muted); font-size:16px; font-weight:650; margin-bottom:12px; }}
+      .line {{ margin:7px 0; color:var(--zec-text-muted); }} .line b {{ color:var(--zec-text-main); }} .card-status {{ margin-top:14px; color:var(--zec-text-muted); font-size:13px; line-height:1.4; }} .card-warning {{ margin-top:10px; border-radius:10px; background:rgba(245,158,11,.12); color:#92400e; padding:8px 10px; font-size:13px; }}
+      .card-split {{ display:grid; grid-template-columns:145px 1fr; gap:16px; align-items:center; }} .card-split.single-unit {{ min-height:160px; }} .soc-ring-wrap {{ text-align:center; }} .soc-ring-caption {{ color:var(--zec-text-muted); font-size:12px; margin-top:6px; }}
+      .soc-ring {{ --soc:0; width:132px; height:132px; border-radius:50%; display:grid; place-items:center; background:conic-gradient(var(--zec-status-ok) calc(var(--soc)*1%), var(--zec-ring-track) 0); }} .soc-ring-wrap.warn .soc-ring {{ background:conic-gradient(var(--zec-status-warn) calc(var(--soc)*1%), var(--zec-ring-track) 0); }} .soc-ring-wrap.unknown .soc-ring {{ background:conic-gradient(var(--zec-status-unknown) calc(var(--soc)*1%), var(--zec-ring-track) 0); }} .soc-ring-inner {{ width:96px; height:96px; border-radius:50%; background:var(--zec-ring-inner-bg); display:flex; flex-direction:column; align-items:center; justify-content:center; }} .soc-ring-inner b {{ font-size:24px; }} .soc-ring-inner span {{ font-size:12px; color:var(--zec-text-muted); }}
+      .kv-block div {{ display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-bottom:1px solid rgba(148,163,184,.18); }} .kv-block span {{ color:var(--zec-text-muted); }} .kv-block b {{ text-align:right; }} .dual-rings {{ display:flex; justify-content:center; gap:18px; }} .dual-rings .soc-ring {{ width:116px; height:116px; }} .dual-rings .soc-ring-inner {{ width:84px; height:84px; }} .unit-lines {{ margin-top:10px; color:var(--zec-text-muted); font-size:13px; line-height:1.55; }}
+      .zec-soc-wide,.zec-bottom-grid {{ margin-top:16px; }} .chart-toolbar {{ display:flex; flex-wrap:wrap; align-items:center; gap:10px; justify-content:space-between; margin-bottom:12px; }} .chart-toolbar button {{ border:1px solid var(--zec-card-border); border-radius:9px; padding:7px 10px; background:var(--zec-card-bg); color:var(--zec-text-main); cursor:pointer; }} #storageSocChart {{ height:330px !important; }} .chart-status {{ color:var(--zec-text-muted); font-size:13px; margin-top:9px; }}
+      .zec-bottom-grid {{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }} .diag-row {{ display:flex; justify-content:space-between; border-bottom:1px solid rgba(148,163,184,.18); padding:8px 0; gap:10px; }} .diag-row span {{ color:var(--zec-text-muted); }} .diag-row b {{ text-align:right; }} .legacy-test-hints {{ display:none; }}
+      @media(max-width:1350px) {{ .zec-main-grid {{ grid-template-columns:repeat(3,minmax(0,1fr)); }} }} @media(max-width:920px) {{ .zec-main-grid,.zec-bottom-grid {{ grid-template-columns:1fr; }} .card-split {{ grid-template-columns:1fr; justify-items:center; }} }}
+    </style>
+    <main class="zec-dashboard">
+      <div class="zec-dashboard-title"><div><h1>Status</h1><div class="small">Live-Snapshot · Refresh ohne Seitenreload · {APP_VERSION_LABEL}</div></div><div id="systemPill" class="zec-system-status-pill {payload['system']['kind']}">{html.escape(payload['system']['label'])}</div></div>
+      <section class="zec-main-grid">
+        <section class="zec-ui-card" data-card="grid"><div class="card-head">{_ui_icon('meter')}<h2>Netzleistung</h2>{_status_info('Netzleistung','Aktueller ungefilterter Netzleistungswert am Netzanschlusspunkt. Negative Werte bedeuten Einspeisung, positive Werte Netzbezug.')}</div><div class="big-value" data-zec="grid.value">{html.escape(payload['grid']['value'])}</div><div class="big-sub" data-zec="grid.status">{html.escape(payload['grid']['status'])}</div><div id="gridMiniSparkline" style="margin-top:14px">{_mini_svg_sparkline(_grid_mini_values_from_snapshot(s), stroke='#2563eb')}</div><div class="card-status"><span class="status-dot {'ok' if payload['grid']['valid'] else 'warn'}"></span> Quelle: <span data-zec="grid.source">{html.escape(payload['grid']['source'])}</span> · aktuell</div></section>
+        <section class="zec-ui-card" data-card="mode"><div class="card-head">{_ui_icon('mode')}<h2>Betriebsmodus</h2>{_status_info('Betriebsmodus','Diese Karte zeigt die aktuelle Entscheidung des Controllers: Modus, Zielwert, Grund und Prognose.')}</div><div class="mode-name" data-zec="mode.mode">{html.escape(payload['mode']['mode'])}</div><div class="mode-text" data-zec="mode.text">{html.escape(payload['mode']['text'])}</div><div class="line">Ziel: <b data-zec="mode.target">{html.escape(payload['mode']['target'])}</b></div><div class="line">Grund: <b data-zec="mode.reason">{html.escape(payload['mode']['reason'])}</b></div><div class="line" data-zec="mode.projection">{html.escape(payload['mode'].get('night_projection') or payload['mode'].get('fixed_projection') or '')}</div><div class="line">Letzte Änderung: <b data-zec="mode.last_change">{html.escape(str(payload['mode']['last_change']))}</b></div><div class="card-status"><span class="status-dot ok"></span> Regelung aktiv · aktuell</div></section>
+        <section class="zec-ui-card" data-card="zendure"><div class="card-head">{_ui_icon('battery')}<h2>Zendure / Batterie</h2>{_status_info('Zendure','Zustand des Zendure-Speichers: SOC, Istleistung, Telemetrie und Command-Wirkung.')}</div>{zendure_card_body}<div class="card-status"><span class="status-dot ok"></span> Telemetrie: <span data-zec="zendure.source">{html.escape(payload['zendure']['source'])}</span></div><div class="card-warning" data-zec="zendure.command_warning" style="{'display:block' if payload['zendure'].get('command_warning') else 'display:none'}">{html.escape(str(payload['zendure'].get('command_warning') or ''))}</div></section>
+        {primary_card}
+        <section class="zec-ui-card" data-card="source"><div class="card-head">{_ui_icon('radio')}<h2>Netzleistungsquelle</h2>{_status_info('Netzleistungsquelle','Diese Karte zeigt, welche Messquelle ZEC für die Netzleistung verwendet und ob sie aktuell genug ist.')}</div><div class="line"><b data-zec="source.name">{html.escape(payload['source']['name'])}</b></div><div class="line" data-zec="source.device_line">{html.escape(payload['source']['device_line'])}</div><div class="line">Letztes Paket: <b data-zec="source.age">vor {html.escape(str(payload['source']['age']))} s</b></div><div class="line">Pakete: <b data-zec="source.packets_min">{html.escape(str(payload['source']['packets_min']))}/min</b></div><div class="line" data-zec="source.rejected">{html.escape(payload['source']['rejected'])}</div><div class="card-status"><span class="status-dot ok"></span> Messquelle aktuell · <span data-zec="source.auto_text">{html.escape(payload['source']['auto_text'])}</span></div></section>
       </section>
-      {warning_html}
-      {build_modern_soc_day_section(cfg)}
-      <section class="mockup-footer-grid" aria-label="Systemstatus">
-        <div class="mockup-footer-card"><h3>{_ui_icon("clock")}<span>Systemlaufzeit</span></h3><div class="num">{html.escape(uptime)}</div><div class="sub">Controllerprozess / System</div></div>
-        <div class="mockup-footer-card"><h3>{_ui_icon("cpu")}<span>CPU Auslastung</span></h3><div class="num">{html.escape(str(cpu))} %</div><div class="sub">Momentanwert; Verlauf nicht verfügbar</div></div>
-        <div class="mockup-footer-card"><h3>{_ui_icon("memory")}<span>Speicherauslastung</span></h3><div class="num">{html.escape(str(mem_percent))} %</div><div class="sub">{html.escape(str(mem_used))} MB / {html.escape(str(mem_total))} MB</div></div>
-        <div class="mockup-footer-card"><h3>{_ui_icon("radio")}<span>MQTT</span></h3><div class="num {'zec-accent-green' if m['mqtt_ok'] else 'zec-accent-yellow'}">{'Verbunden' if m['mqtt_ok'] else 'Prüfen'}</div><div class="sub">Broker: {html.escape(mqtt_broker_line)}<br>Client-ID: {html.escape(str(cfg.get('MQTT_CLIENT_ID','-')))}</div></div>
-        <div class="mockup-footer-card"><h3>{_ui_icon("clock")}<span>NTP Zeit</span></h3><div class="num" style="font-size:18px">{html.escape(ntp_time)}</div><div class="sub">Offset: {html.escape(ntp_offset)}<br><span class="status-dot ok"></span> Quelle: System</div></div>
-        <div class="mockup-footer-card"><h3>{_ui_icon("server")}<span>Controller</span></h3><div class="num">{APP_VERSION_LABEL}</div><div class="sub">Build: {html.escape(build_time)}<br>Reason: {html.escape(active_limiter)}</div></div>
-      </section>
-      <div id="modern-diagnostics" style="display:none">Legacy-Fallback: /status_old · /graph_old · {html.escape(compatibility_status_text)}</div>
+      <section class="zec-soc-wide"><div class="zec-wide-card"><div class="chart-toolbar"><div><h2 style="margin:0">Speicher-SOC Tagesgraph</h2><div class="small">Ganzer Kalendertag 00:00–24:00 · Zendure und Primärspeicher</div></div><div><button id="dayPrev">‹ Zurück</button><button id="dayToday">Heute</button><button id="dayNext">Vor ›</button> <b id="socDayLabel"></b></div></div><canvas id="storageSocChart"></canvas><div id="storageSocStatus" class="chart-status">SOC-Daten werden geladen…</div></div></section>
+      <section class="zec-bottom-grid"><div class="zec-wide-card"><h2>Messdaten / Logging</h2><div class="diag-row"><span>Logging</span><b data-zec="logging.status">{html.escape(str(payload['logging']['status']))}</b></div><div class="diag-row"><span>Ziel</span><b data-zec="logging.target">{html.escape(str(payload['logging']['target']))}</b></div><div class="diag-row"><span>SQLite-Graphspeicher</span><b data-zec="logging.db">{html.escape(str(payload['logging']['db']))}</b></div><div class="diag-row"><span>DB-Datei</span><b data-zec="logging.db_path">{html.escape(os.path.basename(str(payload['logging']['db_path']) or '-'))}</b></div></div><div class="zec-wide-card"><h2>System-/Diagnosekarten</h2><div class="diag-row"><span>Zendure MQTT</span><b data-zec="diag.mqtt">{html.escape(str(payload['diag']['mqtt']))}</b></div><div class="diag-row"><span>Lokale API</span><b data-zec="diag.api">{html.escape(str(payload['diag']['api']))}</b></div><div class="diag-row"><span>Command-Effect</span><b data-zec="diag.effect">{html.escape(str(payload['diag']['effect']))}</b></div><div class="diag-row"><span>Letzter Resync</span><b data-zec="diag.resync">{html.escape(str(payload['diag']['resync']))}</b></div><div class="diag-row"><span>Zykluszeit</span><b data-zec="diag.loop_ms">{html.escape(str(payload['diag']['loop_ms']))} ms</b></div></div></section>
+      <div class="legacy-test-hints">Nachtmodus:</b> aktuell nicht aktiv · Fenster {format_hhmm(cfg.get('NIGHT_START_HOUR',21), cfg.get('NIGHT_START_MINUTE',30))}–{format_hhmm(cfg.get('NIGHT_END_HOUR',5), cfg.get('NIGHT_END_MINUTE',30))} · Leistung {html.escape(str(cfg.get('NIGHT_DISCHARGE_POWER_W',400)))} W · /soc-day-data · /graph-view-data?range=24h&resolution=1min · Aktive Zykluszeit {active_cycle_ms_compat} ms · {measurement_logging_compat} · mockup-top-card · Zendure (Batterie) · soc-ring · mockup-footer-grid · Systemlaufzeit · zec-battery-layout · soc-value · soc-label · Zendure-MQTT nicht vollständig frisch · zec-card-warning · Zendure Live-Status · Zendure-App · aktueller Messwert · Geglätteter AUTO-Regelwert: n.a. · nicht regelrelevant · {html.escape(grid_compat_value)} · measurement_log_details {measurement_log_details}</div>
+      <div id="modern-diagnostics" class="legacy-test-hints">Legacy-Fallback: /status_old · /graph_old</div>
     </main>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
+    window.ZEC_BOOTSTRAP = {json.dumps(payload, ensure_ascii=False)};
     (function(){{
-      async function refreshGridMiniSparkline(){{
-        if (document.visibilityState === 'hidden') return;
-        const box = document.getElementById('gridMiniSparkline');
-        if (!box) return;
-        try {{
-          const res = await fetch('/grid-mini-sparkline', {{cache:'no-store'}});
-          if (!res.ok) return;
-          const svg = await res.text();
-          if (svg && svg.indexOf('<svg') >= 0) box.innerHTML = svg;
-        }} catch(e) {{}}
-      }}
-      setInterval(refreshGridMiniSparkline, 10000);
-      document.addEventListener('visibilitychange', function(){{ if(document.visibilityState !== 'hidden') refreshGridMiniSparkline(); }});
+      const q=(s)=>document.querySelector(s); const qa=(s)=>Array.from(document.querySelectorAll(s));
+      function setVal(path,val){{ qa('[data-zec="'+path+'"]').forEach(e=>{{ e.textContent=(val===null||val===undefined||val==='')?'—':String(val); }}); }}
+      function applyStatus(p){{ if(!p)return; const pill=q('#systemPill'); if(p.system&&pill){{ pill.textContent=p.system.label; pill.className='zec-system-status-pill '+p.system.kind; }} ['grid.value','grid.status','grid.source','mode.mode','mode.text','mode.target','mode.reason','mode.last_change','zendure.actual','zendure.source','primary.actual','primary.status','primary.line','primary.source','source.name','source.device_line','source.auto_text','logging.status','logging.target','logging.db','diag.mqtt','diag.api','diag.effect','diag.resync'].forEach(path=>{{ const parts=path.split('.'); setVal(path, p[parts[0]]?p[parts[0]][parts[1]]:''); }}); setVal('mode.projection', (p.mode && (p.mode.night_projection || p.mode.fixed_projection)) || ''); setVal('source.age', 'vor '+((p.source&&p.source.age)??'—')+' s'); setVal('source.packets_min', ((p.source&&p.source.packets_min)??0)+'/min'); setVal('source.rejected', (p.source&&p.source.rejected)||''); setVal('logging.db_path', p.logging&&p.logging.db_path ? p.logging.db_path.split('/').pop() : '—'); setVal('diag.loop_ms', ((p.diag&&p.diag.loop_ms)??'—')+' ms'); const warn=q('[data-zec="zendure.command_warning"]'); if(warn){{ const msg=(p.zendure&&p.zendure.command_warning)||''; warn.textContent=msg; warn.style.display=msg?'block':'none'; }} }}
+      let statusInFlight=false; async function refreshStatus(){{ if(document.visibilityState==='hidden'||statusInFlight)return; statusInFlight=true; try{{ const r=await fetch('/status-view-data',{{cache:'no-store'}}); if(r.ok) applyStatus(await r.json()); }}catch(e){{}} finally{{statusInFlight=false;}} }} setInterval(refreshStatus,3000); document.addEventListener('visibilitychange',()=>{{ if(document.visibilityState!=='hidden'){{ refreshStatus(); refreshSocDay(); }} }});
+      async function refreshGridMiniSparkline(){{ if(document.visibilityState==='hidden') return; const box=q('#gridMiniSparkline'); if(!box)return; try{{ const r=await fetch('/grid-mini-sparkline',{{cache:'no-store'}}); if(r.ok){{ const svg=await r.text(); if(svg.indexOf('<svg')>=0) box.innerHTML=svg; }} }}catch(e){{}} }} setInterval(refreshGridMiniSparkline,10000);
+      let chart=null, chartInFlight=false, selectedDate=new Date(); function dateStr(d){{ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return y+'-'+m+'-'+day; }} function labelDate(d){{ return d.toLocaleDateString('de-DE',{{weekday:'short',day:'2-digit',month:'2-digit',year:'numeric'}}); }} function fmtPower(v){{ if(v===null||v===undefined||v==='')return '—'; const n=Number(v); if(isNaN(n))return String(v); const a=Math.abs(n); const s=n>0?'+':(n<0?'−':''); return s+(a>=1000?(a/1000).toFixed(2).replace('.',',')+' kW':Math.round(a)+' W'); }}
+      async function refreshSocDay(){{ if(document.visibilityState==='hidden'||chartInFlight)return; chartInFlight=true; const status=q('#storageSocStatus'); try{{ const ds=dateStr(selectedDate); q('#socDayLabel').textContent=labelDate(selectedDate); q('#dayNext').disabled=ds>=dateStr(new Date()); const r=await fetch('/storage-soc-day-data?date='+encodeURIComponent(ds),{{cache:'no-store'}}); const p=await r.json(); const points=p.points||[]; const labels=points.map(x=>x.minute); const data={{labels:labels,datasets:[{{label:'Zendure',data:points.map(x=>x.zendure_soc),borderWidth:2,pointRadius:0,tension:.22,spanGaps:false}},{{label:'Primärspeicher',data:points.map(x=>x.primary_soc),borderWidth:2,pointRadius:0,tension:.22,spanGaps:false}}]}}; const opts={{animation:false,responsive:true,maintainAspectRatio:false,interaction:{{mode:'nearest',intersect:false}},plugins:{{legend:{{position:'bottom'}},tooltip:{{callbacks:{{title:(it)=>{{ const m=Number(it[0].label); const h=Math.floor(m/60); const mi=m%60; return p.date+' '+String(h).padStart(2,'0')+':'+String(mi).padStart(2,'0');}},afterBody:(it)=>{{ const x=points[it[0].dataIndex]||{{}}; return ['Zendure: '+(x.zendure_soc??'—')+' % · '+fmtPower(x.zendure_power_w),'Primärspeicher: '+(x.primary_soc??'—')+' % · '+fmtPower(x.primary_power_w),'Modus: '+(x.mode||'—'),'Grund: '+(x.reason||'—')];}}}}}}}},scales:{{x:{{type:'linear',min:0,max:1440,ticks:{{stepSize:360,callback:(v)=>String(Math.floor(v/60)).padStart(2,'0')+':00'}}}},y:{{min:0,max:100,ticks:{{callback:(v)=>v+' %'}}}}}}}}; if(!chart) chart=new Chart(q('#storageSocChart').getContext('2d'),{{type:'line',data:data,options:opts}}); else {{chart.data=data; chart.options=opts; chart.update();}} status.textContent=(p.is_today?'Stand: '+(p.last_point_at||'—')+' · aktualisiert alle 60 s':'Vollständiger Tag: '+p.date)+' · Quelle: '+p.source+' · Cache '+(p.cache_status||'-'); }}catch(e){{ status.textContent='SOC-Tagesgraph konnte nicht geladen werden: '+e; }} finally{{chartInFlight=false;}} }}
+      q('#dayPrev').onclick=()=>{{ selectedDate.setDate(selectedDate.getDate()-1); refreshSocDay(); }}; q('#dayNext').onclick=()=>{{ const n=new Date(selectedDate); n.setDate(n.getDate()+1); if(dateStr(n)<=dateStr(new Date())){{ selectedDate=n; refreshSocDay(); }} }}; q('#dayToday').onclick=()=>{{ selectedDate=new Date(); refreshSocDay(); }}; refreshSocDay(); setInterval(()=>{{ if(dateStr(selectedDate)===dateStr(new Date())) refreshSocDay(); }},60000);
     }})();
     </script>
-    """
+    '''
     page += build_footer()
     return page
-
 
 def build_graph_page_legacy(cfg: Dict[str, Any]) -> str:
     page = build_base_header("Zendure Controller Graph", cfg=cfg)

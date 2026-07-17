@@ -84,6 +84,8 @@ def extract_measurement_point(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     target = _safe_float(_first(row, "target_final_w", "zendure_target_power_w", "command_effective_w", "zendure_target_signed_power"))
     actual = _safe_float(_first(row, "zendure_actual_power_w", "actual_zendure_power_w", "norm_zendure_actual_power_w", "zendure_system_signed_power"))
     soc = _safe_float(_first(row, "zendure_soc_percent", "norm_zendure_soc_percent", "raw_zendure_soc_percent", "soc"))
+    primary_soc = _safe_float(_first(row, "second_battery_soc_percent", "sma_battery_soc", "primary_soc_percent"))
+    primary_power = _safe_float(_first(row, "second_battery_power_w", "sma_battery_power_w", "sma_battery_power"))
     pv = _safe_float(_first(row, "pv_power_w")) if _boolish(_first(row, "pv_power_valid", "pv_valid")) else None
     house = _safe_float(_first(row, "house_power_w")) if _boolish(_first(row, "house_power_valid", "house_valid")) else None
     soc_valid_raw = _first(row, "soc_valid", "zendure_soc_valid")
@@ -99,6 +101,8 @@ def extract_measurement_point(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         "pv_power_w": pv,
         "house_power_w": house,
         "soc_percent": soc,
+        "primary_soc_percent": primary_soc,
+        "primary_power_w": primary_power,
         "mode": mode,
         "data_status": data_status,
         "source": str(_first(row, "raw_grid_source", "grid_meter_source") or ""),
@@ -178,6 +182,16 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         """
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_measurement_raw_ts ON measurement_raw(ts_ms)")
+    for table, columns in {
+        "measurement_raw": {
+            "primary_soc_percent": "REAL",
+            "primary_power_w": "REAL",
+        },
+    }.items():
+        existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        for col, typ in columns.items():
+            if col not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS measurement_1min (
@@ -194,6 +208,8 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             pv_avg_w REAL,
             house_avg_w REAL,
             soc_last_percent REAL,
+            primary_soc_last_percent REAL,
+            primary_power_last_w REAL,
             mode_last TEXT,
             data_status_last TEXT,
             source_last TEXT,
@@ -207,6 +223,10 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         """
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_measurement_1min_bucket ON measurement_1min(bucket_start_ms)")
+    existing_1min = {row[1] for row in conn.execute("PRAGMA table_info(measurement_1min)").fetchall()}
+    for col, typ in {"primary_soc_last_percent": "REAL", "primary_power_last_w": "REAL"}.items():
+        if col not in existing_1min:
+            conn.execute(f"ALTER TABLE measurement_1min ADD COLUMN {col} {typ}")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS measurement_meta (
@@ -251,14 +271,14 @@ def write_points(conn: sqlite3.Connection, points: List[Dict[str, Any]]) -> int:
             INSERT OR REPLACE INTO measurement_raw(
                 ts_ms, grid_power_w, raw_grid_power_w, zendure_target_power_w,
                 zendure_actual_power_w, pv_power_w, house_power_w, soc_percent,
-                mode, data_status, source, soc_valid, grid_valid, safe_state_active,
+                primary_soc_percent, primary_power_w, mode, data_status, source, soc_valid, grid_valid, safe_state_active,
                 cross_charge_limited, night_window_active, night_reserve_active
-            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 p["ts_ms"], p.get("grid_power_w"), p.get("raw_grid_power_w"), p.get("zendure_target_power_w"),
                 p.get("zendure_actual_power_w"), p.get("pv_power_w"), p.get("house_power_w"), p.get("soc_percent"),
-                p.get("mode"), p.get("data_status"), p.get("source"), p.get("soc_valid"), p.get("grid_valid"),
+                p.get("primary_soc_percent"), p.get("primary_power_w"), p.get("mode"), p.get("data_status"), p.get("source"), p.get("soc_valid"), p.get("grid_valid"),
                 p.get("safe_state_active"), p.get("cross_charge_limited"), p.get("night_window_active"), p.get("night_reserve_active"),
             ),
         )
@@ -272,14 +292,15 @@ def write_points(conn: sqlite3.Connection, points: List[Dict[str, Any]]) -> int:
                     bucket_start_ms, sample_count, first_ts_ms, last_ts_ms, grid_avg_w,
                     grid_min_w, grid_max_w, raw_grid_last_w, zendure_target_last_w,
                     zendure_actual_last_w, pv_avg_w, house_avg_w, soc_last_percent,
-                    mode_last, data_status_last, source_last, soc_valid_last, grid_valid_last,
+                    primary_soc_last_percent, primary_power_last_w, mode_last, data_status_last, source_last, soc_valid_last, grid_valid_last,
                     safe_state_active, cross_charge_limited, night_window_active, night_reserve_active
-                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     bucket, 1, p["ts_ms"], p["ts_ms"], p.get("grid_power_w"), p.get("grid_power_w"), p.get("grid_power_w"),
                     p.get("raw_grid_power_w"), p.get("zendure_target_power_w"), p.get("zendure_actual_power_w"),
-                    p.get("pv_power_w"), p.get("house_power_w"), p.get("soc_percent"), p.get("mode"), p.get("data_status"),
+                    p.get("pv_power_w"), p.get("house_power_w"), p.get("soc_percent"),
+                    p.get("primary_soc_percent"), p.get("primary_power_w"), p.get("mode"), p.get("data_status"),
                     p.get("source"), p.get("soc_valid"), p.get("grid_valid"), p.get("safe_state_active"),
                     p.get("cross_charge_limited"), p.get("night_window_active"), p.get("night_reserve_active"),
                 ),
@@ -293,7 +314,7 @@ def write_points(conn: sqlite3.Connection, points: List[Dict[str, Any]]) -> int:
                 UPDATE measurement_1min SET
                     sample_count=?, first_ts_ms=?, last_ts_ms=?, grid_avg_w=?, grid_min_w=?, grid_max_w=?,
                     raw_grid_last_w=?, zendure_target_last_w=?, zendure_actual_last_w=?, pv_avg_w=?, house_avg_w=?,
-                    soc_last_percent=?, mode_last=?, data_status_last=?, source_last=?, soc_valid_last=?, grid_valid_last=?,
+                    soc_last_percent=?, primary_soc_last_percent=?, primary_power_last_w=?, mode_last=?, data_status_last=?, source_last=?, soc_valid_last=?, grid_valid_last=?,
                     safe_state_active=?, cross_charge_limited=?, night_window_active=?, night_reserve_active=?
                 WHERE bucket_start_ms=?
                 """,
@@ -307,7 +328,7 @@ def write_points(conn: sqlite3.Connection, points: List[Dict[str, Any]]) -> int:
                     p.get("raw_grid_power_w"), p.get("zendure_target_power_w"), p.get("zendure_actual_power_w"),
                     _avg_update(old.get("pv_avg_w"), count, p.get("pv_power_w")),
                     _avg_update(old.get("house_avg_w"), count, p.get("house_power_w")),
-                    p.get("soc_percent"), p.get("mode"), p.get("data_status"), p.get("source"),
+                    p.get("soc_percent"), p.get("primary_soc_percent"), p.get("primary_power_w"), p.get("mode"), p.get("data_status"), p.get("source"),
                     p.get("soc_valid"), p.get("grid_valid"),
                     1 if int(old.get("safe_state_active") or 0) or int(p.get("safe_state_active") or 0) else 0,
                     1 if int(old.get("cross_charge_limited") or 0) or int(p.get("cross_charge_limited") or 0) else 0,
@@ -526,6 +547,8 @@ def query_graph_points(config: Dict[str, Any], start_dt: datetime, end_dt: datet
             "pv_power_w": row["pv_avg_w"],
             "house_power_w": row["house_avg_w"],
             "soc": row["soc_last_percent"],
+            "primary_soc": row["primary_soc_last_percent"] if "primary_soc_last_percent" in row.keys() else None,
+            "primary_power_w": row["primary_power_last_w"] if "primary_power_last_w" in row.keys() else None,
             "mode": mode,
             "mode_label": mode,
             "control_reason": "",
