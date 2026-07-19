@@ -1,5 +1,7 @@
 # Zendure Energy Controller V12.11.2-RC3
 
+<img width="2560" height="1230" alt="image" src="https://github.com/user-attachments/assets/a4ceb190-2b3a-46e4-ae15-de7d55e9c923" />
+
 ## Statusseite V2 – echter Neuaufbau
 
 V12.11.2-RC3 setzt die über mehrere Tage abgestimmte Statusseiten-Spezifikation als eigenständige Oberfläche um. Die historische Statusseite bleibt ausschließlich als Experten-/Legacy-Fallback erreichbar; ihr Markup und ihre Kartenstruktur werden von der neuen Statusseite nicht wiederverwendet.
