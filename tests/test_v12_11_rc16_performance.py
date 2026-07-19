@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class TestRC16PerformanceEndpoints(unittest.TestCase):
     def test_version_label_rc16(self):
-        self.assertEqual(version.APP_VERSION_LABEL, "V12.11.2-RC2")
+        self.assertEqual(version.APP_VERSION_LABEL, "V12.11.2-RC3")
 
     def test_tail_reader_avoids_old_rows_for_recent_window(self):
         now = datetime.now().replace(microsecond=0)
@@ -43,9 +43,12 @@ class TestRC16PerformanceEndpoints(unittest.TestCase):
         self.assertIn("payload.cache_status", html)
 
     def test_status_page_refreshes_grid_mini_sparkline_endpoint(self):
-        html = web_ui.build_status_page({"UI_DARK_MODE": False}, {"current_mode":"AUTO", "grid_power_valid":True, "graph_history":[{"grid_power": -100},{"grid_power": -50}]})
-        self.assertIn("gridMiniSparkline", html)
-        self.assertIn("/grid-mini-sparkline", html)
+        html = web_ui.build_status_page({"UI_DARK_MODE": False}, {"current_mode":"AUTO", "grid_power_valid":True, "raw_grid_power":-100})
+        self.assertIn('id="gridMiniChart"', html)
+        js = (ROOT / 'static' / 'status_v2.js').read_text(encoding='utf-8')
+        self.assertIn('/grid-mini-data', js)
+        self.assertIn('class MiniGridChart', js)
+        self.assertIn('this.inFlight', js)
 
     def test_graph_page_prevents_overlapping_requests_and_has_timeout(self):
         html = web_ui.build_graph_page({"UI_DARK_MODE": False})

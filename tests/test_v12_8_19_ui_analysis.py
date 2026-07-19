@@ -15,7 +15,7 @@ from config_manager import DEFAULT_CONFIG
 from tests.test_operation_priority import OkShelly, base_cfg, fresh_state, make_controller
 from tools.replay_web import selection_profile
 from tools.replay_report import charts_html, data_quality_table, recommendations_table
-from web_ui import build_status_page
+from web_ui import build_status_page, build_status_view_payload
 
 
 CSV_HEADER = "schema;datetime_local;grid_power_w;soc;zendure_actual_power_w\n"
@@ -35,14 +35,10 @@ class V12819UiAnalysisTests(unittest.TestCase):
         cfg = base_cfg(NIGHT_DISCHARGE_ENABLED=True)
         controller, state, mqtt, shelly = make_controller(cfg, state=fresh_state(62), shelly=OkShelly(-6.7))
         controller.is_night_discharge_active = lambda _cfg: True
-
         self._run_full_cycle(controller, cfg)
-        html = build_status_page(cfg, state.snapshot())
-
-        self.assertIn("-6.7 W", html)
-        self.assertIn("aktueller Messwert", html)
-        self.assertIn("Geglätteter AUTO-Regelwert: n.a.", html)
-        self.assertIn("nicht regelrelevant", html)
+        payload = build_status_view_payload(cfg, state.snapshot())
+        self.assertEqual("−7 W", payload["grid"]["value"])
+        self.assertEqual("ausgeglichen", payload["grid"]["status"])
         self.assertFalse(state.grid_power_used_for_control)
         self.assertTrue(state.grid_power_valid)
 
@@ -52,13 +48,10 @@ class V12819UiAnalysisTests(unittest.TestCase):
         with state.lock:
             state.last_output_power = 400
         controller, state, mqtt, shelly = make_controller(cfg, state=state, shelly=OkShelly(123.4))
-
         self._run_full_cycle(controller, cfg)
-        html = build_status_page(cfg, state.snapshot())
-
-        self.assertIn("123.4 W", html)
-        self.assertIn("aktueller Messwert", html)
-        self.assertIn("Geglätteter AUTO-Regelwert: n.a.", html)
+        payload = build_status_view_payload(cfg, state.snapshot())
+        self.assertEqual("+123 W", payload["grid"]["value"])
+        self.assertEqual("Bezug aus Netz", payload["grid"]["status"])
         self.assertFalse(state.grid_power_used_for_control)
         self.assertEqual(state.current_mode, "STOP_HOLD")
 

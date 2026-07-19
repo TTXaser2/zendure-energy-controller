@@ -61,43 +61,19 @@ class MeasurementV4Rc5Tests(unittest.TestCase):
             "last_cycle_total_ms": 143,
             "last_cycle_slowest_step": "measurement_logging_ms",
             "last_cycle_slowest_step_ms": 22,
-            "loop_counter": 60,
-            "uptime_seconds": 193,
-            "mqtt_connected": True,
-            "last_shelly_update_age_seconds": 1,
             "battery_soc": 80,
             "current_mode": "AUTO",
             "grid_power": 0,
             "raw_grid_power": 0,
             "grid_power_valid": True,
-            "grid_power_fresh": True,
-            "grid_power_used_for_control": True,
-            "last_input_power": 0,
-            "last_output_power": 0,
-            "actual_zendure_power": 0,
-            "actual_zendure_system_power": 0,
-            "actual_zendure_system_charge_power": 0,
-            "actual_zendure_system_discharge_power": 0,
-            "zendure_pack_power_details": [],
-            "zendure_temperature_details": [],
-            "active_limiters": [],
-            "last_control_action": "-",
-            "technical_control_path": "GRID -> DEADBAND",
             "measurement_log_status": "active",
-            "measurement_log_status_reason": "OK",
-            "measurement_log_path": "/media/pi/4CD6-6466/ZEC/logs/zendure_measurements_v4.csv",
-            "measurement_log_active_target_type": "external_mount",
-            "measurement_fallback_count_since_start": 0,
-            "measurement_estimated_retention_hours": 1,
-            "measurement_free_disk_mb": 100,
         })
         html = build_status_page(cfg, snapshot)
         self.assertIn("Aktive Zykluszeit", html)
         self.assertIn("143 ms", html)
-        self.assertIn("Messdaten-Logging 22 ms", html)
+        self.assertIn("Messdaten-Logging", html)
+        self.assertIn("22 ms", html)
         self.assertNotIn("cycle_total_without_sleep_ms", html)
-
-
 
 if __name__ == "__main__":
     unittest.main()

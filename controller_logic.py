@@ -410,6 +410,14 @@ class ZendureController:
                 if self.state.last_shelly_update_epoch is not None:
                     self.state.grid_power_age_seconds = max(0, int(time.time() - self.state.last_shelly_update_epoch))
                 exc_text = str(exc)
+                if "unplausibel" in exc_text.lower():
+                    self.state.grid_rejected_count_since_start += 1
+                    self.state.grid_last_rejected_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    self.state.grid_last_rejected_reason = "unplausibler Messwert"
+                    try:
+                        self.state.grid_last_rejected_value_w = float(raw)
+                    except Exception:
+                        self.state.grid_last_rejected_value_w = None
                 self.state.grid_power_validity_reason = exc_text if "unplausibel" in exc_text.lower() else f"{source_label} nicht aktuell"
             with self.state.lock:
                 last_update = self.state.last_shelly_update_epoch

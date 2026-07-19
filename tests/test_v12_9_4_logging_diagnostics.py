@@ -85,9 +85,10 @@ class V1294LoggingDiagnosticsTests(unittest.TestCase):
 
     def test_status_page_source_no_longer_shows_schema_line_in_logging_card(self):
         source = inspect.getsource(build_status_page)
-        self.assertNotIn("Schema: {CSV_SCHEMA}", source)
-        self.assertIn("measurement_log_details", source)
-
+        html = build_status_page({"MEASUREMENT_LOG_MODE":"standard"}, {"current_mode":"HOLD", "measurement_log_status":"active"})
+        self.assertNotIn("Schema:", html)
+        self.assertIn("Messdaten / Logging", html)
+        self.assertIn('data-zec="logging.status"', html)
 
 if __name__ == "__main__":
     unittest.main()

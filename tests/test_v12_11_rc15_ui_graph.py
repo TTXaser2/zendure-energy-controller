@@ -7,29 +7,18 @@ import version
 
 class TestRC15UiGraphPolish(unittest.TestCase):
     def test_version_label_rc15(self):
-        self.assertEqual(version.APP_VERSION_LABEL, "V12.11.2-RC2")
+        self.assertEqual(version.APP_VERSION_LABEL, "V12.11.2-RC3")
 
     def test_zendure_mqtt_warning_is_card_local_not_global_strip(self):
         cfg = {"UI_DARK_MODE": False, "NIGHT_DISCHARGE_ENABLED": False}
-        snap = {
-            "current_mode": "HOLD",
-            "raw_grid_power": -40,
-            "grid_power_valid": True,
-            "battery_soc": 100,
-            "mqtt_connected": True,
-            "zendure_mqtt_overall_status": "PARTIAL",
-            "actual_zendure_power_valid": False,
-            "measurement_log_status": "active",
-            "measurement_log_mode": "standard",
-            "graph_history": [{"grid_power": -24}, {"grid_power": -5}, {"grid_power": -4}],
-        }
+        snap = {"current_mode":"HOLD", "raw_grid_power":-40, "grid_power_valid":True, "battery_soc":100, "zendure_mqtt_overall_status":"ZENDURE_MQTT_RETAINED_ONLY", "zendure_mqtt_live_confirmed":False, "measurement_log_status":"active"}
         html = web_ui.build_status_page(cfg, snap)
-        self.assertIn("zec-battery-layout", html)
-        self.assertIn("soc-value", html)
-        self.assertIn("soc-label", html)
-        self.assertIn("Zendure-MQTT nicht vollständig frisch", html)
-        self.assertIn("zec-card-warning", html)
-        self.assertNotIn("<div class='zec-alert-strip'><b>Aktuelle Hinweise:</b> Zendure-MQTT", html)
+        self.assertIn('class="zec-storage-layout', html)
+        self.assertIn('class="zec-soc-ring', html)
+        self.assertIn('data-zec="zendure.command_warning"', html)
+        self.assertIn('Zendure Live-Status', html)
+        self.assertIn('Zendure-App', html)
+        self.assertNotIn('zec-alert-strip', html)
 
     def test_status_soc_chart_tooltip_uses_x_axis_non_intersect(self):
         html = web_ui.build_modern_soc_day_section({})

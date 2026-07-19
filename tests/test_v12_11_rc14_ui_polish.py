@@ -12,35 +12,16 @@ TOOLS = ROOT / "tools"
 
 class TestRC14UiPolish(unittest.TestCase):
     def test_version_label_rc14(self):
-        self.assertEqual(version.APP_VERSION_LABEL, "V12.11.2-RC2")
+        self.assertEqual(version.APP_VERSION_LABEL, "V12.11.2-RC3")
 
     def test_status_page_uses_neutral_night_context_and_svg_icons(self):
-        cfg = {
-            "UI_DARK_MODE": False,
-            "NIGHT_DISCHARGE_ENABLED": True,
-            "NIGHT_START_HOUR": 21,
-            "NIGHT_START_MINUTE": 30,
-            "NIGHT_END_HOUR": 5,
-            "NIGHT_END_MINUTE": 30,
-            "NIGHT_DISCHARGE_POWER_W": 400,
-        }
-        snap = {
-            "current_mode": "SAFE_STATE",
-            "raw_grid_power": -2160,
-            "grid_power_valid": True,
-            "battery_soc": 100,
-            "mqtt_connected": True,
-            "zendure_mqtt_overall_status": "ZENDURE_MQTT_OK",
-            "measurement_log_status": "active",
-            "graph_history": [{"grid_power": -2000}, {"grid_power": -1700}, {"grid_power": -900}],
-        }
+        cfg = {"UI_DARK_MODE":False, "NIGHT_DISCHARGE_ENABLED":True, "NIGHT_START_HOUR":21, "NIGHT_START_MINUTE":30, "NIGHT_END_HOUR":5, "NIGHT_END_MINUTE":30, "NIGHT_DISCHARGE_POWER_W":400}
+        snap = {"current_mode":"SAFE_STATE", "raw_grid_power":-2160, "grid_power_valid":True, "battery_soc":100, "zendure_mqtt_overall_status":"ZENDURE_MQTT_OK", "measurement_log_status":"active"}
         html = web_ui.build_status_page(cfg, snap)
         self.assertIn('class="zec-icon"', html)
-        self.assertIn("Nachtmodus:</b> aktuell nicht aktiv", html)
-        self.assertIn("Fenster 21:30–05:30", html)
-        self.assertIn("Leistung 400 W", html)
-        self.assertNotIn("Nachtmodus-Prognose", html)
-        self.assertNotIn("zec-mode-projection", html)
+        self.assertIn('data-zec="mode.projection"', html)
+        self.assertIn('SAFE_STATE', html)
+        self.assertNotIn('Nachtmodus-Prognose', html)
 
     def test_mini_sparkline_has_axes_scale_and_no_fake_curve(self):
         html = web_ui._mini_svg_sparkline([-1500, -1000, -500, 0, 250])

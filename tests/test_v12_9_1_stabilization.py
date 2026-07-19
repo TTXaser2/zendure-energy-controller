@@ -120,19 +120,12 @@ class V1291StabilizationTests(unittest.TestCase):
 
     def test_status_page_shows_zendure_mqtt_recovery_hint(self):
         s = ControllerState().snapshot()
-        s.update({
-            "mqtt_connected": True,
-            "last_mqtt_command": "-",
-            "zendure_mqtt_overall_status": "ZENDURE_MQTT_RETAINED_ONLY",
-            "zendure_mqtt_status_reason": "nur retained",
-            "zendure_mqtt_live_confirmed": False,
-            "zendure_mqtt_missing_critical_groups": "-",
-            "zendure_mqtt_stale_critical_groups": "-",
-        })
-        cfg = {"MANUAL_MODE": "AUTO", "NIGHT_DISCHARGE_ENABLED": False, "MEASUREMENT_LOG_MODE": "off"}
+        s.update({"zendure_mqtt_overall_status":"ZENDURE_MQTT_RETAINED_ONLY", "zendure_mqtt_live_confirmed":False})
+        cfg = {"MANUAL_MODE":"AUTO", "NIGHT_DISCHARGE_ENABLED":False, "MEASUREMENT_LOG_MODE":"off"}
         html = build_status_page(cfg, s)
         self.assertIn("Zendure Live-Status", html)
         self.assertIn("Zendure-App", html)
+        self.assertIn('data-zec="zendure.command_warning"', html)
 
     def test_update_script_cleans_stale_tests_but_not_v2_logs(self):
         script = (Path(__file__).resolve().parents[1] / "tools" / "update_zendure_controller.sh").read_text(encoding="utf-8")

@@ -1,5 +1,6 @@
 import time
 import unittest
+from pathlib import Path
 
 # Import test_operation_priority first; it installs the paho-mqtt test stub.
 from tests.test_operation_priority import DummyConfigManager, RecordingMqtt, OkShelly, NoopCsv, NoopZendureApi, NoopLogger, base_cfg, fresh_state
@@ -91,17 +92,16 @@ class V12112Rc1CommandLifecycleAndUiTests(unittest.TestCase):
         snapshot = ControllerState().snapshot()
         snapshot.update({"battery_soc": 82, "grid_power": -120, "raw_grid_power": -120, "grid_power_valid": True, "current_mode": "AUTO"})
         html = build_status_page(cfg, snapshot)
-        self.assertIn("Netzleistung", html)
-        self.assertIn("Betriebsmodus", html)
-        self.assertIn("Zendure / Batterie", html)
-        self.assertIn("Primärspeicher", html)
-        self.assertIn("Netzleistungsquelle", html)
-        self.assertIn("/status-view-data", html)
-        self.assertIn("/storage-soc-day-data?date=", html)
-        self.assertIn("dayPrev", html)
-        self.assertIn("dayToday", html)
-        self.assertIn("dayNext", html)
-
+        self.assertIn('class="zec-status-v2"', html)
+        for label in ("Netzleistung", "Betriebsmodus", "Zendure / Batterie", "Primärspeicher", "Netzleistungsquelle"):
+            self.assertIn(label, html)
+        self.assertIn('/static/status_v2.js', html)
+        js = (Path(__file__).resolve().parents[1] / 'static' / 'status_v2.js').read_text(encoding='utf-8')
+        self.assertIn('/status-view-data', js)
+        self.assertIn('/storage-soc-day-data?date=', js)
+        self.assertIn('dayPrev', html)
+        self.assertIn('dayToday', html)
+        self.assertIn('dayNext', html)
 
 if __name__ == "__main__":
     unittest.main()

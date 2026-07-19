@@ -57,6 +57,10 @@ class ControllerState:
     grid_power_validity_reason: str = "GRID_MISSING"
     grid_meter_source: str = "shelly_http"
     raw_grid_source: str = "Shelly-kompatible HTTP-Quelle"
+    grid_rejected_count_since_start: int = 0
+    grid_last_rejected_time: str = "-"
+    grid_last_rejected_reason: str = ""
+    grid_last_rejected_value_w: Optional[float] = None
     last_input_power: int = 0
     last_output_power: int = 0
     # Zendure Headunit/System-Istleistung. Historisch wurden packInputPower
@@ -1345,6 +1349,10 @@ class ControllerState:
                 "grid_power_validity_reason": self.grid_power_validity_reason,
                 "grid_meter_source": self.grid_meter_source,
                 "raw_grid_source": self.raw_grid_source,
+                "grid_rejected_count_since_start": self.grid_rejected_count_since_start,
+                "grid_last_rejected_time": self.grid_last_rejected_time,
+                "grid_last_rejected_reason": self.grid_last_rejected_reason,
+                "grid_last_rejected_value_w": self.grid_last_rejected_value_w,
                 "last_input_power": self.last_input_power,
                 "last_output_power": self.last_output_power,
                 "actual_zendure_charge_power": self.actual_zendure_charge_power,

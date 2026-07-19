@@ -11,18 +11,11 @@ class V1211Rc9ModernUiTests(unittest.TestCase):
         cfg = dict(DEFAULT_CONFIG)
         cfg["UI_DARK_MODE"] = True
         snap = ControllerState().snapshot()
-        snap.update({
-            "current_mode": "AUTO",
-            "battery_soc": 82,
-            "mqtt_connected": True,
-            "zendure_mqtt_overall_status": "ZENDURE_MQTT_OK",
-            "grid_power_valid": True,
-            "raw_grid_power": -123.4,
-            "grid_power_used_for_control": True,
-            "measurement_log_status": "off",
-        })
+        snap.update({"current_mode":"AUTO", "battery_soc":82, "zendure_mqtt_overall_status":"ZENDURE_MQTT_OK", "grid_power_valid":True, "raw_grid_power":-123.4, "measurement_log_status":"off"})
         html = build_status_page(cfg, snap)
-        self.assertIn('class="modern-page"', html)
+        self.assertIn('class="zec-status-v2"', html)
+        self.assertIn('data-theme="dark"', html)
+        self.assertIn('id="expertMenu"', html)
         self.assertIn('/status_old', html)
         self.assertIn('/graph_old', html)
         self.assertNotIn('Detailkarten darunter bleiben', html)

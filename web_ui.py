@@ -18,6 +18,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 import requests
 from fastapi import FastAPI, Request
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, JSONResponse
 
 from config_manager import CONFIG_SCHEMA, ConfigManager, validate_config
@@ -26,6 +27,7 @@ from cross_charge import cross_charge_enabled
 from csv_logger import rows_to_csv, estimate_retention_hours, measurement_log_mode, detected_log_mounts, resolve_log_path
 from measurement_db import query_graph_points, resolve_measurement_db_path, db_status_for_config
 from version import APP_VERSION, APP_VERSION_LABEL, CSV_SCHEMA
+from status_page_v2 import render_status_page_v2
 from state import ControllerState
 from translations import (
     limiter_label,
@@ -309,6 +311,20 @@ def _safe_float(value: Any) -> Optional[float]:
         return None
 
 
+def _first_snapshot_value(snapshot: Dict[str, Any], *keys: str) -> Any:
+    """Return the first actually populated snapshot value.
+
+    `dict.get(key, fallback)` is intentionally not used here because state
+    snapshots contain many explicit `None` defaults which would otherwise mask
+    a valid compatibility field further down the list.
+    """
+    for key in keys:
+        value = snapshot.get(key)
+        if value not in (None, "", "-"):
+            return value
+    return None
+
+
 def _boolish(value: Any) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "ja", "ok"}
 
@@ -497,6 +513,24 @@ def _grid_mini_values_from_snapshot(snap: Dict[str, Any], max_points: int = 48) 
         if isinstance(row, dict):
             vals.append(_safe_float(row.get("grid_power", row.get("grid_power_w"))))
     return vals
+
+
+def build_grid_mini_payload(snap: Dict[str, Any], max_points: int = 48) -> Dict[str, Any]:
+    rows = list(snap.get("graph_history", []) or [])[-max_points:]
+    points: List[Dict[str, Any]] = []
+    for idx, row in enumerate(rows):
+        if not isinstance(row, dict):
+            continue
+        value = _safe_float(row.get("grid_power", row.get("grid_power_w", row.get("raw_grid_power_w"))))
+        if value is None:
+            continue
+        time_text = str(row.get("timestamp") or row.get("time") or "")
+        if not time_text:
+            dt_text = str(row.get("datetime_local") or "")
+            time_text = dt_text[11:19] if len(dt_text) >= 19 else f"Punkt {idx+1}"
+        status = "Bezug aus Netz" if value > 50 else ("Einspeisung / Export" if value < -50 else "ausgeglichen")
+        points.append({"time": time_text, "value": value, "status": status})
+    return {"points": points, "count": len(points), "snapshot_epoch_ms": int(time.time() * 1000)}
 
 
 def measurement_availability(cfg: Dict[str, Any], max_rows_per_file: int = 250000) -> Dict[str, Any]:
@@ -1023,6 +1057,11 @@ def analysis_service_url(cfg: Dict[str, Any]) -> str:
 
 def create_app(config_manager: ConfigManager, state: ControllerState, on_config_saved=None) -> FastAPI:
     app = FastAPI(title="Zendure Energy Controller", version=APP_VERSION)
+    static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+    if os.path.isdir(static_dir):
+        app.mount("/static", StaticFiles(directory=static_dir), name="static")
+    status_view_cache: Dict[str, Any] = {"built_epoch": 0.0, "payload": None}
+    status_view_lock = threading.Lock()
 
     def html_or_headless(page_builder, *args, **kwargs):
         cfg = config_manager.get()
@@ -1050,8 +1089,20 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
 
     @app.get("/status-view-data")
     def status_view_data():
+        now = time.time()
+        with status_view_lock:
+            cached = status_view_cache.get("payload")
+            if cached is not None and now - float(status_view_cache.get("built_epoch") or 0) < 1.0:
+                return dict(cached)
         snap = state.snapshot()
-        return build_status_view_payload(config_manager.get(), snap)
+        payload = build_status_view_payload(config_manager.get(), snap)
+        with status_view_lock:
+            status_view_cache.update({"built_epoch": now, "payload": payload})
+        return payload
+
+    @app.get("/grid-mini-data")
+    def grid_mini_data():
+        return build_grid_mini_payload(state.snapshot())
 
     @app.get("/graph-data")
     def graph_data():
@@ -2975,7 +3026,14 @@ def _reason_public_text(s: Dict[str, Any]) -> str:
     reason = str(s.get("control_reason") or s.get("target_final_reason") or "")
     path = str(s.get("technical_control_path") or "")
     harvest = str(s.get("rest_surplus_harvest_reason") or "")
-    if "REST_SURPLUS" in reason or "HARVEST" in path or harvest not in {"", "NONE"}:
+    mode = str(s.get("current_mode") or "")
+    if mode == "NIGHT_DISCHARGE":
+        return "Nachtfenster aktiv"
+    if mode in {"MANUAL_FIXED_CHARGE", "FIXED_CHARGE", "MANUAL_FIXED_DISCHARGE", "FIXED_DISCHARGE"}:
+        return "Manueller fester Modus"
+    if mode == "SAFE_STATE":
+        return str(s.get("control_reason") or "Schutzmodus aktiv")
+    if "REST_SURPLUS" in reason or "HARVEST" in path or (harvest not in {"", "NONE"} and mode.startswith("AUTO")):
         return "Restüberschuss wird gespeichert"
     if "CROSS_CHARGE" in reason or "CROSS_CHARGE" in path or "CROSS_CHARGE" in str(s.get("active_limiters") or ""):
         return "Batterie-zu-Batterie-Umladung wird begrenzt"
@@ -3018,73 +3076,352 @@ def _soc_ring_html(label: str, soc: Any, cfg: Dict[str, Any], subtitle: str = ""
     </div>'''
 
 
+def _status_event_time(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text or text == "-":
+        return "-"
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%d.%m.%Y %H:%M:%S", "%H:%M:%S"):
+        try:
+            dt = datetime.strptime(text[:19], fmt)
+            if fmt == "%H:%M:%S":
+                return text[:8]
+            if dt.date() == datetime.now().date():
+                return dt.strftime("heute %H:%M")
+            return dt.strftime("%d.%m.%Y %H:%M")
+        except Exception:
+            pass
+    return text
+
+
+def _status_unit_state(actual: Any, target: Any, soc: Any, cfg: Dict[str, Any]) -> str:
+    actual_f = _safe_float(actual)
+    target_f = _safe_float(target)
+    soc_f = _safe_float(soc)
+    max_soc = _safe_float(cfg.get("MAX_SOC_PERCENT")) or 99
+    min_soc = _safe_float(cfg.get("MIN_SOC_PERCENT")) or 15
+    if soc_f is not None and soc_f >= max_soc:
+        return "voll"
+    if soc_f is not None and soc_f <= min_soc:
+        return "Min-SOC erreicht"
+    if actual_f is not None and actual_f > 50:
+        return "lädt"
+    if actual_f is not None and actual_f < -50:
+        return "entlädt"
+    if target_f is not None and target_f > 50:
+        return "hält / Ladeziel noch nicht wirksam"
+    if target_f is not None and target_f < -50:
+        return "hält / Entladeziel noch nicht wirksam"
+    return "neutral"
+
+
+def _status_unit_tone(soc: Any, cfg: Dict[str, Any], *, valid: bool = True) -> str:
+    if not valid or _safe_float(soc) is None:
+        return "unknown"
+    return "warn" if _soc_color_class(soc, cfg) == "warn" else "ok"
+
+
+def _status_units(cfg: Dict[str, Any], s: Dict[str, Any], target: Any, actual: Any) -> List[Dict[str, Any]]:
+    raw_units = s.get("zendure_units_json")
+    parsed: List[Dict[str, Any]] = []
+    if isinstance(raw_units, list):
+        parsed = [x for x in raw_units if isinstance(x, dict)]
+    elif raw_units:
+        try:
+            obj = json.loads(str(raw_units))
+            if isinstance(obj, list):
+                parsed = [x for x in obj if isinstance(x, dict)]
+        except Exception:
+            parsed = []
+    if not parsed:
+        parsed = [{
+            "unit_id": "primary",
+            "soc_percent": _first_snapshot_value(s, "battery_soc", "zendure_soc_percent", "norm_zendure_soc_percent", "raw_zendure_soc_percent", "soc"),
+            "actual_power_w": actual,
+            "target_w": target,
+            "freshness": s.get("zendure_mqtt_overall_status"),
+            "command_path_valid": s.get("mqtt_command_path_valid", True),
+            "capacity_kwh": (_safe_float(cfg.get("ZENDURE_BATTERY_CAPACITY_WH")) or 0) / 1000.0 or None,
+        }]
+    units: List[Dict[str, Any]] = []
+    for idx, unit in enumerate(parsed[:2]):
+        soc = next((unit.get(k) for k in ("soc_percent", "soc", "battery_soc") if unit.get(k) not in (None, "", "-")), None)
+        actual_w = next((unit.get(k) for k in ("actual_power_w", "actual_w", "signed_power_w") if unit.get(k) not in (None, "", "-")), None)
+        target_w = next((unit.get(k) for k in ("target_w", "target_power_w") if unit.get(k) not in (None, "", "-")), None)
+        capacity = _safe_float(unit.get("capacity_kwh"))
+        if capacity is None and idx == 0:
+            cap_wh = _safe_float(cfg.get("ZENDURE_BATTERY_CAPACITY_WH"))
+            capacity = cap_wh / 1000.0 if cap_wh else None
+        energy = capacity * float(soc) / 100.0 if capacity is not None and _safe_float(soc) is not None else None
+        state_text = _status_unit_state(actual_w, target_w, soc, cfg)
+        technical_state = str(unit.get("execution_state") or unit.get("state") or "")
+        if technical_state and technical_state not in {"AUTO", "AUTO_CHARGE", "AUTO_DISCHARGE"}:
+            state_text = f"{technical_state} ({state_text})"
+        detail_parts = [_zec_num(soc, "%")]
+        if energy is not None and capacity is not None:
+            detail_parts.append(f"{_zec_num(energy, 'kWh')} von {_zec_num(capacity, 'kWh')}")
+        detail_parts.append(_signed_power_phrase(actual_w))
+        if state_text not in {"lädt", "entlädt", "neutral"}:
+            detail_parts.append(state_text)
+        units.append({
+            "id": str(unit.get("unit_id") or f"unit-{idx+1}"),
+            "name": str(unit.get("name") or f"Unit {idx+1}"),
+            "soc": soc,
+            "actual_w": actual_w,
+            "target_w": target_w,
+            "state_text": state_text,
+            "detail": " · ".join(x for x in detail_parts if x and x != "nicht verfügbar"),
+            "tone": _status_unit_tone(soc, cfg, valid=_safe_float(soc) is not None),
+            "capacity_kwh": capacity,
+            "energy_kwh": energy,
+        })
+    return units
+
+
 def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any]) -> Dict[str, Any]:
-    target = s.get("zendure_target_signed_power")
-    if target in (None, "", 0):
-        inp = _safe_float(s.get("last_input_power")) or 0
-        out = _safe_float(s.get("last_output_power")) or 0
+    target = _first_snapshot_value(s, "zendure_target_signed_power", "current_target_power")
+    if target is None:
+        inp = _safe_float(_first_snapshot_value(s, "last_input_power")) or 0
+        out = _safe_float(_first_snapshot_value(s, "last_output_power")) or 0
         target = inp if inp > 0 and out <= 0 else (-out if out > 0 else 0)
+    actual = _first_snapshot_value(
+        s,
+        "zendure_system_signed_power",
+        "actual_zendure_system_signed_power",
+        "zendure_actual_power_w",
+        "actual_zendure_power_w",
+        "actual_zendure_system_power",
+    )
     mode = str(s.get("current_mode") or "-")
-    grid = _safe_float(s.get("grid_power", s.get("raw_grid_power")))
-    grid_status = "nicht bewertbar"
-    if bool(s.get("grid_power_valid")) and grid is not None:
-        if grid > 50:
-            grid_status = "Bezug aus Netz"
-        elif grid < -50:
-            grid_status = "Einspeisung / Export"
-        else:
-            grid_status = "ausgeglichen"
+
+    grid = _safe_float(_first_snapshot_value(s, "raw_grid_power", "grid_power", "grid_power_w"))
+    grid_valid = bool(s.get("grid_power_valid")) and grid is not None
+    if not grid_valid:
+        grid_status, grid_tone = "nicht bewertbar", "unknown"
+    elif grid > 500:
+        grid_status, grid_tone = "Bezug aus Netz", "bad"
+    elif grid > 50:
+        grid_status, grid_tone = "Bezug aus Netz", "warn"
+    elif grid < -50:
+        grid_status, grid_tone = "Einspeisung / Export", "ok"
+    else:
+        grid_status, grid_tone = "ausgeglichen", "ok"
+    grid_age = _safe_float(s.get("grid_power_age_seconds"))
+    grid_freshness = "aktuell" if grid_valid and (grid_age is None or grid_age <= 3) else (f"verzögert, {int(grid_age)} s" if grid_valid and grid_age is not None else "nicht aktuell")
+
     warnings: List[str] = []
     if mode == "SAFE_STATE":
         warnings.append("Safe-State aktiv")
     if s.get("command_uncertain_mqtt_active"):
-        warnings.append("Zendure-Command nach unsicherem MQTT-Zustand")
+        warnings.append("Aktiver Zendure-Sollwert wurde bei unsicherem MQTT-Zustand gesendet")
     if s.get("command_not_effective_active"):
-        warnings.append("Sollwert nicht wirksam")
-    if not bool(s.get("grid_power_valid", True)):
+        warnings.append("Zendure-Sollwert zeigt keine plausible Gerätewirkung")
+    if not grid_valid:
         warnings.append("Netzleistungswert nicht aktuell")
+    if not bool(s.get("second_battery_data_valid", s.get("second_battery_data_available", True))):
+        warnings.append("Primärspeicher-Daten nicht vollständig")
     status_kind = "bad" if mode == "SAFE_STATE" else ("warn" if warnings else "ok")
     system_status = "Safe-State" if mode == "SAFE_STATE" else (f"Warnung {len(warnings)}" if warnings else "System OK")
 
-    primary_power = _safe_float(s.get("sma_battery_power", s.get("second_battery_power_w", s.get("second_battery_power"))))
-    primary_soc = _safe_float(s.get("sma_battery_soc", s.get("second_battery_soc_percent", s.get("second_battery_soc"))))
-    primary_status = "nicht verfügbar"
-    if primary_power is not None:
-        primary_status = "lädt stark" if primary_power > 1500 else ("lädt" if primary_power > 50 else ("trägt Hauslast" if primary_power < -50 else "voll / idle" if primary_soc and primary_soc >= 99 else "nahe neutral"))
-    harvest_line = "Speicherstrategie: SMA hat Vorrang"
+    command_warning = ""
+    mqtt_overall = str(s.get("zendure_mqtt_overall_status") or "").upper()
+    mqtt_live_confirmed = bool(s.get("zendure_mqtt_live_confirmed", s.get("zendure_live_confirmed", True)))
+    mqtt_resave_required = (
+        ("RETAINED_ONLY" in mqtt_overall)
+        or ("AFTER_BROKER_RESTART_NO_LIVE" in mqtt_overall)
+        or ("NO_LIVE" in mqtt_overall and not mqtt_live_confirmed)
+    )
+    if mqtt_resave_required:
+        warnings.append("Zendure Live-Status fehlt: MQTT in der Zendure-App erneut speichern/aktivieren")
+    if s.get("command_not_effective_active"):
+        command_warning = str(s.get("command_not_effective_reason") or "Sollwert nicht wirksam: Ziel und Istleistung stimmen nicht plausibel überein.")
+    elif s.get("command_uncertain_mqtt_active"):
+        command_warning = str(s.get("command_uncertain_mqtt_reason") or "Letzter aktiver Sollwert wurde bei unsicherem Zendure-MQTT-Zustand gesendet.")
+    elif mqtt_resave_required:
+        command_warning = "Zendure Live-Status fehlt. MQTT in der Zendure-App erneut speichern/aktivieren; ZEC synchronisiert den aktiven Sollwert nach der Recovery erneut."
+
+    units = _status_units(cfg, s, target, actual)
+    weighted_num = 0.0
+    weighted_den = 0.0
+    for unit in units:
+        cap = _safe_float(unit.get("capacity_kwh"))
+        soc = _safe_float(unit.get("soc"))
+        if cap is not None and cap > 0 and soc is not None:
+            weighted_num += cap * soc
+            weighted_den += cap
+    system_soc = weighted_num / weighted_den if weighted_den > 0 else (_safe_float(units[0].get("soc")) if len(units) == 1 else None)
+    remaining = s.get("zendure_remaining_capacity_kwh")
+    max_soc = _safe_float(cfg.get("MAX_SOC_PERCENT")) or 99
+    zendure_tone = "warn" if command_warning else (units[0].get("tone") if len(units) == 1 else ("warn" if any(u.get("tone") != "ok" for u in units) else "ok"))
+
+    primary_power = _safe_float(_first_snapshot_value(
+        s, "sma_battery_display_power", "second_battery_power_w", "norm_second_battery_power_w", "sma_battery_power", "second_battery_power"
+    ))
+    primary_soc = _safe_float(_first_snapshot_value(
+        s, "sma_battery_soc", "second_battery_soc_percent", "raw_second_battery_soc_percent", "second_battery_soc", "sma_soc"
+    ))
+    primary_valid = bool(s.get("second_battery_data_valid", s.get("second_battery_data_available", primary_soc is not None)))
+    primary_fresh = bool(s.get("second_battery_data_fresh", primary_valid))
+    if primary_power is None:
+        primary_status = "nicht verfügbar"
+    elif primary_power > 1500:
+        primary_status = "lädt stark"
+    elif primary_power > 50:
+        primary_status = "lädt"
+    elif primary_power < -50:
+        primary_status = "trägt Hauslast"
+    elif primary_soc is not None and primary_soc >= 99:
+        primary_status = "voll / idle"
+    else:
+        primary_status = "nahe neutral"
+    harmony = "Speicherstrategie: SMA hat Vorrang"
     if bool(s.get("rest_surplus_harvest_active")):
         hreason = str(s.get("rest_surplus_harvest_reason") or "")
-        if "FULL" in hreason or (primary_soc is not None and primary_soc >= 99):
-            harvest_line = "Harvest: Zendure übernimmt Restüberschuss"
-        else:
-            harvest_line = "Harvest: Parallel-Ernte aktiv"
+        harmony = "Harvest: Zendure übernimmt Restüberschuss" if "FULL" in hreason or (primary_soc is not None and primary_soc >= 99) else "Harvest: Parallel-Ernte aktiv · Primärspeicher bleibt priorisiert"
     if "CROSS_CHARGE" in str(s.get("active_limiters") or "") or bool(s.get("cross_charge_guard_limited")):
-        harvest_line = "Cross-Charge: Zendure-Leistung begrenzt"
+        harmony = "Cross-Charge-Schutz: Zendure-Leistung wird begrenzt"
+    primary_tone = _status_unit_tone(primary_soc, cfg, valid=primary_valid and primary_fresh)
+    primary_age = _safe_float(_first_snapshot_value(s, "second_battery_data_age_seconds", "last_sma_battery_update_age_seconds"))
+    primary_freshness = "aktuell" if primary_valid and primary_fresh and (primary_age is None or primary_age <= 10) else (f"verzögert, {int(primary_age)} s" if primary_valid and primary_age is not None else "nicht aktuell")
 
     detected = int(_safe_float(s.get("sma_energy_meter_detected_device_count")) or 0)
-    packets = int(_safe_float(s.get("sma_energy_meter_packet_rate_per_min")) or 0)
-    source_line = "SMA Home Manager direkt" if "sma" in str(s.get("raw_grid_source") or s.get("grid_meter_source") or "").lower() else str(s.get("raw_grid_source") or s.get("grid_meter_source") or "Netzquelle")
-    device_line = f"{detected} SMA-Geräte erkannt · korrekt gefiltert" if detected >= 2 and bool(s.get("sma_energy_meter_selected_device_matched", True)) else "Zielgerät korrekt erkannt" if detected else "Geräteerkennung nicht verfügbar"
-    rejected = ""
-    if s.get("last_error") and "unplausibel" in str(s.get("last_error")):
-        rejected = f"Letzter verworfener Messwert: {s.get('last_error_time','-')} · Grund: unplausibler Messwert"
+    packets = int(round(_safe_float(s.get("sma_energy_meter_packet_rate_per_min")) or 0))
+    source_raw = str(s.get("raw_grid_source") or s.get("grid_meter_source") or "")
+    source_name = "SMA Home Manager direkt" if "sma" in source_raw.lower() else (source_raw or "Netzleistungsquelle")
+    matched = bool(s.get("sma_energy_meter_selected_device_matched", True))
+    if detected >= 2 and matched:
+        device_line = f"{detected} SMA-Geräte erkannt · korrekt gefiltert"
+    elif detected == 1 and matched:
+        device_line = "1 SMA-Gerät erkannt · korrekt zugeordnet"
+    elif detected:
+        device_line = f"{detected} SMA-Geräte erkannt · Zielgerät nicht eindeutig"
+    else:
+        device_line = "Geräteerkennung nicht verfügbar"
+    source_age = _safe_float(_first_snapshot_value(s, "sma_energy_meter_last_update_age_seconds", "grid_power_age_seconds"))
+    age_text = f"vor {int(source_age)} s" if source_age is not None else "nicht verfügbar"
+    source_tone = "ok" if grid_valid and matched else ("warn" if grid_valid else "bad")
+    auto_text = "Messquelle aktuell · AUTO nutzt diesen Wert" if mode.startswith("AUTO") and grid_valid else ("Messquelle aktuell" if grid_valid else "AUTO wartet auf aktuelle Netzwerte")
+
+    rejected_text = ""
+    last_rejected_at = s.get("grid_last_rejected_time")
+    last_rejected_reason = s.get("grid_last_rejected_reason")
+    if str(last_rejected_at or "").strip() not in {"", "-"}:
+        rejected_text = f"Letzter verworfener Messwert: {_status_event_time(last_rejected_at)} · Grund: {last_rejected_reason or 'unplausibler Messwert'}"
+    elif s.get("last_error") and "unplausibel" in str(s.get("last_error")).lower() and str(s.get("last_error_time") or "").strip() not in {"", "-"}:
+        rejected_text = f"Letzter verworfener Messwert: {_status_event_time(s.get('last_error_time'))} · Grund: unplausibler Messwert"
+    rejected_count = int(_safe_float(s.get("grid_rejected_count_since_start")) or 0)
+    rejected_count_text = f"Verworfen: {rejected_count} seit Start" if rejected_count else ""
 
     fixed_projection = fixed_mode_projection_text(cfg, s, mode)
     night_projection = night_mode_projection_text(cfg, s, mode) if mode == "NIGHT_DISCHARGE" else ""
+    projection = fixed_projection or night_projection
+    mode_tone = "bad" if mode == "SAFE_STATE" else ("warn" if command_warning else "ok")
+    mode_status = "Schutzmodus aktiv" if mode == "SAFE_STATE" else ("Regelung eingeschränkt" if command_warning else "Regelung aktiv · aktuell")
+
+    db_path = str(s.get("measurement_db_path") or "")
+    local_api_error = str(s.get("last_local_api_error") or "none")
+    api_text = "OK" if local_api_error.lower() in {"", "none", "ok"} else "Warnung"
+    try:
+        timing_obj = json.loads(str(s.get("last_cycle_timing_json") or "{}"))
+    except Exception:
+        timing_obj = {}
+    active_cycle_ms = _safe_float(
+        s.get("last_cycle_total_ms", s.get("last_loop_duration_ms", timing_obj.get("active_cycle_ms", timing_obj.get("cycle_total_without_sleep_ms"))))
+    )
+    measurement_logging_ms = _safe_float(
+        timing_obj.get("measurement_logging_ms", timing_obj.get("measurement_log_ms", timing_obj.get("measurement_v4_ms")))
+    )
+    if measurement_logging_ms is None and str(s.get("last_cycle_slowest_step") or "") == "measurement_logging_ms":
+        measurement_logging_ms = _safe_float(s.get("last_cycle_slowest_step_ms"))
     return {
         "version": APP_VERSION_LABEL,
+        "snapshot_epoch_ms": int(time.time() * 1000),
         "server_time": datetime.now().strftime("%H:%M:%S"),
         "snapshot_time": datetime.now().isoformat(timespec="seconds"),
-        "system": {"kind": status_kind, "label": system_status, "warnings": warnings},
-        "grid": {"value": _zec_num(grid, signed=True), "status": grid_status, "valid": bool(s.get("grid_power_valid")), "source": source_line, "age": s.get("grid_power_age_seconds")},
-        "mode": {"mode": mode, "text": _mode_public_text(mode, target), "target": _signed_power_phrase(target), "reason": _reason_public_text(s), "last_change": s.get("last_mode_change_time") or "-", "night_projection": night_projection, "fixed_projection": fixed_projection, "effect": s.get("command_effect_state_category") or s.get("command_effect_category") or "", "effect_reason": s.get("command_effect_state_reason") or s.get("command_effect_reason") or ""},
-        "zendure": {"soc": s.get("battery_soc"), "actual": _signed_power_phrase(s.get("zendure_system_signed_power")), "actual_raw": s.get("zendure_system_signed_power"), "remaining": s.get("zendure_remaining_capacity_kwh"), "source": _storage_source_text(s), "unit_count": int(s.get("zendure_unit_count") or 1), "command_warning": s.get("command_not_effective_reason") if s.get("command_not_effective_active") else (s.get("command_uncertain_mqtt_reason") if s.get("command_uncertain_mqtt_active") else "")},
-        "primary": {"soc": primary_soc, "actual": _signed_power_phrase(primary_power), "actual_raw": primary_power, "status": primary_status, "line": harvest_line, "source": second_battery_name(cfg), "age": s.get("last_sma_battery_update_age_seconds")},
-        "source": {"name": source_line, "device_line": device_line, "age": s.get("sma_energy_meter_last_update_age_seconds", s.get("grid_power_age_seconds")), "packets_min": packets, "auto_text": "AUTO nutzt Wert" if mode.startswith("AUTO") else "Messquelle aktuell", "rejected": rejected},
-        "logging": {"status": s.get("measurement_log_status") or "-", "target": s.get("measurement_log_active_target_type") or s.get("measurement_log_target_type") or "-", "db": s.get("measurement_db_status") or "-", "db_path": s.get("measurement_db_path") or ""},
-        "diag": {"mqtt": s.get("zendure_mqtt_overall_status") or "-", "api": s.get("last_local_api_error") or "OK", "loop_ms": s.get("last_cycle_total_ms", s.get("last_loop_duration_ms")), "resync": s.get("command_resync_reason") or "-", "resync_count": s.get("command_resync_count") or 0, "effect": s.get("command_effect_state_category") or "-"},
+        "system": {
+            "kind": status_kind,
+            "label": system_status,
+            "warnings": warnings,
+            "critical_text": str(s.get("control_reason") or "Pflichtdaten fehlen oder Regelung ist nicht sicher möglich.") if mode == "SAFE_STATE" else "",
+        },
+        "grid": {
+            "value": _zec_num(grid, signed=True),
+            "value_raw": grid,
+            "status": grid_status,
+            "valid": grid_valid,
+            "tone": grid_tone,
+            "source": source_name,
+            "freshness_text": grid_freshness,
+            "age": grid_age,
+        },
+        "mode": {
+            "mode": mode,
+            "text": _mode_public_text(mode, target),
+            "target": _signed_power_phrase(target),
+            "target_raw": target,
+            "reason": _reason_public_text(s),
+            "last_change": s.get("last_mode_change_time") or "-",
+            "projection": projection,
+            "effect": s.get("command_effect_state_category") or s.get("command_effect_category") or "",
+            "effect_reason": s.get("command_effect_state_reason") or s.get("command_effect_reason") or "",
+            "tone": mode_tone,
+            "status_text": mode_status,
+        },
+        "zendure": {
+            "soc": system_soc,
+            "system_soc_text": f"{_zec_num(system_soc, '%')} gewichtet" if len(units) > 1 and system_soc is not None else _zec_num(system_soc, "%"),
+            "actual": _signed_power_phrase(actual),
+            "actual_raw": actual,
+            "remaining": remaining,
+            "remaining_text": _zec_num(remaining, "kWh") if remaining is not None else "nicht berechenbar",
+            "max_soc_text": _zec_num(max_soc, "%"),
+            "source": _storage_source_text(s),
+            "unit_count": len(units),
+            "units": units,
+            "command_warning": command_warning,
+            "tone": zendure_tone,
+        },
+        "primary": {
+            "soc": primary_soc,
+            "actual": _signed_power_phrase(primary_power),
+            "actual_raw": primary_power,
+            "status": primary_status,
+            "line": harmony,
+            "source": second_battery_name(cfg),
+            "age": primary_age,
+            "freshness_text": primary_freshness,
+            "tone": primary_tone,
+        },
+        "source": {
+            "name": source_name,
+            "device_line": device_line,
+            "age": source_age,
+            "age_text": age_text,
+            "packets_min": packets,
+            "packets_text": f"{packets}/min",
+            "auto_text": auto_text,
+            "rejected_text": rejected_text,
+            "rejected_count_text": rejected_count_text,
+            "tone": source_tone,
+        },
+        "logging": {
+            "status": s.get("measurement_log_status") or "-",
+            "target": s.get("measurement_log_active_target_type") or s.get("measurement_log_target_type") or "-",
+            "db": s.get("measurement_db_status") or "-",
+            "db_path": db_path,
+            "db_name": os.path.basename(db_path) if db_path else "—",
+        },
+        "diag": {
+            "mqtt": s.get("zendure_mqtt_overall_status") or "-",
+            "api": api_text,
+            "loop_ms": active_cycle_ms,
+            "loop_text": f"{int(active_cycle_ms)} ms" if active_cycle_ms is not None else "—",
+            "measurement_logging_ms": measurement_logging_ms,
+            "measurement_logging_text": f"{int(measurement_logging_ms)} ms" if measurement_logging_ms is not None else "—",
+            "resync": s.get("command_resync_reason") or "kein aktueller Resync",
+            "resync_count": s.get("command_resync_count") or 0,
+            "effect": s.get("command_effect_state_category") or s.get("command_effect_category") or "-",
+        },
     }
-
 
 def _parse_day(date_text: Optional[str]) -> datetime:
     if date_text:
@@ -3103,7 +3440,7 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
     day_end = day_start + timedelta(days=1)
     today = datetime.now().date()
     is_today = day_start.date() == today
-    cache_key = f"{day_start.date().isoformat()}|storage-v1"
+    cache_key = f"{day_start.date().isoformat()}|storage-v2"
     now_epoch = time.time()
     ttl = 60 if is_today else 3600
     with _storage_day_lock:
@@ -3125,6 +3462,8 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
                     "minute": minute,
                     "time": dt.strftime("%H:%M"),
                     "zendure_soc": pnt.get("soc"),
+                    "zendure_unit_1_soc": pnt.get("soc"),
+                    "zendure_unit_2_soc": pnt.get("zendure_unit_2_soc"),
                     "primary_soc": pnt.get("primary_soc"),
                     "zendure_power_w": pnt.get("zendure_actual_power_w"),
                     "primary_power_w": pnt.get("primary_power_w"),
@@ -3146,6 +3485,8 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
                 "minute": minute,
                 "time": now.strftime("%H:%M"),
                 "zendure_soc": snap.get("battery_soc"),
+                "zendure_unit_1_soc": (_status_units(cfg, snap, snap.get("zendure_target_signed_power"), snap.get("zendure_system_signed_power")) or [{}])[0].get("soc"),
+                "zendure_unit_2_soc": ((_status_units(cfg, snap, snap.get("zendure_target_signed_power"), snap.get("zendure_system_signed_power")) + [{}, {}])[1].get("soc")),
                 "primary_soc": snap.get("sma_battery_soc", snap.get("second_battery_soc_percent", snap.get("second_battery_soc"))),
                 "zendure_power_w": snap.get("zendure_system_signed_power"),
                 "primary_power_w": snap.get("sma_battery_power", snap.get("second_battery_power_w", snap.get("second_battery_power"))),
@@ -3156,9 +3497,14 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
                 "live": True,
             })
     points = sorted(points, key=lambda x: x.get("minute", 0))
+    status_units = _status_units(cfg, snap, snap.get("zendure_target_signed_power"), snap.get("zendure_system_signed_power"))
+    complete = bool(is_today or (points and int(points[-1].get("minute", 0)) >= 1430))
     payload = {
         "date": day_start.date().isoformat(),
         "is_today": is_today,
+        "complete": complete,
+        "zendure_unit_count": min(2, max(1, len(status_units))),
+        "unit_labels": [str(u.get("name") or f"Zendure {idx+1}") for idx, u in enumerate(status_units[:2])],
         "axis_minute_start": 0,
         "axis_minute_end": 1440,
         "points": points,
@@ -3178,8 +3524,8 @@ def _status_info(title: str, text: str) -> str:
     return f'<button class="info-dot" data-tooltip="{html.escape(text, quote=True)}" aria-label="Info {html.escape(title)}">i</button>'
 
 
-def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
-    # V12.11.2-RC2 status page with compact snapshot refresh.
+def build_status_page_rc2_legacy(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
+    # Historical RC2 status page retained only as implementation reference.
     payload = build_status_view_payload(cfg, s)
     # Compatibility-visible values also document the old text-heavy information inventory.
     measurement_log_details = (
@@ -3295,6 +3641,22 @@ def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
     '''
     page += build_footer()
     return page
+
+
+def build_status_page(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
+    """Render the independently rebuilt V2 status page.
+
+    The historical status-page markup is intentionally not reused.  Only the
+    compact view model and the dedicated cached JSON endpoints are shared.
+    """
+    payload = build_status_view_payload(cfg, s)
+    port = int(cfg.get("REPLAY_WEB_PORT", 8090) or 8090)
+    return render_status_page_v2(
+        cfg,
+        payload,
+        analysis_available=replay_service_available(cfg),
+        analysis_port=port,
+    )
 
 def build_graph_page_legacy(cfg: Dict[str, Any]) -> str:
     page = build_base_header("Zendure Controller Graph", cfg=cfg)
