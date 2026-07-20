@@ -11,8 +11,8 @@ from web_ui import build_status_page, build_status_view_payload
 
 class V12112Rc5OperationsDashboardTests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual("12.11.2-rc5", version.APP_VERSION)
-        self.assertEqual("V12.11.2-RC5", version.APP_VERSION_LABEL)
+        self.assertEqual("12.11.2-rc6", version.APP_VERSION)
+        self.assertEqual("V12.11.2-RC6", version.APP_VERSION_LABEL)
 
     def test_four_lower_cards_and_calendar_hotfix_are_present(self):
         snap = ControllerState().snapshot()

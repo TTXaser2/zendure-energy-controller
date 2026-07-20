@@ -309,13 +309,13 @@ def render_status_page_v2(
           <div><span>MQTT-/Wirkungspfad</span><strong data-zec="diag.command_text">—</strong></div>
           <div><span>Logging im Hauptthread</span><strong data-zec="diag.measurement_logging_text">{_e(payload['diag'].get('measurement_logging_text'))}</strong></div>
           <div><span>SQLite-Schreiben, asynchron</span><strong data-zec="diag.sqlite_text">—</strong></div>
-          <div><span>Langsamster Abschnitt</span><strong data-zec="diag.slowest_text">—</strong></div>
+          <div><span>Langsamster Abschnitt</span><strong data-zec="diag.slowest_text">{_e(payload['diag'].get('slowest_step') or '—')} · {_e(payload['diag'].get('slowest_ms') if payload['diag'].get('slowest_ms') is not None else '—')} ms</strong></div>
         </div>
         <div class="zec-meter"><div class="zec-meter-fill" data-meter="diag.cycle"></div></div>
         <div class="zec-health-rows compact">
           <div><span>Analyse / Replay</span><strong data-zec="diag.analysis">{_e(payload['diag'].get('analysis'))}</strong></div>
           <div><span>Controller-Laufzeit</span><strong data-zec="diag.uptime_text">—</strong></div>
-          <div class="zec-full-row"><span>Letzter Zendure-Kommandoabgleich</span><strong data-zec="diag.resync_text">—</strong></div>
+          <div class="zec-full-row"><span>Letzter Zendure-Kommandoabgleich</span><strong data-zec="diag.resync_text">{_e(payload['diag'].get('resync_text'))}</strong></div>
         </div>
         <footer class="zec-card-footer"><span class="zec-status-dot ok"></span><span data-zec="diag.footer">Controller und Schnittstellen werden bewertet</span></footer>
       </article>

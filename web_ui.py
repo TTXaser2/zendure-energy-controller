@@ -2686,7 +2686,7 @@ def build_status_page_legacy(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
             )}
         </div>
     </div>
-    {build_soc_day_section(cfg)}
+    {_legacy_soc_reference_box()}
     <div class="section">{heading_link('Diagnose', 'Sicherheit / Fallback', 2)}<div class="section-tools"><a href="#" onclick="expandSectionInfo('status-diagnostics'); return false;">Alle Infos auf- und zuklappen</a></div><div class="grid" id="status-diagnostics">
         {status_card('Aktive Betriebslogik', html.escape(path_human), html.escape(str(s['last_control_action'])), 'gray', 'Die aktive Betriebslogik beschreibt den aktuell verwendeten Entscheidungsweg des Controllers in verständlicher Form. Der technische Code bleibt darunter sichtbar, damit man Events, Graphdaten und Logausgaben eindeutig zuordnen kann.', path_code)}
         {status_card('Aktive Zykluszeit', f'{active_cycle_ms} ms', timing_details, 'gray', 'Die aktive Zykluszeit ist die Zeit, in der der Controller für einen Regelzyklus tatsächlich arbeitet: Datenquellen prüfen, Regelentscheidung berechnen, MQTT-Kommandopfad ausführen, Status aktualisieren und Messdaten schreiben. Nicht enthalten ist die geplante Wartezeit bis zum nächsten Regelintervall. Der langsamste Teil zeigt, welcher echte Abschnitt innerhalb des letzten Zyklus am meisten Zeit benötigt hat.')}
@@ -2696,7 +2696,7 @@ def build_status_page_legacy(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
         {status_card('Analyse-Weboberfläche', f'Port {replay_port}', analysis_link_html, 'gray', 'Die Analyse läuft bewusst getrennt vom Live-Regler. Der Dienst wird mitgeliefert, aber nicht automatisch aktiviert.')}
         {status_card('High-SOC-Ladeannahme', html.escape(str(s.get('charge_acceptance_state', 'ok'))), html.escape(str(s.get('charge_acceptance_reason', '-'))), 'gray', 'Leichtgewichtige Diagnose: Zeigt, ob Zendure eine angeforderte Ladeleistung bei hohem SOC plausibel annimmt. Diese Diagnose greift nicht aktiv in die Regelung ein.')}
     </div></div>
-    {build_event_section(s['event_history'])}
+    {_legacy_event_reference_box()}
     """
     page += build_footer()
     return page
@@ -3192,6 +3192,141 @@ def _status_units(cfg: Dict[str, Any], s: Dict[str, Any], target: Any, actual: A
     return units
 
 
+def _zendure_mqtt_public_status(value: Any) -> tuple[str, str]:
+    raw = str(value or "").strip().upper()
+    mapping = {
+        "ZENDURE_MQTT_OK": ("Aktuell", "ok"),
+        "ZENDURE_MQTT_PARTIAL_STALE": ("Teilweise veraltet", "warn"),
+        "ZENDURE_MQTT_STALE": ("Veraltet", "bad"),
+        "ZENDURE_MQTT_RETAINED_ONLY": ("Nur gespeicherte MQTT-Daten", "warn"),
+        "ZENDURE_MQTT_AFTER_BROKER_RESTART_NO_LIVE_UPDATES": ("Keine bestätigten Live-Daten", "bad"),
+    }
+    if raw in mapping:
+        return mapping[raw]
+    if not raw:
+        return "Noch keine Daten", "unknown"
+    return "Status unbekannt", "unknown"
+
+
+def _command_effect_public_status(value: Any) -> tuple[str, str]:
+    raw = str(value or "").strip().lower()
+    mapping = {
+        "no_command": ("Noch kein relevantes Kommando", "ok"),
+        "none": ("Noch kein relevantes Kommando", "ok"),
+        "effective": ("Wirksam", "ok"),
+        "confirmed": ("Wirksam", "ok"),
+        "pending": ("Wirkung wird geprüft", "warn"),
+        "checking": ("Wirkung wird geprüft", "warn"),
+        "uncertain": ("Unklar nach Verbindungsunterbrechung", "warn"),
+        "not_effective": ("Nicht wirksam", "bad"),
+        "command_not_effective": ("Nicht wirksam", "bad"),
+        "unavailable": ("Kommandoweg nicht verfügbar", "bad"),
+    }
+    if raw in mapping:
+        return mapping[raw]
+    if not raw:
+        return "Noch nicht bewertbar", "unknown"
+    return "Status nicht eindeutig", "unknown"
+
+
+def _measurement_log_public_status(value: Any) -> str:
+    raw = str(value or "").strip().lower()
+    return {
+        "active": "Aktiv",
+        "ok": "Aktiv",
+        "off": "Deaktiviert",
+        "disabled": "Deaktiviert",
+        "paused": "Pausiert",
+        "fallback": "Fallback aktiv",
+        "error": "Fehler",
+    }.get(raw, str(value or "—"))
+
+
+def _measurement_db_public_status(value: Any) -> str:
+    raw = str(value or "").strip().lower()
+    return {
+        "queued": "Aktiv · asynchron",
+        "active": "Aktiv",
+        "ok": "Aktiv",
+        "ready": "Bereit",
+        "disabled": "Deaktiviert",
+        "off": "Deaktiviert",
+        "error": "Fehler",
+    }.get(raw, str(value or "—"))
+
+
+def _measurement_target_public_status(value: Any) -> str:
+    raw = str(value or "").strip().lower()
+    return {
+        "internal_sd": "Interner Systemdatenträger",
+        "external_mount": "Externes Laufwerk",
+        "custom_path": "Benutzerdefinierter Pfad",
+        "fallback_sd": "Interner Fallback-Speicher",
+        "unavailable": "Nicht verfügbar",
+    }.get(raw, str(value or "—"))
+
+
+def _timing_step_public_label(value: Any) -> str:
+    raw = str(value or "").strip()
+    return {
+        "config_reload_ms": "Konfigurationsprüfung",
+        "mqtt_refresh_subscriptions_ms": "MQTT-Subscriptions",
+        "zendure_local_api_ms": "Zendure Local API",
+        "cycle_display_metrics_ms": "Statusaufbereitung",
+        "grid_display_read_ms": "Netzwert für Anzeige",
+        "grid_control_read_ms": "Netzwert für Regelung",
+        "cross_charge_metrics_ms": "Cross-Charge-Metriken",
+        "charge_acceptance_diag_ms": "Ladeannahme-Diagnose",
+        "graph_snapshot_ms": "Graph-Snapshot",
+        "measurement_logging_ms": "Messdaten-Logging",
+        "run_once_ms": "Regelentscheidung",
+        "control_decision_ms": "Regelentscheidung",
+        "mqtt_command_path_ms": "MQTT-Kommandopfad",
+        "command_effect_monitor_ms": "Kommandowirkungsprüfung",
+        "finish_cycle_ms": "Zyklusabschluss",
+    }.get(raw, raw or "—")
+
+
+def _command_resync_public_reason(value: Any) -> str:
+    raw = str(value or "").strip()
+    mapping = {
+        "RESYNC_AFTER_RECONNECT": "nach Wiederherstellung der MQTT-Verbindung",
+        "RESYNC_AFTER_LONG_STALE": "nach längerer Phase veralteter Telemetriedaten",
+        "RESYNC_AFTER_CONFIRMED_MISMATCH": "nach bestätigter Abweichung zwischen Sollwert und Gerätewirkung",
+        "RESYNC_AFTER_UNCERTAIN_COMMAND": "nach unsicherem Kommandozustand",
+        "STARTUP": "nach Controllerstart",
+    }
+    return mapping.get(raw.upper(), raw or "Kommunikationsunsicherheit")
+
+
+def _legacy_soc_reference_box() -> str:
+    return """
+    <div class="section">
+      <h2>Speicher-SOC Tagesgraph</h2>
+      <div class="card">
+        <b>Historische Referenzansicht</b><br>
+        Der frühere eingebettete SOC-Graph wird hier bewusst nicht mehr geladen,
+        weil seine alte Renderfunktion nicht mehr Teil der aktuellen Statusarchitektur ist.<br><br>
+        <a href="/">Aktuellen SOC-Tagesgraphen auf der neuen Statusseite öffnen</a>
+        &nbsp;·&nbsp;
+        <a href="/graph_old">Alten separaten Graphen öffnen</a>
+      </div>
+    </div>
+    """
+
+
+def _legacy_event_reference_box() -> str:
+    return """
+    <div class="section">
+      <h2>Betriebsereignisse</h2>
+      <div class="card">
+        Das frühere eingebettete Ereignisfeld wird in der Referenzansicht nicht mehr aufgebaut.
+        Das aktuelle persistente Betriebsjournal befindet sich auf der neuen Statusseite.
+      </div>
+    </div>
+    """
+
+
 def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     target = _first_snapshot_value(s, "zendure_target_signed_power", "current_target_power")
     if target is None:
@@ -3337,6 +3472,10 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
     local_api_error = str(s.get("last_local_api_error") or "none")
     api_enabled = bool(cfg.get("ZENDURE_LOCAL_API_ENABLED", True))
     api_text = "Deaktiviert" if not api_enabled else ("Aktuell" if local_api_error.lower() in {"", "none", "ok"} else "Nicht erreichbar")
+    api_tone = "unknown" if not api_enabled else ("ok" if api_text == "Aktuell" else "warn")
+    mqtt_public, mqtt_tone = _zendure_mqtt_public_status(s.get("zendure_mqtt_overall_status"))
+    effect_raw = s.get("command_effect_state_category") or s.get("command_effect_category") or ""
+    effect_public, effect_tone = _command_effect_public_status(effect_raw)
     try:
         timing_obj = json.loads(str(s.get("last_cycle_timing_json") or "{}"))
     except Exception:
@@ -3357,6 +3496,20 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
     cycle_age = None
     if s.get("last_cycle_completed_epoch"):
         cycle_age = max(0.0, time.time() - float(s.get("last_cycle_completed_epoch")))
+    if cycle_age is not None and cycle_age <= max(10.0, interval_s * 2.5):
+        cycle_rule, cycle_rule_tone = "Aktuell", "ok"
+    elif cycle_age is not None and cycle_age <= 30:
+        cycle_rule, cycle_rule_tone = "Verzögert", "warn"
+    else:
+        cycle_rule, cycle_rule_tone = "Nicht aktuell", "bad"
+    slowest_step_public = _timing_step_public_label(s.get("last_cycle_slowest_step"))
+    resync_count = int(s.get("command_resync_count") or 0)
+    resync_time = str(s.get("command_resync_last_time") or "").strip()
+    resync_reason = _command_resync_public_reason(s.get("command_resync_reason"))
+    if resync_count > 0:
+        resync_text = f"{resync_time or 'Zeitpunkt unbekannt'} · {resync_reason} · AC-Modus und Lade-/Entladelimits erneut gesendet"
+    else:
+        resync_text = "Kein Zendure-Kommandoabgleich seit Controllerstart · betroffen wären AC-Modus und Lade-/Entladelimits"
     controller_uptime = max(0.0, time.time() - float(s.get("controller_started_epoch") or time.time()))
     free_bytes = metrics.get("disk_free_bytes")
     total_bytes = metrics.get("disk_total_bytes")
@@ -3439,11 +3592,11 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "tone": source_tone,
         },
         "logging": {
-            "status": s.get("measurement_log_status") or "-",
+            "status": _measurement_log_public_status(s.get("measurement_log_status")),
             "reason": s.get("measurement_log_status_reason") or "",
-            "target": s.get("measurement_log_active_target_type") or s.get("measurement_log_target_type") or "-",
+            "target": _measurement_target_public_status(s.get("measurement_log_active_target_type") or s.get("measurement_log_target_type")),
             "path": s.get("measurement_log_path") or "",
-            "db": s.get("measurement_db_status") or "-",
+            "db": _measurement_db_public_status(s.get("measurement_db_status")),
             "db_path": db_path,
             "db_name": os.path.basename(db_path) if db_path else "—",
             "db_size_bytes": s.get("measurement_db_size_bytes"),
@@ -3472,12 +3625,19 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "status": "Raspberry Pi unauffällig" if resource_tone == "ok" else ("Raspberry Pi beobachten" if resource_tone == "warn" else "Raspberry Pi kritisch"),
         },
         "diag": {
-            "rule": "Aktuell" if cycle_age is not None and cycle_age <= max(10.0, interval_s*2.5) else ("Verzögert" if cycle_age is not None and cycle_age <= 30 else "Nicht aktuell"),
+            "rule": cycle_rule,
+            "rule_tone": cycle_rule_tone,
             "cycle_age_s": cycle_age,
             "broker": "Verbunden" if bool(s.get("mqtt_connected")) else "Getrennt",
-            "mqtt": s.get("zendure_mqtt_overall_status") or "-",
+            "broker_tone": "ok" if bool(s.get("mqtt_connected")) else "bad",
+            "mqtt": mqtt_public,
+            "mqtt_tone": mqtt_tone,
+            "mqtt_raw": s.get("zendure_mqtt_overall_status") or "",
             "api": api_text,
-            "effect": s.get("command_effect_state_category") or s.get("command_effect_category") or "-",
+            "api_tone": api_tone,
+            "effect": effect_public,
+            "effect_tone": effect_tone,
+            "effect_raw": effect_raw,
             "loop_ms": active_cycle_ms,
             "loop_text": (f"{int(round(active_cycle_ms))} ms" if active_cycle_ms is not None and active_cycle_ms >= 100 else (f"{active_cycle_ms:.1f} ms" if active_cycle_ms is not None else "—")),
             "cycle_budget_percent": cycle_budget_pct,
@@ -3486,13 +3646,15 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "measurement_logging_ms": measurement_logging_ms,
             "measurement_logging_text": (f"{int(measurement_logging_ms)} ms" if measurement_logging_ms is not None and float(measurement_logging_ms).is_integer() else (f"{measurement_logging_ms:.1f} ms" if measurement_logging_ms is not None else "—")),
             "sqlite_ms": sqlite_ms,
-            "slowest_step": s.get("last_cycle_slowest_step") or "—",
+            "slowest_step": slowest_step_public,
+            "slowest_step_raw": s.get("last_cycle_slowest_step") or "",
             "slowest_ms": s.get("last_cycle_slowest_step_ms"),
             "timing": timing_obj,
             "controller_uptime_s": controller_uptime,
-            "resync": s.get("command_resync_reason") or "kein Kommandoabgleich seit Start",
-            "resync_time": s.get("command_resync_last_time") or "—",
-            "resync_count": s.get("command_resync_count") or 0,
+            "resync": resync_reason,
+            "resync_time": resync_time or "—",
+            "resync_text": resync_text,
+            "resync_count": resync_count,
             "resync_target_w": s.get("command_uncertain_mqtt_target_w") or target or 0,
             "analysis": "Aktiv" if replay_service_available(cfg) else "Nicht erreichbar",
         },
