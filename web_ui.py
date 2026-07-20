@@ -25,9 +25,11 @@ from config_manager import CONFIG_SCHEMA, ConfigManager, validate_config
 from config_validator import ValidationIssue, restart_relevant_changes, split_issues, validate_config_semantics
 from cross_charge import cross_charge_enabled
 from csv_logger import rows_to_csv, estimate_retention_hours, measurement_log_mode, detected_log_mounts, resolve_log_path
-from measurement_db import query_graph_points, resolve_measurement_db_path, db_status_for_config
+from measurement_db import query_graph_points, query_measurement_date_range, resolve_measurement_db_path, db_status_for_config
 from version import APP_VERSION, APP_VERSION_LABEL, CSV_SCHEMA
 from status_page_v2 import render_status_page_v2
+from system_metrics import get_system_metrics
+from operational_events import OperationalEventJournal, read_recent_events
 from state import ControllerState
 from translations import (
     limiter_label,
@@ -1062,6 +1064,15 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
         app.mount("/static", StaticFiles(directory=static_dir), name="static")
     status_view_cache: Dict[str, Any] = {"built_epoch": 0.0, "payload": None}
     status_view_lock = threading.Lock()
+    event_journal = OperationalEventJournal(config_manager.get, state)
+
+    @app.on_event("startup")
+    def _start_operational_events() -> None:
+        event_journal.start()
+
+    @app.on_event("shutdown")
+    def _stop_operational_events() -> None:
+        event_journal.stop()
 
     def html_or_headless(page_builder, *args, **kwargs):
         cfg = config_manager.get()
@@ -1155,6 +1166,10 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
     @app.get("/measurement-db-status")
     def measurement_db_status():
         return db_status_for_config(config_manager.get())
+
+    @app.get("/operational-events")
+    def operational_events(days: int = 2, limit: int = 250):
+        return {"items": event_journal.list_recent(days=max(1, min(days, 90)), limit=max(1, min(limit, 1000)))}
 
     @app.get("/measurements/export.csv")
     def measurements_export_csv(start: str = "", end: str = ""):
@@ -3177,7 +3192,7 @@ def _status_units(cfg: Dict[str, Any], s: Dict[str, Any], target: Any, actual: A
     return units
 
 
-def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any]) -> Dict[str, Any]:
+def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     target = _first_snapshot_value(s, "zendure_target_signed_power", "current_target_power")
     if target is None:
         inp = _safe_float(_first_snapshot_value(s, "last_input_power")) or 0
@@ -3317,9 +3332,11 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any]) -> Dict[st
     mode_tone = "bad" if mode == "SAFE_STATE" else ("warn" if command_warning else "ok")
     mode_status = "Schutzmodus aktiv" if mode == "SAFE_STATE" else ("Regelung eingeschränkt" if command_warning else "Regelung aktiv · aktuell")
 
-    db_path = str(s.get("measurement_db_path") or "")
+    db_path = str(s.get("measurement_db_path") or resolve_measurement_db_path(cfg) or "")
+    metrics = get_system_metrics(db_path or "/", ttl_s=5.0)
     local_api_error = str(s.get("last_local_api_error") or "none")
-    api_text = "OK" if local_api_error.lower() in {"", "none", "ok"} else "Warnung"
+    api_enabled = bool(cfg.get("ZENDURE_LOCAL_API_ENABLED", True))
+    api_text = "Deaktiviert" if not api_enabled else ("Aktuell" if local_api_error.lower() in {"", "none", "ok"} else "Nicht erreichbar")
     try:
         timing_obj = json.loads(str(s.get("last_cycle_timing_json") or "{}"))
     except Exception:
@@ -3332,6 +3349,24 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any]) -> Dict[st
     )
     if measurement_logging_ms is None and str(s.get("last_cycle_slowest_step") or "") == "measurement_logging_ms":
         measurement_logging_ms = _safe_float(s.get("last_cycle_slowest_step_ms"))
+    control_ms = _safe_float(timing_obj.get("control_decision_ms"))
+    command_ms = _safe_float(timing_obj.get("mqtt_command_path_ms", timing_obj.get("command_effect_monitor_ms")))
+    sqlite_ms = _safe_float(s.get("measurement_db_last_write_duration_ms"))
+    interval_s = max(0.1, float(cfg.get("INTERVAL_SECONDS", 2) or 2))
+    cycle_budget_pct = (100.0 * active_cycle_ms / (interval_s * 1000.0)) if active_cycle_ms is not None else None
+    cycle_age = None
+    if s.get("last_cycle_completed_epoch"):
+        cycle_age = max(0.0, time.time() - float(s.get("last_cycle_completed_epoch")))
+    controller_uptime = max(0.0, time.time() - float(s.get("controller_started_epoch") or time.time()))
+    free_bytes = metrics.get("disk_free_bytes")
+    total_bytes = metrics.get("disk_total_bytes")
+    disk_used_pct = (100.0 * (float(total_bytes)-float(free_bytes))/float(total_bytes)) if total_bytes and free_bytes is not None else None
+    throttling = metrics.get("throttling") or {}
+    current_throttle = throttling.get("current") or []
+    historic_throttle = throttling.get("historic") or []
+    resource_tone = "bad" if current_throttle or ((metrics.get("temperature_c") or 0) >= 75) or ((metrics.get("ram_used_percent") or 0) >= 92) else ("warn" if historic_throttle or ((metrics.get("temperature_c") or 0) >= 65) or ((metrics.get("ram_used_percent") or 0) >= 75) else "ok")
+    event_rows = events if events is not None else read_recent_events(cfg, days=2, limit=250)
+    open_events = [e for e in event_rows if e.get("status") == "open"]
     return {
         "version": APP_VERSION_LABEL,
         "snapshot_epoch_ms": int(time.time() * 1000),
@@ -3405,21 +3440,66 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any]) -> Dict[st
         },
         "logging": {
             "status": s.get("measurement_log_status") or "-",
+            "reason": s.get("measurement_log_status_reason") or "",
             "target": s.get("measurement_log_active_target_type") or s.get("measurement_log_target_type") or "-",
+            "path": s.get("measurement_log_path") or "",
             "db": s.get("measurement_db_status") or "-",
             "db_path": db_path,
             "db_name": os.path.basename(db_path) if db_path else "—",
+            "db_size_bytes": s.get("measurement_db_size_bytes"),
+            "queue_depth": s.get("measurement_db_queue_depth", 0),
+            "last_write": s.get("measurement_db_last_write_time") or "—",
+            "fallback_active": bool(s.get("measurement_fallback_active")),
+            "fallback_count": int(s.get("measurement_fallback_count_since_start") or 0),
+            "fallback_reason": s.get("measurement_last_fallback_reason") or "",
+            "free_bytes": free_bytes,
+            "total_bytes": total_bytes,
+            "disk_used_percent": disk_used_pct,
+            "tone": "bad" if str(s.get("measurement_log_status") or "").lower() == "error" else ("warn" if bool(s.get("measurement_fallback_active")) else "ok"),
+        },
+        "resources": {
+            "cpu_percent": metrics.get("cpu_percent"),
+            "ram_used_percent": metrics.get("ram_used_percent"),
+            "ram_available_bytes": metrics.get("ram_available_bytes"),
+            "ram_total_bytes": metrics.get("ram_total_bytes"),
+            "swap_used_bytes": metrics.get("swap_used_bytes"),
+            "swap_total_bytes": metrics.get("swap_total_bytes"),
+            "temperature_c": metrics.get("temperature_c"),
+            "load": metrics.get("load"),
+            "system_uptime_s": metrics.get("system_uptime_s"),
+            "throttling": throttling,
+            "tone": resource_tone,
+            "status": "Raspberry Pi unauffällig" if resource_tone == "ok" else ("Raspberry Pi beobachten" if resource_tone == "warn" else "Raspberry Pi kritisch"),
         },
         "diag": {
+            "rule": "Aktuell" if cycle_age is not None and cycle_age <= max(10.0, interval_s*2.5) else ("Verzögert" if cycle_age is not None and cycle_age <= 30 else "Nicht aktuell"),
+            "cycle_age_s": cycle_age,
+            "broker": "Verbunden" if bool(s.get("mqtt_connected")) else "Getrennt",
             "mqtt": s.get("zendure_mqtt_overall_status") or "-",
             "api": api_text,
-            "loop_ms": active_cycle_ms,
-            "loop_text": f"{int(active_cycle_ms)} ms" if active_cycle_ms is not None else "—",
-            "measurement_logging_ms": measurement_logging_ms,
-            "measurement_logging_text": f"{int(measurement_logging_ms)} ms" if measurement_logging_ms is not None else "—",
-            "resync": s.get("command_resync_reason") or "kein aktueller Resync",
-            "resync_count": s.get("command_resync_count") or 0,
             "effect": s.get("command_effect_state_category") or s.get("command_effect_category") or "-",
+            "loop_ms": active_cycle_ms,
+            "loop_text": (f"{int(round(active_cycle_ms))} ms" if active_cycle_ms is not None and active_cycle_ms >= 100 else (f"{active_cycle_ms:.1f} ms" if active_cycle_ms is not None else "—")),
+            "cycle_budget_percent": cycle_budget_pct,
+            "control_ms": control_ms,
+            "command_ms": command_ms,
+            "measurement_logging_ms": measurement_logging_ms,
+            "measurement_logging_text": (f"{int(measurement_logging_ms)} ms" if measurement_logging_ms is not None and float(measurement_logging_ms).is_integer() else (f"{measurement_logging_ms:.1f} ms" if measurement_logging_ms is not None else "—")),
+            "sqlite_ms": sqlite_ms,
+            "slowest_step": s.get("last_cycle_slowest_step") or "—",
+            "slowest_ms": s.get("last_cycle_slowest_step_ms"),
+            "timing": timing_obj,
+            "controller_uptime_s": controller_uptime,
+            "resync": s.get("command_resync_reason") or "kein Kommandoabgleich seit Start",
+            "resync_time": s.get("command_resync_last_time") or "—",
+            "resync_count": s.get("command_resync_count") or 0,
+            "resync_target_w": s.get("command_uncertain_mqtt_target_w") or target or 0,
+            "analysis": "Aktiv" if replay_service_available(cfg) else "Nicht erreichbar",
+        },
+        "events": {
+            "items": event_rows,
+            "open_count": len(open_events),
+            "open_severity": "error" if any(e.get("severity") == "error" for e in open_events) else ("warning" if open_events else "info"),
         },
     }
 
@@ -3439,8 +3519,11 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
     day_start = _parse_day(date)
     day_end = day_start + timedelta(days=1)
     today = datetime.now().date()
+    if day_start.date() > today:
+        day_start = datetime.combine(today, datetime.min.time())
+        day_end = day_start + timedelta(days=1)
     is_today = day_start.date() == today
-    cache_key = f"{day_start.date().isoformat()}|storage-v2"
+    cache_key = f"{day_start.date().isoformat()}|storage-v3"
     now_epoch = time.time()
     ttl = 60 if is_today else 3600
     with _storage_day_lock:
@@ -3499,6 +3582,7 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
     points = sorted(points, key=lambda x: x.get("minute", 0))
     status_units = _status_units(cfg, snap, snap.get("zendure_target_signed_power"), snap.get("zendure_system_signed_power"))
     complete = bool(is_today or (points and int(points[-1].get("minute", 0)) >= 1430))
+    date_range = query_measurement_date_range(cfg)
     payload = {
         "date": day_start.date().isoformat(),
         "is_today": is_today,
@@ -3513,6 +3597,8 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
         "cache_age_s": 0,
         "error": error,
         "last_point_at": points[-1]["time"] if points else "",
+        "available_from": date_range.get("available_from") or day_start.date().isoformat(),
+        "available_to": today.isoformat(),
         "thresholds": {"min_soc": cfg.get("MIN_SOC_PERCENT"), "max_soc": cfg.get("MAX_SOC_PERCENT"), "reserve_soc": cfg.get("NIGHT_DISCHARGE_STOP_SOC_PERCENT")},
         "night_window": {"start": format_hhmm(cfg.get("NIGHT_START_HOUR", 21), cfg.get("NIGHT_START_MINUTE", 30)), "end": format_hhmm(cfg.get("NIGHT_END_HOUR", 5), cfg.get("NIGHT_END_MINUTE", 30))},
     }

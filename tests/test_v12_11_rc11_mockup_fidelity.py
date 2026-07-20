@@ -17,7 +17,9 @@ class V1211Rc11MockupFidelityTests(unittest.TestCase):
         self.assertIn('Zendure / Batterie', html)
         self.assertIn('class="zec-soc-ring', html)
         self.assertIn('class="zec-lower-grid"', html)
-        self.assertIn('System-/Diagnosekarten', html)
+        self.assertIn('Systemressourcen', html)
+        self.assertIn('Controller &amp; Schnittstellen', html)
+        self.assertIn('Betriebsereignisse', html)
         self.assertNotIn('Aktuelle Energieflüsse', html)
 
     def test_graph_page_keeps_dark_graph_mockup_shell(self):

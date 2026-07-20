@@ -31,6 +31,59 @@
     const n = number(value);
     return n === null ? '—' : `${Math.round(n)} %`;
   }
+  function fmtBytes(value) {
+    const n=number(value); if(n===null)return '—';
+    if(n>=1024**3)return `${(n/1024**3).toLocaleString('de-DE',{maximumFractionDigits:1})} GB`;
+    if(n>=1024**2)return `${(n/1024**2).toLocaleString('de-DE',{maximumFractionDigits:0})} MB`;
+    if(n>=1024)return `${(n/1024).toLocaleString('de-DE',{maximumFractionDigits:0})} kB`;
+    return `${Math.round(n)} B`;
+  }
+  function fmtDuration(value) {
+    const s=number(value); if(s===null)return '—';
+    if(s<60)return `${Math.round(s)} s`;
+    if(s<3600)return `${Math.floor(s/60)} min ${Math.round(s%60)} s`;
+    if(s<86400)return `${Math.floor(s/3600)} h ${Math.floor((s%3600)/60)} min`;
+    return `${Math.floor(s/86400)} d ${Math.floor((s%86400)/3600)} h`;
+  }
+  function fmtMs(value){const n=number(value);return n===null?'—':`${n<100?n.toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1}):Math.round(n).toLocaleString('de-DE')} ms`;}
+  function meter(path,value,tone='ok') { const el=$(`[data-meter="${path}"]`); if(!el)return; const n=number(value); el.style.width=`${Math.max(0,Math.min(100,n??0))}%`; el.className=`zec-meter-fill ${tone||'ok'}`; }
+  function eventTime(epoch){const d=new Date(Number(epoch)*1000);return d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});}
+  function renderEvents(events){
+    const root=$('#operationalEvents'); if(!root)return; const items=Array.isArray(events?.items)?events.items:[];
+    const now=new Date(), today=now.toDateString(), yesterday=new Date(now.getFullYear(),now.getMonth(),now.getDate()-1).toDateString();
+    const groups={open:[],today:[],yesterday:[]};
+    items.forEach(e=>{if(e.status==='open')groups.open.push(e);else{const d=new Date(Number(e.started_at)*1000).toDateString();if(d===today)groups.today.push(e);else if(d===yesterday)groups.yesterday.push(e);}});
+    const section=(title,list)=>!list.length?'':`<section class="zec-event-group"><h3>${escapeHtml(title)} <span>${list.length}</span></h3>${list.map(e=>`<article class="zec-event ${escapeHtml(e.severity||'info')}"><div class="zec-event-dot"></div><div><div class="zec-event-head"><time>${e.status==='open'?'seit ':''}${eventTime(e.started_at)}</time><strong>${escapeHtml(e.title)}</strong></div><p>${escapeHtml(e.detail||'')}</p>${Number(e.occurrence_count)>1?`<small>${Number(e.occurrence_count)} Wiederholungen</small>`:''}</div></article>`).join('')}</section>`;
+    root.innerHTML=section('Offene Ereignisse',groups.open)+section('Heute',groups.today)+section('Gestern',groups.yesterday)||'<div class="zec-empty">Keine Betriebsereignisse für heute und gestern.</div>';
+    const footer=$('[data-lower="events"] .zec-card-footer'); if(footer)setDot(footer,groups.open.some(e=>e.severity==='error')?'bad':(groups.open.length?'warn':'ok'));
+    text('events.footer',groups.open.length?`${groups.open.length} offene${groups.open.length===1?'s Ereignis':' Ereignisse'}`:'Keine aktuell offene Betriebsstörung');
+  }
+  function fmtReason(value) {
+    const raw = String(value ?? '').trim();
+    if (!raw) return '';
+    const labels = {
+      AUTO_GRID_EXPORT:'Netzexport wird gespeichert',
+      AUTO_GRID_IMPORT:'Netzbezug wird ausgeglichen',
+      DEADBAND:'Netzleistung innerhalb Totband',
+      REST_SURPLUS_HARVEST:'Restüberschuss wird gespeichert',
+      CROSS_CHARGE_REDUCED:'Cross-Charge-Schutz reduziert Leistung',
+      CROSS_CHARGE_BLOCKED:'Cross-Charge-Schutz neutralisiert Leistung',
+      NIGHT_DISCHARGE:'Nachtfenster aktiv',
+      FIXED_CHARGE:'Feste Ladung aktiv',
+      FIXED_DISCHARGE:'Feste Entladung aktiv',
+      MAX_SOC_LIMIT:'Maximaler SOC erreicht',
+      MIN_SOC_LIMIT:'Minimaler SOC erreicht',
+      SAFE_STATE:'Schutzmodus aktiv',
+      MQTT_DISCONNECTED:'MQTT-Verbindung getrennt',
+      ZENDURE_MQTT_STALE:'Zendure-Telemetrie veraltet',
+      GRID_STALE:'Netzmessung veraltet',
+      SOC_STALE:'SOC veraltet',
+      STEP_LIMIT:'Leistungsänderung schrittweise begrenzt',
+      SMOOTHING:'Sollwert geglättet',
+      MANUAL_STOP:'Manueller Stopp aktiv'
+    };
+    return labels[raw.toUpperCase()] || raw;
+  }
   function setDot(footer, tone) {
     const dot = $('.zec-status-dot', footer);
     if (dot) dot.className = `zec-status-dot ${tone || 'unknown'}`;
@@ -132,8 +185,32 @@
     setHidden('source.rejected_count_text', !p.source?.rejected_count_text);
     const sf = $('[data-card="source"] .zec-card-footer'); if (sf) setDot(sf, p.source?.tone);
 
-    ['status','target','db','db_name'].forEach(k => text(`logging.${k}`, p.logging?.[k]));
-    ['mqtt','api','effect','resync','loop_text','measurement_logging_text'].forEach(k => text(`diag.${k}`, p.diag?.[k]));
+    ['status','target','db','last_write'].forEach(k => text(`logging.${k}`, p.logging?.[k]));
+    text('logging.db_size_text',fmtBytes(p.logging?.db_size_bytes));
+    text('logging.queue_text',`${Number(p.logging?.queue_depth||0).toLocaleString('de-DE')} Datensätze`);
+    text('logging.fallback_text',p.logging?.fallback_active?`Aktiv · ${p.logging?.fallback_reason||'Ersatzziel'}`:(p.logging?.fallback_count?`Inaktiv · ${p.logging.fallback_count} seit Start`:'Inaktiv'));
+    text('logging.free_text',`${fmtBytes(p.logging?.free_bytes)} von ${fmtBytes(p.logging?.total_bytes)}`);
+    text('logging.footer',p.logging?.tone==='bad'?'Messdatenspeicherung gestört':(p.logging?.tone==='warn'?'Fallback-Speicher aktiv':'Messdatenspeicherung unauffällig'));
+    meter('logging.disk',p.logging?.disk_used_percent,p.logging?.tone); const lf=$('[data-lower="logging"] .zec-card-footer');if(lf)setDot(lf,p.logging?.tone);
+
+    text('resources.cpu_text',p.resources?.cpu_percent==null?'wird ermittelt …':`${p.resources.cpu_percent.toLocaleString('de-DE',{maximumFractionDigits:1})} %`);
+    text('resources.ram_text',`${number(p.resources?.ram_used_percent)?.toLocaleString('de-DE',{maximumFractionDigits:1})??'—'} % · ${fmtBytes(p.resources?.ram_available_bytes)} frei`);
+    text('resources.temp_text',p.resources?.temperature_c==null?'—':`${p.resources.temperature_c.toLocaleString('de-DE',{maximumFractionDigits:1})} °C`);
+    text('resources.load_text',(p.resources?.load||[]).map(v=>number(v)?.toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})??'—').join(' / '));
+    text('resources.swap_text',p.resources?.swap_total_bytes?`${fmtBytes(p.resources?.swap_used_bytes)} von ${fmtBytes(p.resources?.swap_total_bytes)}`:'Deaktiviert');
+    text('resources.uptime_text',fmtDuration(p.resources?.system_uptime_s));
+    const th=p.resources?.throttling||{}; text('resources.throttle_text',(th.current?.length?`Aktuell: ${th.current.join(', ')}`:(th.historic?.length?`Seit Systemstart: ${th.historic.join(', ')}`:(th.available?'Nein':'Status nicht verfügbar'))));
+    meter('resources.cpu',p.resources?.cpu_percent,p.resources?.tone);meter('resources.ram',p.resources?.ram_used_percent,p.resources?.tone);meter('resources.temp',number(p.resources?.temperature_c)==null?0:Math.max(0,Math.min(100,(p.resources.temperature_c-30)/55*100)),p.resources?.tone);
+    text('resources.status',p.resources?.status);const rf=$('[data-lower="resources"] .zec-card-footer');if(rf)setDot(rf,p.resources?.tone);
+
+    ['rule','broker','mqtt','api','effect','loop_text','measurement_logging_text','analysis'].forEach(k=>text(`diag.${k}`,p.diag?.[k]));
+    text('diag.control_text',fmtMs(p.diag?.control_ms));text('diag.command_text',fmtMs(p.diag?.command_ms));text('diag.sqlite_text',fmtMs(p.diag?.sqlite_ms));
+    text('diag.slowest_text',`${p.diag?.slowest_step||'—'} · ${fmtMs(p.diag?.slowest_ms)}`);text('diag.uptime_text',fmtDuration(p.diag?.controller_uptime_s));
+    text('diag.resync_text',`${p.diag?.resync_time||'—'} · ${p.diag?.resync||'kein Kommandoabgleich'} · AC-Modus und Lade-/Entladelimits`);
+    meter('diag.cycle',p.diag?.cycle_budget_percent,(number(p.diag?.cycle_budget_percent)||0)>80?'bad':((number(p.diag?.cycle_budget_percent)||0)>50?'warn':'ok'));
+    const chain={rule:p.diag?.rule==='Aktuell'?'ok':(p.diag?.rule==='Verzögert'?'warn':'bad'),mqtt:p.diag?.broker==='Verbunden'?'ok':'bad',api:p.diag?.api==='Aktuell'?'ok':(p.diag?.api==='Deaktiviert'?'unknown':'warn'),effect:String(p.diag?.effect||'').toLowerCase().includes('not_effective')?'bad':(String(p.diag?.effect||'').toLowerCase().includes('uncertain')?'warn':'ok')};Object.entries(chain).forEach(([k,v])=>{const el=$(`[data-chain="${k}"]`);if(el)el.className=v;});
+    const diagTone=Object.values(chain).includes('bad')?'bad':(Object.values(chain).includes('warn')?'warn':'ok');const df=$('[data-lower="diagnostics"] .zec-card-footer');if(df)setDot(df,diagTone);text('diag.footer',diagTone==='ok'?'Controller und Schnittstellen aktuell':(diagTone==='warn'?'Controller oder Schnittstelle eingeschränkt':'Controller oder Schnittstelle gestört'));
+    renderEvents(p.events);
   }
 
   class PollChannel {
@@ -220,7 +297,19 @@
       defs.push({key:'primary_soc',label:'Primärspeicher',color:colors[2]});
       return defs;
     }
-    drawLegend(){const legend=$('#storageSocLegend');if(!legend)return;legend.innerHTML=this.series().map(s=>`<span class="zec-legend-item"><i class="zec-legend-line" style="background:${s.color}"></i>${escapeHtml(s.label)}</span>`).join('');}
+    drawLegend(){
+      const legend=$('#storageSocLegend');if(!legend)return;
+      const p=this.payload||{}, thresholds=p.thresholds||{}, night=p.night_window||{};
+      const entries=this.series().map(s=>`<span class="zec-legend-item"><i class="zec-legend-line" style="background:${s.color}"></i>${escapeHtml(s.label)}</span>`);
+      [['max_soc','Max-SOC'],['reserve_soc','Nachtreserve'],['min_soc','Min-SOC']].forEach(([key,label])=>{
+        const value=number(thresholds[key]);if(value===null)return;
+        const tone=key==='reserve_soc'?'is-reserve':'is-threshold';
+        entries.push(`<span class="zec-legend-item"><i class="zec-legend-line is-dashed ${tone}"></i>${escapeHtml(label)} ${escapeHtml(fmtSoc(value))}</span>`);
+      });
+      if(night.start&&night.end)entries.push(`<span class="zec-legend-item"><i class="zec-legend-area"></i>Nachtfenster ${escapeHtml(night.start)}–${escapeHtml(night.end)}</span>`);
+      if(p.is_today)entries.push('<span class="zec-legend-item"><i class="zec-legend-line is-now"></i>Jetzt</span>');
+      legend.innerHTML=entries.join('');
+    }
     draw(){
       const {ctx,w,h}=this.prepare(); const p=this.payload||{}; const points=p.points||[]; const pad={l:42,r:12,t:10,b:28};const pw=w-pad.l-pad.r,ph=h-pad.t-pad.b;
       const x=m=>pad.l+(Number(m)/1440)*pw; const y=v=>pad.t+(1-Number(v)/100)*ph;
@@ -234,7 +323,7 @@
       const series=this.series();
       series.forEach(s=>{ctx.strokeStyle=s.color;ctx.lineWidth=2;ctx.beginPath();let started=false;points.forEach(pt=>{const v=number(pt[s.key]);if(v===null){started=false;return;}const px=x(pt.minute),py=y(v);if(!started){ctx.moveTo(px,py);started=true;}else ctx.lineTo(px,py);});ctx.stroke();});
       if(p.is_today){const now=new Date();const minute=now.getHours()*60+now.getMinutes();ctx.strokeStyle=css('--zec-blue');ctx.setLineDash([2,4]);ctx.beginPath();ctx.moveTo(x(minute),pad.t);ctx.lineTo(x(minute),h-pad.b);ctx.stroke();ctx.setLineDash([]);}
-      if(this.hoverX!==null&&points.length){const minute=Math.max(0,Math.min(1440,Math.round((this.hoverX-pad.l)/pw*1440)));let nearest=points[0],dist=Infinity;points.forEach(pt=>{const d=Math.abs(Number(pt.minute)-minute);if(d<dist){dist=d;nearest=pt;}});const px=x(nearest.minute);ctx.strokeStyle=css('--zec-blue');ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px,pad.t);ctx.lineTo(px,h-pad.b);ctx.stroke();series.forEach(s=>{const v=number(nearest[s.key]);if(v===null)return;ctx.fillStyle=s.color;ctx.beginPath();ctx.arc(px,y(v),3.5,0,Math.PI*2);ctx.fill();});const rows=series.map(s=>`<div class="zec-chart-tooltip-row"><span>${escapeHtml(s.label)}</span><b>${escapeHtml(fmtSoc(nearest[s.key]))}</b></div>`).join('');this.showTooltip(`<strong>${escapeHtml(p.date||'')} ${escapeHtml(nearest.time||'')}</strong>${rows}<div class="zec-chart-tooltip-row"><span>Zendure-Leistung</span><b>${escapeHtml(fmtPower(nearest.zendure_power_w))}</b></div><div class="zec-chart-tooltip-row"><span>Primärspeicher</span><b>${escapeHtml(fmtPower(nearest.primary_power_w))}</b></div><div class="zec-chart-tooltip-row"><span>Modus</span><b>${escapeHtml(nearest.mode||'—')}</b></div><div class="zec-chart-tooltip-row"><span>Grund</span><b>${escapeHtml(nearest.reason||'—')}</b></div>`,px,pad.t+ph*.55);}
+      if(this.hoverX!==null&&points.length){const minute=Math.max(0,Math.min(1440,Math.round((this.hoverX-pad.l)/pw*1440)));let nearest=points[0],dist=Infinity;points.forEach(pt=>{const d=Math.abs(Number(pt.minute)-minute);if(d<dist){dist=d;nearest=pt;}});const px=x(nearest.minute);ctx.strokeStyle=css('--zec-blue');ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px,pad.t);ctx.lineTo(px,h-pad.b);ctx.stroke();series.forEach(s=>{const v=number(nearest[s.key]);if(v===null)return;ctx.fillStyle=s.color;ctx.beginPath();ctx.arc(px,y(v),3.5,0,Math.PI*2);ctx.fill();});const rows=series.map(s=>`<div class="zec-chart-tooltip-row"><span>${escapeHtml(s.label)}</span><b>${escapeHtml(fmtSoc(nearest[s.key]))}</b></div>`).join('');const reason=fmtReason(nearest.reason);const reasonRow=reason?`<div class="zec-chart-tooltip-row"><span>Grund</span><b>${escapeHtml(reason)}</b></div>`:'';this.showTooltip(`<strong>${escapeHtml(p.date||'')} ${escapeHtml(nearest.time||'')}</strong>${rows}<div class="zec-chart-tooltip-row"><span>Zendure-Leistung</span><b>${escapeHtml(fmtPower(nearest.zendure_power_w))}</b></div><div class="zec-chart-tooltip-row"><span>Primärspeicher</span><b>${escapeHtml(fmtPower(nearest.primary_power_w))}</b></div><div class="zec-chart-tooltip-row"><span>Modus</span><b>${escapeHtml(nearest.mode||'—')}</b></div>${reasonRow}`,px,pad.t+ph*.55);}
     }
   }
 
@@ -249,9 +338,17 @@
     pop.addEventListener('mouseleave',close);document.addEventListener('click',e=>{if(!e.target.closest('.zec-info-button')&&!e.target.closest('#zecInfoPopover'))close();});window.addEventListener('resize',close);window.addEventListener('scroll',close,true);
   }
   function setupMenus(){
-    const pairs=[['#systemStatusButton','#systemStatusMenu'],['#expertMenuButton','#expertMenu']];
-    pairs.forEach(([bs,ms])=>{const b=$(bs),m=$(ms);if(!b||!m)return;b.addEventListener('click',e=>{e.stopPropagation();const next=!m.hidden;pairs.forEach(([ob,om])=>{const x=$(om),y=$(ob);if(x)x.hidden=true;if(y)y.setAttribute('aria-expanded','false');});m.hidden=!next;b.setAttribute('aria-expanded',String(next));});});
-    document.addEventListener('click',()=>pairs.forEach(([b,m])=>{const menu=$(m),btn=$(b);if(menu)menu.hidden=true;if(btn)btn.setAttribute('aria-expanded','false');}));
+    const systemButton=$('#systemStatusButton'), systemMenu=$('#systemStatusMenu');
+    if(systemButton&&systemMenu){
+      systemButton.addEventListener('click',e=>{e.stopPropagation();const open=systemMenu.hidden;systemMenu.hidden=!open;systemButton.setAttribute('aria-expanded',String(open));const details=$('#expertMenuDetails');if(details)details.open=false;});
+    }
+    const expertDetails=$('#expertMenuDetails');
+    if(expertDetails){
+      expertDetails.addEventListener('toggle',()=>{if(expertDetails.open&&systemMenu){systemMenu.hidden=true;if(systemButton)systemButton.setAttribute('aria-expanded','false');}});
+      expertDetails.addEventListener('click',e=>e.stopPropagation());
+    }
+    document.addEventListener('click',()=>{if(systemMenu)systemMenu.hidden=true;if(systemButton)systemButton.setAttribute('aria-expanded','false');if(expertDetails)expertDetails.open=false;});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(systemMenu)systemMenu.hidden=true;if(systemButton)systemButton.setAttribute('aria-expanded','false');if(expertDetails)expertDetails.open=false;}});
     $$('.analysis-service-link').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();location.href=`//${location.hostname}:${a.dataset.replayPort}`;}));
   }
   function startClock(){const el=$('#localClock');const update=()=>{if(el)el.textContent=new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',second:'2-digit'});};update();setInterval(update,1000);}
@@ -262,16 +359,23 @@
 
   let selectedDate=new Date(); let dayInFlight=false; let dayController=null;
   const dateString=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const localDateFromString=value=>{const m=String(value||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?new Date(Number(m[1]),Number(m[2])-1,Number(m[3])):null;};
   const dayLabel=d=>d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit',year:'numeric'});
+  function syncDateControls(payload={}){
+    const ds=dateString(selectedDate), today=dateString(new Date()), picker=$('#socDayPicker');
+    $('#socDayLabel').textContent=dayLabel(selectedDate);$('#dayNext').disabled=ds>=today;
+    if(picker){picker.value=ds;picker.max=payload.available_to||today;if(payload.available_from)picker.min=payload.available_from;}
+  }
   async function refreshSocDay(){
     if(document.visibilityState==='hidden'||dayInFlight)return;dayInFlight=true;dayController=new AbortController();const timeout=setTimeout(()=>dayController.abort(),5000);
-    const status=$('#storageSocStatus');const ds=dateString(selectedDate);$('#socDayLabel').textContent=dayLabel(selectedDate);$('#dayNext').disabled=ds>=dateString(new Date());
-    try{const r=await fetch(`/storage-soc-day-data?date=${encodeURIComponent(ds)}`,{cache:'no-store',signal:dayController.signal});if(!r.ok)throw new Error(`HTTP ${r.status}`);const p=await r.json();socChart.setData(p);status.textContent=p.is_today?`Stand: ${p.last_point_at||'—'} · aktualisiert alle 60 s · Quelle: ${p.source||'—'} · Cache ${p.cache_status||'—'}`:`${p.complete===false?'Daten unvollständig':'Vollständiger Tag'}: ${p.date} · Quelle: ${p.source||'—'} · Cache ${p.cache_status||'—'}`;}catch(e){status.textContent='SOC-Tageskurve wird noch vorbereitet oder ist vorübergehend nicht verfügbar.';}finally{clearTimeout(timeout);dayController=null;dayInFlight=false;}
+    const status=$('#storageSocStatus');const ds=dateString(selectedDate);syncDateControls();
+    try{const r=await fetch(`/storage-soc-day-data?date=${encodeURIComponent(ds)}`,{cache:'no-store',signal:dayController.signal});if(!r.ok)throw new Error(`HTTP ${r.status}`);const p=await r.json();const returned=localDateFromString(p.date);if(returned)selectedDate=returned;syncDateControls(p);socChart.setData(p);status.textContent=p.is_today?`Stand: ${p.last_point_at||'—'} · aktualisiert alle 60 s · Quelle: ${p.source||'—'} · Cache ${p.cache_status||'—'}`:`${p.complete===false?'Daten unvollständig':'Vollständiger Tag'}: ${p.date} · Quelle: ${p.source||'—'} · Cache ${p.cache_status||'—'}`;}catch(e){status.textContent='SOC-Tageskurve wird noch vorbereitet oder ist vorübergehend nicht verfügbar.';}finally{clearTimeout(timeout);dayController=null;dayInFlight=false;}
   }
 
-  $('#dayPrev').addEventListener('click',()=>{selectedDate.setDate(selectedDate.getDate()-1);refreshSocDay();});
+  $('#dayPrev').addEventListener('click',()=>{const n=new Date(selectedDate);n.setDate(n.getDate()-1);selectedDate=n;refreshSocDay();});
   $('#dayNext').addEventListener('click',()=>{const n=new Date(selectedDate);n.setDate(n.getDate()+1);if(dateString(n)<=dateString(new Date())){selectedDate=n;refreshSocDay();}});
   $('#dayToday').addEventListener('click',()=>{selectedDate=new Date();refreshSocDay();});
+  const dayPicker=$('#socDayPicker');if(dayPicker){dayPicker.addEventListener('change',()=>{const chosen=localDateFromString(dayPicker.value);if(chosen&&dateString(chosen)<=dateString(new Date())){selectedDate=chosen;refreshSocDay();}});const label=dayPicker.closest('.zec-day-picker-label');if(label)label.addEventListener('click',e=>{if(e.target===dayPicker)return;e.preventDefault();try{dayPicker.showPicker();}catch(_){dayPicker.focus();dayPicker.click();}});}
 
   setupInfoPopovers(); setupMenus(); startClock(); applyStatus(bootstrap);
   statusPoll.start(Math.floor(Math.random()*700)); miniPoll.start(Math.floor(Math.random()*1000)); refreshSocDay();

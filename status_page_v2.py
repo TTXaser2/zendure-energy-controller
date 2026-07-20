@@ -32,6 +32,8 @@ def _icon(name: str) -> str:
         "radio": '<path d="M5 9a10 10 0 0 0 0 6"/><path d="M8 11a6 6 0 0 0 0 2"/><path d="M19 9a10 10 0 0 1 0 6"/><path d="M16 11a6 6 0 0 1 0 2"/><circle cx="12" cy="12" r="2"/>',
         "database": '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
         "diagnostics": '<path d="M4 18h16"/><path d="M6 15V9"/><path d="M10 15V5"/><path d="M14 15v-3"/><path d="M18 15V7"/>',
+        "resources": '<rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>',
+        "events": '<path d="M7 4h10v16H7z"/><path d="M9 8h6M9 12h6M9 16h4"/>',
         "info": '<circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 7h.01"/>',
         "clock": '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     }
@@ -104,6 +106,11 @@ def render_status_page_v2(
     analysis_available: bool,
     analysis_port: int,
 ) -> str:
+    payload = dict(payload or {})
+    payload.setdefault("logging", {})
+    payload.setdefault("resources", {})
+    payload.setdefault("diag", {})
+    payload.setdefault("events", {"items": [], "open_count": 0})
     dark = bool(cfg.get("UI_DARK_MODE", False))
     theme = "dark" if dark else "light"
     units = list(payload.get("zendure", {}).get("units") or [])[:2]
@@ -151,7 +158,7 @@ def render_status_page_v2(
 </head>
 <body class="zec-status-v2">
   <header class="zec-topbar">
-    <div class="zec-brand"><span class="zec-wordmark">ZENDURE</span><span class="zec-brand-divider"></span><span class="zec-product">Energy Controller</span></div>
+    <div class="zec-brand"><span class="zec-wordmark">ZENDURE</span><span class="zec-product">Energy Controller</span><span class="zec-brand-divider" aria-hidden="true"></span></div>
     <nav class="zec-main-nav" aria-label="Hauptnavigation">{_nav(analysis_available, analysis_port)}</nav>
     <div class="zec-topbar-right">
       <div class="zec-system-menu-wrap">
@@ -166,15 +173,15 @@ def render_status_page_v2(
       </div>
       <span class="zec-version-pill">{_e(APP_VERSION_LABEL)}</span>
       <span class="zec-clock">{_icon('clock')}<b id="localClock">{_e(payload.get('server_time'))}</b></span>
-      <div class="zec-expert-menu-wrap">
-        <button id="expertMenuButton" class="zec-expert-button" type="button" aria-expanded="false">Experte ▾</button>
-        <div id="expertMenu" class="zec-expert-menu" hidden>
+      <details id="expertMenuDetails" class="zec-expert-menu-wrap">
+        <summary id="expertMenuButton" class="zec-expert-button" aria-label="Expertenmenü öffnen">Experte <span aria-hidden="true">▾</span></summary>
+        <div id="expertMenu" class="zec-expert-menu">
           <a href="/mqtt-diagnostics">MQTT Diagnose</a>
           <a href="/measurements">Messdaten-CSV</a>
           <a href="/status_old">Alte Statusseite</a>
           <a href="/graph_old">Alter Graph</a>
         </div>
-      </div>
+      </details>
     </div>
   </header>
 
@@ -201,10 +208,10 @@ def render_status_page_v2(
           <div class="zec-mode-public" data-zec="mode.text">{_e(payload['mode'].get('text'))}</div>
         </div>
         <div class="zec-mode-details">
-          <div><span>Ziel:</span><strong data-zec="mode.target">{_e(payload['mode'].get('target'))}</strong></div>
-          <div><span>Grund:</span><strong data-zec="mode.reason">{_e(payload['mode'].get('reason'))}</strong></div>
+          <div class="zec-mode-row"><span>Ziel</span><strong data-zec="mode.target">{_e(payload['mode'].get('target'))}</strong></div>
+          <div class="zec-mode-row"><span>Grund</span><strong data-zec="mode.reason">{_e(payload['mode'].get('reason'))}</strong></div>
           <div class="zec-mode-projection" data-zec="mode.projection">{_e(payload['mode'].get('projection'))}</div>
-          <div class="zec-last-change">Letzte Änderung: <strong data-zec="mode.last_change">{_e(payload['mode'].get('last_change'))}</strong></div>
+          <div class="zec-mode-row zec-last-change"><span>Letzte Änderung</span><strong data-zec="mode.last_change">{_e(payload['mode'].get('last_change'))}</strong></div>
         </div>
         <footer class="zec-card-footer"><span class="zec-status-dot { _e(payload['mode'].get('tone','ok')) }"></span><span data-zec="mode.status_text">{_e(payload['mode'].get('status_text'))}</span></footer>
       </article>
@@ -219,7 +226,7 @@ def render_status_page_v2(
       <article class="zec-card zec-primary-card" data-card="primary">
         <header class="zec-card-header"><div class="zec-card-title">{_icon('primary')}<h2>Primärspeicher</h2></div>{_info_button('Primärspeicher','Diese Karte zeigt den SMA-/Primärspeicher. ZEC steuert ihn nicht direkt, berücksichtigt SOC und Lade-/Entladeleistung jedoch für Harvest, Cross-Charge-Schutz und die defensive Speicherpriorität.')}</header>
         <div class="zec-storage-layout zec-storage-layout-single">
-          {_ring('primary', 'SMA', payload['primary'].get('soc'), 'Primärspeicher')}
+          {_ring('primary', 'SMA', payload['primary'].get('soc'), 'SOC aktuell')}
           <div class="zec-storage-details">
             <div class="zec-detail-row"><span>Istleistung</span><strong data-zec="primary.actual">{_e(payload['primary'].get('actual'))}</strong></div>
             <div class="zec-detail-row"><span>Status</span><strong data-zec="primary.status">{_e(payload['primary'].get('status'))}</strong></div>
@@ -245,8 +252,8 @@ def render_status_page_v2(
 
     <section class="zec-wide-card zec-soc-day-card">
       <header class="zec-wide-header">
-        <div><div class="zec-card-title">{_icon('graph')}<h2>Speicher-SOC Tagesgraph</h2></div><p>Ganzer Kalendertag 00:00–24:00 · Zendure und Primärspeicher</p></div>
-        <div class="zec-day-nav"><button id="dayPrev" type="button">‹ Zurück</button><button id="dayToday" type="button">Heute</button><button id="dayNext" type="button">Vor ›</button><strong id="socDayLabel"></strong></div>
+        <div><div class="zec-card-title">{_icon('graph')}<h2>Speicher-SOC Tagesgraph</h2></div></div>
+        <div class="zec-day-nav"><button id="dayPrev" type="button">‹ Zurück</button><button id="dayToday" type="button">Heute</button><button id="dayNext" type="button">Vor ›</button><label class="zec-day-picker-label" aria-label="Datum direkt auswählen"><strong id="socDayLabel"></strong><input id="socDayPicker" type="date" aria-label="Datum des Speicher-SOC-Tagesgraphen auswählen"></label></div>
       </header>
       <div class="zec-day-chart-wrap"><canvas id="storageSocChart" aria-label="Speicher-SOC im Tagesverlauf"></canvas><div id="storageSocTooltip" class="zec-chart-tooltip" hidden></div></div>
       <div id="storageSocLegend" class="zec-chart-legend"></div>
@@ -254,26 +261,69 @@ def render_status_page_v2(
     </section>
 
     <section class="zec-lower-grid">
-      <article class="zec-lower-card">
-        <header class="zec-card-header"><div class="zec-card-title">{_icon('database')}<h2>Messdaten / Logging</h2></div>{_info_button('Messdaten / Logging','Kompakter Betriebsstatus von Measurement-V4, CSV und SQLite-Graphspeicher. Ausführliche Export- und Diagnosefunktionen liegen auf der Messdaten-Seite.')}</header>
-        <div class="zec-lower-kpis">
-          <div><span>Logging</span><strong data-zec="logging.status">{_e(payload['logging'].get('status'))}</strong></div>
+      <article class="zec-lower-card" data-lower="logging">
+        <header class="zec-card-header"><div class="zec-card-title">{_icon('database')}<h2>Messdaten / Logging</h2></div>{_info_button('Messdaten / Logging','Zeigt CSV-Protokoll, SQLite-Graphspeicher, Speicherziel, Queue, Fallback und verfügbaren Speicher. Dateisystemdaten werden ausschließlich gecacht im Web-Backend erfasst; der Regelzyklus bleibt unberührt.')}</header>
+        <div class="zec-health-rows">
+          <div><span>CSV-Protokoll</span><strong data-zec="logging.status">{_e(payload['logging'].get('status'))}</strong></div>
+          <div><span>SQLite-Graphspeicher</span><strong data-zec="logging.db">{_e(payload['logging'].get('db'))}</strong></div>
           <div><span>Speicherziel</span><strong data-zec="logging.target">{_e(payload['logging'].get('target'))}</strong></div>
-          <div><span>SQLite</span><strong data-zec="logging.db">{_e(payload['logging'].get('db'))}</strong></div>
           <div><span>DB-Datei</span><strong data-zec="logging.db_name">{_e(payload['logging'].get('db_name'))}</strong></div>
+          <div><span>DB-Größe</span><strong data-zec="logging.db_size_text">—</strong></div>
+          <div><span>Queue</span><strong data-zec="logging.queue_text">—</strong></div>
+          <div><span>Letzter DB-Schreibvorgang</span><strong data-zec="logging.last_write">{_e(payload['logging'].get('last_write'))}</strong></div>
+          <div><span>Fallback</span><strong data-zec="logging.fallback_text">—</strong></div>
+          <div><span>Freier Speicher</span><strong data-zec="logging.free_text">—</strong></div>
         </div>
+        <div class="zec-meter"><div class="zec-meter-fill" data-meter="logging.disk"></div></div>
+        <footer class="zec-card-footer"><span class="zec-status-dot {_e(payload['logging'].get('tone','ok'))}"></span><span data-zec="logging.footer">Messdatenspeicherung wird bewertet</span></footer>
       </article>
-      <article class="zec-lower-card" id="systemDiagnostics">
-        <header class="zec-card-header"><div class="zec-card-title">{_icon('diagnostics')}<h2>System-/Diagnosekarten</h2></div>{_info_button('Systemdiagnose','Kompakter Überblick über MQTT, lokale Zendure-API, Command-Wirkung, Resync und Zykluszeit. Die endgültige Detailaufteilung dieser unteren Ebene wird separat nachgezogen.')}</header>
-        <div class="zec-lower-kpis">
-          <div><span>Zendure MQTT</span><strong data-zec="diag.mqtt">{_e(payload['diag'].get('mqtt'))}</strong></div>
-          <div><span>Lokale API</span><strong data-zec="diag.api">{_e(payload['diag'].get('api'))}</strong></div>
-          <div><span>Command-Wirkung</span><strong data-zec="diag.effect">{_e(payload['diag'].get('effect'))}</strong></div>
-          <div><span>Letzter Resync</span><strong data-zec="diag.resync">{_e(payload['diag'].get('resync'))}</strong></div>
-          <div><span>Aktive Zykluszeit</span><strong data-zec="diag.loop_text">{_e(payload['diag'].get('loop_text'))}</strong></div>
-          <div><span>Messdaten-Logging</span><strong data-zec="diag.measurement_logging_text">{_e(payload['diag'].get('measurement_logging_text'))}</strong></div>
-          <div><span>Controller</span><strong>{_e(APP_VERSION_LABEL)}</strong></div>
+
+      <article class="zec-lower-card" data-lower="resources">
+        <header class="zec-card-header"><div class="zec-card-title">{_icon('resources')}<h2>Systemressourcen</h2></div>{_info_button('Systemressourcen','CPU zeigt die Gesamtauslastung aller Kerne. RAM wird Linux-korrekt über MemAvailable bewertet. Systemlast (1/5/15 Min.) ist auf dem Vierkern-Pi bei etwa 4,0 vollständig ausgelastet. Historische Throttling-Bits sind Hinweise, aktuelle Bits sind Störungen.')}</header>
+        <div class="zec-resource-block"><div class="zec-resource-label"><span>CPU-Auslastung</span><strong data-zec="resources.cpu_text">—</strong></div><div class="zec-meter"><div class="zec-meter-fill" data-meter="resources.cpu"></div></div></div>
+        <div class="zec-resource-block"><div class="zec-resource-label"><span>RAM-Auslastung</span><strong data-zec="resources.ram_text">—</strong></div><div class="zec-meter"><div class="zec-meter-fill" data-meter="resources.ram"></div></div></div>
+        <div class="zec-resource-block"><div class="zec-resource-label"><span>CPU-Temperatur</span><strong data-zec="resources.temp_text">—</strong></div><div class="zec-meter"><div class="zec-meter-fill" data-meter="resources.temp"></div></div></div>
+        <div class="zec-health-rows compact">
+          <div><span>Systemlast (1/5/15 Min.)</span><strong data-zec="resources.load_text">—</strong></div>
+          <div><span>Swap-Nutzung</span><strong data-zec="resources.swap_text">—</strong></div>
+          <div><span>Systemlaufzeit</span><strong data-zec="resources.uptime_text">—</strong></div>
+          <div><span>Throttling / Unterspannung</span><strong data-zec="resources.throttle_text">—</strong></div>
         </div>
+        <footer class="zec-card-footer"><span class="zec-status-dot {_e(payload['resources'].get('tone','unknown'))}"></span><span data-zec="resources.status">{_e(payload['resources'].get('status'))}</span></footer>
+      </article>
+
+      <article class="zec-lower-card" data-lower="diagnostics">
+        <header class="zec-card-header"><div class="zec-card-title">{_icon('diagnostics')}<h2>Controller &amp; Schnittstellen</h2></div>{_info_button('Controller & Schnittstellen','Zeigt den zuletzt abgeschlossenen aktiven Gesamtdurchlauf und dessen wesentliche Abschnitte. Mittelwerte und P95 können später ergänzend in die Detaildiagnose aufgenommen werden. Der Zendure-Kommandoabgleich sendet AC-Modus sowie Lade-/Entladelimits nach Kommunikationsunsicherheit erneut.')}</header>
+        <div class="zec-health-chain"><span data-chain="rule">● Regelung</span><span data-chain="mqtt">● MQTT</span><span data-chain="api">● API</span><span data-chain="effect">● Wirkung</span></div>
+        <div class="zec-health-rows">
+          <div><span>Regelzyklus</span><strong data-zec="diag.rule">{_e(payload['diag'].get('rule'))}</strong></div>
+          <div><span>MQTT-Broker</span><strong data-zec="diag.broker">{_e(payload['diag'].get('broker'))}</strong></div>
+          <div><span>Zendure-Telemetrie</span><strong data-zec="diag.mqtt">{_e(payload['diag'].get('mqtt'))}</strong></div>
+          <div><span>Lokale API</span><strong data-zec="diag.api">{_e(payload['diag'].get('api'))}</strong></div>
+          <div><span>Kommandowirkung</span><strong data-zec="diag.effect">{_e(payload['diag'].get('effect'))}</strong></div>
+        </div>
+        <div class="zec-timing-title">Durchlaufzeiten – letzter Durchlauf</div>
+        <div class="zec-health-rows compact">
+          <div><span>Aktiver Gesamtdurchlauf</span><strong data-zec="diag.loop_text">{_e(payload['diag'].get('loop_text'))}</strong></div>
+          <div><span>Reine Regelentscheidung</span><strong data-zec="diag.control_text">—</strong></div>
+          <div><span>MQTT-/Wirkungspfad</span><strong data-zec="diag.command_text">—</strong></div>
+          <div><span>Logging im Hauptthread</span><strong data-zec="diag.measurement_logging_text">{_e(payload['diag'].get('measurement_logging_text'))}</strong></div>
+          <div><span>SQLite-Schreiben, asynchron</span><strong data-zec="diag.sqlite_text">—</strong></div>
+          <div><span>Langsamster Abschnitt</span><strong data-zec="diag.slowest_text">—</strong></div>
+        </div>
+        <div class="zec-meter"><div class="zec-meter-fill" data-meter="diag.cycle"></div></div>
+        <div class="zec-health-rows compact">
+          <div><span>Analyse / Replay</span><strong data-zec="diag.analysis">{_e(payload['diag'].get('analysis'))}</strong></div>
+          <div><span>Controller-Laufzeit</span><strong data-zec="diag.uptime_text">—</strong></div>
+          <div class="zec-full-row"><span>Letzter Zendure-Kommandoabgleich</span><strong data-zec="diag.resync_text">—</strong></div>
+        </div>
+        <footer class="zec-card-footer"><span class="zec-status-dot ok"></span><span data-zec="diag.footer">Controller und Schnittstellen werden bewertet</span></footer>
+      </article>
+
+      <article class="zec-lower-card zec-events-card" data-lower="events">
+        <header class="zec-card-header"><div class="zec-card-title">{_icon('events')}<h2>Betriebsereignisse</h2></div>{_info_button('Betriebsereignisse','Persistentes Betriebsjournal relevanter Zustandswechsel. Es zeigt keine Rohlogs und keinen Regelzyklus-Spam. Offene Ereignisse stehen zuerst, danach Heute und Gestern. Das Journal beeinflusst keine Regelentscheidung und keinen Kommandoabgleich.')}</header>
+        <div class="zec-events-scroll" id="operationalEvents"><div class="zec-empty">Ereignisse werden geladen…</div></div>
+        <footer class="zec-card-footer"><span class="zec-status-dot unknown"></span><span data-zec="events.footer">Ereignisstatus wird bewertet</span></footer>
       </article>
     </section>
   </main>

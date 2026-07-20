@@ -69,7 +69,7 @@ class MeasurementV4Rc5Tests(unittest.TestCase):
             "measurement_log_status": "active",
         })
         html = build_status_page(cfg, snapshot)
-        self.assertIn("Aktive Zykluszeit", html)
+        self.assertIn("Aktiver Gesamtdurchlauf", html)
         self.assertIn("143 ms", html)
         self.assertIn("Messdaten-Logging", html)
         self.assertIn("22 ms", html)

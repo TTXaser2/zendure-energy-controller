@@ -156,10 +156,12 @@ class ControllerState:
     last_error: str = "none"
     last_error_time: str = "-"
     safe_state_counter: int = 0
-    last_loop_duration_ms: int = 0
-    last_cycle_total_ms: int = 0
+    controller_started_epoch: float = field(default_factory=time.time)
+    last_cycle_completed_epoch: Optional[float] = None
+    last_loop_duration_ms: float = 0.0
+    last_cycle_total_ms: float = 0.0
     last_cycle_slowest_step: str = "none"
-    last_cycle_slowest_step_ms: int = 0
+    last_cycle_slowest_step_ms: float = 0.0
     last_cycle_timing_json: str = "{}"
     loop_counter: int = 0
     last_record_epoch: Optional[float] = None
@@ -555,17 +557,18 @@ class ControllerState:
         with self.lock:
             return json.dumps(self.zendure_mqtt_topics, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
-    def set_cycle_timing(self, timing_parts: Dict[str, Any], slowest_step: str, slowest_step_ms: int, total_ms: int) -> None:
+    def set_cycle_timing(self, timing_parts: Dict[str, Any], slowest_step: str, slowest_step_ms: float, total_ms: float) -> None:
         with self.lock:
-            clean: Dict[str, int] = {}
+            clean: Dict[str, float] = {}
             for key, value in (timing_parts or {}).items():
                 try:
-                    clean[str(key)] = int(value)
+                    clean[str(key)] = round(float(value), 3)
                 except Exception:
                     continue
-            self.last_cycle_total_ms = int(total_ms or 0)
+            self.last_cycle_total_ms = round(float(total_ms or 0), 3)
             self.last_cycle_slowest_step = str(slowest_step or "none")
-            self.last_cycle_slowest_step_ms = int(slowest_step_ms or 0)
+            self.last_cycle_slowest_step_ms = round(float(slowest_step_ms or 0), 3)
+            self.last_cycle_completed_epoch = time.time()
             self.last_cycle_timing_json = json.dumps(clean, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
     def set_measurement_log_status(self, status: Dict[str, Any]) -> None:
@@ -1263,6 +1266,8 @@ class ControllerState:
                 "command_resync_reason": self.command_resync_reason,
                 "command_effect_state_category": self.command_effect_category,
                 "command_effect_state_reason": self.command_effect_reason,
+                "controller_started_epoch": self.controller_started_epoch,
+                "last_cycle_completed_epoch": self.last_cycle_completed_epoch,
                 "loop_duration_ms": self.last_loop_duration_ms,
                 "cycle_total_without_sleep_ms": self.last_cycle_total_ms,
                 "cycle_slowest_step": self.last_cycle_slowest_step,
@@ -1433,6 +1438,8 @@ class ControllerState:
                 "measurement_db_rows_dropped": self.measurement_db_rows_dropped,
                 "measurement_db_size_bytes": self.measurement_db_size_bytes,
                 "safe_state_counter": self.safe_state_counter,
+                "controller_started_epoch": self.controller_started_epoch,
+                "last_cycle_completed_epoch": self.last_cycle_completed_epoch,
                 "last_loop_duration_ms": self.last_loop_duration_ms,
                 "last_cycle_total_ms": self.last_cycle_total_ms,
                 "last_cycle_slowest_step": self.last_cycle_slowest_step,

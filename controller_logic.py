@@ -68,12 +68,12 @@ class ZendureController:
         self.app_logger.log(cfg, message)
 
     def _timed_phase(self, name: str, func, *args, **kwargs):
-        started = time.time()
+        started = time.perf_counter_ns()
         try:
             return func(*args, **kwargs)
         finally:
-            elapsed_ms = int((time.time() - started) * 1000)
-            self._cycle_timing_parts[name] = int(self._cycle_timing_parts.get(name, 0)) + elapsed_ms
+            elapsed_ms = (time.perf_counter_ns() - started) / 1_000_000.0
+            self._cycle_timing_parts[name] = float(self._cycle_timing_parts.get(name, 0.0)) + elapsed_ms
 
     def request_stop(self) -> None:
         self._running = False
@@ -92,15 +92,16 @@ class ZendureController:
         self.log("[CTRL] Hauptschleife gestartet")
         while self._running:
             loop_start = time.time()
+            loop_perf_start = time.perf_counter_ns()
             self._cycle_timing_parts = {}
-            reload_started = time.time()
+            reload_started = time.perf_counter_ns()
             cfg, changed = self.config_manager.reload_if_needed()
-            self._cycle_timing_parts["config_reload_ms"] = int((time.time() - reload_started) * 1000)
+            self._cycle_timing_parts["config_reload_ms"] = (time.perf_counter_ns() - reload_started) / 1_000_000.0
             if changed:
                 self.log("[CONFIG] Änderung geladen")
                 self._timed_phase("mqtt_refresh_subscriptions_ms", self.mqtt.refresh_subscriptions)
 
-            run_once_started = time.time()
+            run_once_started = time.perf_counter_ns()
             try:
                 self.run_once(cfg)
                 with self.state.lock:
@@ -113,16 +114,16 @@ class ZendureController:
                 if self.state.consecutive_errors >= cfg.get("MAX_CONSECUTIVE_ERRORS", 5):
                     self.safe_state("Zu viele Fehler in Folge")
             finally:
-                self._cycle_timing_parts["run_once_ms"] = int((time.time() - run_once_started) * 1000)
+                self._cycle_timing_parts["run_once_ms"] = (time.perf_counter_ns() - run_once_started) / 1_000_000.0
 
-            finish_started = time.time()
+            finish_started = time.perf_counter_ns()
             self.finish_cycle(cfg, loop_start)
-            self._cycle_timing_parts["finish_cycle_ms"] = int((time.time() - finish_started) * 1000)
-            total_ms = int((time.time() - loop_start) * 1000)
+            self._cycle_timing_parts["finish_cycle_ms"] = (time.perf_counter_ns() - finish_started) / 1_000_000.0
+            total_ms = (time.perf_counter_ns() - loop_perf_start) / 1_000_000.0
             self._cycle_timing_parts["cycle_total_without_sleep_ms"] = total_ms
             measured_parts = {k: v for k, v in self._cycle_timing_parts.items() if k != "cycle_total_without_sleep_ms"}
             slowest = max(measured_parts.items(), key=lambda item: item[1]) if measured_parts else ("none", 0)
-            self.state.set_cycle_timing(self._cycle_timing_parts, slowest[0], int(slowest[1]), total_ms)
+            self.state.set_cycle_timing(self._cycle_timing_parts, slowest[0], float(slowest[1]), total_ms)
             warn_ms = int(cfg.get("SLOW_CYCLE_WARN_MS", 5000))
             detail_ms = int(cfg.get("TIMING_DETAIL_LOG_MS", 2000))
             if total_ms >= warn_ms:
@@ -178,7 +179,7 @@ class ZendureController:
         if manual_mode != "AUTO":
             self._reset_rest_surplus_harvest("MODE_CHANGED")
             self._timed_phase("grid_display_read_ms", self.refresh_grid_power_for_display, cfg)
-            self.handle_manual_mode(cfg, manual_mode)
+            self._timed_phase("control_decision_ms", self.handle_manual_mode, cfg, manual_mode)
             return
 
         if night_active:
@@ -196,7 +197,7 @@ class ZendureController:
                     return
             else:
                 self._timed_phase("grid_display_read_ms", self.refresh_grid_power_for_display, cfg)
-                self.handle_night_mode(cfg)
+                self._timed_phase("control_decision_ms", self.handle_night_mode, cfg)
                 return
 
         if not self.soc_is_fresh(cfg):
@@ -221,16 +222,16 @@ class ZendureController:
             # nahe 0 W erreicht ist, soll Zendure kontrolliert Ladeleistung
             # übernehmen dürfen, statt in HOLD bei einem alten Ziel zu verharren.
             if self._rest_surplus_is_active() and bool(cfg.get("HARVEST_HIGH_SMA_SOC_ENABLED", True)):
-                self.handle_charge(cfg, grid_power)
+                self._timed_phase("control_decision_ms", self.handle_charge, cfg, grid_power)
                 return
-            self.handle_deadband(cfg)
+            self._timed_phase("control_decision_ms", self.handle_deadband, cfg)
             return
 
         if grid_power > 0:
-            self.handle_discharge(cfg, grid_power)
+            self._timed_phase("control_decision_ms", self.handle_discharge, cfg, grid_power)
             return
 
-        self.handle_charge(cfg, grid_power)
+        self._timed_phase("control_decision_ms", self.handle_charge, cfg, grid_power)
 
     def update_sma_energy_meter_status(self, cfg: Dict[str, Any]) -> None:
         """Keep the passive SMA direct source listener and status snapshot current."""
@@ -2014,7 +2015,7 @@ class ZendureController:
 
     def finish_cycle(self, cfg: Dict[str, Any], loop_start: float) -> None:
         with self.state.lock:
-            self.state.last_loop_duration_ms = int((time.time() - loop_start) * 1000)
+            self.state.last_loop_duration_ms = round((time.time() - loop_start) * 1000.0, 3)
             self.state.last_limit_reason = ", ".join(self.state.active_limiters) if self.state.active_limiters else "none"
             path = self.state.technical_control_path
             mode = self.state.current_mode
