@@ -9,10 +9,11 @@ from state import ControllerState
 from web_ui import build_status_page, build_status_view_payload
 
 
+from pathlib import Path
 class V12112Rc5OperationsDashboardTests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual("12.11.2-rc6", version.APP_VERSION)
-        self.assertEqual("V12.11.2-RC6", version.APP_VERSION_LABEL)
+        self.assertEqual("12.11.2-rc8", version.APP_VERSION)
+        self.assertEqual("V12.11.2-RC8", version.APP_VERSION_LABEL)
 
     def test_four_lower_cards_and_calendar_hotfix_are_present(self):
         snap = ControllerState().snapshot()
@@ -21,8 +22,8 @@ class V12112Rc5OperationsDashboardTests(unittest.TestCase):
         for token in ("Messdaten / Logging", "Systemressourcen", "Controller &amp; Schnittstellen", "Betriebsereignisse"):
             self.assertIn(token, html)
         self.assertIn("Systemlast (1/5/15 Min.)", html)
-        self.assertIn("Letzter Zendure-Kommandoabgleich", html)
-        js = open("static/status_v2.js", encoding="utf-8").read()
+        self.assertIn("Letzter erfolgreicher Zendure-Kommandoabgleich", html)
+        js = Path("static/status_v2.js").read_text(encoding="utf-8")
         self.assertIn("showPicker", js)
         self.assertIn("renderEvents", js)
 

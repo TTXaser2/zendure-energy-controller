@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class V12112Rc4UiPolishTests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual("12.11.2-rc6", version.APP_VERSION)
-        self.assertEqual("V12.11.2-RC6", version.APP_VERSION_LABEL)
+        self.assertEqual("12.11.2-rc8", version.APP_VERSION)
+        self.assertEqual("V12.11.2-RC8", version.APP_VERSION_LABEL)
 
     def test_status_markup_contains_approved_polish(self):
         payload = {
@@ -33,7 +33,8 @@ class V12112Rc4UiPolishTests(unittest.TestCase):
         brand = '<span class="zec-wordmark">ZENDURE</span><span class="zec-product">Energy Controller</span><span class="zec-brand-divider"'
         self.assertIn(brand, html)
         self.assertIn('<details id="expertMenuDetails"', html)
-        self.assertIn('id="socDayPicker" type="date"', html)
+        self.assertIn('id="socDayPickerButton"', html)
+        self.assertIn('id="socDayPicker"', html)
         self.assertNotIn('Ganzer Kalendertag 00:00–24:00', html)
         self.assertIn('class="zec-mode-row"', html)
         self.assertIn('data-ring-block="primary"', html)
@@ -48,7 +49,7 @@ class V12112Rc4UiPolishTests(unittest.TestCase):
         self.assertIn("socDayPicker", js)
         self.assertIn("expertMenuDetails", js)
         self.assertIn("zec-legend-line.is-dashed", css)
-        self.assertIn("zec-day-picker-label", css)
+        self.assertIn("zec-day-picker-button", css)
 
     def test_reason_is_persisted_in_raw_and_minute_store(self):
         with tempfile.TemporaryDirectory() as td:

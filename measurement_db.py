@@ -374,6 +374,7 @@ class MeasurementDbWriter:
             "measurement_db_path": "",
             "measurement_db_queue_depth": 0,
             "measurement_db_last_write_epoch_s": "",
+            "measurement_db_last_write_duration_ms": None,
             "measurement_db_error": "",
             "measurement_db_rows_written": 0,
             "measurement_db_rows_dropped": 0,
@@ -432,6 +433,7 @@ class MeasurementDbWriter:
     def _flush(self, path: str, batch: List[Dict[str, Any]]) -> None:
         if not batch:
             return
+        started_ns = time.perf_counter_ns()
         try:
             if self._conn is None or self._path != path:
                 if self._conn is not None:
@@ -450,6 +452,7 @@ class MeasurementDbWriter:
                     "measurement_db_path": path,
                     "measurement_db_queue_depth": self._queue.qsize(),
                     "measurement_db_last_write_epoch_s": time.time(),
+                    "measurement_db_last_write_duration_ms": round((time.perf_counter_ns() - started_ns) / 1_000_000.0, 3),
                     "measurement_db_error": "",
                     "measurement_db_rows_written": total,
                     "measurement_db_size_bytes": os.path.getsize(path) if os.path.exists(path) else 0,

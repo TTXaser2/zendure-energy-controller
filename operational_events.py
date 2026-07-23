@@ -31,6 +31,7 @@ class OperationalEventJournal:
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._previous: Dict[str, Any] = {}
+        self._stable_candidates: Dict[str, Dict[str, Any]] = {}
 
     def path(self) -> str:
         cfg = self.config_getter()
@@ -255,6 +256,78 @@ class OperationalEventJournal:
         elif was_bad and not is_bad:
             self._resolve(conn, key, title_ok, detail_ok)
 
+    def _stable_incident(
+        self,
+        conn: sqlite3.Connection,
+        key: str,
+        is_bad: bool,
+        *,
+        title_bad: str,
+        title_ok: str,
+        detail_bad: str,
+        detail_ok: str,
+        severity: str = "warning",
+        bad_stable_s: float = 6.0,
+        ok_stable_s: float = 6.0,
+    ) -> None:
+        """Journal only a diagnosis state that remains stable for a short window.
+
+        This observer-side debounce is diagnostic only.  It never feeds back into
+        control, MQTT resync eligibility or command deduplication.
+        """
+        now = time.monotonic()
+        stable_key = f"stable:{key}"
+        old = self._previous.get(stable_key, _SENTINEL)
+        if old is _SENTINEL:
+            # A bad state already present when the observer starts must not be
+            # silently treated as a healthy baseline.  Start a candidate from
+            # an assumed healthy state and open it only after the same bounded
+            # stability window.  A short startup flap therefore still creates
+            # no event, while a persistent incident becomes visible and keeps
+            # the journal/footer consistent with the current diagnosis.
+            if bool(is_bad):
+                self._previous[stable_key] = False
+                self._stable_candidates[key] = {
+                    "value": True,
+                    "since": now,
+                    "detail": detail_bad,
+                }
+            else:
+                self._previous[stable_key] = False
+            return
+        if bool(old) == bool(is_bad):
+            self._stable_candidates.pop(key, None)
+            return
+        candidate = self._stable_candidates.get(key)
+        if not candidate or bool(candidate.get("value")) != bool(is_bad):
+            self._stable_candidates[key] = {"value": bool(is_bad), "since": now, "detail": detail_bad}
+            return
+        candidate["detail"] = detail_bad
+        threshold = bad_stable_s if is_bad else ok_stable_s
+        if now - float(candidate.get("since") if candidate.get("since") is not None else now) < threshold:
+            return
+        self._previous[stable_key] = bool(is_bad)
+        self._stable_candidates.pop(key, None)
+        if is_bad:
+            self._add(
+                conn, key, severity, title_bad, str(candidate.get("detail") or detail_bad),
+                dedupe_key=key, open_event=True, dedupe_window_s=_FLAP_COMPACT_WINDOW_S,
+            )
+        else:
+            self._resolve(conn, key, title_ok, detail_ok)
+
+    @staticmethod
+    def _public_resync_reason(reason: str) -> str:
+        value = str(reason or "").strip().upper()
+        labels = {
+            "RESYNC_AFTER_RECONNECT": "nach Wiederherstellung der MQTT-Verbindung",
+            "RESYNC_AFTER_LONG_STALE": "nach längerer Phase veralteter Telemetriedaten",
+            "RESYNC_SUPPRESSED_COOLDOWN": "wegen laufender Cooldown-Zeit nicht erneut gesendet",
+        }
+        if value.startswith("RESYNC_AFTER_CONFIRMED_MISMATCH"):
+            return "nach bestätigter Abweichung zwischen Sollwert und Gerätewirkung"
+        return labels.get(value, str(reason or "Kommunikationsunsicherheit"))
+
     def _observe(self, conn: sqlite3.Connection, s: Dict[str, Any]) -> None:
         mode = str(s.get("current_mode") or "")
         old_mode = self._previous.get("mode")
@@ -293,17 +366,17 @@ class OperationalEventJournal:
             "ZENDURE_MQTT_RETAINED_ONLY",
             "ZENDURE_MQTT_AFTER_BROKER_RESTART_NO_LIVE_UPDATES",
         }
-        self._transition(
+        self._stable_incident(
             conn,
             "zendure_telemetry",
-            tele,
-            bad,
-            "Zendure-Telemetrie nicht aktuell",
-            "Zendure-Telemetrie wieder aktuell",
-            lambda v: str(s.get("zendure_mqtt_status_reason") or v),
+            tele in bad,
+            title_bad="Zendure-Telemetrie nicht aktuell",
+            title_ok="Zendure-Telemetrie wieder aktuell",
+            detail_bad=str(s.get("zendure_mqtt_status_reason") or tele),
             detail_ok="Datenversorgung vollständig wiederhergestellt.",
             severity="warning",
-            dedupe_window_s=_FLAP_COMPACT_WINDOW_S,
+            bad_stable_s=6.0,
+            ok_stable_s=6.0,
         )
 
         effect = str(s.get("command_effect_state_category") or s.get("command_effect_category") or "")
@@ -325,7 +398,7 @@ class OperationalEventJournal:
         old_count = int(self._previous.get("resync_count") or 0)
         self._previous["resync_count"] = resync_count
         if resync_count > old_count:
-            reason = str(s.get("command_resync_reason") or "Kommunikationsunsicherheit")
+            reason = self._public_resync_reason(str(s.get("command_resync_reason") or "Kommunikationsunsicherheit"))
             target = int(s.get("command_uncertain_mqtt_target_w") or s.get("zendure_target_signed_power") or 0)
             self._add(
                 conn,

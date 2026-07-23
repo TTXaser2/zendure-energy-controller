@@ -1,51 +1,62 @@
-# Zendure Energy Controller V12.11.2-RC4 – Installation und Betrieb
+# Zendure Energy Controller V12.11.2-RC8 – Installation und Betrieb
 
-## Update installieren
+## 1. Update installieren
 
-```bash
-cd /home/pi
-./update_zendure_controller.sh v12_11_2_rc4
-```
-
-Danach prüfen:
+Die Datei `zendure_controller_v12_11_2_rc8.zip` unverändert nach `/home/pi/Downloads/` kopieren und ausführen:
 
 ```bash
-cd /opt/zendure-controller
-python3 -m py_compile *.py tools/*.py
-python3 -m unittest discover -s tests -q
-sudo systemctl status zendure-controller.service --no-pager -l
+cd /home/pi/Downloads
+/opt/zendure-controller/tools/update_zendure_controller.sh v12_11_2_rc8
 ```
 
-Anschließend die Statusseite einmal mit `Strg+F5` hart neu laden, damit alte CSS-/JavaScript-Dateien sicher aus dem Browsercache verschwinden.
+Das Update-Skript erstellt automatisch ein vollständiges Installationsbackup und sichert die produktive `config.json` separat.
 
-## Historische Regelgründe nachfüllen
+## 2. Ready-Check
 
-Neue Messwerte speichern den Tooltip-Grund automatisch. Für den historischen Bestand zunächst nur den Dry-Run ausführen:
+Das Update-Skript wartet nun bis zu 20 Sekunden auf gültiges JSON von `/ready`.
+
+Erfolgsabschluss:
+
+```text
+Update abgeschlossen und Ready-Check erfolgreich.
+```
+
+Zusätzliche manuelle Prüfung:
 
 ```bash
-cd /opt/zendure-controller
-python3 tools/backfill_measurement_reasons.py \
-  --root /opt/zendure-controller \
-  --db-path /opt/zendure-controller/logs/zec_measurements.sqlite3
+systemctl status zendure-controller.service --no-pager -l
+curl -fsS http://127.0.0.1:8080/ready | python3 -m json.tool
 ```
 
-Der echte Lauf darf nur bei gestopptem Controller erfolgen und erzeugt vorher automatisch ein SQLite-Rollback-Backup:
+Browser anschließend aktualisieren:
 
-```bash
-sudo systemctl stop zendure-controller.service
-
-python3 tools/backfill_measurement_reasons.py \
-  --root /opt/zendure-controller \
-  --db-path /opt/zendure-controller/logs/zec_measurements.sqlite3 \
-  --apply
-
-sudo systemctl start zendure-controller.service
+```text
+Desktop: Strg+F5
+iOS: Seite neu laden; bei Bedarf Tab schließen und neu öffnen
 ```
 
-## Architekturhinweise
+## 3. Erwartete RC8-Anzeigen
 
-- Die Statusseite V2 liegt in `status_page_v2.py`, `static/status_v2.css` und `static/status_v2.js`.
-- UI und Graph nutzen ausschließlich In-Memory-Snapshots und gecachte, indizierte Graphendpunkte.
-- Die SQLite-Schemaänderung ist additiv und läuft außerhalb des Controller-Regelpfads im DB-Writer-Kontext.
-- AUTO, Harvest, Cross-Charge, NIGHT_DISCHARGE, Fixed-Modi und MQTT-Command-Entscheidungen werden nicht verändert.
-- Die bekannte `ResourceWarning: unclosed database` aus bestehenden Measurement-DB-Tests kann weiterhin erscheinen; entscheidend ist ein Testabschluss mit `OK`.
+- Der SOC-Tagesgraph zeigt konsistente Lade-/Entladephasen deutlich weniger treppenartig.
+- Echte lange Plateaus, Datenlücken, Richtungswechsel und größere Sprünge bleiben sichtbar.
+- Tooltip und Datenbank zeigen weiterhin die gespeicherten Original-SOC-Werte.
+- Unter `Aktiver Gesamtdurchlauf` erscheint beispielsweise:
+
+```text
+Zyklusabstand ca. 2,05 s · aktive Arbeit 2,4 %
+```
+
+- Die Farbpunkte vor den Timing-Teilphasen entsprechen exakt den Segmentfarben im gestapelten Balken.
+- Der Verteilungsbalken enthält nur synchrone Teilphasen; SQLite bleibt separat als asynchrone Hintergrundarbeit.
+- Eine rote Slow-Cycle-Kennzeichnung erscheint nur bei Überschreitung von `SLOW_CYCLE_WARN_MS`.
+- Eine alte gelbe MQTT-Unsicherheitswarnung verschwindet, sobald Sollwert 0 W und frische Gerätewirkung innerhalb der Toleranz neutral sind.
+
+## 4. Migration
+
+- Keine Konfigurationsmigration erforderlich.
+- Keine Datenbankmigration erforderlich.
+- Keine Änderung des Messdaten- oder Ereignisschemas.
+
+## 5. Hinweise
+
+Einzelne ältere SQLite-Tests können unter neueren Python-Versionen weiterhin `ResourceWarning: unclosed database` ausgeben. Dies ist ein bestehender Test-/Wartungspunkt und kein Laufzeitfehler des produktiven SQLite-Workers. Maßgeblich ist der Abschluss der Tests mit `OK`.

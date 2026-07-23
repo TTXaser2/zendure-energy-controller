@@ -53,7 +53,7 @@
     const now=new Date(), today=now.toDateString(), yesterday=new Date(now.getFullYear(),now.getMonth(),now.getDate()-1).toDateString();
     const groups={open:[],today:[],yesterday:[]};
     items.forEach(e=>{if(e.status==='open')groups.open.push(e);else{const d=new Date(Number(e.started_at)*1000).toDateString();if(d===today)groups.today.push(e);else if(d===yesterday)groups.yesterday.push(e);}});
-    const section=(title,list)=>!list.length?'':`<section class="zec-event-group"><h3>${escapeHtml(title)} <span>${list.length}</span></h3>${list.map(e=>`<article class="zec-event ${escapeHtml(e.severity||'info')}"><div class="zec-event-dot"></div><div><div class="zec-event-head"><time>${e.status==='open'?'seit ':''}${eventTime(e.started_at)}</time><strong>${escapeHtml(e.title)}</strong></div><p>${escapeHtml(e.detail||'')}</p>${Number(e.occurrence_count)>1?`<small>${Number(e.occurrence_count)} Vorkommnisse zusammengefasst</small>`:''}</div></article>`).join('')}</section>`;
+    const section=(title,list)=>!list.length?'':`<section class="zec-event-group"><h3>${escapeHtml(title)} <span>· ${list.length} Ereignisgruppe${list.length===1?'':'n'}</span></h3>${list.map(e=>`<article class="zec-event ${escapeHtml(e.severity||'info')}"><div class="zec-event-dot"></div><div><div class="zec-event-head"><time>${e.status==='open'?'seit ':''}${eventTime(e.started_at)}</time><strong>${escapeHtml(e.title)}</strong></div><p>${escapeHtml(e.detail||'')}</p>${Number(e.occurrence_count)>1?`<small>${Number(e.occurrence_count)} Vorkommnisse zusammengefasst</small>`:''}</div></article>`).join('')}</section>`;
     root.innerHTML=section('Offene Ereignisse',groups.open)+section('Heute',groups.today)+section('Gestern',groups.yesterday)||'<div class="zec-empty">Keine Betriebsereignisse für heute und gestern.</div>';
     const footer=$('[data-lower="events"] .zec-card-footer'); if(footer)setDot(footer,groups.open.some(e=>e.severity==='error')?'bad':(groups.open.length?'warn':'ok'));
     text('events.footer',groups.open.length?`${groups.open.length} offene${groups.open.length===1?'s Ereignis':' Ereignisse'}`:'Keine aktuell offene Betriebsstörung');
@@ -198,18 +198,34 @@
     text('resources.temp_text',p.resources?.temperature_c==null?'—':`${p.resources.temperature_c.toLocaleString('de-DE',{maximumFractionDigits:1})} °C`);
     text('resources.load_text',(p.resources?.load||[]).map(v=>number(v)?.toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})??'—').join(' / '));
     text('resources.swap_text',p.resources?.swap_total_bytes?`${fmtBytes(p.resources?.swap_used_bytes)} von ${fmtBytes(p.resources?.swap_total_bytes)}`:'Deaktiviert');
+    const swapIn=number(p.resources?.swap_in_bytes_per_s),swapOut=number(p.resources?.swap_out_bytes_per_s);
+    text('resources.swap_activity_text',swapIn===null||swapOut===null?'wird ermittelt …':`${fmtBytes(swapIn)}/s hinein · ${fmtBytes(swapOut)}/s hinaus`);
     text('resources.uptime_text',fmtDuration(p.resources?.system_uptime_s));
     const th=p.resources?.throttling||{}; text('resources.throttle_text',(th.current?.length?`Aktuell: ${th.current.join(', ')}`:(th.historic?.length?`Seit Systemstart: ${th.historic.join(', ')}`:(th.available?'Nein':'Status nicht verfügbar'))));
     meter('resources.cpu',p.resources?.cpu_percent,p.resources?.tone);meter('resources.ram',p.resources?.ram_used_percent,p.resources?.tone);meter('resources.temp',number(p.resources?.temperature_c)==null?0:Math.max(0,Math.min(100,(p.resources.temperature_c-30)/55*100)),p.resources?.tone);
     text('resources.status',p.resources?.status);const rf=$('[data-lower="resources"] .zec-card-footer');if(rf)setDot(rf,p.resources?.tone);
 
-    ['rule','broker','mqtt','api','effect','loop_text','measurement_logging_text','analysis'].forEach(k=>text(`diag.${k}`,p.diag?.[k]));
-    text('diag.control_text',fmtMs(p.diag?.control_ms));text('diag.command_text',fmtMs(p.diag?.command_ms));text('diag.sqlite_text',fmtMs(p.diag?.sqlite_ms));
+    ['rule','broker','mqtt','api','effect','loop_text','analysis'].forEach(k=>text(`diag.${k}`,p.diag?.[k]));
+    text('diag.cycle_meta',p.diag?.cycle_meta_text);
+    text('diag.sqlite_text',fmtMs(p.diag?.sqlite_ms));
     text('diag.slowest_text',`${p.diag?.slowest_step||'—'} · ${fmtMs(p.diag?.slowest_ms)}`);text('diag.uptime_text',fmtDuration(p.diag?.controller_uptime_s));
     text('diag.resync_text',p.diag?.resync_text||'Kein Zendure-Kommandoabgleich seit Controllerstart · betroffen wären AC-Modus und Lade-/Entladelimits');
-    meter('diag.cycle',p.diag?.cycle_budget_percent,(number(p.diag?.cycle_budget_percent)||0)>80?'bad':((number(p.diag?.cycle_budget_percent)||0)>50?'warn':'ok'));
+    text('diag.resync_suppressed_text',p.diag?.resync_suppressed_text||'Kein unterdrückter Abgleichversuch seit Controllerstart');
+    const phases=Array.isArray(p.diag?.timing_phases)?p.diag.timing_phases:[];
+    const phaseClass=key=>`zec-phase-${String(key||'other').replace(/[^a-z0-9_-]/gi,'-')}`;
+    const timingRoot=$('#diagTimingTree');
+    if(timingRoot){timingRoot.innerHTML=phases.map(row=>`<div class="zec-timing-row ${phaseClass(row.key)}"><span class="zec-timing-label"><i class="zec-timing-key" aria-hidden="true"></i>${escapeHtml(row.label||'Abschnitt')}</span><strong>${escapeHtml(fmtMs(row.ms))}</strong></div>`).join('')||'<div class="zec-empty">Noch keine Teilzeiten erfasst.</div>';}
+    const distribution=$('#diagTimingDistribution');
+    if(distribution){
+      const total=phases.reduce((sum,row)=>sum+(number(row.ms)||0),0);
+      distribution.innerHTML=total>0?phases.map(row=>{const ms=number(row.ms)||0;const pct=100*ms/total;const title=`${row.label||'Abschnitt'}: ${fmtMs(ms)} · ${pct.toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1})} % des aktiven Durchlaufs`;return `<span class="zec-timing-segment ${phaseClass(row.key)}" style="flex-grow:${Math.max(0,ms)}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"></span>`;}).join(''):'';
+      distribution.classList.toggle('is-slow',!!p.diag?.cycle_slow_warning);
+      distribution.setAttribute('aria-label',p.diag?.cycle_slow_warning?'Zeitverteilung; Slow-Cycle-Warnschwelle überschritten':'Zeitverteilung des letzten aktiven Controller-Durchlaufs');
+    }
+    const diagInfo=$('[data-lower="diagnostics"] .zec-info-button');
+    if(diagInfo&&p.diag?.timing_stats){const labels={cycle_total_without_sleep_ms:'Aktiver Gesamtdurchlauf',control_decision_ms:'Regelentscheidung',mqtt_command_path_ms:'MQTT-Kommandopfad',measurement_logging_ms:'Logging im Hauptthread',other_cycle_work_ms:'Sonstige, nicht einzeln erfasste Verarbeitung'};const lines=[`Letzter Durchlauf: ${fmtMs(p.diag?.loop_ms)}. ${p.diag?.cycle_meta_text||''}`,`Slow-Cycle-Warnschwelle: ${fmtMs(p.diag?.slow_cycle_warn_ms)}. Sie ist eine Diagnosegrenze, keine harte Deadline.`,'Statistik der jüngsten, begrenzt gespeicherten Durchläufe:'];Object.entries(labels).forEach(([key,label])=>{const st=p.diag.timing_stats[key];if(st)lines.push(`${label}: Mittel ${fmtMs(st.mean_ms)}, P95 ${fmtMs(st.p95_ms)}, Maximum ${fmtMs(st.max_ms)} (${st.samples} Werte)`);});lines.push('Der farbige Balken zeigt ausschließlich die Verteilung der synchronen Teilphasen im letzten aktiven Durchlauf. SQLite läuft asynchron und ist nicht enthalten.');diagInfo.dataset.infoText=lines.join('\n');}
     const chain={rule:p.diag?.rule_tone||'unknown',mqtt:p.diag?.broker_tone||p.diag?.mqtt_tone||'unknown',api:p.diag?.api_tone||'unknown',effect:p.diag?.effect_tone||'unknown'};Object.entries(chain).forEach(([k,v])=>{const el=$(`[data-chain="${k}"]`);if(el)el.className=v;});
-    const diagTone=Object.values(chain).includes('bad')?'bad':(Object.values(chain).includes('warn')?'warn':'ok');const df=$('[data-lower="diagnostics"] .zec-card-footer');if(df)setDot(df,diagTone);text('diag.footer',diagTone==='ok'?'Controller und Schnittstellen aktuell':(diagTone==='warn'?'Controller oder Schnittstelle eingeschränkt':'Controller oder Schnittstelle gestört'));
+    const diagTone=p.diag?.cycle_slow_warning?'bad':(Object.values(chain).includes('bad')?'bad':(Object.values(chain).includes('warn')?'warn':'ok'));const df=$('[data-lower="diagnostics"] .zec-card-footer');if(df)setDot(df,diagTone);text('diag.footer',p.diag?.cycle_slow_warning?'Aktiver Controller-Durchlauf überschreitet die Slow-Cycle-Warnschwelle':(diagTone==='ok'?'Controller und Schnittstellen aktuell':(diagTone==='warn'?'Controller oder Schnittstelle eingeschränkt':'Controller oder Schnittstelle gestört')));
     renderEvents(p.events);
   }
 
@@ -310,6 +326,68 @@
       if(p.is_today)entries.push('<span class="zec-legend-item"><i class="zec-legend-line is-now"></i>Jetzt</span>');
       legend.innerHTML=entries.join('');
     }
+    splitSocSegments(rawPoints){
+      const segments=[];let current=[];
+      rawPoints.forEach(pt=>{
+        const valid=pt.value!==null&&pt.minute!==null;
+        if(!valid||(current.length&&pt.minute-current.at(-1).minute>3)){if(current.length)segments.push(current);current=[];}
+        if(valid)current.push({minute:Number(pt.minute),value:Number(pt.value)});
+      });
+      if(current.length)segments.push(current);
+      return segments;
+    }
+    reconstructQuantizedSoc(segment, protectedLevels=[]){
+      if(segment.length<3)return segment.map(p=>({...p}));
+      const groups=[];
+      segment.forEach((pt,index)=>{
+        const last=groups.at(-1);
+        if(last&&last.value===pt.value){last.endIndex=index;last.endMinute=pt.minute;}
+        else groups.push({value:pt.value,startIndex:index,endIndex:index,startMinute:pt.minute,endMinute:pt.minute});
+      });
+      if(groups.length<3)return segment.map(p=>({...p}));
+      const protectedSet=new Set(protectedLevels.map(number).filter(v=>v!==null).map(v=>Math.round(v)));
+      const isBarrier=g=>{const duration=Math.max(0,g.endMinute-g.startMinute);return duration>=20||((protectedSet.has(Math.round(g.value))||g.value<=0||g.value>=100)&&duration>=8);};
+      const display=segment.map(p=>({...p}));
+      let i=0;
+      while(i<groups.length-1){
+        const firstDiff=groups[i+1].value-groups[i].value;
+        if(Math.abs(Math.abs(firstDiff)-1)>0.001){i+=1;continue;}
+        const direction=Math.sign(firstDiff);let j=i+1;
+        while(j<groups.length-1){
+          if(isBarrier(groups[j]))break;
+          const diff=groups[j+1].value-groups[j].value;
+          if(Math.abs(Math.abs(diff)-1)>0.001||Math.sign(diff)!==direction)break;
+          j+=1;
+        }
+        if(j-i+1>=3){
+          for(let k=i;k<=j;k+=1){
+            const group=groups[k];
+            if(isBarrier(group))continue;
+            const startValue=k>i?(groups[k-1].value+group.value)/2:group.value;
+            const endValue=k<j?(group.value+groups[k+1].value)/2:group.value;
+            const span=Math.max(1,group.endMinute-group.startMinute);
+            for(let rawIndex=group.startIndex;rawIndex<=group.endIndex;rawIndex+=1){
+              const point=display[rawIndex];
+              const ratio=Math.max(0,Math.min(1,(point.minute-group.startMinute)/span));
+              point.value=startValue+(endValue-startValue)*ratio;
+            }
+          }
+          i=j;
+        }else i+=1;
+      }
+      return display;
+    }
+    drawQuantizedSocLine(ctx,rawPoints,color,x,y,protectedLevels){
+      ctx.strokeStyle=color;ctx.lineWidth=2;
+      this.splitSocSegments(rawPoints).forEach(segment=>{
+        const points=this.reconstructQuantizedSoc(segment,protectedLevels);
+        if(!points.length)return;
+        ctx.beginPath();ctx.moveTo(x(points[0].minute),y(points[0].value));
+        for(let i=1;i<points.length;i+=1)ctx.lineTo(x(points[i].minute),y(points[i].value));
+        if(points.length===1)ctx.lineTo(x(points[0].minute)+.01,y(points[0].value));
+        ctx.stroke();
+      });
+    }
     draw(){
       const {ctx,w,h}=this.prepare(); const p=this.payload||{}; const points=p.points||[]; const pad={l:42,r:12,t:10,b:28};const pw=w-pad.l-pad.r,ph=h-pad.t-pad.b;
       const x=m=>pad.l+(Number(m)/1440)*pw; const y=v=>pad.t+(1-Number(v)/100)*ph;
@@ -321,7 +399,8 @@
       [0,360,720,1080,1440].forEach(m=>{const px=x(m);ctx.beginPath();ctx.moveTo(px,pad.t);ctx.lineTo(px,h-pad.b);ctx.stroke();ctx.textAlign=m===0?'left':m===1440?'right':'center';ctx.fillText(`${String(Math.floor(m/60)).padStart(2,'0')}:00`,px,h-8);});ctx.textAlign='left';
       const thresholds=p.thresholds||{}; [['min_soc','Min-SOC'],['max_soc','Max-SOC'],['reserve_soc','Reserve']].forEach(([key,label])=>{const v=number(thresholds[key]);if(v===null)return;ctx.strokeStyle=key==='reserve_soc'?css('--zec-amber'):css('--zec-subtle');ctx.setLineDash([5,4]);ctx.beginPath();ctx.moveTo(pad.l,y(v));ctx.lineTo(w-pad.r,y(v));ctx.stroke();ctx.setLineDash([]);});
       const series=this.series();
-      series.forEach(s=>{ctx.strokeStyle=s.color;ctx.lineWidth=2;ctx.beginPath();let started=false;points.forEach(pt=>{const v=number(pt[s.key]);if(v===null){started=false;return;}const px=x(pt.minute),py=y(v);if(!started){ctx.moveTo(px,py);started=true;}else ctx.lineTo(px,py);});ctx.stroke();});
+      const protectedLevels=[thresholds.min_soc,thresholds.max_soc,thresholds.reserve_soc,0,100];
+      series.forEach(s=>{const raw=points.map(pt=>({minute:number(pt.minute),value:number(pt[s.key])}));this.drawQuantizedSocLine(ctx,raw,s.color,x,y,protectedLevels);});
       if(p.is_today){const now=new Date();const minute=now.getHours()*60+now.getMinutes();ctx.strokeStyle=css('--zec-blue');ctx.setLineDash([2,4]);ctx.beginPath();ctx.moveTo(x(minute),pad.t);ctx.lineTo(x(minute),h-pad.b);ctx.stroke();ctx.setLineDash([]);}
       if(this.hoverX!==null&&points.length){const minute=Math.max(0,Math.min(1440,Math.round((this.hoverX-pad.l)/pw*1440)));let nearest=points[0],dist=Infinity;points.forEach(pt=>{const d=Math.abs(Number(pt.minute)-minute);if(d<dist){dist=d;nearest=pt;}});const px=x(nearest.minute);ctx.strokeStyle=css('--zec-blue');ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px,pad.t);ctx.lineTo(px,h-pad.b);ctx.stroke();series.forEach(s=>{const v=number(nearest[s.key]);if(v===null)return;ctx.fillStyle=s.color;ctx.beginPath();ctx.arc(px,y(v),3.5,0,Math.PI*2);ctx.fill();});const rows=series.map(s=>`<div class="zec-chart-tooltip-row"><span>${escapeHtml(s.label)}</span><b>${escapeHtml(fmtSoc(nearest[s.key]))}</b></div>`).join('');const reason=fmtReason(nearest.reason);const reasonRow=reason?`<div class="zec-chart-tooltip-row"><span>Grund</span><b>${escapeHtml(reason)}</b></div>`:'';this.showTooltip(`<strong>${escapeHtml(p.date||'')} ${escapeHtml(nearest.time||'')}</strong>${rows}<div class="zec-chart-tooltip-row"><span>Zendure-Leistung</span><b>${escapeHtml(fmtPower(nearest.zendure_power_w))}</b></div><div class="zec-chart-tooltip-row"><span>Primärspeicher</span><b>${escapeHtml(fmtPower(nearest.primary_power_w))}</b></div><div class="zec-chart-tooltip-row"><span>Modus</span><b>${escapeHtml(nearest.mode||'—')}</b></div>${reasonRow}`,px,pad.t+ph*.55);}
     }
@@ -375,7 +454,7 @@
   $('#dayPrev').addEventListener('click',()=>{const n=new Date(selectedDate);n.setDate(n.getDate()-1);selectedDate=n;refreshSocDay();});
   $('#dayNext').addEventListener('click',()=>{const n=new Date(selectedDate);n.setDate(n.getDate()+1);if(dateString(n)<=dateString(new Date())){selectedDate=n;refreshSocDay();}});
   $('#dayToday').addEventListener('click',()=>{selectedDate=new Date();refreshSocDay();});
-  const dayPicker=$('#socDayPicker');if(dayPicker){dayPicker.addEventListener('change',()=>{const chosen=localDateFromString(dayPicker.value);if(chosen&&dateString(chosen)<=dateString(new Date())){selectedDate=chosen;refreshSocDay();}});const label=dayPicker.closest('.zec-day-picker-label');if(label)label.addEventListener('click',e=>{if(e.target===dayPicker)return;e.preventDefault();try{dayPicker.showPicker();}catch(_){dayPicker.focus();dayPicker.click();}});}
+  const dayPicker=$('#socDayPicker'),dayPickerButton=$('#socDayPickerButton');if(dayPicker){dayPicker.addEventListener('change',()=>{const chosen=localDateFromString(dayPicker.value);if(chosen&&dateString(chosen)<=dateString(new Date())){selectedDate=chosen;refreshSocDay();}});const openDayPicker=()=>{try{if(typeof dayPicker.showPicker==='function'){dayPicker.showPicker();return;}}catch(_){}try{dayPicker.focus({preventScroll:true});dayPicker.click();}catch(_){dayPicker.focus();}};if(dayPickerButton){dayPickerButton.addEventListener('click',openDayPicker);dayPickerButton.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openDayPicker();}});}}
 
   setupInfoPopovers(); setupMenus(); startClock(); applyStatus(bootstrap);
   statusPoll.start(Math.floor(Math.random()*700)); miniPoll.start(Math.floor(Math.random()*1000)); refreshSocDay();

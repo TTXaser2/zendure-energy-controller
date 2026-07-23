@@ -5,6 +5,7 @@
 # See LICENSE, NOTICE and DISCLAIMER.md for license, attribution and warranty information.
 
 import csv
+from contextlib import asynccontextmanager
 import html
 import io
 import json
@@ -1058,21 +1059,22 @@ def analysis_service_url(cfg: Dict[str, Any]) -> str:
 
 
 def create_app(config_manager: ConfigManager, state: ControllerState, on_config_saved=None) -> FastAPI:
-    app = FastAPI(title="Zendure Energy Controller", version=APP_VERSION)
+    event_journal = OperationalEventJournal(config_manager.get, state)
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        event_journal.start()
+        try:
+            yield
+        finally:
+            event_journal.stop()
+
+    app = FastAPI(title="Zendure Energy Controller", version=APP_VERSION, lifespan=lifespan)
     static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
     if os.path.isdir(static_dir):
         app.mount("/static", StaticFiles(directory=static_dir), name="static")
     status_view_cache: Dict[str, Any] = {"built_epoch": 0.0, "payload": None}
     status_view_lock = threading.Lock()
-    event_journal = OperationalEventJournal(config_manager.get, state)
-
-    @app.on_event("startup")
-    def _start_operational_events() -> None:
-        event_journal.start()
-
-    @app.on_event("shutdown")
-    def _stop_operational_events() -> None:
-        event_journal.stop()
 
     def html_or_headless(page_builder, *args, **kwargs):
         cfg = config_manager.get()
@@ -2429,7 +2431,8 @@ def build_status_page_legacy(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
         "graph_snapshot_ms": "Status-Snapshot",
         "measurement_logging_ms": "Messdaten-Logging",
         "run_once_ms": "Regelentscheidung",
-        "finish_cycle_ms": "Zyklusabschluss",
+        "finish_cycle_ms": "Zyklusabschluss (Sammelwert)",
+        "other_cycle_work_ms": "Sonstige, nicht einzeln erfasste Verarbeitung",
     }
     active_cycle_ms = int(s.get("last_cycle_total_ms") or s.get("last_loop_duration_ms") or 0)
     slowest_key = str(s.get("last_cycle_slowest_step") or "")
@@ -2466,6 +2469,10 @@ def build_status_page_legacy(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
         timing_obj = json.loads(str(s.get("last_cycle_timing_json") or "{}"))
     except Exception:
         timing_obj = {}
+    try:
+        timing_stats = json.loads(str(s.get("last_cycle_timing_stats_json") or "{}"))
+    except Exception:
+        timing_stats = {}
     local_api_ms = timing_obj.get("zendure_local_api_ms")
     local_api_details = (
         f"Modus: {html.escape(local_api_mode)}<br>"
@@ -3279,11 +3286,12 @@ def _timing_step_public_label(value: Any) -> str:
         "charge_acceptance_diag_ms": "Ladeannahme-Diagnose",
         "graph_snapshot_ms": "Graph-Snapshot",
         "measurement_logging_ms": "Messdaten-Logging",
-        "run_once_ms": "Regelentscheidung",
+        "run_once_ms": "Controller-Hauptteil (Sammelwert)",
         "control_decision_ms": "Regelentscheidung",
         "mqtt_command_path_ms": "MQTT-Kommandopfad",
         "command_effect_monitor_ms": "Kommandowirkungsprüfung",
-        "finish_cycle_ms": "Zyklusabschluss",
+        "finish_cycle_ms": "Zyklusabschluss (Sammelwert)",
+        "other_cycle_work_ms": "Sonstige, nicht einzeln erfasste Verarbeitung",
     }.get(raw, raw or "—")
 
 
@@ -3295,8 +3303,60 @@ def _command_resync_public_reason(value: Any) -> str:
         "RESYNC_AFTER_CONFIRMED_MISMATCH": "nach bestätigter Abweichung zwischen Sollwert und Gerätewirkung",
         "RESYNC_AFTER_UNCERTAIN_COMMAND": "nach unsicherem Kommandozustand",
         "STARTUP": "nach Controllerstart",
+        "RESYNC_SUPPRESSED_COOLDOWN": "wegen laufender Cooldown-Zeit nicht erneut gesendet",
     }
-    return mapping.get(raw.upper(), raw or "Kommunikationsunsicherheit")
+    upper = raw.upper()
+    if upper.startswith("RESYNC_AFTER_CONFIRMED_MISMATCH"):
+        return "nach bestätigter Abweichung zwischen Sollwert und Gerätewirkung"
+    return mapping.get(upper, raw or "Kommunikationsunsicherheit")
+
+
+def _adaptive_epoch_text(value: Any) -> str:
+    try:
+        epoch = float(value)
+    except Exception:
+        return "—"
+    if epoch <= 0:
+        return "—"
+    age = max(0.0, time.time() - epoch)
+    if age < 60:
+        return f"vor {int(age)} s"
+    if age < 3600:
+        return f"vor {int(age // 60)} min"
+    if age < 86400:
+        hours = int(age // 3600)
+        minutes = int((age % 3600) // 60)
+        return f"vor {hours} h {minutes} min"
+    dt = datetime.fromtimestamp(epoch)
+    days = int(age // 86400)
+    return f"vor {days} Tagen · {dt.strftime('%d.%m.%Y, %H:%M:%S')}"
+
+
+def _timing_phase_rows(timing: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def total(*keys: str) -> Optional[float]:
+        values = [_safe_float(timing.get(key)) for key in keys]
+        present = [value for value in values if value is not None]
+        return sum(present) if present else None
+
+    rows = [
+        ("config", "Konfigurationsprüfung", total("config_reload_ms", "mqtt_refresh_subscriptions_ms")),
+        ("local_api", "Zendure Local API", total("zendure_local_api_ms")),
+        ("energy_data", "SMA- und Netzdaten", total("sma_energy_meter_ms", "grid_control_read_ms", "grid_display_read_ms")),
+        ("diagnostics", "Status- und Diagnoseaufbereitung", total("cycle_display_metrics_ms", "cross_charge_metrics_ms", "charge_acceptance_diag_ms", "graph_snapshot_ms")),
+        ("control", "Regelentscheidung", total("control_decision_ms")),
+        ("mqtt", "MQTT-Kommandopfad", total("mqtt_command_path_ms")),
+        ("effect", "Kommandowirkungsprüfung", total("command_effect_monitor_ms")),
+        ("logging", "Logging im Hauptthread", total("measurement_logging_ms")),
+        ("other", "Sonstige, nicht einzeln erfasste Verarbeitung", total("other_cycle_work_ms")),
+    ]
+    active_total = _safe_float(timing.get("cycle_total_without_sleep_ms"))
+    result: List[Dict[str, Any]] = []
+    for key, label, value in rows:
+        if value is None or value < 0.01:
+            continue
+        percent = (100.0 * value / active_total) if active_total and active_total > 0 else None
+        result.append({"key": key, "label": label, "ms": value, "percent": percent})
+    return result
 
 
 def _legacy_soc_reference_box() -> str:
@@ -3480,6 +3540,10 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
         timing_obj = json.loads(str(s.get("last_cycle_timing_json") or "{}"))
     except Exception:
         timing_obj = {}
+    try:
+        timing_stats = json.loads(str(s.get("last_cycle_timing_stats_json") or "{}"))
+    except Exception:
+        timing_stats = {}
     active_cycle_ms = _safe_float(
         s.get("last_cycle_total_ms", s.get("last_loop_duration_ms", timing_obj.get("active_cycle_ms", timing_obj.get("cycle_total_without_sleep_ms"))))
     )
@@ -3489,10 +3553,26 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
     if measurement_logging_ms is None and str(s.get("last_cycle_slowest_step") or "") == "measurement_logging_ms":
         measurement_logging_ms = _safe_float(s.get("last_cycle_slowest_step_ms"))
     control_ms = _safe_float(timing_obj.get("control_decision_ms"))
-    command_ms = _safe_float(timing_obj.get("mqtt_command_path_ms", timing_obj.get("command_effect_monitor_ms")))
+    command_ms = _safe_float(timing_obj.get("mqtt_command_path_ms"))
     sqlite_ms = _safe_float(s.get("measurement_db_last_write_duration_ms"))
     interval_s = max(0.1, float(cfg.get("INTERVAL_SECONDS", 2) or 2))
-    cycle_budget_pct = (100.0 * active_cycle_ms / (interval_s * 1000.0)) if active_cycle_ms is not None else None
+    sleep_ms = interval_s * 1000.0
+    # The loop sleeps for INTERVAL_SECONDS *after* active work.  The bar must
+    # therefore show the active share of the real start-to-start cycle rather
+    # than pretending the configured sleep were a hard execution budget.
+    cycle_active_share_pct = (
+        100.0 * active_cycle_ms / (active_cycle_ms + sleep_ms)
+        if active_cycle_ms is not None and (active_cycle_ms + sleep_ms) > 0
+        else None
+    )
+    cycle_start_to_start_ms = (active_cycle_ms + sleep_ms) if active_cycle_ms is not None else None
+    cycle_meta_text = "—"
+    if cycle_start_to_start_ms is not None and cycle_active_share_pct is not None:
+        distance_text = f"{cycle_start_to_start_ms / 1000.0:.2f}".replace(".", ",")
+        share_text = f"{cycle_active_share_pct:.1f}".replace(".", ",")
+        cycle_meta_text = f"Zyklusabstand ca. {distance_text} s · aktive Arbeit {share_text} %"
+    slow_cycle_warn_ms = max(1.0, float(cfg.get("SLOW_CYCLE_WARN_MS", 5000) or 5000))
+    cycle_slow_warning = bool(active_cycle_ms is not None and active_cycle_ms >= slow_cycle_warn_ms)
     cycle_age = None
     if s.get("last_cycle_completed_epoch"):
         cycle_age = max(0.0, time.time() - float(s.get("last_cycle_completed_epoch")))
@@ -3502,6 +3582,7 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
         cycle_rule, cycle_rule_tone = "Verzögert", "warn"
     else:
         cycle_rule, cycle_rule_tone = "Nicht aktuell", "bad"
+    timing_phases = _timing_phase_rows(timing_obj)
     slowest_step_public = _timing_step_public_label(s.get("last_cycle_slowest_step"))
     resync_count = int(s.get("command_resync_count") or 0)
     resync_time = str(s.get("command_resync_last_time") or "").strip()
@@ -3510,6 +3591,13 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
         resync_text = f"{resync_time or 'Zeitpunkt unbekannt'} · {resync_reason} · AC-Modus und Lade-/Entladelimits erneut gesendet"
     else:
         resync_text = "Kein Zendure-Kommandoabgleich seit Controllerstart · betroffen wären AC-Modus und Lade-/Entladelimits"
+    suppressed_count = int(s.get("command_resync_suppressed_count") or 0)
+    suppressed_time = str(s.get("command_resync_suppressed_last_time") or "").strip()
+    suppressed_reason = _command_resync_public_reason(s.get("command_resync_suppressed_reason"))
+    suppressed_text = (
+        f"{suppressed_time or 'Zeitpunkt unbekannt'} · {suppressed_reason}"
+        if suppressed_count > 0 else "Kein unterdrückter Abgleichversuch seit Controllerstart"
+    )
     controller_uptime = max(0.0, time.time() - float(s.get("controller_started_epoch") or time.time()))
     free_bytes = metrics.get("disk_free_bytes")
     total_bytes = metrics.get("disk_total_bytes")
@@ -3601,7 +3689,8 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "db_name": os.path.basename(db_path) if db_path else "—",
             "db_size_bytes": s.get("measurement_db_size_bytes"),
             "queue_depth": s.get("measurement_db_queue_depth", 0),
-            "last_write": s.get("measurement_db_last_write_time") or "—",
+            "last_write": _adaptive_epoch_text(s.get("measurement_db_last_write_epoch_s")),
+            "last_write_epoch_s": s.get("measurement_db_last_write_epoch_s"),
             "fallback_active": bool(s.get("measurement_fallback_active")),
             "fallback_count": int(s.get("measurement_fallback_count_since_start") or 0),
             "fallback_reason": s.get("measurement_last_fallback_reason") or "",
@@ -3617,6 +3706,8 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "ram_total_bytes": metrics.get("ram_total_bytes"),
             "swap_used_bytes": metrics.get("swap_used_bytes"),
             "swap_total_bytes": metrics.get("swap_total_bytes"),
+            "swap_in_bytes_per_s": metrics.get("swap_in_bytes_per_s"),
+            "swap_out_bytes_per_s": metrics.get("swap_out_bytes_per_s"),
             "temperature_c": metrics.get("temperature_c"),
             "load": metrics.get("load"),
             "system_uptime_s": metrics.get("system_uptime_s"),
@@ -3640,7 +3731,13 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "effect_raw": effect_raw,
             "loop_ms": active_cycle_ms,
             "loop_text": (f"{int(round(active_cycle_ms))} ms" if active_cycle_ms is not None and active_cycle_ms >= 100 else (f"{active_cycle_ms:.1f} ms" if active_cycle_ms is not None else "—")),
-            "cycle_budget_percent": cycle_budget_pct,
+            "cycle_active_share_percent": cycle_active_share_pct,
+            # Compatibility key for the RC5/RC6 frontend contract.
+            "cycle_budget_percent": cycle_active_share_pct,
+            "cycle_start_to_start_ms": cycle_start_to_start_ms,
+            "cycle_meta_text": cycle_meta_text,
+            "slow_cycle_warn_ms": slow_cycle_warn_ms,
+            "cycle_slow_warning": cycle_slow_warning,
             "control_ms": control_ms,
             "command_ms": command_ms,
             "measurement_logging_ms": measurement_logging_ms,
@@ -3650,11 +3747,15 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "slowest_step_raw": s.get("last_cycle_slowest_step") or "",
             "slowest_ms": s.get("last_cycle_slowest_step_ms"),
             "timing": timing_obj,
+            "timing_phases": timing_phases,
+            "timing_stats": timing_stats,
             "controller_uptime_s": controller_uptime,
             "resync": resync_reason,
             "resync_time": resync_time or "—",
             "resync_text": resync_text,
             "resync_count": resync_count,
+            "resync_suppressed_count": suppressed_count,
+            "resync_suppressed_text": suppressed_text,
             "resync_target_w": s.get("command_uncertain_mqtt_target_w") or target or 0,
             "analysis": "Aktiv" if replay_service_available(cfg) else "Nicht erreichbar",
         },

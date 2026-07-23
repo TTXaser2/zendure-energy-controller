@@ -75,6 +75,50 @@ class ZendureController:
             elapsed_ms = (time.perf_counter_ns() - started) / 1_000_000.0
             self._cycle_timing_parts[name] = float(self._cycle_timing_parts.get(name, 0.0)) + elapsed_ms
 
+    def _timed_control_phase(self, func, *args, **kwargs):
+        """Measure controller decision work excluding actual MQTT setter calls.
+
+        MQTT setters are measured independently.  Subtracting their nested time
+        keeps the visible "Regelentscheidung" value non-overlapping without
+        changing the existing handler/control flow.
+        """
+        mqtt_before = float(self._cycle_timing_parts.get("mqtt_command_path_ms", 0.0))
+        started = time.perf_counter_ns()
+        try:
+            return func(*args, **kwargs)
+        finally:
+            total_ms = (time.perf_counter_ns() - started) / 1_000_000.0
+            mqtt_after = float(self._cycle_timing_parts.get("mqtt_command_path_ms", 0.0))
+            exclusive_ms = max(0.0, total_ms - max(0.0, mqtt_after - mqtt_before))
+            self._cycle_timing_parts["control_decision_ms"] = float(
+                self._cycle_timing_parts.get("control_decision_ms", 0.0)
+            ) + exclusive_ms
+
+    def _timed_command_effect_phase(self, func, *args, **kwargs):
+        mqtt_before = float(self._cycle_timing_parts.get("mqtt_command_path_ms", 0.0))
+        started = time.perf_counter_ns()
+        try:
+            return func(*args, **kwargs)
+        finally:
+            total_ms = (time.perf_counter_ns() - started) / 1_000_000.0
+            mqtt_after = float(self._cycle_timing_parts.get("mqtt_command_path_ms", 0.0))
+            exclusive_ms = max(0.0, total_ms - max(0.0, mqtt_after - mqtt_before))
+            self._cycle_timing_parts["command_effect_monitor_ms"] = float(
+                self._cycle_timing_parts.get("command_effect_monitor_ms", 0.0)
+            ) + exclusive_ms
+
+    def _timed_mqtt_setter(self, func, *args, **kwargs):
+        return self._timed_phase("mqtt_command_path_ms", func, *args, **kwargs)
+
+    def _mqtt_set_ac_mode(self, mode: str, force: bool = False) -> None:
+        self._timed_mqtt_setter(self.mqtt.set_ac_mode, mode, force=force)
+
+    def _mqtt_set_input_limit(self, watts: int, force: bool = False) -> None:
+        self._timed_mqtt_setter(self.mqtt.set_input_limit, watts, force=force)
+
+    def _mqtt_set_output_limit(self, watts: int, force: bool = False) -> None:
+        self._timed_mqtt_setter(self.mqtt.set_output_limit, watts, force=force)
+
     def request_stop(self) -> None:
         self._running = False
 
@@ -121,7 +165,25 @@ class ZendureController:
             self._cycle_timing_parts["finish_cycle_ms"] = (time.perf_counter_ns() - finish_started) / 1_000_000.0
             total_ms = (time.perf_counter_ns() - loop_perf_start) / 1_000_000.0
             self._cycle_timing_parts["cycle_total_without_sleep_ms"] = total_ms
-            measured_parts = {k: v for k, v in self._cycle_timing_parts.items() if k != "cycle_total_without_sleep_ms"}
+            leaf_keys = (
+                "config_reload_ms", "mqtt_refresh_subscriptions_ms",
+                "zendure_local_api_ms", "sma_energy_meter_ms",
+                "grid_control_read_ms", "grid_display_read_ms",
+                "cycle_display_metrics_ms", "cross_charge_metrics_ms",
+                "control_decision_ms", "mqtt_command_path_ms",
+                "command_effect_monitor_ms", "charge_acceptance_diag_ms",
+                "graph_snapshot_ms", "measurement_logging_ms",
+            )
+            attributed_ms = sum(float(self._cycle_timing_parts.get(key, 0.0)) for key in leaf_keys)
+            self._cycle_timing_parts["other_cycle_work_ms"] = max(0.0, total_ms - attributed_ms)
+            # A residual is useful for completeness of the hierarchy, but it
+            # is not a directly measured phase and must therefore never be
+            # presented as the "slowest measured section".
+            measured_parts = {
+                key: float(self._cycle_timing_parts.get(key, 0.0))
+                for key in leaf_keys
+                if float(self._cycle_timing_parts.get(key, 0.0)) > 0.0
+            }
             slowest = max(measured_parts.items(), key=lambda item: item[1]) if measured_parts else ("none", 0)
             self.state.set_cycle_timing(self._cycle_timing_parts, slowest[0], float(slowest[1]), total_ms)
             warn_ms = int(cfg.get("SLOW_CYCLE_WARN_MS", 5000))
@@ -179,7 +241,7 @@ class ZendureController:
         if manual_mode != "AUTO":
             self._reset_rest_surplus_harvest("MODE_CHANGED")
             self._timed_phase("grid_display_read_ms", self.refresh_grid_power_for_display, cfg)
-            self._timed_phase("control_decision_ms", self.handle_manual_mode, cfg, manual_mode)
+            self._timed_control_phase(self.handle_manual_mode, cfg, manual_mode)
             return
 
         if night_active:
@@ -197,7 +259,7 @@ class ZendureController:
                     return
             else:
                 self._timed_phase("grid_display_read_ms", self.refresh_grid_power_for_display, cfg)
-                self._timed_phase("control_decision_ms", self.handle_night_mode, cfg)
+                self._timed_control_phase(self.handle_night_mode, cfg)
                 return
 
         if not self.soc_is_fresh(cfg):
@@ -222,16 +284,16 @@ class ZendureController:
             # nahe 0 W erreicht ist, soll Zendure kontrolliert Ladeleistung
             # übernehmen dürfen, statt in HOLD bei einem alten Ziel zu verharren.
             if self._rest_surplus_is_active() and bool(cfg.get("HARVEST_HIGH_SMA_SOC_ENABLED", True)):
-                self._timed_phase("control_decision_ms", self.handle_charge, cfg, grid_power)
+                self._timed_control_phase(self.handle_charge, cfg, grid_power)
                 return
-            self._timed_phase("control_decision_ms", self.handle_deadband, cfg)
+            self._timed_control_phase(self.handle_deadband, cfg)
             return
 
         if grid_power > 0:
-            self._timed_phase("control_decision_ms", self.handle_discharge, cfg, grid_power)
+            self._timed_control_phase(self.handle_discharge, cfg, grid_power)
             return
 
-        self._timed_phase("control_decision_ms", self.handle_charge, cfg, grid_power)
+        self._timed_control_phase(self.handle_charge, cfg, grid_power)
 
     def update_sma_energy_meter_status(self, cfg: Dict[str, Any]) -> None:
         """Keep the passive SMA direct source listener and status snapshot current."""
@@ -805,16 +867,16 @@ class ZendureController:
             live_confirmed = bool(self.state.zendure_mqtt_live_confirmed)
         self._mark_active_command_mqtt_uncertain(signed_target_w, mqtt_status, live_confirmed)
         if signed_target_w > 0:
-            self.mqtt.set_ac_mode("Input mode", force=force)
-            self.mqtt.set_output_limit(0, force=force)
-            self.mqtt.set_input_limit(signed_target_w, force=force)
+            self._mqtt_set_ac_mode("Input mode", force=force)
+            self._mqtt_set_output_limit(0, force=force)
+            self._mqtt_set_input_limit(signed_target_w, force=force)
         elif signed_target_w < 0:
-            self.mqtt.set_ac_mode("Output mode", force=force)
-            self.mqtt.set_input_limit(0, force=force)
-            self.mqtt.set_output_limit(abs(signed_target_w), force=force)
+            self._mqtt_set_ac_mode("Output mode", force=force)
+            self._mqtt_set_input_limit(0, force=force)
+            self._mqtt_set_output_limit(abs(signed_target_w), force=force)
         else:
-            self.mqtt.set_input_limit(0, force=(force or force_zero))
-            self.mqtt.set_output_limit(0, force=(force or force_zero))
+            self._mqtt_set_input_limit(0, force=(force or force_zero))
+            self._mqtt_set_output_limit(0, force=(force or force_zero))
 
     def _force_resend_signed_target(self, signed_target_w: int, reason: str) -> None:
         signed_target_w = int(signed_target_w or 0)
@@ -882,7 +944,9 @@ class ZendureController:
         if cooldown_s > 0 and signature == self._last_resync_signature and (now - self._last_resync_epoch) < cooldown_s:
             if not confirmed_mismatch:
                 with self.state.lock:
-                    self.state.command_resync_reason = "RESYNC_SUPPRESSED_COOLDOWN"
+                    self.state.command_resync_suppressed_count += 1
+                    self.state.command_resync_suppressed_last_time = datetime.now().strftime("%H:%M:%S")
+                    self.state.command_resync_suppressed_reason = "RESYNC_SUPPRESSED_COOLDOWN"
                 return False
         self._last_resync_signature = signature
         self._last_resync_epoch = now
@@ -951,10 +1015,60 @@ class ZendureController:
         if target == 0:
             self._command_effect_watch_target = 0
             self._command_effect_watch_start_epoch = None
+            neutral_tolerance_w = max(20, int(cfg.get("COMMAND_EFFECT_TOLERANCE_W", 80) or 80))
+            actual_timeout_s = max(1, int(cfg.get("ZENDURE_POWER_STALE_TIMEOUT_SECONDS", 90) or 90))
             with self.state.lock:
+                # Alle Freigabebedingungen unter demselben RLock erneut lesen.
+                # Damit kann ein zwischenzeitlich neu gesetzter Nicht-Null-Sollwert
+                # nicht durch einen veralteten Snapshot als "neutral" behandelt werden.
+                live_target = 0
+                if self.state.last_input_power > 0 and self.state.last_output_power <= 0:
+                    live_target = int(self.state.last_input_power)
+                elif self.state.last_output_power > 0 and self.state.last_input_power <= 0:
+                    live_target = -int(self.state.last_output_power)
+                if live_target != 0:
+                    return
+
+                live_status = str(self.state.zendure_mqtt_overall_status or "")
+                live_confirmed_now = bool(self.state.zendure_mqtt_live_confirmed)
+                live_actual = int(self.state.actual_zendure_system_signed_power or 0)
+                live_actual_valid = bool(
+                    self.state.actual_zendure_power_valid
+                    and self.state.last_zendure_power_update_epoch is not None
+                )
+                live_actual_age = (
+                    max(0.0, now - float(self.state.last_zendure_power_update_epoch))
+                    if self.state.last_zendure_power_update_epoch is not None
+                    else None
+                )
+                neutral_state_confirmed = (
+                    live_status == "ZENDURE_MQTT_OK"
+                    and live_confirmed_now
+                    and live_actual_valid
+                    and live_actual_age is not None
+                    and live_actual_age <= float(actual_timeout_s)
+                    and abs(live_actual) <= neutral_tolerance_w
+                )
+
                 self._clear_command_not_effective_locked()
+                if self.state.command_uncertain_mqtt_active and neutral_state_confirmed:
+                    # Diagnose-Latch sicher auflösen: Der aktuelle Controller-Sollwert
+                    # ist neutral und frische Live-Telemetrie bestätigt eine neutrale
+                    # Gerätewirkung. Dies verändert weder Sendelogik noch Resync-
+                    # Entscheidung; nur die veraltete Warnanzeige wird bereinigt.
+                    self.state.command_uncertain_mqtt_active = False
+                    self.state.command_uncertain_mqtt_reason = ""
+                    self.state.command_uncertain_mqtt_status = ""
+                    self.state.command_uncertain_mqtt_target_w = 0
+                    self.state.command_uncertain_mqtt_since_epoch = None
+                    self.state.command_uncertain_mqtt_since_time = "-"
+                    self.state.command_effect_reason = (
+                        f"Neutraler Sollwert und frische neutrale Gerätewirkung "
+                        f"({live_actual:+d} W) bestätigt."
+                    )
+                else:
+                    self.state.command_effect_reason = "Kein aktiver Nicht-Null-Sollwert."
                 self.state.command_effect_category = "no_command"
-                self.state.command_effect_reason = "Kein aktiver Nicht-Null-Sollwert."
             return
 
         min_target_w = max(0, int(cfg.get("COMMAND_EFFECT_MIN_TARGET_W", 120) or 120))
@@ -1382,8 +1496,8 @@ class ZendureController:
         self._reset_rest_surplus_harvest("SAFE_STATE")
         with self.state.lock:
             need_force = (self.state.last_input_power != 0 or self.state.last_output_power != 0 or self.state.current_mode != "SAFE_STATE")
-        self.mqtt.set_output_limit(0, force=need_force)
-        self.mqtt.set_input_limit(0, force=need_force)
+        self._mqtt_set_output_limit(0, force=need_force)
+        self._mqtt_set_input_limit(0, force=need_force)
         with self.state.lock:
             self.state.last_output_power = 0
             self.state.last_input_power = 0
@@ -1427,8 +1541,8 @@ class ZendureController:
                 or self.state.last_output_power != 0
             )
 
-        self.mqtt.set_output_limit(0, force=need_force)
-        self.mqtt.set_input_limit(0, force=need_force)
+        self._mqtt_set_output_limit(0, force=need_force)
+        self._mqtt_set_input_limit(0, force=need_force)
 
         with self.state.lock:
             self.state.last_output_power = 0
@@ -1466,9 +1580,9 @@ class ZendureController:
         )
         target = max(0, target)
 
-        self.mqtt.set_ac_mode("Output mode")
-        self.mqtt.set_input_limit(0)
-        self.mqtt.set_output_limit(target)
+        self._mqtt_set_ac_mode("Output mode")
+        self._mqtt_set_input_limit(0)
+        self._mqtt_set_output_limit(target)
 
         with self.state.lock:
             self.state.last_input_power = 0
@@ -1508,9 +1622,9 @@ class ZendureController:
         )
         target = max(0, target)
 
-        self.mqtt.set_ac_mode("Input mode")
-        self.mqtt.set_output_limit(0)
-        self.mqtt.set_input_limit(target)
+        self._mqtt_set_ac_mode("Input mode")
+        self._mqtt_set_output_limit(0)
+        self._mqtt_set_input_limit(target)
 
         with self.state.lock:
             self.state.last_output_power = 0
@@ -1626,9 +1740,9 @@ class ZendureController:
         if int(previous_output or 0) <= 0:
             return False
 
-        self.mqtt.set_ac_mode("Output mode")
-        self.mqtt.set_input_limit(0, force=True)
-        self.mqtt.set_output_limit(0, force=True)
+        self._mqtt_set_ac_mode("Output mode")
+        self._mqtt_set_input_limit(0, force=True)
+        self._mqtt_set_output_limit(0, force=True)
         with self.state.lock:
             self.state.last_input_power = 0
             self.state.last_output_power = 0
@@ -1667,9 +1781,9 @@ class ZendureController:
         # und darf bei realem Netzbezug wieder geregelt entladen. In Folgezyklen darf
         # eine bereits laufende AUTO-Entladung nicht wieder auf 0 W zurückgesetzt werden.
         if previous_mode == "NIGHT_DISCHARGE" or previous_path == "NIGHT_MODE -> OUTPUT":
-            self.mqtt.set_ac_mode("Output mode")
-            self.mqtt.set_input_limit(0, force=True)
-            self.mqtt.set_output_limit(0, force=True)
+            self._mqtt_set_ac_mode("Output mode")
+            self._mqtt_set_input_limit(0, force=True)
+            self._mqtt_set_output_limit(0, force=True)
             with self.state.lock:
                 self.state.last_input_power = 0
                 self.state.last_output_power = 0
@@ -1698,9 +1812,9 @@ class ZendureController:
             return
 
         target = int(cfg["NIGHT_DISCHARGE_POWER_W"])
-        self.mqtt.set_ac_mode("Output mode")
-        self.mqtt.set_input_limit(0)
-        self.mqtt.set_output_limit(target)
+        self._mqtt_set_ac_mode("Output mode")
+        self._mqtt_set_input_limit(0)
+        self._mqtt_set_output_limit(target)
         with self.state.lock:
             self.state.last_input_power = 0
             self.state.last_output_power = target
@@ -1860,9 +1974,9 @@ class ZendureController:
             last_input = self.state.last_input_power
         step = int(cfg.get("SMA_GUARD_RAMP_DOWN_W", cfg.get("MAX_POWER_STEP_W", 150)))
         target = max(0, last_input - step)
-        self.mqtt.set_ac_mode("Input mode")
-        self.mqtt.set_output_limit(0)
-        self.mqtt.set_input_limit(target)
+        self._mqtt_set_ac_mode("Input mode")
+        self._mqtt_set_output_limit(0)
+        self._mqtt_set_input_limit(target)
         if self._rest_surplus_is_active():
             self.state.add_limiter("REST_SURPLUS_HARVEST")
             with self.state.lock:
@@ -1886,9 +2000,9 @@ class ZendureController:
         with self.state.lock:
             last_output = self.state.last_output_power
         target = max(0, last_output - int(cfg.get("MAX_POWER_STEP_W", 150)))
-        self.mqtt.set_ac_mode("Output mode")
-        self.mqtt.set_input_limit(0)
-        self.mqtt.set_output_limit(target)
+        self._mqtt_set_ac_mode("Output mode")
+        self._mqtt_set_input_limit(0)
+        self._mqtt_set_output_limit(target)
         with self.state.lock:
             self.state.last_input_power = 0
             self.state.last_output_power = target
@@ -2044,7 +2158,7 @@ class ZendureController:
         required_sources = self.determine_cycle_required_sources(cfg)
         self.state.set_control_source_requirements(required_sources)
         self.state.update_data_validity_model(cfg)
-        self._timed_phase("command_effect_monitor_ms", self.update_command_effect_monitor, cfg)
+        self._timed_command_effect_phase(self.update_command_effect_monitor, cfg)
         self._timed_phase("charge_acceptance_diag_ms", self.update_charge_acceptance_diagnostic, cfg)
         self._timed_phase("graph_snapshot_ms", self.state.record_graph_point, int(cfg.get("GRAPH_HISTORY_LIMIT", 300)))
         try:

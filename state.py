@@ -145,6 +145,9 @@ class ControllerState:
     command_resync_count: int = 0
     command_resync_last_time: str = "-"
     command_resync_reason: str = ""
+    command_resync_suppressed_count: int = 0
+    command_resync_suppressed_last_time: str = "-"
+    command_resync_suppressed_reason: str = ""
     command_effect_category: str = "no_command"
     command_effect_reason: str = "Kein aktiver Nicht-Null-Sollwert."
     command_not_effective_active: bool = False
@@ -163,6 +166,8 @@ class ControllerState:
     last_cycle_slowest_step: str = "none"
     last_cycle_slowest_step_ms: float = 0.0
     last_cycle_timing_json: str = "{}"
+    last_cycle_timing_stats_json: str = "{}"
+    cycle_timing_history: Deque[Dict[str, float]] = field(default_factory=lambda: deque(maxlen=60), repr=False)
     loop_counter: int = 0
     last_record_epoch: Optional[float] = None
     last_record_mqtt_commands_sent: int = 0
@@ -325,6 +330,7 @@ class ControllerState:
     measurement_db_path: str = ""
     measurement_db_queue_depth: int = 0
     measurement_db_last_write_epoch_s: Any = ""
+    measurement_db_last_write_duration_ms: Any = None
     measurement_db_error: str = ""
     measurement_db_rows_written: int = 0
     measurement_db_rows_dropped: int = 0
@@ -507,7 +513,7 @@ class ControllerState:
             missing = sorted(g for g in required_groups if g not in groups)
             stale = sorted(
                 group for group, info in groups.items()
-                if group in required_groups and (info.get("age_s") is None or int(info.get("age_s") or 999999) > timeout_s)
+                if group in required_groups and (info.get("age_s") is None or int(info.get("age_s")) > timeout_s)
             )
             live_groups = {group for group, info in groups.items() if group in required_groups and bool(info.get("live_confirmed"))}
             retained_only_groups = {group for group, info in groups.items() if group in required_groups and bool(info.get("retained_only"))}
@@ -570,6 +576,22 @@ class ControllerState:
             self.last_cycle_slowest_step_ms = round(float(slowest_step_ms or 0), 3)
             self.last_cycle_completed_epoch = time.time()
             self.last_cycle_timing_json = json.dumps(clean, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            self.cycle_timing_history.append(dict(clean))
+            stats: Dict[str, Dict[str, float]] = {}
+            all_keys = sorted({key for item in self.cycle_timing_history for key in item})
+            for key in all_keys:
+                values = sorted(float(item[key]) for item in self.cycle_timing_history if key in item)
+                if not values:
+                    continue
+                count = len(values)
+                p95_index = max(0, min(count - 1, int((count * 0.95) + 0.999999) - 1))
+                stats[key] = {
+                    "samples": count,
+                    "mean_ms": round(sum(values) / count, 3),
+                    "p95_ms": round(values[p95_index], 3),
+                    "max_ms": round(values[-1], 3),
+                }
+            self.last_cycle_timing_stats_json = json.dumps(stats, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
     def set_measurement_log_status(self, status: Dict[str, Any]) -> None:
         with self.lock:
@@ -599,6 +621,7 @@ class ControllerState:
             except Exception:
                 pass
             self.measurement_db_last_write_epoch_s = status.get("measurement_db_last_write_epoch_s", self.measurement_db_last_write_epoch_s)
+            self.measurement_db_last_write_duration_ms = status.get("measurement_db_last_write_duration_ms", self.measurement_db_last_write_duration_ms)
             self.measurement_db_error = str(status.get("measurement_db_error", self.measurement_db_error) or "")
             try:
                 self.measurement_db_rows_written = int(status.get("measurement_db_rows_written", self.measurement_db_rows_written) or 0)
@@ -1264,6 +1287,9 @@ class ControllerState:
                 "command_resync_count": self.command_resync_count,
                 "command_resync_last_time": self.command_resync_last_time,
                 "command_resync_reason": self.command_resync_reason,
+                "command_resync_suppressed_count": self.command_resync_suppressed_count,
+                "command_resync_suppressed_last_time": self.command_resync_suppressed_last_time,
+                "command_resync_suppressed_reason": self.command_resync_suppressed_reason,
                 "command_effect_state_category": self.command_effect_category,
                 "command_effect_state_reason": self.command_effect_reason,
                 "controller_started_epoch": self.controller_started_epoch,
@@ -1273,6 +1299,7 @@ class ControllerState:
                 "cycle_slowest_step": self.last_cycle_slowest_step,
                 "cycle_slowest_step_ms": self.last_cycle_slowest_step_ms,
                 "cycle_timing_json": self.last_cycle_timing_json,
+                "cycle_timing_stats_json": self.last_cycle_timing_stats_json,
                 "loop_counter": self.loop_counter,
                 "last_error": self.last_error,
                 "last_error_time": self.last_error_time,
@@ -1309,6 +1336,7 @@ class ControllerState:
                 "measurement_db_path": self.measurement_db_path,
                 "measurement_db_queue_depth": self.measurement_db_queue_depth,
                 "measurement_db_last_write_epoch_s": self.measurement_db_last_write_epoch_s,
+                "measurement_db_last_write_duration_ms": self.measurement_db_last_write_duration_ms,
                 "measurement_db_error": self.measurement_db_error,
                 "measurement_db_rows_written": self.measurement_db_rows_written,
                 "measurement_db_rows_dropped": self.measurement_db_rows_dropped,
@@ -1407,6 +1435,9 @@ class ControllerState:
                 "command_resync_count": self.command_resync_count,
                 "command_resync_last_time": self.command_resync_last_time,
                 "command_resync_reason": self.command_resync_reason,
+                "command_resync_suppressed_count": self.command_resync_suppressed_count,
+                "command_resync_suppressed_last_time": self.command_resync_suppressed_last_time,
+                "command_resync_suppressed_reason": self.command_resync_suppressed_reason,
                 "command_effect_state_category": self.command_effect_category,
                 "command_effect_state_reason": self.command_effect_reason,
                 "command_not_effective_active": self.command_not_effective_active,
@@ -1433,6 +1464,7 @@ class ControllerState:
                 "measurement_db_path": self.measurement_db_path,
                 "measurement_db_queue_depth": self.measurement_db_queue_depth,
                 "measurement_db_last_write_epoch_s": self.measurement_db_last_write_epoch_s,
+                "measurement_db_last_write_duration_ms": self.measurement_db_last_write_duration_ms,
                 "measurement_db_error": self.measurement_db_error,
                 "measurement_db_rows_written": self.measurement_db_rows_written,
                 "measurement_db_rows_dropped": self.measurement_db_rows_dropped,
@@ -1445,6 +1477,7 @@ class ControllerState:
                 "last_cycle_slowest_step": self.last_cycle_slowest_step,
                 "last_cycle_slowest_step_ms": self.last_cycle_slowest_step_ms,
                 "last_cycle_timing_json": self.last_cycle_timing_json,
+                "last_cycle_timing_stats_json": self.last_cycle_timing_stats_json,
                 "loop_counter": self.loop_counter,
                 "last_shelly_update_time": self.last_shelly_update_time,
                 "last_shelly_update_age_seconds": age_seconds(self.last_shelly_update_epoch),

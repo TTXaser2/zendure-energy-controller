@@ -33,8 +33,8 @@ class V12112Rc6UiDiagnosticsHotfixTests(unittest.TestCase):
         raise AssertionError(f"Route {method} {path} not found")
 
     def test_version(self):
-        self.assertEqual("12.11.2-rc6", version.APP_VERSION)
-        self.assertEqual("V12.11.2-RC6", version.APP_VERSION_LABEL)
+        self.assertEqual("12.11.2-rc8", version.APP_VERSION)
+        self.assertEqual("V12.11.2-RC8", version.APP_VERSION_LABEL)
 
     def test_wide_desktop_has_four_columns_medium_two_mobile_one(self):
         css = Path("static/status_v2.css").read_text(encoding="utf-8")
@@ -61,7 +61,7 @@ class V12112Rc6UiDiagnosticsHotfixTests(unittest.TestCase):
                 "measurement_log_status": "active",
                 "measurement_db_status": "queued",
                 "measurement_log_active_target_type": "internal_sd",
-                "last_cycle_slowest_step": "finish_cycle_ms",
+                "last_cycle_slowest_step": "other_cycle_work_ms",
                 "last_cycle_slowest_step_ms": 11.6,
                 "last_cycle_completed_epoch": time.time(),
                 "grid_power_valid": True,
@@ -75,7 +75,7 @@ class V12112Rc6UiDiagnosticsHotfixTests(unittest.TestCase):
         )
         self.assertEqual("Aktuell", payload["diag"]["mqtt"])
         self.assertEqual("Noch kein relevantes Kommando", payload["diag"]["effect"])
-        self.assertEqual("Zyklusabschluss", payload["diag"]["slowest_step"])
+        self.assertEqual("Sonstige, nicht einzeln erfasste Verarbeitung", payload["diag"]["slowest_step"])
         self.assertEqual("Aktiv", payload["logging"]["status"])
         self.assertEqual("Aktiv · asynchron", payload["logging"]["db"])
         self.assertEqual("Interner Systemdatenträger", payload["logging"]["target"])
@@ -83,6 +83,7 @@ class V12112Rc6UiDiagnosticsHotfixTests(unittest.TestCase):
         self.assertNotIn("no_command", payload["diag"]["effect"])
 
     def test_repeated_telemetry_flap_reopens_same_row_semantically(self):
+        from unittest.mock import patch
         with tempfile.TemporaryDirectory() as td:
             cfg = {"OPERATIONAL_EVENTS_DB_PATH": os.path.join(td, "events.sqlite3")}
             state = ControllerState()
@@ -92,27 +93,29 @@ class V12112Rc6UiDiagnosticsHotfixTests(unittest.TestCase):
                 "mqtt_connected": True,
                 "mode": "AUTO",
                 "resync_count": 0,
-                "zendure_telemetry": "ZENDURE_MQTT_OK",
+                "stable:zendure_telemetry": False,
                 "command_effect": "effective",
                 "measurement_logging": "active",
             }
             base = state.snapshot()
-            base.update(
-                {
-                    "mqtt_connected": True,
-                    "current_mode": "AUTO",
-                    "command_effect_category": "effective",
-                    "measurement_log_status": "active",
-                    "zendure_mqtt_overall_status": "ZENDURE_MQTT_PARTIAL_STALE",
-                    "zendure_mqtt_status_reason": "Headunit-Leistung fehlt",
-                }
-            )
-            journal._observe(conn, base)
-            base["zendure_mqtt_overall_status"] = "ZENDURE_MQTT_OK"
-            journal._observe(conn, base)
-            base["zendure_mqtt_overall_status"] = "ZENDURE_MQTT_PARTIAL_STALE"
-            base["zendure_mqtt_status_reason"] = "SOC fehlt"
-            journal._observe(conn, base)
+            base.update({
+                "mqtt_connected": True,
+                "current_mode": "AUTO",
+                "command_effect_category": "effective",
+                "measurement_log_status": "active",
+                "zendure_mqtt_overall_status": "ZENDURE_MQTT_PARTIAL_STALE",
+                "zendure_mqtt_status_reason": "Headunit-Leistung fehlt",
+            })
+            with patch("operational_events.time.monotonic", side_effect=[0.0, 7.0, 8.0, 15.0, 16.0, 23.0]):
+                journal._observe(conn, base)
+                journal._observe(conn, base)
+                base["zendure_mqtt_overall_status"] = "ZENDURE_MQTT_OK"
+                journal._observe(conn, base)
+                journal._observe(conn, base)
+                base["zendure_mqtt_overall_status"] = "ZENDURE_MQTT_PARTIAL_STALE"
+                base["zendure_mqtt_status_reason"] = "SOC fehlt"
+                journal._observe(conn, base)
+                journal._observe(conn, base)
             row = conn.execute(
                 "SELECT title,detail,status,ended_at,occurrence_count FROM operational_events WHERE event_type='zendure_telemetry'"
             ).fetchone()

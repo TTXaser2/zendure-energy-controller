@@ -253,7 +253,7 @@ def render_status_page_v2(
     <section class="zec-wide-card zec-soc-day-card">
       <header class="zec-wide-header">
         <div><div class="zec-card-title">{_icon('graph')}<h2>Speicher-SOC Tagesgraph</h2></div></div>
-        <div class="zec-day-nav"><button id="dayPrev" type="button">‹ Zurück</button><button id="dayToday" type="button">Heute</button><button id="dayNext" type="button">Vor ›</button><label class="zec-day-picker-label" aria-label="Datum direkt auswählen"><strong id="socDayLabel"></strong><input id="socDayPicker" type="date" aria-label="Datum des Speicher-SOC-Tagesgraphen auswählen"></label></div>
+        <div class="zec-day-nav"><button id="dayPrev" type="button">‹ Zurück</button><button id="dayToday" type="button">Heute</button><button id="dayNext" type="button">Vor ›</button><span class="zec-day-picker-wrap"><button id="socDayPickerButton" class="zec-day-picker-button" type="button" aria-label="Datum direkt auswählen"><strong id="socDayLabel"></strong></button><input id="socDayPicker" class="zec-day-picker-input" type="date" aria-label="Datum des Speicher-SOC-Tagesgraphen auswählen"></span></div>
       </header>
       <div class="zec-day-chart-wrap"><canvas id="storageSocChart" aria-label="Speicher-SOC im Tagesverlauf"></canvas><div id="storageSocTooltip" class="zec-chart-tooltip" hidden></div></div>
       <div id="storageSocLegend" class="zec-chart-legend"></div>
@@ -286,6 +286,7 @@ def render_status_page_v2(
         <div class="zec-health-rows compact">
           <div><span>Systemlast (1/5/15 Min.)</span><strong data-zec="resources.load_text">—</strong></div>
           <div><span>Swap-Nutzung</span><strong data-zec="resources.swap_text">—</strong></div>
+          <div><span>Swap-Aktivität</span><strong data-zec="resources.swap_activity_text">wird ermittelt …</strong></div>
           <div><span>Systemlaufzeit</span><strong data-zec="resources.uptime_text">—</strong></div>
           <div><span>Throttling / Unterspannung</span><strong data-zec="resources.throttle_text">—</strong></div>
         </div>
@@ -293,7 +294,7 @@ def render_status_page_v2(
       </article>
 
       <article class="zec-lower-card" data-lower="diagnostics">
-        <header class="zec-card-header"><div class="zec-card-title">{_icon('diagnostics')}<h2>Controller &amp; Schnittstellen</h2></div>{_info_button('Controller & Schnittstellen','Zeigt den zuletzt abgeschlossenen aktiven Gesamtdurchlauf und dessen wesentliche Abschnitte. Mittelwerte und P95 können später ergänzend in die Detaildiagnose aufgenommen werden. Der Zendure-Kommandoabgleich sendet AC-Modus sowie Lade-/Entladelimits nach Kommunikationsunsicherheit erneut.')}</header>
+        <header class="zec-card-header"><div class="zec-card-title">{_icon('diagnostics')}<h2>Controller &amp; Schnittstellen</h2></div>{_info_button('Controller & Schnittstellen','Zeigt den zuletzt abgeschlossenen aktiven Gesamtdurchlauf und dessen wesentliche Abschnitte. Mittelwert, P95 und Maximum der jüngsten begrenzt gespeicherten Durchläufe stehen im Info-Pop-over. Der Zendure-Kommandoabgleich sendet AC-Modus sowie Lade-/Entladelimits nach Kommunikationsunsicherheit erneut.')}</header>
         <div class="zec-health-chain"><span data-chain="rule">● Regelung</span><span data-chain="mqtt">● MQTT</span><span data-chain="api">● API</span><span data-chain="effect">● Wirkung</span></div>
         <div class="zec-health-rows">
           <div><span>Regelzyklus</span><strong data-zec="diag.rule">{_e(payload['diag'].get('rule'))}</strong></div>
@@ -303,19 +304,19 @@ def render_status_page_v2(
           <div><span>Kommandowirkung</span><strong data-zec="diag.effect">{_e(payload['diag'].get('effect'))}</strong></div>
         </div>
         <div class="zec-timing-title">Durchlaufzeiten – letzter Durchlauf</div>
-        <div class="zec-health-rows compact">
-          <div><span>Aktiver Gesamtdurchlauf</span><strong data-zec="diag.loop_text">{_e(payload['diag'].get('loop_text'))}</strong></div>
-          <div><span>Reine Regelentscheidung</span><strong data-zec="diag.control_text">—</strong></div>
-          <div><span>MQTT-/Wirkungspfad</span><strong data-zec="diag.command_text">—</strong></div>
-          <div><span>Logging im Hauptthread</span><strong data-zec="diag.measurement_logging_text">{_e(payload['diag'].get('measurement_logging_text'))}</strong></div>
+        <div class="zec-timing-total"><span>Aktiver Gesamtdurchlauf <small>ohne Wartezeit / Sleep</small></span><strong data-zec="diag.loop_text">{_e(payload['diag'].get('loop_text'))}</strong></div>
+        <div class="zec-cycle-meta" data-zec="diag.cycle_meta">{_e(payload['diag'].get('cycle_meta_text') or '—')}</div>
+        <div id="diagTimingTree" class="zec-timing-tree"></div>
+        <div id="diagTimingDistribution" class="zec-timing-distribution" role="img" aria-label="Zeitverteilung des letzten aktiven Controller-Durchlaufs"></div>
+        <div class="zec-health-rows compact zec-async-timing">
           <div><span>SQLite-Schreiben, asynchron</span><strong data-zec="diag.sqlite_text">—</strong></div>
-          <div><span>Langsamster Abschnitt</span><strong data-zec="diag.slowest_text">{_e(payload['diag'].get('slowest_step') or '—')} · {_e(payload['diag'].get('slowest_ms') if payload['diag'].get('slowest_ms') is not None else '—')} ms</strong></div>
+          <div><span>Langsamster erfasster Teilabschnitt</span><strong data-zec="diag.slowest_text">{_e(payload['diag'].get('slowest_step') or '—')} · {_e(payload['diag'].get('slowest_ms') if payload['diag'].get('slowest_ms') is not None else '—')} ms</strong></div>
         </div>
-        <div class="zec-meter"><div class="zec-meter-fill" data-meter="diag.cycle"></div></div>
         <div class="zec-health-rows compact">
           <div><span>Analyse / Replay</span><strong data-zec="diag.analysis">{_e(payload['diag'].get('analysis'))}</strong></div>
           <div><span>Controller-Laufzeit</span><strong data-zec="diag.uptime_text">—</strong></div>
-          <div class="zec-full-row"><span>Letzter Zendure-Kommandoabgleich</span><strong data-zec="diag.resync_text">{_e(payload['diag'].get('resync_text'))}</strong></div>
+          <div class="zec-full-row"><span>Letzter erfolgreicher Zendure-Kommandoabgleich</span><strong data-zec="diag.resync_text">{_e(payload['diag'].get('resync_text'))}</strong></div>
+          <div class="zec-full-row"><span>Letzter unterdrückter Abgleichversuch</span><strong data-zec="diag.resync_suppressed_text">{_e(payload['diag'].get('resync_suppressed_text'))}</strong></div>
         </div>
         <footer class="zec-card-footer"><span class="zec-status-dot ok"></span><span data-zec="diag.footer">Controller und Schnittstellen werden bewertet</span></footer>
       </article>

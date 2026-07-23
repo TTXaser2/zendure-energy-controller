@@ -15,6 +15,7 @@ from typing import Any, Dict, Optional
 _lock = threading.Lock()
 _cache: Dict[str, Any] = {"built": 0.0, "payload": None}
 _prev_cpu: Optional[tuple[int, int]] = None
+_prev_swap: Optional[tuple[float, int, int]] = None
 _start_epoch = time.time()
 
 
@@ -71,6 +72,41 @@ def _mem() -> Dict[str, Optional[float]]:
         "swap_used_bytes": max(0, swap_total - swap_free),
     }
 
+
+
+def _swap_activity() -> Dict[str, Optional[float]]:
+    """Return swap-in/out throughput derived from /proc/vmstat deltas.
+
+    Linux exposes pswpin/pswpout as page counters.  The calculation is cached
+    with the other web metrics and never runs in the controller loop.
+    """
+    global _prev_swap
+    values: Dict[str, int] = {}
+    for line in _read("/proc/vmstat").splitlines():
+        parts = line.split()
+        if len(parts) == 2 and parts[0] in {"pswpin", "pswpout"}:
+            try:
+                values[parts[0]] = int(parts[1])
+            except Exception:
+                pass
+    if "pswpin" not in values or "pswpout" not in values:
+        return {"swap_in_bytes_per_s": None, "swap_out_bytes_per_s": None}
+    now = time.monotonic()
+    current = (now, values["pswpin"], values["pswpout"])
+    if _prev_swap is None:
+        _prev_swap = current
+        return {"swap_in_bytes_per_s": None, "swap_out_bytes_per_s": None}
+    elapsed = now - _prev_swap[0]
+    page_size = int(os.sysconf("SC_PAGE_SIZE")) if hasattr(os, "sysconf") else 4096
+    if elapsed <= 0:
+        _prev_swap = current
+        return {"swap_in_bytes_per_s": None, "swap_out_bytes_per_s": None}
+    result = {
+        "swap_in_bytes_per_s": max(0.0, (current[1] - _prev_swap[1]) * page_size / elapsed),
+        "swap_out_bytes_per_s": max(0.0, (current[2] - _prev_swap[2]) * page_size / elapsed),
+    }
+    _prev_swap = current
+    return result
 
 def _temperature() -> Optional[float]:
     raw = _read("/sys/class/thermal/thermal_zone0/temp")
@@ -138,6 +174,7 @@ def get_system_metrics(storage_path: str = "/", ttl_s: float = 5.0) -> Dict[str,
             "throttling": _throttled(),
         }
         payload.update(_mem())
+        payload.update(_swap_activity())
         payload.update(_disk(storage_path))
         _cache.update({"built": now, "payload": payload})
         return dict(payload)

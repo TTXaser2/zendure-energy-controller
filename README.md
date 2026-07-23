@@ -1,40 +1,34 @@
-# Zendure Energy Controller V12.11.2-RC4
+# Zendure Energy Controller V12.11.2-RC8
 
-## Statusseite V2 – gezielter UI-/Graph-Feinschliff
+## Aktueller Release
 
-V12.11.2-RC4 basiert auf der produktiv bewährten Statusseite aus RC3. Der Neuaufbau, das responsive Kartenlayout und die zentrale Snapshot-/Polling-Architektur bleiben unverändert. RC4 behebt ausschließlich die gemeinsam identifizierten Funktions- und Konsistenzpunkte.
+V12.11.2-RC8 schließt den nach der RC7-Produktivsichtung bestätigten UI-/Diagnose-Backlog ab.
 
-### Änderungen der Statusseite
+Wesentliche Änderungen:
 
-- Produktkopf visuell korrigiert: `ZENDURE Energy Controller | Navigation`.
-- Betriebsmodus-Details als konsistente Bezeichnungs-/Wertzeilen mit rechtsbündigen Werten.
-- Primärspeicher-Ring einheitlich mit `SOC aktuell` beschriftet.
-- Redundanter Untertitel des Speicher-SOC-Tagesgraphen entfernt.
-- Expertenmenü als robustes, nativ klickbares Dropdown umgesetzt.
-- Datum des Tagesgraphen ist direkt anklickbar und öffnet den nativen Kalenderwähler; `Zurück`, `Heute` und `Vor` bleiben erhalten.
-- Graphlegende erklärt nun dynamisch Zendure, Primärspeicher, Max-SOC, Nachtreserve, Min-SOC, Nachtfenster und den aktuellen Zeitpunkt.
+- quantisierungsbewusste SOC-Anzeigekurve statt kaum wirksamer Plateau-Bézier-Glättung,
+- sichere Auflösung einer veralteten MQTT-Unsicherheitswarnung bei bestätigtem neutralem Soll-/Istzustand,
+- verständlicher Zykluskontext mit Start-zu-Start-Abstand und aktivem Arbeitsanteil,
+- gestapelter Timing-Verteilungsbalken mit identischer Farblegende im Linienbaum,
+- Slow-Cycle-Bewertung ausschließlich gegen `SLOW_CYCLE_WARN_MS`,
+- robuster Installations-Ready-Check mit Retry, JSON-Prüfung und eindeutiger Fehlerausgabe,
+- FastAPI-Lifespan statt veralteter `on_event`-Handler,
+- geschlossener Dateihandle im Operations-Dashboard-Test.
 
-### Historischer Regelgrund im SOC-Tooltip
+Ausführliche Informationen:
 
-Der SQLite-Graphspeicher persistiert ab RC4 zusätzlich den Regelgrund:
+```text
+TECHNICAL_NOTES_V12_11_2_RC8.md
+RELEASE_INFO_V12_11_2_RC8.md
+```
 
-- `measurement_raw.control_reason`
-- `measurement_1min.control_reason_last`
+## Architektur und Regelungsschutz
 
-Neue Messwerte zeigen den Grund damit dauerhaft im Tagesgraph-Tooltip. Die Schemaerweiterung erfolgt beim Start als additive SQLite-Migration; vorhandene Messwerte und Tabellen bleiben erhalten.
+RC8 verändert keine fachliche Energie-Regelstrategie von AUTO, NIGHT_DISCHARGE, FIXED, Harvest, Cross-Charge oder Safe-State.
 
-Für bereits bestehende historische SQLite-Daten liegt das idempotente Wartungsskript `tools/backfill_measurement_reasons.py` bei. Es liest vorhandene V4-CSV-Dateien streamingbasiert, verändert keine CSV, füllt nur leere Reason-Felder und erstellt vor `--apply` ein Rollback-Backup.
+Die Korrektur in `controller_logic.py` betrifft ausschließlich ein diagnostisches Warn-Latch. Es wird nur dann aufgelöst, wenn der aktuelle Sollwert neutral ist und frische Zendure-Live-Telemetrie eine neutrale Gerätewirkung bestätigt. Die Korrektur sendet kein MQTT-Kommando und verändert keine Resync-Berechtigung.
 
-### Refresh und Lastschutz
-
-- Zentrale Snapshot-Single-Source-of-Truth über `/status-view-data` bleibt erhalten.
-- Keine vollständigen Seitenreloads und keine unabhängigen Poller je Karte.
-- Keine synchronen DB-, MQTT-, Netzwerk- oder Dateisystemoperationen im Reglerpfad ergänzt.
-- Der Tagesgraph liest weiterhin ausschließlich den indizierten 1-Minuten-Speicher für den ausgewählten Tag.
-
-### Unveränderte Regelung
-
-AUTO, Harvest, Cross-Charge, NIGHT_DISCHARGE, Fixed-Modi, Safe-State und MQTT-Command-Lifecycle sind gegenüber RC3 unverändert. RC4 erzeugt keine neuen Reglerzustände, Latches, Race Conditions oder Prioritätsumkehrungen.
+SOC-Rekonstruktion, Timing-Verteilungsbalken und Slow-Cycle-Darstellung sind reine UI-/Diagnosefunktionen. Rohmesswerte, Tooltipwerte, Schwellen, Datenbank und Messschema bleiben unverändert.
 
 ## Installation
 

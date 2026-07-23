@@ -187,10 +187,34 @@ if [ "$REPLAY_WAS_ACTIVE" -eq 1 ]; then
     systemctl status zendure-replay.service --no-pager -l
 fi
 
-echo "Ready-Check:"
-curl -s "http://127.0.0.1:8080/ready" | python3 -m json.tool || true
+echo "Ready-Check (maximal 20 Sekunden):"
+READY_OK=0
+READY_BODY="$(mktemp)"
+READY_JSON="$(mktemp)"
+READY_DEADLINE=$((SECONDS + 20))
+READY_ATTEMPT=0
+while [ "$SECONDS" -lt "$READY_DEADLINE" ]; do
+    READY_ATTEMPT=$((READY_ATTEMPT + 1))
+    if curl -fsS --connect-timeout 1 --max-time 1 "http://127.0.0.1:8080/ready" > "$READY_BODY" 2>/dev/null \
+       && python3 -m json.tool < "$READY_BODY" > "$READY_JSON" 2>/dev/null; then
+        echo "Ready nach Versuch ${READY_ATTEMPT}:"
+        cat "$READY_JSON"
+        READY_OK=1
+        break
+    fi
+    sleep 0.5
+done
+rm -f "$READY_BODY" "$READY_JSON"
 
-echo "Update abgeschlossen."
+if [ "$READY_OK" -ne 1 ]; then
+    echo "FEHLER: Der Controller-Dienst läuft, aber /ready lieferte innerhalb von 20 Sekunden kein gültiges JSON."
+    echo "Bitte unmittelbar prüfen:"
+    echo "  systemctl status zendure-controller.service --no-pager -l"
+    echo "  journalctl -u zendure-controller.service -n 100 --no-pager"
+    exit 1
+fi
+
+echo "Update abgeschlossen und Ready-Check erfolgreich."
 if [ "$REPLAY_WAS_ACTIVE" -eq 1 ]; then
     echo "Der Analyse-Dienst war vor dem Update aktiv und wurde wieder gestartet."
 else
