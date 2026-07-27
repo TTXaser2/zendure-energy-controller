@@ -22,6 +22,7 @@ from measurement_v4_contract import (
     header_for_profile,
     header_hash,
     rc10_header_for_profile,
+    rc12_header_for_profile,
     rc11_header_for_profile,
 )
 from version import APP_VERSION
@@ -464,6 +465,11 @@ def build_v4_row(config: Dict[str, Any], row: Dict[str, Any], previous_effective
         "command_desired_safety_relevant": _bool01(row.get("command_desired_safety_relevant")),
         "command_publish_event": str(row.get("command_publish_event", "") or ""),
         "command_publish_fields": str(row.get("command_publish_fields", "") or ""),
+        "command_publish_event_id": _safe_int(row.get("command_publish_event_id")) or 0,
+        "command_publish_epoch_s": _round1(row.get("command_publish_epoch_s")),
+        "command_state_gate_state": str(row.get("command_state_gate_state", "") or ""),
+        "command_state_retry_remaining_s": _round1(row.get("command_state_retry_remaining_s")),
+        "command_neutralization_episode_id": _safe_int(row.get("command_neutralization_episode_id")) or 0,
         "command_effect_category": str(row.get("command_effect_category", "") or ""),
         "command_effect_reason": str(row.get("command_effect_reason", "") or ""),
         "command_effect_confirmed": _bool01(row.get("command_effect_confirmed")),
@@ -1309,7 +1315,7 @@ class MeasurementV4Logger:
         return len(buffer.getvalue().encode("utf-8"))
 
     def _schema_upgrade_path_if_needed(self, path: str, profile: str) -> str:
-        """Keep older V4 files immutable and continue in a fresh RC12 file."""
+        """Keep older V4 files immutable and continue in a fresh RC13 file."""
         if not os.path.exists(path) or os.path.getsize(path) == 0:
             return path
         try:
@@ -1319,7 +1325,9 @@ class MeasurementV4Logger:
             return path
         fields = [part.strip() for part in first.split(";")]
         previous_contract = ""
-        if fields == rc11_header_for_profile(profile):
+        if fields == rc12_header_for_profile(profile):
+            previous_contract = "ZEC-MEASUREMENT-V4-RC12"
+        elif fields == rc11_header_for_profile(profile):
             previous_contract = "ZEC-MEASUREMENT-V4-RC11"
         elif fields == rc10_header_for_profile(profile):
             previous_contract = "ZEC-MEASUREMENT-V4-RC10"
@@ -1331,9 +1339,9 @@ class MeasurementV4Logger:
         directory = os.path.dirname(path)
         filename = os.path.basename(path)
         stem, ext = os.path.splitext(filename)
-        new_path = os.path.join(directory, f"{stem}_schema_rc12_{self._session_suffix}{ext}")
+        new_path = os.path.join(directory, f"{stem}_schema_rc13_{self._session_suffix}{ext}")
         if os.path.exists(new_path):
-            new_path = os.path.join(directory, f"{stem}_schema_rc12_{self._session_suffix}_{uuid.uuid4().hex[:6]}{ext}")
+            new_path = os.path.join(directory, f"{stem}_schema_rc13_{self._session_suffix}_{uuid.uuid4().hex[:6]}{ext}")
         for base, mapped in list(self._session_path_map.items()):
             if mapped == path:
                 self._session_path_map[base] = new_path
@@ -1344,7 +1352,7 @@ class MeasurementV4Logger:
             "new_path": new_path,
             "rotation_reason": "HEADER_CHANGED",
             "previous_contract": previous_contract,
-            "new_contract": "ZEC-MEASUREMENT-V4-RC12",
+            "new_contract": "ZEC-MEASUREMENT-V4-RC13",
         })
         return new_path
 

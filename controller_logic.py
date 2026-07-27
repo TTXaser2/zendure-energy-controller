@@ -21,6 +21,11 @@ from command_lifecycle import (
     INTENT_DISCHARGE,
     INTENT_IDLE,
     INTENT_NEUTRALIZE,
+    COMMAND_GATE_UNPROTECTED,
+    COMMAND_GATE_WAIT_SMART_MODE,
+    COMMAND_GATE_WAIT_FULL_STATE,
+    COMMAND_GATE_READY,
+    COMMAND_GATE_SAFETY_NEUTRALIZATION,
     intent_for_signed_target,
 )
 from state import ControllerState
@@ -79,6 +84,9 @@ class ZendureController:
         self._last_non_neutral_ac_mode: str = "Output mode"
         self._command_state_verification_signature: str = ""
         self._command_state_verification_epoch: float = 0.0
+        self._neutralization_physical_signature: str = ""
+        self._neutralization_confirmed_signature: str = ""
+        self._command_effect_last_charge_soc: Optional[float] = None
         self._last_published_intent: str = INTENT_IDLE
 
     def log(self, message: str) -> None:
@@ -200,6 +208,9 @@ class ZendureController:
             "_last_non_neutral_ac_mode": "Output mode",
             "_command_state_verification_signature": "",
             "_command_state_verification_epoch": 0.0,
+            "_neutralization_physical_signature": "",
+            "_neutralization_confirmed_signature": "",
+            "_command_effect_last_charge_soc": None,
             "_last_published_intent": INTENT_IDLE,
             "_last_resync_signature": "",
             "_last_resync_epoch": 0.0,
@@ -1064,12 +1075,19 @@ class ZendureController:
         self._ensure_command_lifecycle_attrs()
         previous = self._desired_command_batch
         intent_changed = previous is None or previous.intent != batch.intent
-        desired_state_changed = previous is None or previous.sequence_id != batch.sequence_id
+        physical_state_changed = bool(
+            previous is None
+            or previous.intent != batch.intent
+            or previous.smart_mode != batch.smart_mode
+            or previous.ac_mode != batch.ac_mode
+            or previous.input_limit_w != batch.input_limit_w
+            or previous.output_limit_w != batch.output_limit_w
+            or previous.signed_target_w != batch.signed_target_w
+        )
         mismatch_resolution_event = ""
 
-        # An old mismatch must not be called recovered merely because a new
-        # safety intent supersedes it.  Close the old episode explicitly before
-        # the new neutralisation watch starts.
+        # A new safety intent supersedes an old mismatch; it is not proof that
+        # the old active command recovered.
         with self.state.lock:
             if previous is not None and previous.intent != batch.intent and self.state.command_not_effective_active:
                 if batch.intent == INTENT_NEUTRALIZE and batch.safety_relevant:
@@ -1087,7 +1105,20 @@ class ZendureController:
             if intent_changed:
                 self._command_effect_last_resend_epoch = 0.0
 
-        now_text = datetime.now().strftime("%H:%M:%S")
+        now_epoch = time.time()
+        now_text = datetime.fromtimestamp(now_epoch).strftime("%H:%M:%S")
+        neutral_signature = f"{batch.ac_mode}|0|0" if batch.intent == INTENT_NEUTRALIZE else ""
+        previous_neutral_signature = (
+            f"{previous.ac_mode}|0|0"
+            if previous is not None and previous.intent == INTENT_NEUTRALIZE
+            else ""
+        )
+        new_neutral_episode = bool(
+            batch.intent == INTENT_NEUTRALIZE
+            and batch.safety_relevant
+            and neutral_signature != previous_neutral_signature
+        )
+
         with self.state.lock:
             self.state.command_desired_sequence_id = batch.sequence_id
             self.state.command_desired_intent = batch.intent
@@ -1103,28 +1134,44 @@ class ZendureController:
                 else "COMMAND_BATCH_PUBLISHED" if published_fields
                 else "COMMAND_BATCH_DEDUPED"
             )
-            self.state.command_publish_last_time = now_text if published_fields else self.state.command_publish_last_time
             self.state.command_publish_fields = ",".join(published_fields)
-            if desired_state_changed or (forced and published_fields):
+            if published_fields:
+                self.state.command_publish_last_time = now_text
+                self.state.command_publish_event_id += 1
+                self.state.command_publish_epoch_s = now_epoch
+            if physical_state_changed or (forced and published_fields):
                 self.state.command_effect_confirmed = False
 
             if batch.intent == INTENT_NEUTRALIZE and batch.safety_relevant:
-                new_episode = (
-                    previous is None
-                    or previous.intent != INTENT_NEUTRALIZE
-                    or previous.reason != batch.reason
-                    or not self.state.command_neutralization_active
+                # Reasons may change while the physical zero state stays exactly
+                # the same. Keep one physical episode and its confirmation.
+                confirmed_same_episode = bool(
+                    neutral_signature == self._neutralization_confirmed_signature
+                    and self.state.command_effect_category == "COMMAND_NEUTRALIZATION_CONFIRMED"
+                    and self.state.command_effect_confirmed
                 )
-                self.state.command_neutralization_active = True
                 self.state.command_neutralization_reason = batch.reason
-                if new_episode:
+                self._neutralization_physical_signature = neutral_signature
+                if new_neutral_episode:
+                    self.state.command_neutralization_episode_id += 1
+                    self._neutralization_confirmed_signature = ""
                     self._neutralization_last_resend_epoch = 0.0
+                    self.state.command_neutralization_active = True
                     self.state.command_neutralization_since_epoch = batch.created_epoch
                     self.state.command_neutralization_since_time = now_text
                     self.state.command_lifecycle_state = "NEUTRALIZATION_OBSERVING"
                     self.state.command_effect_category = "COMMAND_NEUTRALIZATION_PENDING"
                     self.state.command_effect_reason = f"Neutralisierung wird auf netzseitige physische Wirkung geprüft: {batch.reason}."
+                elif not confirmed_same_episode:
+                    self.state.command_neutralization_active = True
+                    if self.state.command_neutralization_since_epoch is None:
+                        self.state.command_neutralization_since_epoch = batch.created_epoch
+                        self.state.command_neutralization_since_time = now_text
+                # A confirmed same physical episode remains confirmed and is not
+                # reopened merely because MIN_SOC becomes SAFE_STATE, etc.
             elif batch.intent in {INTENT_CHARGE, INTENT_DISCHARGE}:
+                self._neutralization_physical_signature = ""
+                self._neutralization_confirmed_signature = ""
                 self.state.command_neutralization_active = False
                 self.state.command_neutralization_since_epoch = None
                 self.state.command_neutralization_since_time = "-"
@@ -1133,6 +1180,28 @@ class ZendureController:
         if mismatch_resolution_event:
             self.state.add_event(mismatch_resolution_event)
 
+    def _set_command_state_gate(self, gate_state: str, *, retry_s: int = 0, now: Optional[float] = None) -> None:
+        epoch = time.time() if now is None else float(now)
+        remaining = 0.0
+        if retry_s > 0 and self._command_state_verification_epoch > 0:
+            remaining = max(0.0, float(retry_s) - (epoch - self._command_state_verification_epoch))
+        with self.state.lock:
+            self.state.command_state_gate_state = str(gate_state)
+            self.state.command_state_retry_remaining_s = round(remaining, 1)
+
+    def _gate_retry_allowed(self, phase: str, intent: str, *, retry_s: int, now: float) -> bool:
+        # Exact watt changes are deliberately excluded. A cloud-driven sequence
+        # +1800 -> +2100 -> +1950 W remains one CHARGE gate episode.
+        signature = f"{phase}|{intent}"
+        allowed = bool(
+            self._command_state_verification_signature != signature
+            or (now - self._command_state_verification_epoch) >= retry_s
+        )
+        if allowed:
+            self._command_state_verification_signature = signature
+            self._command_state_verification_epoch = now
+        return allowed
+
     def _publish_command_batch(
         self,
         batch: DesiredCommandBatch,
@@ -1140,195 +1209,146 @@ class ZendureController:
         force: bool = False,
         publish_kind: str = "normal",
     ) -> Tuple[str, ...]:
-        """Publish the minimum safe Zendure command set.
+        """Publish the minimum safe Zendure command set (RC13 contract).
 
-        Production behavior follows the verified local MQTT discovery contract:
-        smartMode=ON prevents dynamic settings from being written to flash.  A
-        normal same-direction target change updates only the active limit after
-        smartMode, AC mode and the inactive limit have been read back.  Startup,
-        reconnect, direction changes and recovery use a full state.  Safety
-        neutralisation is never blocked by an incomplete read-back.
+        Non-neutral dynamic control is impossible until smartMode=1 is freshly
+        read back. A single, intent-based gate enforces the retry interval even
+        when the exact watt target changes every controller cycle. Safety zero
+        commands remain possible, but at most once per retry window until their
+        read-back/effect is confirmed.
         """
         cfg = self.config_manager.get() if self.config_manager is not None else {}
         published = []
         smart_supported = self._smart_mode_contract_supported()
 
-        # Historical test doubles do not implement smartMode. Keep them on the
-        # old deterministic path; production MqttBridge always uses the guarded
-        # contract below.
+        # Compatibility path for historical test doubles only.
         if not smart_supported:
             if batch.intent == INTENT_CHARGE:
-                if self._mqtt_set_ac_mode(batch.ac_mode, force=force):
-                    published.append("ac_mode")
-                if self._mqtt_set_output_limit(0, force=force):
-                    published.append("output_limit")
-                if self._mqtt_set_input_limit(batch.input_limit_w, force=force):
-                    published.append("input_limit")
+                if self._mqtt_set_ac_mode(batch.ac_mode, force=force): published.append("ac_mode")
+                if self._mqtt_set_output_limit(0, force=force): published.append("output_limit")
+                if self._mqtt_set_input_limit(batch.input_limit_w, force=force): published.append("input_limit")
             elif batch.intent == INTENT_DISCHARGE:
-                if self._mqtt_set_ac_mode(batch.ac_mode, force=force):
-                    published.append("ac_mode")
-                if self._mqtt_set_input_limit(0, force=force):
-                    published.append("input_limit")
-                if self._mqtt_set_output_limit(batch.output_limit_w, force=force):
-                    published.append("output_limit")
+                if self._mqtt_set_ac_mode(batch.ac_mode, force=force): published.append("ac_mode")
+                if self._mqtt_set_input_limit(0, force=force): published.append("input_limit")
+                if self._mqtt_set_output_limit(batch.output_limit_w, force=force): published.append("output_limit")
             elif batch.intent == INTENT_NEUTRALIZE:
-                if self._mqtt_set_ac_mode(batch.ac_mode, force=force):
-                    published.append("ac_mode")
-                if self._mqtt_set_input_limit(0, force=force):
-                    published.append("input_limit")
-                if self._mqtt_set_output_limit(0, force=force):
-                    published.append("output_limit")
-            event = None
-            if publish_kind == "neutralization" and published:
-                event = "FULL_STATE_NEUTRALIZATION_SENT"
-            elif publish_kind == "resync" and published:
-                event = "FULL_STATE_RESYNC_SENT"
+                if self._mqtt_set_ac_mode(batch.ac_mode, force=force): published.append("ac_mode")
+                if self._mqtt_set_input_limit(0, force=force): published.append("input_limit")
+                if self._mqtt_set_output_limit(0, force=force): published.append("output_limit")
+            event = (
+                "FULL_STATE_RESYNC_SENT" if publish_kind == "resync" and published
+                else "FULL_STATE_NEUTRALIZATION_SENT" if publish_kind == "neutralization" and published
+                else None
+            )
             self._record_desired_command_batch(batch, tuple(published), forced=force, publish_event=event)
             return tuple(published)
 
         snapshot = self._command_state_snapshot(cfg)
         previous = self._desired_command_batch
         intent_changed = previous is None or previous.intent != batch.intent
-        safety_neutral = batch.intent == INTENT_NEUTRALIZE and batch.safety_relevant
         now = time.time()
+        retry_s = max(5, int(cfg.get("ZENDURE_COMMAND_STATE_RETRY_SECONDS", 30) or 30))
+        smart_retry_s = max(5, int(cfg.get("ZENDURE_SMART_MODE_RETRY_SECONDS", retry_s) or retry_s))
+        flash_active = bool(snapshot.get("flash_protection_active") and snapshot.get("smart_mode") == 1)
+        complete = bool(snapshot.get("complete"))
+        state_matches = self._command_state_matches_batch(snapshot, batch)
+        static_matches = self._command_static_invariants_match(snapshot, batch)
 
-        # Dynamic active control is gated until smartMode=1 is physically read
-        # back. Send exactly one enable request per retry window, but do not send
-        # dynamic limits while the flash-protection state is unknown or OFF.
-        if batch.intent in {INTENT_CHARGE, INTENT_DISCHARGE} and snapshot.get("smart_mode") != 1:
-            retry_s = max(5, int(cfg.get("ZENDURE_SMART_MODE_RETRY_SECONDS", 30) or 30))
-            verification_signature = "SMART_MODE_ENABLE"
-            can_retry = (
-                self._command_state_verification_signature != verification_signature
-                or (now - self._command_state_verification_epoch) >= retry_s
-            )
-            if can_retry and self._mqtt_set_smart_mode(True, force=True):
-                published.append("smart_mode")
-                self._command_state_verification_signature = verification_signature
-                self._command_state_verification_epoch = now
-            self._record_desired_command_batch(
-                batch,
-                tuple(published),
-                forced=False,
-                publish_event="SMART_MODE_ENABLE_SENT" if published else "COMMAND_STATE_WAITING",
-            )
-            self._mark_command_state_waiting(
-                batch,
-                "SMART_MODE_ENABLE_SENT" if published else "COMMAND_STATE_WAITING",
-                tuple(published),
-            )
-            return tuple(published)
-
-        full_state_required = bool(
-            force
-            or publish_kind in {"resync", "neutralization"}
-            or intent_changed
-            or not self._command_static_invariants_match(snapshot, batch)
-        )
-
-        # If smartMode is confirmed but the rest of the state has not yet been
-        # read back, send one full state and wait rather than hammering every
-        # changing target as a full command set.
-        if (
-            batch.intent in {INTENT_CHARGE, INTENT_DISCHARGE}
-            and not force
-            and not snapshot.get("complete")
-        ):
-            verification_signature = f"FULL_STATE_VERIFY|{batch.intent}|{batch.ac_mode}"
-            retry_s = max(5, int(cfg.get("ZENDURE_COMMAND_STATE_RETRY_SECONDS", 30) or 30))
-            can_retry = (
-                self._command_state_verification_signature != verification_signature
-                or (now - self._command_state_verification_epoch) >= retry_s
-            )
-            if not can_retry:
-                self._record_desired_command_batch(
-                    batch,
-                    tuple(),
-                    forced=False,
-                    publish_event="COMMAND_STATE_WAITING",
-                )
-                self._mark_command_state_waiting(batch, "COMMAND_STATE_WAITING", tuple())
-                return tuple()
-            full_state_required = True
-            self._command_state_verification_signature = verification_signature
-            self._command_state_verification_epoch = now
-
-        if (
-            full_state_required
-            and batch.intent in {INTENT_CHARGE, INTENT_DISCHARGE}
-            and not force
-            and publish_kind == "normal"
-        ):
-            verification_signature = f"FULL_STATE_APPLY|{batch.intent}|{batch.ac_mode}"
-            retry_s = max(5, int(cfg.get("ZENDURE_COMMAND_STATE_RETRY_SECONDS", 30) or 30))
-            can_retry = (
-                self._command_state_verification_signature != verification_signature
-                or (now - self._command_state_verification_epoch) >= retry_s
-            )
-            if not can_retry:
-                self._record_desired_command_batch(
-                    batch, tuple(), forced=False, publish_event="COMMAND_STATE_WAITING"
-                )
-                self._mark_command_state_waiting(batch, "COMMAND_STATE_WAITING", tuple())
-                return tuple()
-            self._command_state_verification_signature = verification_signature
-            self._command_state_verification_epoch = now
-
-        if full_state_required:
-            # smartMode is included for resync/direction changes only, not for
-            # every setpoint tick. Neutralisation preserves smartMode=1 so an
-            # off-grid/backup load is not hard-disabled.
-            send_smart = bool(
-                snapshot.get("smart_mode") != 1
-                or publish_kind == "resync"
-            )
-            if send_smart and self._mqtt_set_smart_mode(True, force=(force or publish_kind == "resync")):
+        def publish_full_state(*, include_smart: bool, event: str) -> Tuple[str, ...]:
+            if include_smart and self._mqtt_set_smart_mode(True, force=True):
                 published.append("smart_mode")
             if self._mqtt_set_ac_mode(batch.ac_mode, force=True):
                 published.append("ac_mode")
             if batch.intent == INTENT_CHARGE:
-                if self._mqtt_set_output_limit(0, force=True):
-                    published.append("output_limit")
-                if self._mqtt_set_input_limit(batch.input_limit_w, force=True):
-                    published.append("input_limit")
+                if self._mqtt_set_output_limit(0, force=True): published.append("output_limit")
+                if self._mqtt_set_input_limit(batch.input_limit_w, force=True): published.append("input_limit")
             elif batch.intent == INTENT_DISCHARGE:
-                if self._mqtt_set_input_limit(0, force=True):
-                    published.append("input_limit")
-                if self._mqtt_set_output_limit(batch.output_limit_w, force=True):
-                    published.append("output_limit")
-            elif batch.intent == INTENT_NEUTRALIZE:
-                if self._mqtt_set_input_limit(0, force=True):
-                    published.append("input_limit")
-                if self._mqtt_set_output_limit(0, force=True):
-                    published.append("output_limit")
-
-            if publish_kind == "resync":
-                event = "FULL_STATE_RESYNC_SENT"
-            elif safety_neutral or publish_kind == "neutralization":
-                event = "FULL_STATE_NEUTRALIZATION_SENT"
+                if self._mqtt_set_input_limit(0, force=True): published.append("input_limit")
+                if self._mqtt_set_output_limit(batch.output_limit_w, force=True): published.append("output_limit")
             else:
-                event = "FULL_STATE_COMMAND_SENT"
-        else:
-            # Same direction with confirmed static state: update only the active
-            # volatile limit. This is the normal high-frequency path.
-            if batch.intent == INTENT_CHARGE:
-                if self._mqtt_set_input_limit(batch.input_limit_w, force=False):
-                    published.append("input_limit")
-            elif batch.intent == INTENT_DISCHARGE:
-                if self._mqtt_set_output_limit(batch.output_limit_w, force=False):
-                    published.append("output_limit")
-            event = "COMMAND_LIMIT_UPDATED" if published else "COMMAND_BATCH_DEDUPED"
+                if self._mqtt_set_input_limit(0, force=True): published.append("input_limit")
+                if self._mqtt_set_output_limit(0, force=True): published.append("output_limit")
+            self._record_desired_command_batch(batch, tuple(published), forced=force, publish_event=event)
+            return tuple(published)
 
-        self._record_desired_command_batch(
-            batch,
-            tuple(published),
-            forced=force,
-            publish_event=event,
-        )
-        self._last_published_intent = batch.intent
-        if not full_state_required and self._command_static_invariants_match(snapshot, batch):
-            self._command_state_verification_signature = ""
-            self._command_state_verification_epoch = 0.0
+        # Safety neutralisation is the only write path allowed before fresh flash
+        # protection. It is strictly rate-limited and never changes off-grid mode.
+        if batch.intent == INTENT_NEUTRALIZE:
+            # A confirmed physical mismatch must remain recovery-capable even
+            # when the command read-back already says 0/0. In that case the
+            # resync deliberately republishes the full neutral state.
+            if state_matches and publish_kind != "resync":
+                self._set_command_state_gate(COMMAND_GATE_READY, now=now)
+                self._command_state_verification_signature = ""
+                self._command_state_verification_epoch = 0.0
+                self._record_desired_command_batch(
+                    batch, tuple(), forced=False,
+                    publish_event="NEUTRALIZATION_REASON_UPDATED" if previous and previous.intent == INTENT_NEUTRALIZE and previous.reason != batch.reason else "COMMAND_BATCH_DEDUPED",
+                )
+                return tuple()
+
+            phase = COMMAND_GATE_SAFETY_NEUTRALIZATION
+            can_retry = self._gate_retry_allowed(phase, INTENT_NEUTRALIZE, retry_s=retry_s, now=now)
+            self._set_command_state_gate(phase, retry_s=retry_s, now=now)
+            if not can_retry:
+                self._record_desired_command_batch(batch, tuple(), forced=False, publish_event="COMMAND_STATE_WAITING")
+                return tuple()
+
+            event = "FULL_STATE_RESYNC_SENT" if publish_kind == "resync" else "FULL_STATE_NEUTRALIZATION_SENT"
+            result = publish_full_state(include_smart=not flash_active, event=event)
+            self._set_command_state_gate(phase, retry_s=retry_s, now=now)
+            return result
+
+        if batch.intent not in {INTENT_CHARGE, INTENT_DISCHARGE}:
+            self._set_command_state_gate(COMMAND_GATE_UNPROTECTED, now=now)
+            self._record_desired_command_batch(batch, tuple(), forced=False, publish_event="COMMAND_BATCH_DEDUPED")
+            return tuple()
+
+        # Hard gate: stale smartMode=1 is not sufficient. Only a fresh read-back
+        # may unlock active limits, including force/resync paths.
+        if not flash_active:
+            phase = COMMAND_GATE_WAIT_SMART_MODE
+            can_retry = self._gate_retry_allowed(phase, batch.intent, retry_s=smart_retry_s, now=now)
+            if can_retry and self._mqtt_set_smart_mode(True, force=True):
+                published.append("smart_mode")
+            self._set_command_state_gate(phase, retry_s=smart_retry_s, now=now)
+            event = "SMART_MODE_ENABLE_SENT" if published else "COMMAND_STATE_WAITING"
+            self._record_desired_command_batch(batch, tuple(published), forced=False, publish_event=event)
+            self._mark_command_state_waiting(batch, event, tuple(published))
+            return tuple(published)
+
+        # Once smartMode is protected, one full state is allowed per real retry
+        # window until all four properties are freshly consistent.
+        need_full_state = bool(force or publish_kind == "resync" or intent_changed or not complete or not static_matches)
+        if need_full_state:
+            phase = COMMAND_GATE_WAIT_FULL_STATE
+            can_retry = self._gate_retry_allowed(phase, batch.intent, retry_s=retry_s, now=now)
+            if not can_retry:
+                self._set_command_state_gate(phase, retry_s=retry_s, now=now)
+                self._record_desired_command_batch(batch, tuple(), forced=False, publish_event="COMMAND_STATE_WAITING")
+                self._mark_command_state_waiting(batch, "COMMAND_STATE_WAITING", tuple())
+                return tuple()
+            event = "FULL_STATE_RESYNC_SENT" if publish_kind == "resync" else "FULL_STATE_COMMAND_SENT"
+            result = publish_full_state(include_smart=False, event=event)
+            self._set_command_state_gate(phase, retry_s=retry_s, now=now)
+            return result
+
+        # READY: same direction and confirmed static invariants. Only the active
+        # volatile limit may change at high frequency.
+        self._command_state_verification_signature = ""
+        self._command_state_verification_epoch = 0.0
+        self._set_command_state_gate(COMMAND_GATE_READY, now=now)
+        if state_matches:
+            self._record_desired_command_batch(batch, tuple(), forced=False, publish_event="COMMAND_BATCH_DEDUPED")
+            return tuple()
+        if batch.intent == INTENT_CHARGE:
+            if self._mqtt_set_input_limit(batch.input_limit_w, force=False):
+                published.append("input_limit")
+        else:
+            if self._mqtt_set_output_limit(batch.output_limit_w, force=False):
+                published.append("output_limit")
+        event = "COMMAND_LIMIT_UPDATED" if published else "COMMAND_BATCH_DEDUPED"
+        self._record_desired_command_batch(batch, tuple(published), forced=False, publish_event=event)
         return tuple(published)
 
     def _new_command_batch(
@@ -1410,7 +1430,8 @@ class ZendureController:
             explicit_neutralize
             and previous is not None
             and previous.intent == INTENT_NEUTRALIZE
-            and previous.reason == resolved_reason
+            and previous.input_limit_w == 0
+            and previous.output_limit_w == 0
         )
         batch = self._new_command_batch(
             signed_target_w,
@@ -1438,7 +1459,9 @@ class ZendureController:
         new_episode = not (
             previous is not None
             and previous.intent == INTENT_NEUTRALIZE
-            and previous.reason == str(reason or "NEUTRALIZATION")
+            and previous.input_limit_w == 0
+            and previous.output_limit_w == 0
+            and previous.ac_mode == (ac_mode or self._last_non_neutral_ac_mode or "Output mode")
         )
         batch = self._new_command_batch(
             0,
@@ -1452,6 +1475,10 @@ class ZendureController:
             force=(new_episode if force is None else bool(force)),
             publish_kind="neutralization",
         )
+        # Any explicit safety neutralisation also satisfies the restart-only
+        # deadband guard; do not send a second physical zero batch in the same
+        # transition cycle.
+        self._startup_deadband_neutralized = True
 
     def _force_resend_signed_target(self, signed_target_w: int, reason: str) -> None:
         signed_target_w = int(signed_target_w or 0)
@@ -1710,7 +1737,9 @@ class ZendureController:
             return
         self._resume_effect_timers_after_telemetry_pause(now)
 
-        tolerance_w = max(10, int(cfg.get("COMMAND_EFFECT_TOLERANCE_W", 80) or 80))
+        absolute_tolerance_w = max(10, int(cfg.get("COMMAND_EFFECT_TOLERANCE_W", 80) or 80))
+        tolerance_percent = max(0.0, float(cfg.get("COMMAND_EFFECT_TOLERANCE_PERCENT", 10) or 0.0))
+        tolerance_w = max(absolute_tolerance_w, int(round(abs(target) * tolerance_percent / 100.0)))
         threshold_w = max(30, int(cfg.get("COMMAND_EFFECT_MIN_W", 80) or 80))
         signed_actual = observation["signed"]
         magnitude = int(observation["magnitude"] or 0)
@@ -1729,7 +1758,7 @@ class ZendureController:
                 with self.state.lock:
                     self.state.command_neutralization_since_epoch = now
                     self.state.command_neutralization_since_time = datetime.now().strftime("%H:%M:%S")
-            if magnitude <= tolerance_w:
+            if magnitude <= absolute_tolerance_w:
                 was_mismatch = bool(self.state.command_not_effective_active)
                 with self.state.lock:
                     self._clear_command_not_effective_locked()
@@ -1742,6 +1771,7 @@ class ZendureController:
                     self.state.command_effect_confirmed = True
                     self.state.command_effect_confirmed_time = datetime.now().strftime("%H:%M:%S")
                     self.state.command_effect_confirmed_reason = self.state.command_effect_reason
+                    self._neutralization_confirmed_signature = self._neutralization_physical_signature
                     self.state.command_uncertain_mqtt_active = False
                     self.state.command_uncertain_mqtt_reason = ""
                     self.state.command_uncertain_mqtt_status = ""
@@ -1760,7 +1790,7 @@ class ZendureController:
                     "NEUTRALIZATION_OBSERVING",
                 )
                 return
-            self._mark_mismatch(target=0, actual_text=actual_text, elapsed_s=elapsed_s, tolerance_w=tolerance_w, neutral=True)
+            self._mark_mismatch(target=0, actual_text=actual_text, elapsed_s=elapsed_s, tolerance_w=absolute_tolerance_w, neutral=True)
             retry_s = max(5, int(cfg.get("COMMAND_RESYNC_COOLDOWN_SECONDS", 120) or 120))
             if now - self._neutralization_last_resend_epoch >= retry_s:
                 if self._resync_permitted(0, "RESYNC_AFTER_NEUTRALIZATION_MISMATCH", cfg, confirmed_mismatch=True):
@@ -1884,15 +1914,35 @@ class ZendureController:
             acceptance_reason = str(self.state.charge_acceptance_reason or "-")
             battery_charge_w = int(self.state.zendure_battery_charge_power_w or 0)
             soc_percent = self.state.battery_soc
+            current_grid_power = float(self.state.grid_power or 0.0)
+        previous_charge_soc = self._command_effect_last_charge_soc
+        soc_non_falling = bool(
+            soc_percent is not None
+            and (previous_charge_soc is None or float(soc_percent) >= float(previous_charge_soc) - 1.0)
+        )
+        if target > 0 and soc_percent is not None:
+            self._command_effect_last_charge_soc = float(soc_percent)
+        elif target <= 0:
+            self._command_effect_last_charge_soc = None
         max_soc_percent = int(cfg.get("MAX_SOC_PERCENT", 100) or 100)
+        command_snapshot = self._command_state_snapshot(cfg)
+        desired_batch = self._desired_command_batch
+        desired_state_confirmed = bool(
+            desired_batch is not None
+            and desired_batch.intent == INTENT_CHARGE
+            and self._command_state_matches_batch(command_snapshot, desired_batch)
+        )
         high_soc_acceptance_limited = bool(
             target > 0
             and observation.get("direction") == "CHARGE"
             and signed_actual is not None
             and int(signed_actual) >= 20
+            and desired_state_confirmed
+            and soc_non_falling
+            and current_grid_power <= -max(80, int(cfg.get("DEADBAND_W", 80) or 80))
             and acceptance_state in {"limited", "not_accepting"}
             and soc_percent is not None
-            and float(soc_percent) >= float(max_soc_percent - 2)
+            and float(soc_percent) >= float(max_soc_percent - 10)
             and battery_charge_w >= max(20, min(threshold_w, 50))
         )
         if high_soc_acceptance_limited:

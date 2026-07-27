@@ -1,45 +1,53 @@
-# Zendure Energy Controller V12.11.2-RC12
+# Zendure Energy Controller V12.11.2-RC13
 
 ## Aktueller Release
 
-V12.11.2-RC12 ist der sicherheitsorientierte Nacharbeitsrelease zu RC11. Er setzt den auf dem produktiven SolarFlow 2400 AC+ verifizierten Zendure-MQTT-Command-Vertrag um und schützt dynamische Regeländerungen vor unbeabsichtigten persistenten Flash-Schreibvorgängen.
+V12.11.2-RC13 ist der eng abgegrenzte Sicherheits-Nachkorrekturrelease zu RC12. Er behebt die im produktiven Morgenzyklus vom 27.07.2026 bestätigte zyklusweise Wiederholung vollständiger 0-W-Kommandos, das umgehbare Command-State-Retry-Fenster und falsche Resyncs während physikalisch plausibler Ladeendphasen.
 
 Wesentliche Änderungen:
 
-- Aktive Lade- und Entladebefehle werden erst freigegeben, wenn `smartMode=1` frisch rückgelesen wurde.
-- Der produktive ZEC-Laufzeitpfad kann `smartMode` ausschließlich aktivieren; `smartMode=OFF` ist im Runtime-Setter gesperrt.
-- Bei unveränderter Richtung wird nach bestätigtem Command-State nur das aktive Leistungslimit aktualisiert.
-- Start, Reconnect, Richtungswechsel, unsicherer Command-State und Recovery verwenden einen vollständigen Modus-/Limit-Abgleich; redundante `smartMode`-Schreibvorgänge werden vermieden, wenn `smartMode=1` bereits frisch bestätigt ist.
-- `chargeMaxLimit` und `inverseMaxPower` werden ausschließlich gelesen und als zusätzliche Zielwertgrenzen berücksichtigt.
-- ZEC schreibt weder `inverseMaxPower`, `chargeMaxLimit`, `gridOffMode`, `socSet`, `minSoc` noch andere dauerhafte Gerätekonfigurationen.
-- Zendure-Leistungsflüsse werden elektrisch getrennt modelliert: Netzport, Batterie und Offgrid-Ausgang.
-- `outputPackPower` gilt korrekt als Batterieladung, `packInputPower` als Batterieentladung und `gridOffPower` bleibt eine eigene Offgrid-Last.
-- Eine aktive Offgrid-Last kann eine netzseitige 0-W-Neutralisierung nicht mehr fälschlich widerlegen.
-- High-SOC-Ladeannahmebegrenzung wird von einem verlorenen Command-State unterschieden.
-- Ein Mismatch, der durch einen neuen Sicherheitsintent beendet wird, gilt nicht mehr fälschlich als wiederhergestellt.
-- Full-State-Resync und Full-State-Sicherheitsneutralisierung besitzen getrennte Publish-Ereignisse.
-- Measurement V4 erhält additive Command-Readback-, Flash-Schutz-, Gerätecap- und Offgrid-Felder. RC10- und RC11-Dateien bleiben unverändert erhalten; RC12 beginnt automatisch eine neue Header-Sitzung.
+- Bestätigte Neutralisierungen werden als physische Episoden behandelt und nach der ersten wirksamen 0-W-Herstellung vollständig dedupliziert.
+- Wechselnde Gründe wie `MIN_SOC_LIMIT`, `MAX_SOC_LIMIT`, `SAFE_STATE` oder `CROSS_CHARGE_BLOCKED` erzeugen bei identischem Nullzustand keinen erneuten MQTT-Batch.
+- Ein einheitlicher Command-State-Gate-Zustandsautomat ersetzt die wechselnden RC12-VERIFY/APPLY-Signaturen.
+- Änderungen des exakten Wattziels innerhalb derselben Lade- oder Entladerichtung setzen das 30-s-Retry-Fenster nicht zurück.
+- Nicht neutrale Leistungsbefehle sind auch bei Force-/Resync-Pfaden nur mit frisch bestätigtem `smartMode=1` möglich.
+- Sicherheitsrelevante 0-W-Kommandos bleiben bei unsicherem Command-State möglich, aber höchstens einmal pro Retry-Fenster.
+- Sollwerttracking verwendet den größeren Wert aus absoluter und relativer Toleranz; Default der neuen relativen Diagnose-Toleranz ist 10 %.
+- Physikalisch bestätigtes BMS-/Ladeannahme-Taper kann bereits ab `MAX_SOC_PERCENT - 10` als `COMMAND_CHARGE_ACCEPTANCE_LIMITED` klassifiziert werden.
+- Echte Nichtwirkung bei niedrigem SOC bleibt mismatch- und resyncfähig.
+- Neue Measurement-V4-Felder machen tatsächliche Publish-Batches eindeutig: Event-ID, Epoch, Gate-Zustand, Retry-Restzeit und Neutralisierungs-Episoden-ID.
+- RC12-Dateien bleiben unverändert; RC13 beginnt bei älterem Header automatisch eine neue `schema_rc13`-Datei.
 
 Ausführliche Informationen:
 
 ```text
-TECHNICAL_NOTES_V12_11_2_RC12.md
-RELEASE_INFO_V12_11_2_RC12.md
-UEBERGABE_ZEC_V12_11_2_RC12_COMMAND_CONTRACT_FLASH_OFFGRID.md
+TECHNICAL_NOTES_V12_11_2_RC13.md
+RELEASE_INFO_V12_11_2_RC13.md
+UEBERGABE_ZEC_V12_11_2_RC13_COMMAND_SAFETY_FOLLOWUP.md
 ```
 
 ## Sicherheitsabgrenzung
 
-RC12 kann keine absolute Garantie gegen jeden Geräte- oder Flashdefekt geben. Die Implementierung minimiert das Risiko jedoch durch eine harte Runtime-Invariante: Dynamische Leistungsänderungen werden nur bei frisch bestätigtem `smartMode=1` ausgeführt; persistente Geräteeinstellungen werden nicht durch ZEC verändert.
+RC13 ändert keine AUTO-/Harvest-Zielwertformel. Die Korrektur von `SMA_FULL_OR_IDLE` bleibt bewusst für den folgenden RC-B-Block reserviert.
 
-Bei einer sicherheitsrelevanten Neutralisierung hat das unverzügliche Setzen beider Limits auf 0 W Vorrang. Falls `smartMode` zu diesem Zeitpunkt nicht bestätigt ist, sendet ZEC zuerst `smartMode=ON` und anschließend den neutralen vollständigen Zustand über denselben MQTT-Client. Dadurch wird eine Sicherheitsneutralisierung nicht durch eine fehlende Rücklesung blockiert.
+Der Runtime-Schreibpfad bleibt auf folgende verifizierte Zendure-Eigenschaften begrenzt:
+
+```text
+smartMode = ON
+acMode
+inputLimit
+outputLimit
+```
+
+ZEC schreibt weiterhin keine persistenten Geräte-Caps, SOC-Grenzen oder Offgrid-Konfigurationen.
 
 ## Bewusst nicht enthalten
 
 - Korrektur der absoluten `SMA_FULL_OR_IDLE`-Zielwertformel,
 - asynchrone Entkopplung der lokalen Zendure-API,
-- Änderungen an der Offgrid-Konfiguration,
-- Wiederaufnahme des pausierten Settings-Redesigns.
+- Readiness-/Sticky-Error-Nacharbeit,
+- produktiver Offgrid-Steckdosentest,
+- Settings-Redesign.
 
 ## Installation
 

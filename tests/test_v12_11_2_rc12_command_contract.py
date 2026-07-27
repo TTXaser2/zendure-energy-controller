@@ -194,6 +194,7 @@ class Rc12CommandContractTests(unittest.TestCase):
     def test_high_soc_limited_charge_is_not_command_mismatch(self):
         cfg = base_cfg(
             MAX_SOC_PERCENT=100,
+            MAX_CHARGE_POWER_W=2400,
             COMMAND_EFFECT_TIMEOUT_SECONDS=10,
             COMMAND_EFFECT_FORCE_RESEND_SECONDS=20,
             COMMAND_EFFECT_MIN_W=80,
@@ -209,6 +210,7 @@ class Rc12CommandContractTests(unittest.TestCase):
             "MQTT", grid_input=74, output_home=0, output_pack=74, pack_input=0
         )
         self.set_live(state)
+        controller._desired_command_batch = controller._new_command_batch(2397, reason="AUTO_CHARGE")
         controller._command_effect_watch_intent = "CHARGE"
         controller._command_effect_watch_target = 2397
         controller._command_effect_watch_start_epoch = time.time() - 120

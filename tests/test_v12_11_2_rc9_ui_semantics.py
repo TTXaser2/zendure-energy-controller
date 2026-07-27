@@ -17,8 +17,8 @@ class V12112Rc9UiSemanticsTests(unittest.TestCase):
         web_ui._replay_health_cache.update({"port": None, "available": False, "checked_epoch": 0.0})
 
     def test_version(self):
-        self.assertEqual("12.11.2-rc12", version.APP_VERSION)
-        self.assertEqual("V12.11.2-RC12", version.APP_VERSION_LABEL)
+        self.assertEqual("12.11.2-rc13", version.APP_VERSION)
+        self.assertEqual("V12.11.2-RC13", version.APP_VERSION_LABEL)
 
     def test_replay_probe_uses_lightweight_health_json(self):
         response = Mock()

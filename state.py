@@ -193,6 +193,14 @@ class ControllerState:
     command_publish_event: str = ""
     command_publish_last_time: str = "-"
     command_publish_fields: str = ""
+    # RC13: Last-event snapshot fields above are made unambiguous by a
+    # monotonically increasing event id and the epoch of the actual logical
+    # publish batch. Follow-up measurement rows keep the same id/epoch.
+    command_publish_event_id: int = 0
+    command_publish_epoch_s: Optional[float] = None
+    command_state_gate_state: str = "UNPROTECTED"
+    command_state_retry_remaining_s: float = 0.0
+    command_neutralization_episode_id: int = 0
     # Read-back of the complete Zendure command state.  Dynamic limit writes are
     # allowed only while smartMode=1 is fresh and the static command invariants
     # (AC mode and inactive limit) are confirmed.
@@ -1621,6 +1629,11 @@ class ControllerState:
                 "command_publish_event": self.command_publish_event,
                 "command_publish_last_time": self.command_publish_last_time,
                 "command_publish_fields": self.command_publish_fields,
+                "command_publish_event_id": self.command_publish_event_id,
+                "command_publish_epoch_s": self.command_publish_epoch_s,
+                "command_state_gate_state": self.command_state_gate_state,
+                "command_state_retry_remaining_s": self.command_state_retry_remaining_s,
+                "command_neutralization_episode_id": self.command_neutralization_episode_id,
                 "command_effect_confirmed": self.command_effect_confirmed,
                 "command_effect_confirmed_time": self.command_effect_confirmed_time,
                 "command_effect_confirmed_reason": self.command_effect_confirmed_reason,
@@ -1821,6 +1834,11 @@ class ControllerState:
                 "command_publish_event": self.command_publish_event,
                 "command_publish_last_time": self.command_publish_last_time,
                 "command_publish_fields": self.command_publish_fields,
+                "command_publish_event_id": self.command_publish_event_id,
+                "command_publish_epoch_s": self.command_publish_epoch_s,
+                "command_state_gate_state": self.command_state_gate_state,
+                "command_state_retry_remaining_s": self.command_state_retry_remaining_s,
+                "command_neutralization_episode_id": self.command_neutralization_episode_id,
                 "command_effect_confirmed": self.command_effect_confirmed,
                 "command_effect_confirmed_time": self.command_effect_confirmed_time,
                 "command_effect_confirmed_reason": self.command_effect_confirmed_reason,

@@ -21,7 +21,7 @@ from zendure_power_observation import derive_zendure_power_observation
 from csv_logger import CsvRotatingLogger
 import operational_events
 from web_ui import build_status_view_payload
-from measurement_v4_contract import RC10_STANDARD_HEADER, RC11_STANDARD_HEADER, STANDARD_HEADER
+from measurement_v4_contract import RC10_STANDARD_HEADER, RC11_STANDARD_HEADER, RC12_STANDARD_HEADER, STANDARD_HEADER
 from measurement_v4 import build_v4_row
 from tests.test_measurement_v4_writer import base_config as measurement_base_config, base_row as measurement_base_row
 
@@ -431,7 +431,7 @@ class Rc11CommandSafetyTests(unittest.TestCase):
         self.assertEqual("12:34:56", state.command_effect_confirmed_time)
 
 
-    def test_custom_rc10_measurement_file_is_preserved_and_rc12_uses_new_session_file(self):
+    def test_custom_rc10_measurement_file_is_preserved_and_rc13_uses_new_session_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             old_path = os.path.join(tmp, "custom_measurements.csv")
             with open(old_path, "w", encoding="utf-8", newline="") as f:
@@ -447,7 +447,7 @@ class Rc11CommandSafetyTests(unittest.TestCase):
             self.assertTrue(os.path.exists(old_path))
             new_files = [
                 name for name in os.listdir(tmp)
-                if name.startswith("custom_measurements_schema_rc12_") and name.endswith(".csv")
+                if name.startswith("custom_measurements_schema_rc13_") and name.endswith(".csv")
             ]
             self.assertEqual(1, len(new_files))
             with open(os.path.join(tmp, new_files[0]), encoding="utf-8", newline="") as f:
@@ -458,7 +458,7 @@ class Rc11CommandSafetyTests(unittest.TestCase):
                 events = [json.loads(line) for line in f if line.strip()]
             self.assertTrue(any(e.get("rotation_reason") == "HEADER_CHANGED" for e in events))
 
-    def test_custom_rc11_measurement_file_is_preserved_and_rc12_uses_new_session_file(self):
+    def test_custom_rc11_measurement_file_is_preserved_and_rc13_uses_new_session_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             old_path = os.path.join(tmp, "custom_rc11_measurements.csv")
             with open(old_path, "w", encoding="utf-8", newline="") as f:
@@ -474,7 +474,32 @@ class Rc11CommandSafetyTests(unittest.TestCase):
             self.assertTrue(os.path.exists(old_path))
             new_files = [
                 name for name in os.listdir(tmp)
-                if name.startswith("custom_rc11_measurements_schema_rc12_") and name.endswith(".csv")
+                if name.startswith("custom_rc11_measurements_schema_rc13_") and name.endswith(".csv")
+            ]
+            self.assertEqual(1, len(new_files))
+            with open(os.path.join(tmp, new_files[0]), encoding="utf-8", newline="") as f:
+                rows = list(csv.DictReader(f, delimiter=";"))
+            self.assertEqual(STANDARD_HEADER, list(rows[0].keys()))
+            self.assertEqual(1, len(rows))
+
+
+    def test_custom_rc12_measurement_file_is_preserved_and_rc13_uses_new_session_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old_path = os.path.join(tmp, "custom_rc12_measurements.csv")
+            with open(old_path, "w", encoding="utf-8", newline="") as f:
+                f.write(";".join(RC12_STANDARD_HEADER) + "\n")
+                f.write(";".join(["4"] + [""] * (len(RC12_STANDARD_HEADER) - 1)) + "\n")
+            cfg = measurement_base_config(tmp)
+            cfg["MEASUREMENT_LOG_FILE"] = "custom_rc12_measurements.csv"
+            logger = CsvRotatingLogger()
+            status = logger.log(cfg, measurement_base_row())
+            logger.close()
+
+            self.assertEqual("active", status["measurement_log_status"])
+            self.assertTrue(os.path.exists(old_path))
+            new_files = [
+                name for name in os.listdir(tmp)
+                if name.startswith("custom_rc12_measurements_schema_rc13_") and name.endswith(".csv")
             ]
             self.assertEqual(1, len(new_files))
             with open(os.path.join(tmp, new_files[0]), encoding="utf-8", newline="") as f:

@@ -105,14 +105,16 @@ def classify_charge_acceptance(
             return {"state": "suspect", "reason": "Ladeanforderung wird deutlich unterschritten; SOC-Grenze unbekannt."}
         return {"state": "ok", "reason": "Keine belastbaren Hinweise auf Nichtannahme."}
 
-    high_soc = soc >= max_soc - 2
+    # RC13: product data showed BMS/charge-acceptance taper beginning well
+    # before the final two percentage points. This is diagnostic-only.
+    high_soc = soc >= max_soc - 10
     at_or_above_max = soc >= max_soc
 
     if at_or_above_max and ratio < 0.20:
         return {"state": "not_accepting", "reason": "SOC am/über Max-SOC; Ladeanforderung wird praktisch nicht angenommen."}
     if high_soc and ratio < 0.20 and still_exporting:
         return {"state": "not_accepting", "reason": "Hoher SOC, weiterhin Einspeisung, nahezu keine reale Ladeleistung."}
-    if high_soc and ratio < 0.60:
+    if high_soc and ratio < 0.90:
         return {"state": "limited", "reason": "Hoher SOC; reale Ladeleistung bleibt deutlich unter Soll."}
     if ratio < 0.35 and still_exporting:
         return {"state": "suspect", "reason": "Ladeanforderung wird deutlich unterschritten und es bleibt Einspeisung."}
