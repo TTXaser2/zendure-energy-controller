@@ -78,10 +78,15 @@ class V1286HousekeepingTests(unittest.TestCase):
         cfg = base_cfg(NIGHT_DISCHARGE_ENABLED=True)
         state = fresh_state(80)
         with state.lock:
+            now = time.time()
             state.actual_zendure_charge_power = 399
+            state.actual_zendure_pack_input_update_epoch = now
             state.actual_zendure_discharge_power = 0
+            state.actual_zendure_output_home_update_epoch = now
             state.actual_zendure_grid_input_power = 0
+            state.actual_zendure_grid_input_update_epoch = now
             state.actual_zendure_output_pack_power = 0
+            state.actual_zendure_output_pack_update_epoch = now
         controller, state, mqtt, shelly = make_controller(cfg, state=state)
         controller.is_night_discharge_active = lambda _cfg: True
 
@@ -90,8 +95,10 @@ class V1286HousekeepingTests(unittest.TestCase):
         controller.finish_cycle(cfg, start)
 
         self.assertEqual(state.last_output_power, 400)
-        self.assertEqual(state.actual_zendure_system_signed_power, -399)
-        self.assertEqual(state.actual_zendure_system_discharge_power, 399)
+        self.assertEqual(state.actual_zendure_system_signed_power, 0)
+        self.assertEqual(state.actual_zendure_system_discharge_power, 0)
+        self.assertEqual(state.zendure_battery_signed_power_w, -399)
+        self.assertEqual(state.zendure_battery_discharge_power_w, 399)
 
 
 if __name__ == "__main__":

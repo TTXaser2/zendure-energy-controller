@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Any, Deque, Dict, List, Optional
 
 from measurement import derive_zendure_actual_power, signed_zendure_target_w
+from zendure_power_observation import derive_zendure_power_observation
 from freshness import boolean_status, timestamp_status
 from translations import limiter_text, mode_label, path_label, technical_limiter_text
 from version import APP_VERSION, CSV_SCHEMA
@@ -73,9 +74,38 @@ class ControllerState:
     actual_zendure_discharge_power: int = 0
     actual_zendure_grid_input_power: int = 0
     actual_zendure_output_pack_power: int = 0
+    actual_zendure_grid_off_power: int = 0
+    actual_zendure_solar_input_power: int = 0
+    actual_zendure_pack_input_update_epoch: Optional[float] = None
+    actual_zendure_output_home_update_epoch: Optional[float] = None
+    actual_zendure_grid_input_update_epoch: Optional[float] = None
+    actual_zendure_output_pack_update_epoch: Optional[float] = None
+    actual_zendure_grid_off_update_epoch: Optional[float] = None
+    actual_zendure_solar_input_update_epoch: Optional[float] = None
+    # Grid-connected AC effect used by control/scenario reconstruction.
     actual_zendure_system_charge_power: int = 0
     actual_zendure_system_discharge_power: int = 0
     actual_zendure_system_signed_power: int = 0
+    # Orthogonal electrical boundaries introduced by RC12.
+    zendure_grid_signed_power_w: int = 0
+    zendure_grid_import_power_w: int = 0
+    zendure_grid_output_power_w: int = 0
+    zendure_battery_signed_power_w: int = 0
+    zendure_battery_charge_power_w: int = 0
+    zendure_battery_discharge_power_w: int = 0
+    zendure_offgrid_power_w: int = 0
+    zendure_offgrid_active: bool = False
+    zendure_power_balance_residual_w: int = 0
+    # Independent physical-direction observation.  Unlike the legacy signed
+    # value above, this model never uses the requested limit as sole direction
+    # evidence.  Ambiguous packInputPower remains directionally unknown while
+    # its magnitude can still prove that a 0-W neutralisation has not worked.
+    zendure_power_observation_direction: str = "UNKNOWN"
+    zendure_power_observation_confidence: str = "NONE"
+    zendure_power_observation_signed_w: Optional[int] = None
+    zendure_power_observation_magnitude_w: int = 0
+    zendure_power_observation_reason: str = "Noch keine unabhängige Leistungsbeobachtung."
+    zendure_power_observation_updated_epoch: Optional[float] = None
     current_target_power: int = 0
     zendure_target_signed_power: int = 0
     last_target_before_smoothing: int = 0
@@ -148,13 +178,57 @@ class ControllerState:
     command_resync_suppressed_count: int = 0
     command_resync_suppressed_last_time: str = "-"
     command_resync_suppressed_reason: str = ""
-    command_effect_category: str = "no_command"
-    command_effect_reason: str = "Kein aktiver Nicht-Null-Sollwert."
+    command_effect_category: str = "COMMAND_IDLE"
+    command_effect_reason: str = "Kein aktiver Command-Effect-Watch."
+    command_lifecycle_state: str = "IDLE"
+    command_desired_sequence_id: int = 0
+    command_desired_intent: str = "IDLE"
+    command_desired_smart_mode: int = 1
+    command_desired_ac_mode: str = ""
+    command_desired_input_limit_w: int = 0
+    command_desired_output_limit_w: int = 0
+    command_desired_signed_target_w: int = 0
+    command_desired_reason: str = ""
+    command_desired_safety_relevant: bool = False
+    command_publish_event: str = ""
+    command_publish_last_time: str = "-"
+    command_publish_fields: str = ""
+    # Read-back of the complete Zendure command state.  Dynamic limit writes are
+    # allowed only while smartMode=1 is fresh and the static command invariants
+    # (AC mode and inactive limit) are confirmed.
+    zendure_command_smart_mode: Optional[int] = None
+    zendure_command_ac_mode: str = ""
+    zendure_command_input_limit_w: Optional[int] = None
+    zendure_command_output_limit_w: Optional[int] = None
+    zendure_device_inverse_max_power_w: Optional[int] = None
+    zendure_device_charge_max_limit_w: Optional[int] = None
+    zendure_grid_off_mode: Optional[int] = None
+    zendure_command_state_updated_epoch: Optional[float] = None
+    zendure_command_smart_mode_updated_epoch: Optional[float] = None
+    zendure_command_ac_mode_updated_epoch: Optional[float] = None
+    zendure_command_input_limit_updated_epoch: Optional[float] = None
+    zendure_command_output_limit_updated_epoch: Optional[float] = None
+    zendure_device_inverse_max_power_updated_epoch: Optional[float] = None
+    zendure_device_charge_max_limit_updated_epoch: Optional[float] = None
+    zendure_grid_off_mode_updated_epoch: Optional[float] = None
+    zendure_command_state_source: str = ""
+    zendure_flash_protection_active: bool = False
+    zendure_flash_protection_reason: str = "smartMode noch nicht bestätigt."
+    zendure_command_state_complete: bool = False
+    zendure_command_state_reason: str = "Command-State noch nicht vollständig rückgelesen."
+    command_effect_confirmed: bool = False
+    command_effect_confirmed_time: str = "-"
+    command_effect_confirmed_reason: str = ""
+    command_neutralization_active: bool = False
+    command_neutralization_since_epoch: Optional[float] = None
+    command_neutralization_since_time: str = "-"
+    command_neutralization_reason: str = ""
     command_not_effective_active: bool = False
     command_not_effective_since_epoch: Optional[float] = None
     command_not_effective_since_time: str = "-"
     command_not_effective_duration_s: int = 0
     command_not_effective_reason: str = ""
+    command_mismatch_resolution: str = ""
     consecutive_errors: int = 0
     last_error: str = "none"
     last_error_time: str = "-"
@@ -410,12 +484,14 @@ class ControllerState:
             self.zendure_mqtt_retained_only = False
             self.zendure_mqtt_partial_stale = False
             self.zendure_mqtt_after_broker_restart_no_live_updates = False
+            self.invalidate_zendure_command_state("MQTT-Verbindung neu aufgebaut")
 
     def mark_zendure_mqtt_disconnect(self, now: Optional[float] = None) -> None:
         with self.lock:
             self.mqtt_connected = False
             self.zendure_mqtt_disconnect_epoch = now if now is not None else time.time()
             self.zendure_mqtt_live_confirmed = False
+            self.invalidate_zendure_command_state("MQTT-Verbindung getrennt")
 
     def track_zendure_mqtt_topic(self, topic: str, payload: str, retain: bool, group: str, now: Optional[float] = None) -> None:
         """Track topic freshness and retained/live evidence for V3 diagnostics."""
@@ -800,12 +876,140 @@ class ControllerState:
     def update_zendure_temperature(self, source: str, pack_temperatures: List[Dict[str, Any]]) -> None:
         self.update_zendure_battery_metrics(source, pack_temperatures)
 
-    def update_zendure_headunit_power(self, source: str, pack_input: Any = None, output_home: Any = None, grid_input: Any = None, output_pack: Any = None) -> None:
-        """Update headunit power sensors and derive signed system power.
+    @staticmethod
+    def _normalize_zendure_command_property(name: str, value: Any) -> Any:
+        key = str(name or "")
+        if key == "smartMode":
+            if isinstance(value, str):
+                text = value.strip().upper()
+                if text == "ON":
+                    return 1
+                if text == "OFF":
+                    return 0
+            try:
+                return 1 if int(float(value)) == 1 else 0
+            except Exception:
+                return None
+        if key == "acMode":
+            if isinstance(value, str):
+                text = value.strip()
+                if text in {"Input mode", "Output mode"}:
+                    return text
+                try:
+                    value = int(float(text))
+                except Exception:
+                    return ""
+            try:
+                numeric = int(value)
+            except Exception:
+                return ""
+            return "Input mode" if numeric == 1 else "Output mode" if numeric == 2 else ""
+        if key in {"inputLimit", "outputLimit", "inverseMaxPower", "chargeMaxLimit", "gridOffMode"}:
+            try:
+                return int(round(float(value)))
+            except Exception:
+                return None
+        return value
 
-        Positive signed power means the Zendure system is charging; negative
-        signed power means it is discharging. gridInputPower is preferred for
-        real AC charging because inputLimit is only the requested limit.
+    def update_zendure_command_property(self, name: str, value: Any, source: str, now: Optional[float] = None) -> None:
+        """Update read-back state for a Zendure command/configuration property."""
+        key = str(name or "")
+        normalized = self._normalize_zendure_command_property(key, value)
+        if normalized is None or (key == "acMode" and not normalized):
+            return
+        epoch = time.time() if now is None else float(now)
+        mapping = {
+            "smartMode": ("zendure_command_smart_mode", "zendure_command_smart_mode_updated_epoch"),
+            "acMode": ("zendure_command_ac_mode", "zendure_command_ac_mode_updated_epoch"),
+            "inputLimit": ("zendure_command_input_limit_w", "zendure_command_input_limit_updated_epoch"),
+            "outputLimit": ("zendure_command_output_limit_w", "zendure_command_output_limit_updated_epoch"),
+            "inverseMaxPower": ("zendure_device_inverse_max_power_w", "zendure_device_inverse_max_power_updated_epoch"),
+            "chargeMaxLimit": ("zendure_device_charge_max_limit_w", "zendure_device_charge_max_limit_updated_epoch"),
+            "gridOffMode": ("zendure_grid_off_mode", "zendure_grid_off_mode_updated_epoch"),
+        }
+        target = mapping.get(key)
+        if target is None:
+            return
+        with self.lock:
+            setattr(self, target[0], normalized)
+            setattr(self, target[1], epoch)
+            self.zendure_command_state_updated_epoch = epoch
+            self.zendure_command_state_source = str(source or "UNKNOWN")
+            self._refresh_zendure_command_state_locked(epoch)
+
+    def _refresh_zendure_command_state_locked(self, now: Optional[float] = None, max_age_s: float = 30.0) -> None:
+        epoch = time.time() if now is None else float(now)
+        max_age = max(1.0, float(max_age_s))
+
+        def fresh(value: Any, updated: Optional[float]) -> bool:
+            return value is not None and updated is not None and (epoch - float(updated)) <= max_age
+
+        smart_fresh = fresh(self.zendure_command_smart_mode, self.zendure_command_smart_mode_updated_epoch)
+        ac_fresh = bool(self.zendure_command_ac_mode) and fresh(self.zendure_command_ac_mode, self.zendure_command_ac_mode_updated_epoch)
+        input_fresh = fresh(self.zendure_command_input_limit_w, self.zendure_command_input_limit_updated_epoch)
+        output_fresh = fresh(self.zendure_command_output_limit_w, self.zendure_command_output_limit_updated_epoch)
+        self.zendure_flash_protection_active = bool(smart_fresh and self.zendure_command_smart_mode == 1)
+        if self.zendure_flash_protection_active:
+            self.zendure_flash_protection_reason = "smartMode=1 frisch rückgelesen; dynamische Änderungen werden nicht in Flash geschrieben."
+        elif smart_fresh:
+            self.zendure_flash_protection_reason = "smartMode=0 rückgelesen; dynamische Leistungsbefehle sind bis zur Aktivierung gesperrt."
+        else:
+            self.zendure_flash_protection_reason = "smartMode nicht frisch bestätigt; dynamische Leistungsbefehle sind bis zur Rücklesung gesperrt."
+        self.zendure_command_state_complete = bool(smart_fresh and ac_fresh and input_fresh and output_fresh)
+        if self.zendure_command_state_complete:
+            self.zendure_command_state_reason = "smartMode, acMode, inputLimit und outputLimit frisch rückgelesen."
+        else:
+            missing = []
+            if not smart_fresh:
+                missing.append("smartMode")
+            if not ac_fresh:
+                missing.append("acMode")
+            if not input_fresh:
+                missing.append("inputLimit")
+            if not output_fresh:
+                missing.append("outputLimit")
+            self.zendure_command_state_reason = "Nicht frisch bestätigt: " + ", ".join(missing)
+
+    def zendure_command_state_snapshot(self, max_age_s: float = 30.0, now: Optional[float] = None) -> Dict[str, Any]:
+        with self.lock:
+            epoch = time.time() if now is None else float(now)
+            self._refresh_zendure_command_state_locked(epoch, max_age_s=max_age_s)
+            return {
+                "smart_mode": self.zendure_command_smart_mode,
+                "ac_mode": self.zendure_command_ac_mode,
+                "input_limit_w": self.zendure_command_input_limit_w,
+                "output_limit_w": self.zendure_command_output_limit_w,
+                "inverse_max_power_w": self.zendure_device_inverse_max_power_w,
+                "charge_max_limit_w": self.zendure_device_charge_max_limit_w,
+                "grid_off_mode": self.zendure_grid_off_mode,
+                "flash_protection_active": self.zendure_flash_protection_active,
+                "complete": self.zendure_command_state_complete,
+                "reason": self.zendure_command_state_reason,
+                "source": self.zendure_command_state_source,
+            }
+
+    def invalidate_zendure_command_state(self, reason: str = "MQTT reconnect") -> None:
+        """Require fresh read-back before incremental dynamic control resumes."""
+        with self.lock:
+            self.zendure_command_smart_mode_updated_epoch = None
+            self.zendure_command_ac_mode_updated_epoch = None
+            self.zendure_command_input_limit_updated_epoch = None
+            self.zendure_command_output_limit_updated_epoch = None
+            self.zendure_command_state_updated_epoch = None
+            self.zendure_flash_protection_active = False
+            self.zendure_flash_protection_reason = f"{reason}: smartMode muss neu bestätigt werden."
+            self.zendure_command_state_complete = False
+            self.zendure_command_state_reason = f"{reason}: vollständiger Command-State muss neu rückgelesen werden."
+
+    def update_zendure_headunit_power(self, source: str, pack_input: Any = None, output_home: Any = None, grid_input: Any = None, output_pack: Any = None, grid_off: Any = None, solar_input: Any = None) -> None:
+        """Update and separate Zendure grid, battery and off-grid power flows.
+
+        The compatibility field ``actual_zendure_system_signed_power`` now
+        describes only the grid-connected AC port: positive means AC import via
+        ``gridInputPower`` and negative means export via ``outputHomePower``.
+        Battery charge/discharge (``outputPackPower``/``packInputPower``) and
+        ``gridOffPower`` remain orthogonal so an off-grid load cannot masquerade
+        as house export or failed grid-side neutralisation.
         """
         with self.lock:
             def to_int(value: Any) -> Optional[int]:
@@ -820,22 +1024,35 @@ class ControllerState:
             oh = to_int(output_home)
             gi = to_int(grid_input)
             op = to_int(output_pack)
+            go = to_int(grid_off)
+            si = to_int(solar_input)
+            now = time.time()
             if pi is not None:
                 self.actual_zendure_charge_power = pi
+                self.actual_zendure_pack_input_update_epoch = now
             if oh is not None:
                 self.actual_zendure_discharge_power = oh
+                self.actual_zendure_output_home_update_epoch = now
             if gi is not None:
                 self.actual_zendure_grid_input_power = gi
+                self.actual_zendure_grid_input_update_epoch = now
             if op is not None:
                 self.actual_zendure_output_pack_power = op
+                self.actual_zendure_output_pack_update_epoch = now
+            if go is not None:
+                self.actual_zendure_grid_off_power = go
+                self.actual_zendure_grid_off_update_epoch = now
+            if si is not None:
+                self.actual_zendure_solar_input_power = si
+                self.actual_zendure_solar_input_update_epoch = now
 
-            self._refresh_zendure_headunit_power_locked()
+            self._refresh_zendure_headunit_power_locked(now=now)
 
-            now = time.time()
             self.last_zendure_power_update_epoch = now
             self.last_zendure_power_update_time = datetime.now().strftime("%H:%M:%S")
 
-    def _refresh_zendure_headunit_power_locked(self) -> None:
+    def _refresh_zendure_headunit_power_locked(self, now: Optional[float] = None) -> None:
+        now = time.time() if now is None else float(now)
         derived = derive_zendure_actual_power(
             pack_input=self.actual_zendure_charge_power,
             output_home=self.actual_zendure_discharge_power,
@@ -847,6 +1064,81 @@ class ControllerState:
         self.actual_zendure_system_charge_power = derived["charge_power_w"]
         self.actual_zendure_system_discharge_power = derived["discharge_power_w"]
         self.actual_zendure_system_signed_power = derived["signed_power_w"]
+        self.zendure_grid_import_power_w = derived["charge_power_w"]
+        self.zendure_grid_output_power_w = derived["discharge_power_w"]
+        self.zendure_grid_signed_power_w = derived["signed_power_w"]
+        self.zendure_battery_charge_power_w = derived["battery_charge_power_w"]
+        self.zendure_battery_discharge_power_w = derived["battery_discharge_power_w"]
+        self.zendure_battery_signed_power_w = derived["battery_signed_power_w"]
+        self.zendure_offgrid_power_w = max(0, int(self.actual_zendure_grid_off_power or 0))
+
+        # Raw Zendure topics do not necessarily arrive in the same MQTT packet.
+        # Never let an old non-zero explicit sensor determine the direction of a
+        # fresh packInputPower sample.  Fifteen seconds is deliberately shorter
+        # than the general power-stale timeout; ambiguous data stays ambiguous
+        # instead of being made certain by a stale companion topic.
+        evidence_max_age_s = 15.0
+
+        def fresh_value(value: int, epoch: Optional[float]) -> Optional[int]:
+            if epoch is None or (now - float(epoch)) > evidence_max_age_s:
+                return None
+            return value
+
+        observation_inputs = {
+            "pack_input": fresh_value(self.actual_zendure_charge_power, self.actual_zendure_pack_input_update_epoch),
+            "output_home": fresh_value(self.actual_zendure_discharge_power, self.actual_zendure_output_home_update_epoch),
+            "grid_input": fresh_value(self.actual_zendure_grid_input_power, self.actual_zendure_grid_input_update_epoch),
+            "output_pack": fresh_value(self.actual_zendure_output_pack_power, self.actual_zendure_output_pack_update_epoch),
+            "grid_off": fresh_value(self.actual_zendure_grid_off_power, self.actual_zendure_grid_off_update_epoch),
+            "solar_input": fresh_value(self.actual_zendure_solar_input_power, self.actual_zendure_solar_input_update_epoch),
+        }
+        observation = derive_zendure_power_observation(**observation_inputs)
+        source_epochs = [
+            epoch for value, epoch in (
+                (observation_inputs["pack_input"], self.actual_zendure_pack_input_update_epoch),
+                (observation_inputs["output_home"], self.actual_zendure_output_home_update_epoch),
+                (observation_inputs["grid_input"], self.actual_zendure_grid_input_update_epoch),
+                (observation_inputs["output_pack"], self.actual_zendure_output_pack_update_epoch),
+                (observation_inputs["grid_off"], self.actual_zendure_grid_off_update_epoch),
+                (observation_inputs["solar_input"], self.actual_zendure_solar_input_update_epoch),
+            ) if value is not None and epoch is not None
+        ]
+        direction = str(observation["direction"])
+        # Command-effect direction belongs to the grid-connected AC boundary.
+        # Battery/off-grid flows are orthogonal and therefore cannot make a
+        # neutral grid command look ineffective.
+        if direction == "CHARGE":
+            observation_epoch = self.actual_zendure_grid_input_update_epoch
+        elif direction == "DISCHARGE":
+            observation_epoch = self.actual_zendure_output_home_update_epoch
+        elif direction == "CONFLICT":
+            epochs = [
+                epoch for value, epoch in (
+                    (observation_inputs["grid_input"], self.actual_zendure_grid_input_update_epoch),
+                    (observation_inputs["output_home"], self.actual_zendure_output_home_update_epoch),
+                ) if value is not None and abs(int(value)) >= 20 and epoch is not None
+            ]
+            observation_epoch = min(epochs) if epochs else None
+        else:
+            grid_epochs = [
+                epoch for value, epoch in (
+                    (observation_inputs["grid_input"], self.actual_zendure_grid_input_update_epoch),
+                    (observation_inputs["output_home"], self.actual_zendure_output_home_update_epoch),
+                ) if value is not None and epoch is not None
+            ]
+            observation_epoch = max(grid_epochs) if grid_epochs else (max(source_epochs) if source_epochs else None)
+        self.zendure_power_observation_direction = direction
+        self.zendure_power_observation_confidence = str(observation["confidence"])
+        self.zendure_power_observation_signed_w = observation["signed_power_w"]
+        self.zendure_power_observation_magnitude_w = int(observation["magnitude_w"] or 0)
+        self.zendure_power_observation_reason = str(observation["reason"])
+        self.zendure_power_observation_updated_epoch = observation_epoch
+        self.zendure_battery_signed_power_w = int(observation.get("battery_signed_power_w") or 0)
+        self.zendure_battery_charge_power_w = int(observation.get("battery_charge_power_w") or 0)
+        self.zendure_battery_discharge_power_w = int(observation.get("battery_discharge_power_w") or 0)
+        self.zendure_offgrid_power_w = int(observation.get("offgrid_power_w") or 0)
+        self.zendure_offgrid_active = bool(observation.get("offgrid_active"))
+        self.zendure_power_balance_residual_w = int(observation.get("power_balance_residual_w") or 0)
 
     def refresh_zendure_headunit_power(self) -> None:
         """Recalculate Zendure actual power from the latest raw sensors and limits.
@@ -1024,27 +1316,40 @@ class ControllerState:
             target_error = target_signed - int(self.actual_zendure_system_signed_power or 0)
             command_sent = mqtt_commands_in_cycle > 0
             command_required = bool(self.mqtt_command_path_used_for_control)
-            if not command_required:
-                effect_category = "no_command"
-                effect_reason = "Kein MQTT-Kommandopfad in diesem Zyklus erforderlich."
-                effect_valid = False
-            elif not command_sent:
-                effect_category = "no_command"
-                effect_reason = self.last_mqtt_command_skipped or "Kein neues MQTT-Kommando gesendet."
-                effect_valid = False
-                if self.command_effect_category:
-                    effect_category = self.command_effect_category
-                    effect_reason = self.command_effect_reason
-                if self.command_uncertain_mqtt_active:
-                    effect_category = "COMMAND_TELEMETRY_UNCERTAIN"
-                    effect_reason = self.command_uncertain_mqtt_reason or "Aktiver Sollwert wurde bei unsicherem Zendure-MQTT-Zustand gesendet."
-                if self.command_not_effective_active:
-                    effect_category = "COMMAND_MISMATCH_CONFIRMED"
-                    effect_reason = self.command_not_effective_reason or "Aktiver Sollwert zeigt keine erkennbare Gerätewirkung."
-            else:
-                effect_category = "not_evaluable"
-                effect_reason = "Momentwert gespeichert; robuste Wirkung wird im Analyse-/Replay-Tool über Folgezyklen bewertet."
-                effect_valid = False
+            # Publish activity and physical effect are independent dimensions.
+            # A cycle without a new publish must not erase an open mismatch, and
+            # a resync cycle must not replace MISMATCH/RECOVERY_VERIFYING with
+            # "no_command" or "not_evaluable".
+            effect_category = str(self.command_effect_category or "")
+            effect_reason = str(self.command_effect_reason or "")
+            if not effect_category:
+                if command_sent:
+                    effect_category = "COMMAND_PENDING"
+                    effect_reason = "Kommando gesendet; physische Wirkung wird über Folgezyklen bewertet."
+                elif command_required:
+                    effect_category = "COMMAND_IDLE"
+                    effect_reason = self.last_mqtt_command_skipped or "Kein neues MQTT-Kommando erforderlich; bestehender Sollzustand bleibt aktiv."
+                else:
+                    effect_category = "COMMAND_IDLE"
+                    effect_reason = "Kein aktiver Command-Effect-Watch."
+            if self.command_uncertain_mqtt_active and effect_category not in {
+                "COMMAND_MISMATCH_CONFIRMED",
+                "COMMAND_NEUTRALIZATION_MISMATCH",
+                "COMMAND_RECOVERY_VERIFYING",
+            }:
+                effect_category = "COMMAND_TELEMETRY_UNCERTAIN"
+                effect_reason = self.command_uncertain_mqtt_reason or "Aktiver Sollwert wurde bei unsicherem Zendure-MQTT-Zustand gesendet."
+            if self.command_not_effective_active and effect_category not in {
+                "COMMAND_RECOVERY_VERIFYING",
+                "COMMAND_NEUTRALIZATION_MISMATCH",
+            }:
+                effect_category = "COMMAND_MISMATCH_CONFIRMED"
+                effect_reason = self.command_not_effective_reason or "Aktiver Sollwert zeigt keine erkennbare Gerätewirkung."
+
+            effect_valid = effect_category in {
+                "COMMAND_TARGET_TRACKING_EFFECTIVE",
+                "COMMAND_NEUTRALIZATION_CONFIRMED",
+            }
 
             unit = {
                 "unit_id": "primary",
@@ -1129,6 +1434,17 @@ class ControllerState:
                 "zendure_raw_pack_input_power_w": self.actual_zendure_charge_power,
                 "zendure_raw_output_home_power_w": self.actual_zendure_discharge_power,
                 "zendure_raw_output_pack_power_w": self.actual_zendure_output_pack_power,
+                "zendure_raw_grid_off_power_w": self.actual_zendure_grid_off_power,
+                "zendure_raw_solar_input_power_w": self.actual_zendure_solar_input_power,
+                "zendure_grid_signed_power_w": self.zendure_grid_signed_power_w,
+                "zendure_grid_import_power_w": self.zendure_grid_import_power_w,
+                "zendure_grid_output_power_w": self.zendure_grid_output_power_w,
+                "zendure_battery_signed_power_w": self.zendure_battery_signed_power_w,
+                "zendure_battery_charge_power_w": self.zendure_battery_charge_power_w,
+                "zendure_battery_discharge_power_w": self.zendure_battery_discharge_power_w,
+                "zendure_offgrid_power_w": self.zendure_offgrid_power_w,
+                "zendure_offgrid_active": self.zendure_offgrid_active,
+                "zendure_power_balance_residual_w": self.zendure_power_balance_residual_w,
                 "zendure_actual_charge_power_w": self.actual_zendure_system_charge_power,
                 "zendure_actual_discharge_power_w": self.actual_zendure_system_discharge_power,
                 "actual_zendure_charge_power": self.actual_zendure_charge_power,
@@ -1292,6 +1608,47 @@ class ControllerState:
                 "command_resync_suppressed_reason": self.command_resync_suppressed_reason,
                 "command_effect_state_category": self.command_effect_category,
                 "command_effect_state_reason": self.command_effect_reason,
+                "command_lifecycle_state": self.command_lifecycle_state,
+                "command_desired_sequence_id": self.command_desired_sequence_id,
+                "command_desired_intent": self.command_desired_intent,
+                "command_desired_smart_mode": self.command_desired_smart_mode,
+                "command_desired_ac_mode": self.command_desired_ac_mode,
+                "command_desired_input_limit_w": self.command_desired_input_limit_w,
+                "command_desired_output_limit_w": self.command_desired_output_limit_w,
+                "command_desired_signed_target_w": self.command_desired_signed_target_w,
+                "command_desired_reason": self.command_desired_reason,
+                "command_desired_safety_relevant": self.command_desired_safety_relevant,
+                "command_publish_event": self.command_publish_event,
+                "command_publish_last_time": self.command_publish_last_time,
+                "command_publish_fields": self.command_publish_fields,
+                "command_effect_confirmed": self.command_effect_confirmed,
+                "command_effect_confirmed_time": self.command_effect_confirmed_time,
+                "command_effect_confirmed_reason": self.command_effect_confirmed_reason,
+                "command_neutralization_active": self.command_neutralization_active,
+                "command_neutralization_since_time": self.command_neutralization_since_time,
+                "command_neutralization_reason": self.command_neutralization_reason,
+                "command_mismatch_resolution": self.command_mismatch_resolution,
+                "zendure_command_smart_mode": self.zendure_command_smart_mode,
+                "zendure_command_ac_mode": self.zendure_command_ac_mode,
+                "zendure_command_input_limit_w": self.zendure_command_input_limit_w,
+                "zendure_command_output_limit_w": self.zendure_command_output_limit_w,
+                "zendure_device_inverse_max_power_w": self.zendure_device_inverse_max_power_w,
+                "zendure_device_charge_max_limit_w": self.zendure_device_charge_max_limit_w,
+                "zendure_grid_off_mode": self.zendure_grid_off_mode,
+                "zendure_flash_protection_active": self.zendure_flash_protection_active,
+                "zendure_flash_protection_reason": self.zendure_flash_protection_reason,
+                "zendure_command_state_complete": self.zendure_command_state_complete,
+                "zendure_command_state_reason": self.zendure_command_state_reason,
+                "zendure_command_state_source": self.zendure_command_state_source,
+                "zendure_power_observation_direction": self.zendure_power_observation_direction,
+                "zendure_power_observation_confidence": self.zendure_power_observation_confidence,
+                "zendure_power_observation_signed_w": self.zendure_power_observation_signed_w,
+                "zendure_power_observation_magnitude_w": self.zendure_power_observation_magnitude_w,
+                "zendure_power_observation_age_s": (
+                    round(max(0.0, now_epoch - float(self.zendure_power_observation_updated_epoch)), 1)
+                    if self.zendure_power_observation_updated_epoch is not None else ""
+                ),
+                "zendure_power_observation_reason": self.zendure_power_observation_reason,
                 "controller_started_epoch": self.controller_started_epoch,
                 "last_cycle_completed_epoch": self.last_cycle_completed_epoch,
                 "loop_duration_ms": self.last_loop_duration_ms,
@@ -1392,6 +1749,17 @@ class ControllerState:
                 "actual_zendure_discharge_power": self.actual_zendure_discharge_power,
                 "actual_zendure_grid_input_power": self.actual_zendure_grid_input_power,
                 "actual_zendure_output_pack_power": self.actual_zendure_output_pack_power,
+                "actual_zendure_grid_off_power": self.actual_zendure_grid_off_power,
+                "actual_zendure_solar_input_power": self.actual_zendure_solar_input_power,
+                "zendure_grid_signed_power_w": self.zendure_grid_signed_power_w,
+                "zendure_grid_import_power_w": self.zendure_grid_import_power_w,
+                "zendure_grid_output_power_w": self.zendure_grid_output_power_w,
+                "zendure_battery_signed_power_w": self.zendure_battery_signed_power_w,
+                "zendure_battery_charge_power_w": self.zendure_battery_charge_power_w,
+                "zendure_battery_discharge_power_w": self.zendure_battery_discharge_power_w,
+                "zendure_offgrid_power_w": self.zendure_offgrid_power_w,
+                "zendure_offgrid_active": self.zendure_offgrid_active,
+                "zendure_power_balance_residual_w": self.zendure_power_balance_residual_w,
                 "zendure_system_charge_power": self.actual_zendure_system_charge_power,
                 "zendure_system_discharge_power": self.actual_zendure_system_discharge_power,
                 "zendure_system_signed_power": self.actual_zendure_system_signed_power,
@@ -1440,6 +1808,44 @@ class ControllerState:
                 "command_resync_suppressed_reason": self.command_resync_suppressed_reason,
                 "command_effect_state_category": self.command_effect_category,
                 "command_effect_state_reason": self.command_effect_reason,
+                "command_lifecycle_state": self.command_lifecycle_state,
+                "command_desired_sequence_id": self.command_desired_sequence_id,
+                "command_desired_intent": self.command_desired_intent,
+                "command_desired_smart_mode": self.command_desired_smart_mode,
+                "command_desired_ac_mode": self.command_desired_ac_mode,
+                "command_desired_input_limit_w": self.command_desired_input_limit_w,
+                "command_desired_output_limit_w": self.command_desired_output_limit_w,
+                "command_desired_signed_target_w": self.command_desired_signed_target_w,
+                "command_desired_reason": self.command_desired_reason,
+                "command_desired_safety_relevant": self.command_desired_safety_relevant,
+                "command_publish_event": self.command_publish_event,
+                "command_publish_last_time": self.command_publish_last_time,
+                "command_publish_fields": self.command_publish_fields,
+                "command_effect_confirmed": self.command_effect_confirmed,
+                "command_effect_confirmed_time": self.command_effect_confirmed_time,
+                "command_effect_confirmed_reason": self.command_effect_confirmed_reason,
+                "command_neutralization_active": self.command_neutralization_active,
+                "command_neutralization_since_time": self.command_neutralization_since_time,
+                "command_neutralization_reason": self.command_neutralization_reason,
+                "command_mismatch_resolution": self.command_mismatch_resolution,
+                "zendure_command_smart_mode": self.zendure_command_smart_mode,
+                "zendure_command_ac_mode": self.zendure_command_ac_mode,
+                "zendure_command_input_limit_w": self.zendure_command_input_limit_w,
+                "zendure_command_output_limit_w": self.zendure_command_output_limit_w,
+                "zendure_device_inverse_max_power_w": self.zendure_device_inverse_max_power_w,
+                "zendure_device_charge_max_limit_w": self.zendure_device_charge_max_limit_w,
+                "zendure_grid_off_mode": self.zendure_grid_off_mode,
+                "zendure_flash_protection_active": self.zendure_flash_protection_active,
+                "zendure_flash_protection_reason": self.zendure_flash_protection_reason,
+                "zendure_command_state_complete": self.zendure_command_state_complete,
+                "zendure_command_state_reason": self.zendure_command_state_reason,
+                "zendure_command_state_source": self.zendure_command_state_source,
+                "zendure_power_observation_direction": self.zendure_power_observation_direction,
+                "zendure_power_observation_confidence": self.zendure_power_observation_confidence,
+                "zendure_power_observation_signed_w": self.zendure_power_observation_signed_w,
+                "zendure_power_observation_magnitude_w": self.zendure_power_observation_magnitude_w,
+                "zendure_power_observation_age_s": age_seconds(self.zendure_power_observation_updated_epoch),
+                "zendure_power_observation_reason": self.zendure_power_observation_reason,
                 "command_not_effective_active": self.command_not_effective_active,
                 "command_not_effective_since_time": self.command_not_effective_since_time,
                 "command_not_effective_duration_s": self.command_not_effective_duration_s,

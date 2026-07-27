@@ -1,0 +1,34 @@
+[Unit]
+Description=Zendure Energy Controller Status UI Preview
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/opt/zendure-controller
+ExecStart=/usr/bin/python3 /opt/zendure-controller/tools/status_preview.py --host 0.0.0.0 --port 8091
+Restart=on-failure
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+# Passive UI-only add-on: no MQTT, controller instance, config write or DB write.
+MemoryAccounting=yes
+CPUAccounting=yes
+MemoryHigh=80M
+MemoryMax=120M
+CPUQuota=15%
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

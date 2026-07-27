@@ -49,13 +49,26 @@ class MqttBridge:
         second_topics = second_battery_topics(cfg)
         return {
             "output_limit": f"Zendure/number/{device_id}/outputLimit/set",
+            "output_limit_state": f"Zendure/number/{device_id}/outputLimit",
             "input_limit": f"Zendure/number/{device_id}/inputLimit/set",
+            "input_limit_state": f"Zendure/number/{device_id}/inputLimit",
             "ac_mode": f"Zendure/select/{device_id}/acMode/set",
+            "ac_mode_state": f"Zendure/select/{device_id}/acMode",
+            "smart_mode": f"Zendure/switch/{device_id}/smartMode/set",
+            "smart_mode_state": f"Zendure/switch/{device_id}/smartMode",
+            "inverse_max_power_state": f"Zendure/number/{device_id}/inverseMaxPower",
+            "charge_max_limit_number_state": f"Zendure/number/{device_id}/chargeMaxLimit",
+            "charge_max_limit_sensor_state": f"Zendure/sensor/{device_id}/chargeMaxLimit",
+            "grid_off_mode_number_state": f"Zendure/number/{device_id}/gridOffMode",
+            "grid_off_mode_select_state": f"Zendure/select/{device_id}/gridOffMode",
+            "grid_off_mode_sensor_state": f"Zendure/sensor/{device_id}/gridOffMode",
             "battery_soc": f"Zendure/sensor/{device_id}/electricLevel",
             "pack_input_power": f"Zendure/sensor/{device_id}/packInputPower",
             "output_home_power": f"Zendure/sensor/{device_id}/outputHomePower",
             "grid_input_power": f"Zendure/sensor/{device_id}/gridInputPower",
             "output_pack_power": f"Zendure/sensor/{device_id}/outputPackPower",
+            "grid_off_power": f"Zendure/sensor/{device_id}/gridOffPower",
+            "solar_input_power": f"Zendure/sensor/{device_id}/solarInputPower",
             "hyper_tmp": f"Zendure/sensor/{device_id}/hyperTmp",
             "pack_max_temp_wildcard": "Zendure/sensor/+/maxTemp",
             "pack_power_wildcard": "Zendure/sensor/+/power",
@@ -78,7 +91,15 @@ class MqttBridge:
     def refresh_subscriptions(self) -> None:
         cfg = self.config_getter()
         topics = self.topics(cfg)
-        for key in ("battery_soc", "pack_input_power", "output_home_power", "grid_input_power", "output_pack_power", "hyper_tmp", "pack_max_temp_wildcard", "pack_power_wildcard", "pack_soc_wildcard", "pack_state_wildcard"):
+        for key in (
+            "battery_soc", "pack_input_power", "output_home_power", "grid_input_power",
+            "output_pack_power", "grid_off_power", "solar_input_power", "hyper_tmp",
+            "smart_mode_state", "ac_mode_state", "input_limit_state", "output_limit_state",
+            "inverse_max_power_state", "charge_max_limit_number_state",
+            "charge_max_limit_sensor_state", "grid_off_mode_number_state",
+            "grid_off_mode_select_state", "grid_off_mode_sensor_state",
+            "pack_max_temp_wildcard", "pack_power_wildcard", "pack_soc_wildcard", "pack_state_wildcard",
+        ):
             self.client.subscribe(topics[key])
 
         if cross_charge_enabled(cfg):
@@ -102,8 +123,19 @@ class MqttBridge:
     def zendure_topic_group(self, topic: str, topics: Dict[str, str]) -> str:
         if topic == topics.get("battery_soc"):
             return "soc"
-        if topic in {topics.get("pack_input_power"), topics.get("output_home_power"), topics.get("grid_input_power"), topics.get("output_pack_power")} or topic.endswith("/power"):
+        if topic in {
+            topics.get("pack_input_power"), topics.get("output_home_power"), topics.get("grid_input_power"),
+            topics.get("output_pack_power"), topics.get("grid_off_power"), topics.get("solar_input_power"),
+        } or topic.endswith("/power"):
             return "headunit_power"
+        if topic in {
+            topics.get("smart_mode_state"), topics.get("ac_mode_state"), topics.get("input_limit_state"),
+            topics.get("output_limit_state"), topics.get("inverse_max_power_state"),
+            topics.get("charge_max_limit_number_state"), topics.get("charge_max_limit_sensor_state"),
+            topics.get("grid_off_mode_number_state"), topics.get("grid_off_mode_select_state"),
+            topics.get("grid_off_mode_sensor_state"),
+        }:
+            return "command_state"
         if topic.endswith("/socLevel"):
             return "pack_soc"
         if topic.endswith("/maxTemp") or topic == topics.get("hyper_tmp"):
@@ -144,7 +176,38 @@ class MqttBridge:
                 if topic.startswith("Zendure/sensor/"):
                     self.state.mark_zendure_mqtt_sensor(now, now_text)
 
-                if topic == topics["battery_soc"]:
+                if topic == topics["smart_mode_state"]:
+                    self.state.update_zendure_command_property("smartMode", payload, "MQTT", now)
+                    self.last_sent_values[topics["smart_mode"]] = "ON" if str(payload).strip().upper() == "ON" else "OFF"
+
+                elif topic == topics["ac_mode_state"]:
+                    self.state.update_zendure_command_property("acMode", payload, "MQTT", now)
+                    self.last_sent_values[topics["ac_mode"]] = payload
+
+                elif topic == topics["input_limit_state"]:
+                    self.state.update_zendure_command_property("inputLimit", payload, "MQTT", now)
+                    try:
+                        self.last_sent_values[topics["input_limit"]] = int(float(payload))
+                    except Exception:
+                        pass
+
+                elif topic == topics["output_limit_state"]:
+                    self.state.update_zendure_command_property("outputLimit", payload, "MQTT", now)
+                    try:
+                        self.last_sent_values[topics["output_limit"]] = int(float(payload))
+                    except Exception:
+                        pass
+
+                elif topic == topics["inverse_max_power_state"]:
+                    self.state.update_zendure_command_property("inverseMaxPower", payload, "MQTT", now)
+
+                elif topic in {topics["charge_max_limit_number_state"], topics["charge_max_limit_sensor_state"]}:
+                    self.state.update_zendure_command_property("chargeMaxLimit", payload, "MQTT", now)
+
+                elif topic in {topics["grid_off_mode_number_state"], topics["grid_off_mode_select_state"], topics["grid_off_mode_sensor_state"]}:
+                    self.state.update_zendure_command_property("gridOffMode", payload, "MQTT", now)
+
+                elif topic == topics["battery_soc"]:
                     self.state.battery_soc = int(float(payload))
                     self.state.mqtt_battery_soc = self.state.battery_soc
                     self.state.last_soc_update_epoch = now
@@ -167,6 +230,12 @@ class MqttBridge:
 
                 elif topic == topics["output_pack_power"]:
                     self.state.update_zendure_headunit_power("MQTT", output_pack=payload)
+
+                elif topic == topics["grid_off_power"]:
+                    self.state.update_zendure_headunit_power("MQTT", grid_off=payload)
+
+                elif topic == topics["solar_input_power"]:
+                    self.state.update_zendure_headunit_power("MQTT", solar_input=payload)
 
                 elif topic == topics["hyper_tmp"]:
                     temp = zendure_temp_to_celsius(payload)
@@ -262,11 +331,21 @@ class MqttBridge:
             self.state.mqtt_commands_sent += 1
         return True
 
-    def set_ac_mode(self, mode: str, force: bool = False) -> None:
-        self.publish(self.topics()["ac_mode"], mode, force=force, numeric=False)
+    def set_smart_mode(self, enabled: bool = True, force: bool = False) -> bool:
+        # Hardware-safety invariant: the dynamic ZEC runtime may only enable
+        # volatile Smart Mode. Disabling it would allow subsequent high-frequency
+        # limit changes to become persistent flash writes and could also interfere
+        # with an active off-grid/backup load. A future administrative release
+        # action must use a separate, explicit path rather than this runtime setter.
+        if not bool(enabled):
+            raise ValueError("ZEC runtime darf smartMode nicht deaktivieren")
+        return self.publish(self.topics()["smart_mode"], "ON", force=force, numeric=False)
 
-    def set_input_limit(self, watts: int, force: bool = False) -> None:
-        self.publish(self.topics()["input_limit"], int(watts), force=force, numeric=True)
+    def set_ac_mode(self, mode: str, force: bool = False) -> bool:
+        return self.publish(self.topics()["ac_mode"], mode, force=force, numeric=False)
 
-    def set_output_limit(self, watts: int, force: bool = False) -> None:
-        self.publish(self.topics()["output_limit"], int(watts), force=force, numeric=True)
+    def set_input_limit(self, watts: int, force: bool = False) -> bool:
+        return self.publish(self.topics()["input_limit"], int(watts), force=force, numeric=True)
+
+    def set_output_limit(self, watts: int, force: bool = False) -> bool:
+        return self.publish(self.topics()["output_limit"], int(watts), force=force, numeric=True)

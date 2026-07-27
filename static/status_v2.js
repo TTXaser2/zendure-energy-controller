@@ -4,6 +4,12 @@
   const $ = (s, root=document) => root.querySelector(s);
   const $$ = (s, root=document) => Array.from(root.querySelectorAll(s));
   const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const previewScenario = bootstrap.preview?.active ? String(bootstrap.preview?.scenario || '') : '';
+  function apiUrl(path) {
+    if (!previewScenario) return path;
+    const sep = path.includes('?') ? '&' : '?';
+    return `${path}${sep}scenario=${encodeURIComponent(previewScenario)}`;
+  }
 
   function text(path, value) {
     $$(`[data-zec="${path}"]`).forEach(el => {
@@ -55,8 +61,22 @@
     items.forEach(e=>{if(e.status==='open')groups.open.push(e);else{const d=new Date(Number(e.started_at)*1000).toDateString();if(d===today)groups.today.push(e);else if(d===yesterday)groups.yesterday.push(e);}});
     const section=(title,list)=>!list.length?'':`<section class="zec-event-group"><h3>${escapeHtml(title)} <span>· ${list.length} Ereignisgruppe${list.length===1?'':'n'}</span></h3>${list.map(e=>`<article class="zec-event ${escapeHtml(e.severity||'info')}"><div class="zec-event-dot"></div><div><div class="zec-event-head"><time>${e.status==='open'?'seit ':''}${eventTime(e.started_at)}</time><strong>${escapeHtml(e.title)}</strong></div><p>${escapeHtml(e.detail||'')}</p>${Number(e.occurrence_count)>1?`<small>${Number(e.occurrence_count)} Vorkommnisse zusammengefasst</small>`:''}</div></article>`).join('')}</section>`;
     root.innerHTML=section('Offene Ereignisse',groups.open)+section('Heute',groups.today)+section('Gestern',groups.yesterday)||'<div class="zec-empty">Keine Betriebsereignisse für heute und gestern.</div>';
-    const footer=$('[data-lower="events"] .zec-card-footer'); if(footer)setDot(footer,groups.open.some(e=>e.severity==='error')?'bad':(groups.open.length?'warn':'ok'));
-    text('events.footer',groups.open.length?`${groups.open.length} offene${groups.open.length===1?'s Ereignis':' Ereignisse'}`:'Keine aktuell offene Betriebsstörung');
+    const restrictions=Array.isArray(events?.technical_restrictions)?events.technical_restrictions.filter(Boolean):[];
+    const errors=groups.open.filter(e=>e.severity==='error');
+    const warnings=groups.open.filter(e=>e.severity==='warning');
+    const footer=$('[data-lower="events"] .zec-card-footer');
+    if(footer)setDot(footer,errors.length?'bad':((warnings.length||groups.open.length||restrictions.length)?'warn':'ok'));
+    if(errors.length){
+      text('events.footer',`${errors.length} offene Störung${errors.length===1?'':'en'} · ${errors[0].title||'Details oben'}`);
+    }else if(warnings.length){
+      text('events.footer',`${warnings.length} offene Warnung${warnings.length===1?'':'en'} · ${warnings[0].title||'Details oben'}`);
+    }else if(groups.open.length){
+      text('events.footer',`${groups.open.length} offene Hinweise`);
+    }else if(restrictions.length){
+      text('events.footer',`Keine offene Störung · ${restrictions.length} technische Einschränkung${restrictions.length===1?'':'en'}`);
+    }else{
+      text('events.footer','Keine aktuell offene Betriebsstörung');
+    }
   }
   function fmtReason(value) {
     const raw = String(value ?? '').trim();
@@ -160,7 +180,10 @@
       setRing('zendure_unit_2', units[1]?.soc, units[1]?.tone);
       text('zendure_unit_1.caption', units[0]?.state_text);
       text('zendure_unit_2.caption', units[1]?.state_text);
-      units.slice(0,2).forEach((unit, index) => text(`zendure.units.${index}.detail`, unit.detail));
+      units.slice(0,2).forEach((unit, index) => {
+        text(`zendure.units.${index}.name`, unit.name || `Unit ${index + 1}`);
+        text(`zendure.units.${index}.detail`, unit.detail);
+      });
     }
     const zw = $('[data-zec="zendure.command_warning"]');
     if (zw) { zw.textContent = p.zendure?.command_warning || ''; zw.hidden = !p.zendure?.command_warning; }
@@ -189,9 +212,16 @@
     text('logging.db_size_text',fmtBytes(p.logging?.db_size_bytes));
     text('logging.queue_text',`${Number(p.logging?.queue_depth||0).toLocaleString('de-DE')} Datensätze`);
     text('logging.fallback_text',p.logging?.fallback_active?`Aktiv · ${p.logging?.fallback_reason||'Ersatzziel'}`:(p.logging?.fallback_count?`Inaktiv · ${p.logging.fallback_count} seit Start`:'Inaktiv'));
-    text('logging.free_text',`${fmtBytes(p.logging?.free_bytes)} von ${fmtBytes(p.logging?.total_bytes)}`);
+    text('logging.used_text',`${fmtBytes(p.logging?.used_bytes)} von ${fmtBytes(p.logging?.total_bytes)}`);
     text('logging.footer',p.logging?.tone==='bad'?'Messdatenspeicherung gestört':(p.logging?.tone==='warn'?'Fallback-Speicher aktiv':'Messdatenspeicherung unauffällig'));
     meter('logging.disk',p.logging?.disk_used_percent,p.logging?.tone); const lf=$('[data-lower="logging"] .zec-card-footer');if(lf)setDot(lf,p.logging?.tone);
+    const loggingInfo=$('[data-lower="logging"] .zec-info-button');
+    if(loggingInfo){const used=number(p.logging?.used_bytes),free=number(p.logging?.free_bytes),total=number(p.logging?.total_bytes),pct=number(p.logging?.disk_used_percent);loggingInfo.dataset.infoText=[
+      'Zeigt CSV-Protokoll, SQLite-Graphspeicher, Speicherziel, Queue und Fallback. Dateisystemdaten werden gecacht im Web-Backend erfasst; der Regelzyklus bleibt unberührt.',
+      `Gesamtkapazität: ${fmtBytes(total)}.`,
+      `Belegt: ${fmtBytes(used)}${pct===null?'':` · ${pct.toLocaleString('de-DE',{maximumFractionDigits:1})} %`}.`,
+      `Frei: ${fmtBytes(free)}.`
+    ].join('\n');}
 
     text('resources.cpu_text',p.resources?.cpu_percent==null?'wird ermittelt …':`${p.resources.cpu_percent.toLocaleString('de-DE',{maximumFractionDigits:1})} %`);
     text('resources.ram_text',`${number(p.resources?.ram_used_percent)?.toLocaleString('de-DE',{maximumFractionDigits:1})??'—'} % · ${fmtBytes(p.resources?.ram_available_bytes)} frei`);
@@ -209,21 +239,23 @@
     text('diag.cycle_meta',p.diag?.cycle_meta_text);
     text('diag.sqlite_text',fmtMs(p.diag?.sqlite_ms));
     text('diag.slowest_text',`${p.diag?.slowest_step||'—'} · ${fmtMs(p.diag?.slowest_ms)}`);text('diag.uptime_text',fmtDuration(p.diag?.controller_uptime_s));
-    text('diag.resync_text',p.diag?.resync_text||'Kein Zendure-Kommandoabgleich seit Controllerstart · betroffen wären AC-Modus und Lade-/Entladelimits');
-    text('diag.resync_suppressed_text',p.diag?.resync_suppressed_text||'Kein unterdrückter Abgleichversuch seit Controllerstart');
+    text('diag.resync_text',p.diag?.resync_text||'Keiner seit Controllerstart');
+    text('diag.effect_confirmation_text',p.diag?.effect_confirmation_text||'Noch nicht bestätigt');
+    text('diag.resync_suppressed_text',p.diag?.resync_suppressed_text||'Keiner seit Controllerstart');
     const phases=Array.isArray(p.diag?.timing_phases)?p.diag.timing_phases:[];
     const phaseClass=key=>`zec-phase-${String(key||'other').replace(/[^a-z0-9_-]/gi,'-')}`;
     const timingRoot=$('#diagTimingTree');
-    if(timingRoot){timingRoot.innerHTML=phases.map(row=>`<div class="zec-timing-row ${phaseClass(row.key)}"><span class="zec-timing-label"><i class="zec-timing-key" aria-hidden="true"></i>${escapeHtml(row.label||'Abschnitt')}</span><strong>${escapeHtml(fmtMs(row.ms))}</strong></div>`).join('')||'<div class="zec-empty">Noch keine Teilzeiten erfasst.</div>';}
+    if(timingRoot){timingRoot.innerHTML=phases.map(row=>`<div class="zec-timing-row ${phaseClass(row.key)}${row.executed===false?' is-not-executed':''}"><span class="zec-timing-label"><i class="zec-timing-key" aria-hidden="true"></i>${escapeHtml(row.label||'Abschnitt')}</span><strong>${row.executed===false?'nicht ausgeführt':escapeHtml(fmtMs(row.ms))}</strong></div>`).join('')||'<div class="zec-empty">Noch keine Teilzeiten erfasst.</div>';}
     const distribution=$('#diagTimingDistribution');
     if(distribution){
-      const total=phases.reduce((sum,row)=>sum+(number(row.ms)||0),0);
-      distribution.innerHTML=total>0?phases.map(row=>{const ms=number(row.ms)||0;const pct=100*ms/total;const title=`${row.label||'Abschnitt'}: ${fmtMs(ms)} · ${pct.toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1})} % des aktiven Durchlaufs`;return `<span class="zec-timing-segment ${phaseClass(row.key)}" style="flex-grow:${Math.max(0,ms)}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"></span>`;}).join(''):'';
+      const executedPhases=phases.filter(row=>row.executed!==false&&number(row.ms)!==null&&number(row.ms)>0);
+      const total=executedPhases.reduce((sum,row)=>sum+(number(row.ms)||0),0);
+      distribution.innerHTML=total>0?executedPhases.map(row=>{const ms=number(row.ms)||0;const pct=100*ms/total;const title=`${row.label||'Abschnitt'}: ${fmtMs(ms)} · ${pct.toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1})} % des aktiven Durchlaufs`;return `<span class="zec-timing-segment ${phaseClass(row.key)}" style="flex-grow:${Math.max(0,ms)}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"></span>`;}).join(''):'';
       distribution.classList.toggle('is-slow',!!p.diag?.cycle_slow_warning);
       distribution.setAttribute('aria-label',p.diag?.cycle_slow_warning?'Zeitverteilung; Slow-Cycle-Warnschwelle überschritten':'Zeitverteilung des letzten aktiven Controller-Durchlaufs');
     }
     const diagInfo=$('[data-lower="diagnostics"] .zec-info-button');
-    if(diagInfo&&p.diag?.timing_stats){const labels={cycle_total_without_sleep_ms:'Aktiver Gesamtdurchlauf',control_decision_ms:'Regelentscheidung',mqtt_command_path_ms:'MQTT-Kommandopfad',measurement_logging_ms:'Logging im Hauptthread',other_cycle_work_ms:'Sonstige, nicht einzeln erfasste Verarbeitung'};const lines=[`Letzter Durchlauf: ${fmtMs(p.diag?.loop_ms)}. ${p.diag?.cycle_meta_text||''}`,`Slow-Cycle-Warnschwelle: ${fmtMs(p.diag?.slow_cycle_warn_ms)}. Sie ist eine Diagnosegrenze, keine harte Deadline.`,'Statistik der jüngsten, begrenzt gespeicherten Durchläufe:'];Object.entries(labels).forEach(([key,label])=>{const st=p.diag.timing_stats[key];if(st)lines.push(`${label}: Mittel ${fmtMs(st.mean_ms)}, P95 ${fmtMs(st.p95_ms)}, Maximum ${fmtMs(st.max_ms)} (${st.samples} Werte)`);});lines.push('Der farbige Balken zeigt ausschließlich die Verteilung der synchronen Teilphasen im letzten aktiven Durchlauf. SQLite läuft asynchron und ist nicht enthalten.');diagInfo.dataset.infoText=lines.join('\n');}
+    if(diagInfo){const labels={cycle_total_without_sleep_ms:'Aktiver Gesamtdurchlauf',control_decision_ms:'Regelentscheidung',mqtt_command_path_ms:'MQTT-Kommandopfad',measurement_logging_ms:'Logging im Hauptthread',other_cycle_work_ms:'Sonstige, nicht einzeln erfasste Verarbeitung'};const lines=[`Letzter Durchlauf: ${fmtMs(p.diag?.loop_ms)}. ${p.diag?.cycle_meta_text||''}`,`Slow-Cycle-Warnschwelle: ${fmtMs(p.diag?.slow_cycle_warn_ms)}. Sie ist eine Diagnosegrenze, keine harte Deadline.`];if(p.diag?.timing_stats){lines.push('Statistik der jüngsten, begrenzt gespeicherten Durchläufe:');Object.entries(labels).forEach(([key,label])=>{const st=p.diag.timing_stats[key];if(st)lines.push(`${label}: Mittel ${fmtMs(st.mean_ms)}, P95 ${fmtMs(st.p95_ms)}, Maximum ${fmtMs(st.max_ms)} (${st.samples} Werte)`);});}lines.push('Der farbige Balken zeigt ausschließlich die Verteilung der synchronen Teilphasen im letzten aktiven Durchlauf. SQLite läuft asynchron und ist nicht enthalten.');lines.push('Beim Zendure-Kommandoabgleich sendet ZEC den aktuell gültigen AC-Modus sowie Lade- und Entladelimits erneut. Der Versand wird getrennt von der anschließend physisch bestätigten Wirkung ausgewiesen. Ein unterdrückter Versuch bedeutet ausdrücklich, dass nichts erneut gesendet wurde.');diagInfo.dataset.infoText=lines.join('\n');}
     const chain={rule:p.diag?.rule_tone||'unknown',mqtt:p.diag?.broker_tone||p.diag?.mqtt_tone||'unknown',api:p.diag?.api_tone||'unknown',effect:p.diag?.effect_tone||'unknown'};Object.entries(chain).forEach(([k,v])=>{const el=$(`[data-chain="${k}"]`);if(el)el.className=v;});
     const diagTone=p.diag?.cycle_slow_warning?'bad':(Object.values(chain).includes('bad')?'bad':(Object.values(chain).includes('warn')?'warn':'ok'));const df=$('[data-lower="diagnostics"] .zec-card-footer');if(df)setDot(df,diagTone);text('diag.footer',p.diag?.cycle_slow_warning?'Aktiver Controller-Durchlauf überschreitet die Slow-Cycle-Warnschwelle':(diagTone==='ok'?'Controller und Schnittstellen aktuell':(diagTone==='warn'?'Controller oder Schnittstelle eingeschränkt':'Controller oder Schnittstelle gestört')));
     renderEvents(p.events);
@@ -297,7 +329,7 @@
       if(lo<0&&hi>0){ctx.strokeStyle=css('--zec-subtle');ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(pad.l,y(0));ctx.lineTo(w-pad.r,y(0));ctx.stroke();ctx.setLineDash([]);}
       ctx.strokeStyle=css('--zec-green');ctx.lineWidth=2;ctx.beginPath();
       pts.forEach((p,i)=>{const v=number(p.value);if(v===null)return;const px=x(i),py=y(v);if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);});ctx.stroke();
-      ctx.fillStyle=css('--zec-muted');ctx.font='9px sans-serif';ctx.fillText(fmtPower(hi),0,12);ctx.fillText(fmtPower(lo),0,h-18);ctx.fillText('letzte 48 Punkte',pad.l,h-4);ctx.textAlign='right';ctx.fillText(`aktuell ${fmtPower(values.at(-1))}`,w-pad.r,h-4);ctx.textAlign='left';
+      ctx.fillStyle=css('--zec-muted');ctx.font='9px sans-serif';ctx.fillText(fmtPower(hi),0,12);ctx.fillText(fmtPower(lo),0,h-18);ctx.fillText('letzte 48 Punkte',pad.l,h-4);ctx.textAlign='right';ctx.fillText(`neuester: ${fmtPower(values.at(-1))}`,w-pad.r,h-4);ctx.textAlign='left';
       if(this.hoverX!==null){const idx=Math.max(0,Math.min(pts.length-1,Math.round((this.hoverX-pad.l)/pw*(pts.length-1))));const p=pts[idx];const v=number(p.value);if(v!==null){const px=x(idx),py=y(v);ctx.strokeStyle=css('--zec-blue');ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px,pad.t);ctx.lineTo(px,h-pad.b);ctx.stroke();ctx.fillStyle=css('--zec-blue');ctx.beginPath();ctx.arc(px,py,3.5,0,Math.PI*2);ctx.fill();this.showTooltip(`<strong>${escapeHtml(p.time||'')}</strong><div class="zec-chart-tooltip-row"><span>Netzleistung</span><b>${escapeHtml(fmtPower(v))}</b></div><div class="zec-chart-tooltip-row"><span>Status</span><b>${escapeHtml(p.status||'—')}</b></div>`,px,py);}}
     }
   }
@@ -310,7 +342,7 @@
       const count=Number(p.zendure_unit_count||1);
       if(count>1){defs.push({key:'zendure_unit_1_soc',label:p.unit_labels?.[0]||'Zendure 1',color:colors[0]});defs.push({key:'zendure_unit_2_soc',label:p.unit_labels?.[1]||'Zendure 2',color:colors[1]});}
       else defs.push({key:'zendure_soc',label:'Zendure',color:colors[0]});
-      defs.push({key:'primary_soc',label:'Primärspeicher',color:colors[2]});
+      if(p.primary_storage_present!==false)defs.push({key:'primary_soc',label:'Primärspeicher',color:colors[2]});
       return defs;
     }
     drawLegend(){
@@ -402,7 +434,7 @@
       const protectedLevels=[thresholds.min_soc,thresholds.max_soc,thresholds.reserve_soc,0,100];
       series.forEach(s=>{const raw=points.map(pt=>({minute:number(pt.minute),value:number(pt[s.key])}));this.drawQuantizedSocLine(ctx,raw,s.color,x,y,protectedLevels);});
       if(p.is_today){const now=new Date();const minute=now.getHours()*60+now.getMinutes();ctx.strokeStyle=css('--zec-blue');ctx.setLineDash([2,4]);ctx.beginPath();ctx.moveTo(x(minute),pad.t);ctx.lineTo(x(minute),h-pad.b);ctx.stroke();ctx.setLineDash([]);}
-      if(this.hoverX!==null&&points.length){const minute=Math.max(0,Math.min(1440,Math.round((this.hoverX-pad.l)/pw*1440)));let nearest=points[0],dist=Infinity;points.forEach(pt=>{const d=Math.abs(Number(pt.minute)-minute);if(d<dist){dist=d;nearest=pt;}});const px=x(nearest.minute);ctx.strokeStyle=css('--zec-blue');ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px,pad.t);ctx.lineTo(px,h-pad.b);ctx.stroke();series.forEach(s=>{const v=number(nearest[s.key]);if(v===null)return;ctx.fillStyle=s.color;ctx.beginPath();ctx.arc(px,y(v),3.5,0,Math.PI*2);ctx.fill();});const rows=series.map(s=>`<div class="zec-chart-tooltip-row"><span>${escapeHtml(s.label)}</span><b>${escapeHtml(fmtSoc(nearest[s.key]))}</b></div>`).join('');const reason=fmtReason(nearest.reason);const reasonRow=reason?`<div class="zec-chart-tooltip-row"><span>Grund</span><b>${escapeHtml(reason)}</b></div>`:'';this.showTooltip(`<strong>${escapeHtml(p.date||'')} ${escapeHtml(nearest.time||'')}</strong>${rows}<div class="zec-chart-tooltip-row"><span>Zendure-Leistung</span><b>${escapeHtml(fmtPower(nearest.zendure_power_w))}</b></div><div class="zec-chart-tooltip-row"><span>Primärspeicher</span><b>${escapeHtml(fmtPower(nearest.primary_power_w))}</b></div><div class="zec-chart-tooltip-row"><span>Modus</span><b>${escapeHtml(nearest.mode||'—')}</b></div>${reasonRow}`,px,pad.t+ph*.55);}
+      if(this.hoverX!==null&&points.length){const minute=Math.max(0,Math.min(1440,Math.round((this.hoverX-pad.l)/pw*1440)));let nearest=points[0],dist=Infinity;points.forEach(pt=>{const d=Math.abs(Number(pt.minute)-minute);if(d<dist){dist=d;nearest=pt;}});const px=x(nearest.minute);ctx.strokeStyle=css('--zec-blue');ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px,pad.t);ctx.lineTo(px,h-pad.b);ctx.stroke();series.forEach(s=>{const v=number(nearest[s.key]);if(v===null)return;ctx.fillStyle=s.color;ctx.beginPath();ctx.arc(px,y(v),3.5,0,Math.PI*2);ctx.fill();});const rows=series.map(s=>`<div class="zec-chart-tooltip-row"><span>${escapeHtml(s.label)}</span><b>${escapeHtml(fmtSoc(nearest[s.key]))}</b></div>`).join('');const reason=fmtReason(nearest.reason);const reasonRow=reason?`<div class="zec-chart-tooltip-row"><span>Grund</span><b>${escapeHtml(reason)}</b></div>`:'';const primaryPowerRow=p.primary_storage_present!==false?`<div class="zec-chart-tooltip-row"><span>Primärspeicher</span><b>${escapeHtml(fmtPower(nearest.primary_power_w))}</b></div>`:'';this.showTooltip(`<strong>${escapeHtml(p.date||'')} ${escapeHtml(nearest.time||'')}</strong>${rows}<div class="zec-chart-tooltip-row"><span>Zendure-Leistung</span><b>${escapeHtml(fmtPower(nearest.zendure_power_w))}</b></div>${primaryPowerRow}<div class="zec-chart-tooltip-row"><span>Modus</span><b>${escapeHtml(nearest.mode||'—')}</b></div>${reasonRow}`,px,pad.t+ph*.55);}
     }
   }
 
@@ -433,8 +465,8 @@
   function startClock(){const el=$('#localClock');const update=()=>{if(el)el.textContent=new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',second:'2-digit'});};update();setInterval(update,1000);}
 
   let statusSequence=0;
-  const statusPoll=new PollChannel('/status-view-data',3000,p=>{const seq=number(p.snapshot_epoch_ms)||Date.now();if(seq<statusSequence)return;statusSequence=seq;applyStatus(p);},2500);
-  const miniPoll=new PollChannel('/grid-mini-data',10000,p=>miniChart.setData(p),2500);
+  const statusPoll=new PollChannel(apiUrl('/status-view-data'),3000,p=>{const seq=number(p.snapshot_epoch_ms)||Date.now();if(seq<statusSequence)return;statusSequence=seq;applyStatus(p);},2500);
+  const miniPoll=new PollChannel(apiUrl('/grid-mini-data'),10000,p=>miniChart.setData(p),2500);
 
   let selectedDate=new Date(); let dayInFlight=false; let dayController=null;
   const dateString=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -448,7 +480,7 @@
   async function refreshSocDay(){
     if(document.visibilityState==='hidden'||dayInFlight)return;dayInFlight=true;dayController=new AbortController();const timeout=setTimeout(()=>dayController.abort(),5000);
     const status=$('#storageSocStatus');const ds=dateString(selectedDate);syncDateControls();
-    try{const r=await fetch(`/storage-soc-day-data?date=${encodeURIComponent(ds)}`,{cache:'no-store',signal:dayController.signal});if(!r.ok)throw new Error(`HTTP ${r.status}`);const p=await r.json();const returned=localDateFromString(p.date);if(returned)selectedDate=returned;syncDateControls(p);socChart.setData(p);status.textContent=p.is_today?`Stand: ${p.last_point_at||'—'} · aktualisiert alle 60 s · Quelle: ${p.source||'—'} · Cache ${p.cache_status||'—'}`:`${p.complete===false?'Daten unvollständig':'Vollständiger Tag'}: ${p.date} · Quelle: ${p.source||'—'} · Cache ${p.cache_status||'—'}`;}catch(e){status.textContent='SOC-Tageskurve wird noch vorbereitet oder ist vorübergehend nicht verfügbar.';}finally{clearTimeout(timeout);dayController=null;dayInFlight=false;}
+    try{const r=await fetch(apiUrl(`/storage-soc-day-data?date=${encodeURIComponent(ds)}`),{cache:'no-store',signal:dayController.signal});if(!r.ok)throw new Error(`HTTP ${r.status}`);const p=await r.json();const returned=localDateFromString(p.date);if(returned)selectedDate=returned;syncDateControls(p);socChart.setData(p);status.textContent=p.is_today?`Stand: ${p.last_point_at||'—'} · aktualisiert alle 60 s · Quelle: ${p.source||'—'} · Cache ${p.cache_status||'—'}`:`${p.complete===false?'Daten unvollständig':'Vollständiger Tag'}: ${p.date} · Quelle: ${p.source||'—'} · Cache ${p.cache_status||'—'}`;}catch(e){status.textContent='SOC-Tageskurve wird noch vorbereitet oder ist vorübergehend nicht verfügbar.';}finally{clearTimeout(timeout);dayController=null;dayInFlight=false;}
   }
 
   $('#dayPrev').addEventListener('click',()=>{const n=new Date(selectedDate);n.setDate(n.getDate()-1);selectedDate=n;refreshSocDay();});

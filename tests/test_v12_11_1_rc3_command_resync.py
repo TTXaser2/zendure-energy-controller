@@ -46,7 +46,8 @@ class Rc3CommandResyncTests(unittest.TestCase):
         controller.update_command_effect_monitor(cfg)
 
         self.assertEqual(1, state.command_resync_count)
-        self.assertFalse(state.command_uncertain_mqtt_active)
+        self.assertTrue(state.command_uncertain_mqtt_active)
+        self.assertEqual("COMMAND_RECOVERY_VERIFYING", state.command_effect_category)
         self.assertIn(("ac", "Output mode", True), mqtt.commands)
         self.assertIn(("input", 0, True), mqtt.commands)
         self.assertIn(("output", 400, True), mqtt.commands)

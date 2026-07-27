@@ -71,7 +71,7 @@ class V12112Rc1CommandLifecycleAndUiTests(unittest.TestCase):
 
         self.assertFalse(state.command_not_effective_active)
         self.assertNotIn("COMMAND_NOT_EFFECTIVE", state.active_limiters)
-        self.assertEqual("COMMAND_EFFECTIVE", state.command_effect_category)
+        self.assertEqual("COMMAND_TARGET_TRACKING_EFFECTIVE", state.command_effect_category)
 
     def test_uncertain_telemetry_is_not_reported_as_confirmed_device_failure(self):
         cfg = base_cfg(COMMAND_EFFECT_TIMEOUT_SECONDS=10)

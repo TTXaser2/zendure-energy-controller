@@ -16,10 +16,12 @@ class V1285SafetyTests(unittest.TestCase):
                 f.write(f"{CSV_SCHEMA};12.8.5;{1000+i*3};3;2026-06-01 00:00:{i:02d};0;0;0;50;HOLD;0;ok\n")
         return path
 
-    def test_night_discharge_pack_power_is_interpreted_as_discharge_when_output_requested(self):
+    def test_pack_discharge_is_separate_from_grid_side_command_effect(self):
         derived = derive_zendure_actual_power(pack_input=422, output_home=0, grid_input=0, output_pack=0, requested_output_limit=400)
-        self.assertEqual(derived["signed_power_w"], -422)
-        self.assertEqual(derived["discharge_power_w"], 422)
+        self.assertEqual(0, derived["signed_power_w"])
+        self.assertEqual(0, derived["discharge_power_w"])
+        self.assertEqual(-422, derived["battery_signed_power_w"])
+        self.assertEqual(422, derived["battery_discharge_power_w"])
 
     def test_analysis_limits_are_pi_safe_and_extended_is_separate(self):
         self.assertEqual(safe_limits().max_files, 2)

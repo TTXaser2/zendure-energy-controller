@@ -380,35 +380,46 @@ class OperationalEventJournal:
         )
 
         effect = str(s.get("command_effect_state_category") or s.get("command_effect_category") or "")
-        bad_effect = {"not_effective", "command_not_effective", "uncertain"}
+        # Telemetry can become uncertain after a mismatch was already confirmed.
+        # The open physical-effect incident must remain open until a later
+        # independent observation confirms recovery; loss of observability is
+        # not recovery.
+        if bool(s.get("command_not_effective_active")) and effect not in {
+            "COMMAND_MISMATCH_CONFIRMED",
+            "COMMAND_NEUTRALIZATION_MISMATCH",
+            "COMMAND_RECOVERY_VERIFYING",
+        }:
+            effect = "COMMAND_MISMATCH_CONFIRMED"
+        bad_effect = {
+            "not_effective", "command_not_effective", "uncertain",
+            "COMMAND_MISMATCH_CONFIRMED", "COMMAND_NEUTRALIZATION_MISMATCH",
+            "COMMAND_RECOVERY_VERIFYING",
+        }
+        mismatch_resolution = str(s.get("command_mismatch_resolution") or "")
+        if mismatch_resolution == "MISMATCH_SUPERSEDED_BY_SAFETY_NEUTRALIZATION":
+            command_title_ok = "Zendure-Mismatch durch Schutzneutralisierung beendet"
+            command_detail_ok = "Der vorherige Lade-/Entladeintent wurde nicht als wiederhergestellt gewertet; ein neuer sicherheitsrelevanter 0-W-Intent hat ihn abgelöst."
+        elif mismatch_resolution == "MISMATCH_ABORTED_BY_INTENT_CHANGE":
+            command_title_ok = "Zendure-Mismatch durch Intentwechsel beendet"
+            command_detail_ok = "Der vorherige Intent wurde legitim abgelöst und nicht als physisch wiederhergestellt gewertet."
+        elif mismatch_resolution == "MISMATCH_RECLASSIFIED_AS_CHARGE_ACCEPTANCE_LIMITED":
+            command_title_ok = "Zendure-Mismatch als Ladeannahmebegrenzung reklassifiziert"
+            command_detail_ok = "Laderichtung und Batterieladung sind bestätigt; die reduzierte Leistung wird als High-SOC-/BMS-Ladeannahmebegrenzung bewertet."
+        else:
+            command_title_ok = "Zendure-Kommandowirkung wiederhergestellt"
+            command_detail_ok = "Die physische Gerätewirkung wurde wieder bestätigt."
         self._transition(
             conn,
             "command_effect",
             effect,
             bad_effect,
-            "Zendure-Kommando nicht bestätigt",
-            "Zendure-Kommando wieder wirksam",
+            "Zendure-Kommando nicht wirksam",
+            command_title_ok,
             lambda v: str(s.get("command_not_effective_reason") or s.get("command_effect_reason") or v),
-            detail_ok="Sollwert und Gerätewirkung stimmen wieder plausibel überein.",
+            detail_ok=command_detail_ok,
             severity="error",
             dedupe_window_s=_FLAP_COMPACT_WINDOW_S,
         )
-
-        resync_count = int(s.get("command_resync_count") or 0)
-        old_count = int(self._previous.get("resync_count") or 0)
-        self._previous["resync_count"] = resync_count
-        if resync_count > old_count:
-            reason = self._public_resync_reason(str(s.get("command_resync_reason") or "Kommunikationsunsicherheit"))
-            target = int(s.get("command_uncertain_mqtt_target_w") or s.get("zendure_target_signed_power") or 0)
-            self._add(
-                conn,
-                "command_resync",
-                "info",
-                "Zendure-Kommandoabgleich ausgeführt",
-                f"AC-Modus und Lade-/Entladelimits für Soll {target:+d} W erneut gesendet · {reason}",
-                dedupe_key="command_resync",
-                dedupe_window_s=5 * 60,
-            )
 
         log_status = str(s.get("measurement_log_status") or "")
         self._transition(
@@ -443,7 +454,10 @@ class OperationalEventJournal:
         elif event_type == "mqtt":
             item["title"] = "MQTT-Verbindung getrennt" if status == "open" else "MQTT-Verbindung wiederhergestellt"
         elif event_type == "command_effect":
-            item["title"] = "Zendure-Kommando nicht bestätigt" if status == "open" else "Zendure-Kommando wieder wirksam"
+            if status == "open":
+                item["title"] = "Zendure-Kommando nicht wirksam"
+            elif not str(item.get("title") or "").strip():
+                item["title"] = "Zendure-Kommandowirkung wiederhergestellt"
         elif event_type == "measurement_logging":
             item["title"] = "Messdaten-Logging eingeschränkt" if status == "open" else "Messdaten-Logging wiederhergestellt"
         return item

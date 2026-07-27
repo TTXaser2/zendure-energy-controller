@@ -16,7 +16,9 @@ class MeasurementV3Tests(unittest.TestCase):
     def test_zendure_actual_power_sign_convention(self):
         self.assertEqual(derive_zendure_actual_power(grid_input=720, output_home=0)["signed_power_w"], 720)
         self.assertEqual(derive_zendure_actual_power(grid_input=0, output_home=650)["signed_power_w"], -650)
-        self.assertEqual(derive_zendure_actual_power(pack_input=200, output_pack=500)["signed_power_w"], -500)
+        derived = derive_zendure_actual_power(pack_input=200, output_pack=500)
+        self.assertEqual(0, derived["signed_power_w"])
+        self.assertEqual(300, derived["battery_signed_power_w"])
 
     def test_csv_v3_uses_semicolon_and_schema_column(self):
         text = rows_to_csv([{"schema": CSV_SCHEMA, "grid_power_w": -120.5, "zendure_target_power_w": 200}])

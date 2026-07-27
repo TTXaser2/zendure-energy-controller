@@ -1037,14 +1037,28 @@ _replay_health_cache: Dict[str, Any] = {"port": None, "available": False, "check
 
 
 def replay_service_available(cfg: Dict[str, Any]) -> bool:
+    """Return cached reachability of the optional replay service.
+
+    The replay root page enumerates CSV files and can legitimately take longer
+    than a sub-second probe.  RC9 therefore uses the dedicated lightweight
+    ``/health`` endpoint and validates its JSON contract.  Negative results are
+    cached only briefly so a service started just after the controller becomes
+    visible without waiting half a minute.  This function is called only by the
+    web/status path, never by the controller loop.
+    """
     port = int(cfg.get("REPLAY_WEB_PORT", 8090) or 8090)
     now = time.time()
-    if _replay_health_cache.get("port") == port and now - float(_replay_health_cache.get("checked_epoch") or 0) < 30:
+    cached_for = now - float(_replay_health_cache.get("checked_epoch") or 0)
+    cache_ttl = 30.0 if bool(_replay_health_cache.get("available")) else 5.0
+    if _replay_health_cache.get("port") == port and cached_for < cache_ttl:
         return bool(_replay_health_cache.get("available"))
+
     available = False
     try:
-        r = requests.get(f"http://127.0.0.1:{port}/", timeout=0.75)
-        available = r.status_code < 500
+        response = requests.get(f"http://127.0.0.1:{port}/health", timeout=1.5)
+        response.raise_for_status()
+        payload = response.json()
+        available = isinstance(payload, dict) and str(payload.get("status") or "").lower() == "ok"
     except Exception:
         available = False
     _replay_health_cache.update({"port": port, "available": available, "checked_epoch": now})
@@ -3220,13 +3234,28 @@ def _command_effect_public_status(value: Any) -> tuple[str, str]:
     mapping = {
         "no_command": ("Noch kein relevantes Kommando", "ok"),
         "none": ("Noch kein relevantes Kommando", "ok"),
-        "effective": ("Wirksam", "ok"),
-        "confirmed": ("Wirksam", "ok"),
+        "command_idle": ("Noch kein relevantes Kommando", "ok"),
+        "effective": ("Sollwerttracking bestätigt", "ok"),
+        "confirmed": ("Sollwerttracking bestätigt", "ok"),
+        "command_target_tracking_effective": ("Sollwerttracking bestätigt", "ok"),
+        "command_neutralization_confirmed": ("Neutralisierung bestätigt", "ok"),
+        "command_below_diagnostic_threshold": ("Wirkung unter Diagnosegrenze", "unknown"),
         "pending": ("Wirkung wird geprüft", "warn"),
         "checking": ("Wirkung wird geprüft", "warn"),
-        "uncertain": ("Unklar nach Verbindungsunterbrechung", "warn"),
+        "command_pending": ("Richtungsreaktion wird geprüft", "warn"),
+        "command_neutralization_pending": ("Neutralisierung wird geprüft", "warn"),
+        "command_partially_effective": ("Teilwirkung · Tracking unzureichend", "warn"),
+        "command_recovery_verifying": ("Kommandoabgleich ausgeführt · Wirkung offen", "warn"),
+        "command_state_verifying": ("Flash-Schutz/Command-State wird geprüft", "warn"),
+        "command_charge_acceptance_limited": ("Ladeannahme bei hohem SOC begrenzt", "warn"),
+        "uncertain": ("Telemetrie für Wirkung unklar", "warn"),
+        "command_telemetry_uncertain": ("Telemetrie für Wirkung unklar", "warn"),
+        "command_power_direction_ambiguous": ("Leistungsrichtung nicht eindeutig", "warn"),
+        "command_power_direction_conflict": ("Leistungssensoren widersprüchlich", "warn"),
         "not_effective": ("Nicht wirksam", "bad"),
         "command_not_effective": ("Nicht wirksam", "bad"),
+        "command_mismatch_confirmed": ("Sollwertwirkung nicht bestätigt", "bad"),
+        "command_neutralization_mismatch": ("Neutralisierung nicht wirksam", "bad"),
         "unavailable": ("Kommandoweg nicht verfügbar", "bad"),
     }
     if raw in mapping:
@@ -3302,12 +3331,15 @@ def _command_resync_public_reason(value: Any) -> str:
         "RESYNC_AFTER_LONG_STALE": "nach längerer Phase veralteter Telemetriedaten",
         "RESYNC_AFTER_CONFIRMED_MISMATCH": "nach bestätigter Abweichung zwischen Sollwert und Gerätewirkung",
         "RESYNC_AFTER_UNCERTAIN_COMMAND": "nach unsicherem Kommandozustand",
+        "RESYNC_AFTER_NEUTRALIZATION_MISMATCH": "nach nicht wirksamer 0-W-Neutralisierung",
         "STARTUP": "nach Controllerstart",
         "RESYNC_SUPPRESSED_COOLDOWN": "wegen laufender Cooldown-Zeit nicht erneut gesendet",
     }
     upper = raw.upper()
     if upper.startswith("RESYNC_AFTER_CONFIRMED_MISMATCH"):
         return "nach bestätigter Abweichung zwischen Sollwert und Gerätewirkung"
+    if upper.startswith("RESYNC_AFTER_NEUTRALIZATION_MISMATCH"):
+        return "nach nicht wirksamer 0-W-Neutralisierung"
     return mapping.get(upper, raw or "Kommunikationsunsicherheit")
 
 
@@ -3339,23 +3371,28 @@ def _timing_phase_rows(timing: Dict[str, Any]) -> List[Dict[str, Any]]:
         return sum(present) if present else None
 
     rows = [
-        ("config", "Konfigurationsprüfung", total("config_reload_ms", "mqtt_refresh_subscriptions_ms")),
-        ("local_api", "Zendure Local API", total("zendure_local_api_ms")),
-        ("energy_data", "SMA- und Netzdaten", total("sma_energy_meter_ms", "grid_control_read_ms", "grid_display_read_ms")),
-        ("diagnostics", "Status- und Diagnoseaufbereitung", total("cycle_display_metrics_ms", "cross_charge_metrics_ms", "charge_acceptance_diag_ms", "graph_snapshot_ms")),
-        ("control", "Regelentscheidung", total("control_decision_ms")),
-        ("mqtt", "MQTT-Kommandopfad", total("mqtt_command_path_ms")),
-        ("effect", "Kommandowirkungsprüfung", total("command_effect_monitor_ms")),
-        ("logging", "Logging im Hauptthread", total("measurement_logging_ms")),
-        ("other", "Sonstige, nicht einzeln erfasste Verarbeitung", total("other_cycle_work_ms")),
+        ("config", "Konfigurationsprüfung", total("config_reload_ms", "mqtt_refresh_subscriptions_ms"), False),
+        # The controller records this key only when should_poll() led to a real
+        # local-API request attempt.  Keep the row visible when omitted so 0,0 ms
+        # is not confused with an executed request.
+        ("local_api", "Zendure Local API", total("zendure_local_api_ms"), True),
+        ("energy_data", "SMA- und Netzdaten", total("sma_energy_meter_ms", "grid_control_read_ms", "grid_display_read_ms"), False),
+        ("diagnostics", "Status- und Diagnoseaufbereitung", total("cycle_display_metrics_ms", "cross_charge_metrics_ms", "charge_acceptance_diag_ms", "graph_snapshot_ms"), False),
+        ("control", "Regelentscheidung", total("control_decision_ms"), False),
+        ("mqtt", "MQTT-Kommandopfad", total("mqtt_command_path_ms"), False),
+        ("effect", "Kommandowirkungsprüfung", total("command_effect_monitor_ms"), False),
+        ("logging", "Logging im Hauptthread", total("measurement_logging_ms"), False),
+        ("other", "Sonstige, nicht einzeln erfasste Verarbeitung", total("other_cycle_work_ms"), False),
     ]
     active_total = _safe_float(timing.get("cycle_total_without_sleep_ms"))
     result: List[Dict[str, Any]] = []
-    for key, label, value in rows:
+    for key, label, value, keep_when_missing in rows:
         if value is None or value < 0.01:
+            if keep_when_missing:
+                result.append({"key": key, "label": label, "ms": None, "percent": None, "executed": False})
             continue
         percent = (100.0 * value / active_total) if active_total and active_total > 0 else None
-        result.append({"key": key, "label": label, "ms": value, "percent": percent})
+        result.append({"key": key, "label": label, "ms": value, "percent": percent, "executed": True})
     return result
 
 
@@ -3385,6 +3422,24 @@ def _legacy_event_reference_box() -> str:
       </div>
     </div>
     """
+
+
+def _primary_storage_present(cfg: Dict[str, Any], s: Optional[Dict[str, Any]] = None) -> bool:
+    """Return whether a primary/external storage belongs to the UI topology.
+
+    Existing installations keep the historic one-primary-store rendering by
+    default.  A real backend may expose ``primary_storage_present`` in its
+    snapshot; installations that intentionally operate without a primary store
+    may alternatively set the UI-only compatibility flag
+    ``STATUS_PRIMARY_STORAGE_PRESENT`` to ``false``.  No controller decision is
+    derived from this view flag.
+    """
+    s = s or {}
+    if "primary_storage_present" in s:
+        return _boolish(s.get("primary_storage_present"))
+    if "STATUS_PRIMARY_STORAGE_PRESENT" in cfg:
+        return _boolish(cfg.get("STATUS_PRIMARY_STORAGE_PRESENT"))
+    return True
 
 
 def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
@@ -3418,6 +3473,7 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
     grid_age = _safe_float(s.get("grid_power_age_seconds"))
     grid_freshness = "aktuell" if grid_valid and (grid_age is None or grid_age <= 3) else (f"verzögert, {int(grid_age)} s" if grid_valid and grid_age is not None else "nicht aktuell")
 
+    primary_present = _primary_storage_present(cfg, s)
     warnings: List[str] = []
     if mode == "SAFE_STATE":
         warnings.append("Safe-State aktiv")
@@ -3425,10 +3481,20 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
         warnings.append("Aktiver Zendure-Sollwert wurde bei unsicherem MQTT-Zustand gesendet")
     if s.get("command_not_effective_active"):
         warnings.append("Zendure-Sollwert zeigt keine plausible Gerätewirkung")
+    active_command_intent = str(s.get("command_desired_intent") or "") in {"CHARGE", "DISCHARGE"}
+    if active_command_intent and not bool(s.get("zendure_flash_protection_active")):
+        warnings.append("Zendure-Flash-Schutz smartMode=1 nicht bestätigt")
+    elif active_command_intent and not bool(s.get("zendure_command_state_complete")):
+        warnings.append("Zendure-Command-State noch nicht vollständig rückgelesen")
     if not grid_valid:
         warnings.append("Netzleistungswert nicht aktuell")
-    if not bool(s.get("second_battery_data_valid", s.get("second_battery_data_available", True))):
+    if primary_present and not bool(s.get("second_battery_data_valid", s.get("second_battery_data_available", True))):
         warnings.append("Primärspeicher-Daten nicht vollständig")
+    effect_state_for_warning = str(s.get("command_effect_state_category") or s.get("command_effect_category") or "").upper()
+    if effect_state_for_warning == "COMMAND_POWER_DIRECTION_AMBIGUOUS":
+        warnings.append("Zendure-Leistungsrichtung nicht eindeutig bewertbar")
+    elif effect_state_for_warning == "COMMAND_POWER_DIRECTION_CONFLICT":
+        warnings.append("Zendure-Leistungssensoren liefern widersprüchliche Richtungen")
     status_kind = "bad" if mode == "SAFE_STATE" else ("warn" if warnings else "ok")
     system_status = "Safe-State" if mode == "SAFE_STATE" else (f"Warnung {len(warnings)}" if warnings else "System OK")
 
@@ -3444,6 +3510,12 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
         warnings.append("Zendure Live-Status fehlt: MQTT in der Zendure-App erneut speichern/aktivieren")
     if s.get("command_not_effective_active"):
         command_warning = str(s.get("command_not_effective_reason") or "Sollwert nicht wirksam: Ziel und Istleistung stimmen nicht plausibel überein.")
+    elif active_command_intent and not bool(s.get("zendure_flash_protection_active")):
+        command_warning = str(s.get("zendure_flash_protection_reason") or "smartMode=1 ist nicht frisch bestätigt; dynamische Leistungskommandos warten.")
+    elif active_command_intent and not bool(s.get("zendure_command_state_complete")):
+        command_warning = str(s.get("zendure_command_state_reason") or "Zendure-Command-State wird rückgelesen.")
+    elif str(effect_state_for_warning) == "COMMAND_CHARGE_ACCEPTANCE_LIMITED":
+        command_warning = str(s.get("command_effect_state_reason") or s.get("command_effect_reason") or "Ladeannahme bei hohem SOC begrenzt.")
     elif s.get("command_uncertain_mqtt_active"):
         command_warning = str(s.get("command_uncertain_mqtt_reason") or "Letzter aktiver Sollwert wurde bei unsicherem Zendure-MQTT-Zustand gesendet.")
     elif mqtt_resave_required:
@@ -3590,18 +3662,36 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
     if resync_count > 0:
         resync_text = f"{resync_time or 'Zeitpunkt unbekannt'} · {resync_reason} · AC-Modus und Lade-/Entladelimits erneut gesendet"
     else:
-        resync_text = "Kein Zendure-Kommandoabgleich seit Controllerstart · betroffen wären AC-Modus und Lade-/Entladelimits"
+        resync_text = "Keiner seit Controllerstart"
+    effect_confirmed = bool(s.get("command_effect_confirmed"))
+    effect_confirmed_time = str(s.get("command_effect_confirmed_time") or "-")
+    effect_confirmed_reason = str(s.get("command_effect_confirmed_reason") or "")
+    if effect_confirmed:
+        effect_confirmation_text = f"Ja · {effect_confirmed_time} · {effect_confirmed_reason or 'physische Gerätewirkung bestätigt'}"
+    elif s.get("command_not_effective_active"):
+        effect_confirmation_text = "Nein · bestätigte Nichtwirkung ist weiterhin offen"
+    elif str(effect_raw).upper() == "COMMAND_RECOVERY_VERIFYING":
+        effect_confirmation_text = "Noch nicht · Wirkung nach Kommandoabgleich wird geprüft"
+    else:
+        effect_confirmation_text = "Noch nicht bestätigt"
     suppressed_count = int(s.get("command_resync_suppressed_count") or 0)
     suppressed_time = str(s.get("command_resync_suppressed_last_time") or "").strip()
     suppressed_reason = _command_resync_public_reason(s.get("command_resync_suppressed_reason"))
     suppressed_text = (
         f"{suppressed_time or 'Zeitpunkt unbekannt'} · {suppressed_reason}"
-        if suppressed_count > 0 else "Kein unterdrückter Abgleichversuch seit Controllerstart"
+        if suppressed_count > 0 else "Keiner seit Controllerstart"
     )
     controller_uptime = max(0.0, time.time() - float(s.get("controller_started_epoch") or time.time()))
     free_bytes = metrics.get("disk_free_bytes")
     total_bytes = metrics.get("disk_total_bytes")
-    disk_used_pct = (100.0 * (float(total_bytes)-float(free_bytes))/float(total_bytes)) if total_bytes and free_bytes is not None else None
+    used_bytes = max(0.0, float(total_bytes) - float(free_bytes)) if total_bytes is not None and free_bytes is not None else None
+    disk_used_pct = (100.0 * used_bytes / float(total_bytes)) if total_bytes and used_bytes is not None else None
+    analysis_available = replay_service_available(cfg)
+    technical_restrictions: List[str] = []
+    if api_enabled and api_text != "Aktuell":
+        technical_restrictions.append("lokale API nicht erreichbar")
+    if not analysis_available:
+        technical_restrictions.append("Analyse-/Replay-Service nicht erreichbar")
     throttling = metrics.get("throttling") or {}
     current_throttle = throttling.get("current") or []
     historic_throttle = throttling.get("historic") or []
@@ -3613,6 +3703,10 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
         "snapshot_epoch_ms": int(time.time() * 1000),
         "server_time": datetime.now().strftime("%H:%M:%S"),
         "snapshot_time": datetime.now().isoformat(timespec="seconds"),
+        "topology": {
+            "primary_storage_present": primary_present,
+            "zendure_unit_count": min(2, max(1, len(units))),
+        },
         "system": {
             "kind": status_kind,
             "label": system_status,
@@ -3657,15 +3751,16 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "tone": zendure_tone,
         },
         "primary": {
-            "soc": primary_soc,
-            "actual": _signed_power_phrase(primary_power),
-            "actual_raw": primary_power,
-            "status": primary_status,
-            "line": harmony,
-            "source": second_battery_name(cfg),
-            "age": primary_age,
-            "freshness_text": primary_freshness,
-            "tone": primary_tone,
+            "present": primary_present,
+            "soc": primary_soc if primary_present else None,
+            "actual": _signed_power_phrase(primary_power) if primary_present else "nicht konfiguriert",
+            "actual_raw": primary_power if primary_present else None,
+            "status": primary_status if primary_present else "nicht konfiguriert",
+            "line": harmony if primary_present else "",
+            "source": second_battery_name(cfg) if primary_present else "",
+            "age": primary_age if primary_present else None,
+            "freshness_text": primary_freshness if primary_present else "",
+            "tone": primary_tone if primary_present else "unknown",
         },
         "source": {
             "name": source_name,
@@ -3695,6 +3790,7 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "fallback_count": int(s.get("measurement_fallback_count_since_start") or 0),
             "fallback_reason": s.get("measurement_last_fallback_reason") or "",
             "free_bytes": free_bytes,
+            "used_bytes": used_bytes,
             "total_bytes": total_bytes,
             "disk_used_percent": disk_used_pct,
             "tone": "bad" if str(s.get("measurement_log_status") or "").lower() == "error" else ("warn" if bool(s.get("measurement_fallback_active")) else "ok"),
@@ -3729,6 +3825,13 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "effect": effect_public,
             "effect_tone": effect_tone,
             "effect_raw": effect_raw,
+            "flash_protection": "Bestätigt" if bool(s.get("zendure_flash_protection_active")) else "Nicht bestätigt",
+            "flash_protection_tone": "ok" if bool(s.get("zendure_flash_protection_active")) else ("bad" if active_command_intent else "unknown"),
+            "flash_protection_reason": s.get("zendure_flash_protection_reason") or "",
+            "command_state_complete": bool(s.get("zendure_command_state_complete")),
+            "command_state_reason": s.get("zendure_command_state_reason") or "",
+            "offgrid_power_w": s.get("zendure_offgrid_power_w", 0),
+            "offgrid_text": _zec_num(s.get("zendure_offgrid_power_w", 0), "W"),
             "loop_ms": active_cycle_ms,
             "loop_text": (f"{int(round(active_cycle_ms))} ms" if active_cycle_ms is not None and active_cycle_ms >= 100 else (f"{active_cycle_ms:.1f} ms" if active_cycle_ms is not None else "—")),
             "cycle_active_share_percent": cycle_active_share_pct,
@@ -3753,16 +3856,18 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "resync": resync_reason,
             "resync_time": resync_time or "—",
             "resync_text": resync_text,
+            "effect_confirmation_text": effect_confirmation_text,
             "resync_count": resync_count,
             "resync_suppressed_count": suppressed_count,
             "resync_suppressed_text": suppressed_text,
             "resync_target_w": s.get("command_uncertain_mqtt_target_w") or target or 0,
-            "analysis": "Aktiv" if replay_service_available(cfg) else "Nicht erreichbar",
+            "analysis": "Aktiv" if analysis_available else "Nicht erreichbar",
         },
         "events": {
             "items": event_rows,
             "open_count": len(open_events),
-            "open_severity": "error" if any(e.get("severity") == "error" for e in open_events) else ("warning" if open_events else "info"),
+            "open_severity": "error" if any(e.get("severity") == "error" for e in open_events) else ("warning" if any(e.get("severity") == "warning" for e in open_events) else "info"),
+            "technical_restrictions": technical_restrictions,
         },
     }
 
@@ -3786,7 +3891,10 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
         day_start = datetime.combine(today, datetime.min.time())
         day_end = day_start + timedelta(days=1)
     is_today = day_start.date() == today
-    cache_key = f"{day_start.date().isoformat()}|storage-v3"
+    primary_present = _primary_storage_present(cfg, snap)
+    status_units = _status_units(cfg, snap, snap.get("zendure_target_signed_power"), snap.get("zendure_system_signed_power"))
+    unit_count = min(2, max(1, len(status_units)))
+    cache_key = f"{day_start.date().isoformat()}|storage-v4|p{int(primary_present)}|u{unit_count}"
     now_epoch = time.time()
     ttl = 60 if is_today else 3600
     with _storage_day_lock:
@@ -3810,9 +3918,9 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
                     "zendure_soc": pnt.get("soc"),
                     "zendure_unit_1_soc": pnt.get("soc"),
                     "zendure_unit_2_soc": pnt.get("zendure_unit_2_soc"),
-                    "primary_soc": pnt.get("primary_soc"),
+                    "primary_soc": pnt.get("primary_soc") if primary_present else None,
                     "zendure_power_w": pnt.get("zendure_actual_power_w"),
-                    "primary_power_w": pnt.get("primary_power_w"),
+                    "primary_power_w": pnt.get("primary_power_w") if primary_present else None,
                     "mode": pnt.get("mode"),
                     "reason": pnt.get("control_reason") or pnt.get("limit_reason") or "",
                     "safe_state": bool(pnt.get("safe_state_active")),
@@ -3831,11 +3939,11 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
                 "minute": minute,
                 "time": now.strftime("%H:%M"),
                 "zendure_soc": snap.get("battery_soc"),
-                "zendure_unit_1_soc": (_status_units(cfg, snap, snap.get("zendure_target_signed_power"), snap.get("zendure_system_signed_power")) or [{}])[0].get("soc"),
-                "zendure_unit_2_soc": ((_status_units(cfg, snap, snap.get("zendure_target_signed_power"), snap.get("zendure_system_signed_power")) + [{}, {}])[1].get("soc")),
-                "primary_soc": snap.get("sma_battery_soc", snap.get("second_battery_soc_percent", snap.get("second_battery_soc"))),
+                "zendure_unit_1_soc": (status_units or [{}])[0].get("soc"),
+                "zendure_unit_2_soc": ((status_units + [{}, {}])[1].get("soc")),
+                "primary_soc": snap.get("sma_battery_soc", snap.get("second_battery_soc_percent", snap.get("second_battery_soc"))) if primary_present else None,
                 "zendure_power_w": snap.get("zendure_system_signed_power"),
-                "primary_power_w": snap.get("sma_battery_power", snap.get("second_battery_power_w", snap.get("second_battery_power"))),
+                "primary_power_w": snap.get("sma_battery_power", snap.get("second_battery_power_w", snap.get("second_battery_power"))) if primary_present else None,
                 "mode": snap.get("current_mode"),
                 "reason": snap.get("control_reason"),
                 "safe_state": snap.get("current_mode") == "SAFE_STATE",
@@ -3843,14 +3951,14 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
                 "live": True,
             })
     points = sorted(points, key=lambda x: x.get("minute", 0))
-    status_units = _status_units(cfg, snap, snap.get("zendure_target_signed_power"), snap.get("zendure_system_signed_power"))
     complete = bool(is_today or (points and int(points[-1].get("minute", 0)) >= 1430))
     date_range = query_measurement_date_range(cfg)
     payload = {
         "date": day_start.date().isoformat(),
         "is_today": is_today,
         "complete": complete,
-        "zendure_unit_count": min(2, max(1, len(status_units))),
+        "zendure_unit_count": unit_count,
+        "primary_storage_present": primary_present,
         "unit_labels": [str(u.get("name") or f"Zendure {idx+1}") for idx, u in enumerate(status_units[:2])],
         "axis_minute_start": 0,
         "axis_minute_end": 1440,
@@ -3979,7 +4087,7 @@ def build_status_page_rc2_legacy(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
     (function(){{
       const q=(s)=>document.querySelector(s); const qa=(s)=>Array.from(document.querySelectorAll(s));
       function setVal(path,val){{ qa('[data-zec="'+path+'"]').forEach(e=>{{ e.textContent=(val===null||val===undefined||val==='')?'—':String(val); }}); }}
-      function applyStatus(p){{ if(!p)return; const pill=q('#systemPill'); if(p.system&&pill){{ pill.textContent=p.system.label; pill.className='zec-system-pill '+p.system.kind; }} ['grid.value','grid.status','grid.source','mode.mode','mode.text','mode.target','mode.reason','mode.last_change','zendure.actual','zendure.source','primary.actual','primary.status','primary.line','primary.source','source.name','source.device_line','source.auto_text','logging.status','logging.target','logging.db','diag.mqtt','diag.api','diag.effect','diag.resync'].forEach(path=>{{ const parts=path.split('.'); setVal(path, p[parts[0]]?p[parts[0]][parts[1]]:''); }}); setVal('mode.projection', (p.mode && (p.mode.night_projection || p.mode.fixed_projection)) || ''); setVal('source.age', 'vor '+((p.source&&p.source.age)??'—')+' s'); setVal('source.packets_min', ((p.source&&p.source.packets_min)??0)+'/min'); setVal('source.rejected', (p.source&&p.source.rejected)||''); setVal('logging.db_path', p.logging&&p.logging.db_path ? p.logging.db_path.split('/').pop() : '—'); setVal('diag.loop_ms', ((p.diag&&p.diag.loop_ms)??'—')+' ms'); setVal('zendure.remaining', (p.zendure&&p.zendure.remaining!==null&&p.zendure.remaining!==undefined)?Number(p.zendure.remaining).toLocaleString('de-DE',{{maximumFractionDigits:2}})+' kWh':'nicht berechenbar'); function updateRing(key,soc){{ const ring=q('[data-ring="'+key+'"]'); if(!ring)return; const n=Number(soc); const valid=Number.isFinite(n); ring.style.setProperty('--soc',valid?Math.max(0,Math.min(100,n)):0); const val=ring.querySelector('.soc-ring-value'); if(val) val.textContent=valid?Math.round(n)+' %':'—'; }} updateRing('zendure',p.zendure&&p.zendure.soc); updateRing('primary',p.primary&&p.primary.soc); const warn=q('[data-zec="zendure.command_warning"]'); if(warn){{ const msg=(p.zendure&&p.zendure.command_warning)||''; warn.textContent=msg; warn.style.display=msg?'block':'none'; }} }}
+      function applyStatus(p){{ if(!p)return; const pill=q('#systemPill'); if(p.system&&pill){{ pill.textContent=p.system.label; pill.className='zec-system-pill '+p.system.kind; }} ['grid.value','grid.status','grid.source','mode.mode','mode.text','mode.target','mode.reason','mode.last_change','zendure.actual','zendure.source','primary.actual','primary.status','primary.line','primary.source','source.name','source.device_line','source.auto_text','logging.status','logging.target','logging.db','diag.mqtt','diag.api','diag.effect','diag.flash_protection','diag.offgrid_text','diag.resync'].forEach(path=>{{ const parts=path.split('.'); setVal(path, p[parts[0]]?p[parts[0]][parts[1]]:''); }}); setVal('mode.projection', (p.mode && (p.mode.night_projection || p.mode.fixed_projection)) || ''); setVal('source.age', 'vor '+((p.source&&p.source.age)??'—')+' s'); setVal('source.packets_min', ((p.source&&p.source.packets_min)??0)+'/min'); setVal('source.rejected', (p.source&&p.source.rejected)||''); setVal('logging.db_path', p.logging&&p.logging.db_path ? p.logging.db_path.split('/').pop() : '—'); setVal('diag.loop_ms', ((p.diag&&p.diag.loop_ms)??'—')+' ms'); setVal('zendure.remaining', (p.zendure&&p.zendure.remaining!==null&&p.zendure.remaining!==undefined)?Number(p.zendure.remaining).toLocaleString('de-DE',{{maximumFractionDigits:2}})+' kWh':'nicht berechenbar'); function updateRing(key,soc){{ const ring=q('[data-ring="'+key+'"]'); if(!ring)return; const n=Number(soc); const valid=Number.isFinite(n); ring.style.setProperty('--soc',valid?Math.max(0,Math.min(100,n)):0); const val=ring.querySelector('.soc-ring-value'); if(val) val.textContent=valid?Math.round(n)+' %':'—'; }} updateRing('zendure',p.zendure&&p.zendure.soc); updateRing('primary',p.primary&&p.primary.soc); const warn=q('[data-zec="zendure.command_warning"]'); if(warn){{ const msg=(p.zendure&&p.zendure.command_warning)||''; warn.textContent=msg; warn.style.display=msg?'block':'none'; }} }}
       let statusInFlight=false; async function refreshStatus(){{ if(document.visibilityState==='hidden'||statusInFlight)return; statusInFlight=true; try{{ const r=await fetch('/status-view-data',{{cache:'no-store'}}); if(r.ok) applyStatus(await r.json()); }}catch(e){{}} finally{{statusInFlight=false;}} }} setInterval(refreshStatus,3000); document.addEventListener('visibilitychange',()=>{{ if(document.visibilityState!=='hidden'){{ refreshStatus(); refreshSocDay(); }} }});
       async function refreshGridMiniSparkline(){{ if(document.visibilityState==='hidden') return; const box=q('#gridMiniSparkline'); if(!box)return; try{{ const r=await fetch('/grid-mini-sparkline',{{cache:'no-store'}}); if(r.ok){{ const svg=await r.text(); if(svg.indexOf('<svg')>=0) box.innerHTML=svg; }} }}catch(e){{}} }} setInterval(refreshGridMiniSparkline,10000);
       let chart=null, chartInFlight=false, selectedDate=new Date(); function dateStr(d){{ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return y+'-'+m+'-'+day; }} function labelDate(d){{ return d.toLocaleDateString('de-DE',{{weekday:'short',day:'2-digit',month:'2-digit',year:'numeric'}}); }} function fmtPower(v){{ if(v===null||v===undefined||v==='')return '—'; const n=Number(v); if(isNaN(n))return String(v); const a=Math.abs(n); const s=n>0?'+':(n<0?'−':''); return s+(a>=1000?(a/1000).toFixed(2).replace('.',',')+' kW':Math.round(a)+' W'); }}

@@ -21,6 +21,8 @@ from measurement_v4_contract import (
     ZENDURE_MQTT_GROUP_BITS,
     header_for_profile,
     header_hash,
+    rc10_header_for_profile,
+    rc11_header_for_profile,
 )
 from version import APP_VERSION
 
@@ -45,6 +47,13 @@ CONTROL_SNAPSHOT_KEYS = [
     "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_AFTERNOON", "HARVEST_CAPACITY_WEIGHTING_MODE",
     "ZENDURE_BATTERY_CAPACITY_KWH",
     "SECOND_BATTERY_CHARGE_SATURATION_MARGIN_W",
+    "COMMAND_RESYNC_ON_MQTT_RECOVERY_ALWAYS", "COMMAND_RESYNC_STALE_MIN_SECONDS",
+    "COMMAND_RESYNC_STALE_MIN_CYCLES", "COMMAND_RESYNC_COOLDOWN_SECONDS",
+    "COMMAND_EFFECT_MIN_TARGET_W", "COMMAND_EFFECT_MIN_W", "COMMAND_EFFECT_TOLERANCE_W",
+    "COMMAND_EFFECT_TIMEOUT_SECONDS", "COMMAND_NEUTRALIZATION_TIMEOUT_SECONDS",
+    "COMMAND_EFFECT_FORCE_RESEND_SECONDS",
+    "ZENDURE_COMMAND_STATE_FRESH_SECONDS", "ZENDURE_SMART_MODE_RETRY_SECONDS",
+    "ZENDURE_COMMAND_STATE_RETRY_SECONDS",
     "GRID_METER_SOURCE", "SMA_ENERGY_METER_GROUP", "SMA_ENERGY_METER_PORT",
     "SMA_ENERGY_METER_INTERFACE", "SMA_ENERGY_METER_SUSY_ID",
     "SMA_ENERGY_METER_SERIAL", "SMA_ENERGY_METER_STALE_TIMEOUT_SECONDS",
@@ -59,6 +68,7 @@ MQTT_GROUP_ALIASES = {
     "limit_state": "ZENDURE_LIMIT_STATE",
     "device_state": "ZENDURE_DEVICE_STATE",
     "command_feedback": "ZENDURE_COMMAND_FEEDBACK",
+    "command_state": "ZENDURE_COMMAND_FEEDBACK",
     "temperature": "ZENDURE_TEMPERATURES",
     "temperatures": "ZENDURE_TEMPERATURES",
 }
@@ -332,6 +342,19 @@ def build_v4_row(config: Dict[str, Any], row: Dict[str, Any], previous_effective
         "zendure_actual_power_fresh": _bool01(row.get("actual_zendure_power_valid")),
         "zendure_actual_power_age_s": _round1(row.get("actual_zendure_power_age_s")),
         "zendure_actual_power_source": _canonical_source(row.get("zendure_telemetry_source")),
+        "zendure_raw_pack_input_w": _round1(row.get("zendure_raw_pack_input_power_w", row.get("actual_zendure_charge_power"))),
+        "zendure_raw_grid_input_w": _round1(row.get("zendure_raw_grid_input_power_w", row.get("actual_zendure_grid_input_power"))),
+        "zendure_raw_output_home_w": _round1(row.get("zendure_raw_output_home_power_w", row.get("actual_zendure_discharge_power"))),
+        "zendure_raw_output_pack_w": _round1(row.get("zendure_raw_output_pack_power_w", row.get("actual_zendure_output_pack_power"))),
+        "zendure_raw_grid_off_w": _round1(row.get("zendure_raw_grid_off_power_w", row.get("actual_zendure_grid_off_power"))),
+        "zendure_raw_solar_input_w": _round1(row.get("zendure_raw_solar_input_power_w", row.get("actual_zendure_solar_input_power"))),
+        "zendure_grid_signed_power_w": _round1(row.get("zendure_grid_signed_power_w", row.get("actual_zendure_power_w"))),
+        "zendure_battery_signed_power_w": _round1(row.get("zendure_battery_signed_power_w")),
+        "zendure_battery_charge_power_w": _round1(row.get("zendure_battery_charge_power_w")),
+        "zendure_battery_discharge_power_w": _round1(row.get("zendure_battery_discharge_power_w")),
+        "zendure_offgrid_power_w": _round1(row.get("zendure_offgrid_power_w")),
+        "zendure_offgrid_active": _bool01(row.get("zendure_offgrid_active")),
+        "zendure_power_balance_residual_w": _round1(row.get("zendure_power_balance_residual_w")),
         "zendure_soc_raw_percent": _round1(row.get("raw_zendure_soc_percent", row.get("zendure_soc_percent"))),
         "zendure_soc_percent": _round1(row.get("norm_zendure_soc_percent", row.get("zendure_soc_percent"))),
         "control_soc_percent": _round1(row.get("input_soc_used_percent", row.get("zendure_soc_percent"))),
@@ -429,8 +452,43 @@ def build_v4_row(config: Dict[str, Any], row: Dict[str, Any], previous_effective
         "command_mqtt_connected": mqtt_connected,
         "command_mqtt_success": "1" if command_sent else ("0" if command_action == "FAILED" else ""),
         "command_delta_w": _round1(command_delta),
+        "command_lifecycle_state": str(row.get("command_lifecycle_state", "") or ""),
+        "command_desired_sequence_id": _safe_int(row.get("command_desired_sequence_id")) or "",
+        "command_desired_intent": str(row.get("command_desired_intent", "") or ""),
+        "command_desired_smart_mode": _safe_int(row.get("command_desired_smart_mode")) if row.get("command_desired_smart_mode") not in (None, "") else "",
+        "command_desired_ac_mode": str(row.get("command_desired_ac_mode", "") or ""),
+        "command_desired_input_limit_w": _round1(row.get("command_desired_input_limit_w")),
+        "command_desired_output_limit_w": _round1(row.get("command_desired_output_limit_w")),
+        "command_desired_signed_target_w": _round1(row.get("command_desired_signed_target_w")),
+        "command_desired_reason": str(row.get("command_desired_reason", "") or ""),
+        "command_desired_safety_relevant": _bool01(row.get("command_desired_safety_relevant")),
+        "command_publish_event": str(row.get("command_publish_event", "") or ""),
+        "command_publish_fields": str(row.get("command_publish_fields", "") or ""),
         "command_effect_category": str(row.get("command_effect_category", "") or ""),
         "command_effect_reason": str(row.get("command_effect_reason", "") or ""),
+        "command_effect_confirmed": _bool01(row.get("command_effect_confirmed")),
+        "command_effect_confirmed_time": str(row.get("command_effect_confirmed_time", "") or ""),
+        "command_neutralization_active": _bool01(row.get("command_neutralization_active")),
+        "command_neutralization_reason": str(row.get("command_neutralization_reason", "") or ""),
+        "command_mismatch_resolution": str(row.get("command_mismatch_resolution", "") or ""),
+        "zendure_command_smart_mode": _safe_int(row.get("zendure_command_smart_mode")) if row.get("zendure_command_smart_mode") not in (None, "") else "",
+        "zendure_command_ac_mode": str(row.get("zendure_command_ac_mode", "") or ""),
+        "zendure_command_input_limit_w": _round1(row.get("zendure_command_input_limit_w")),
+        "zendure_command_output_limit_w": _round1(row.get("zendure_command_output_limit_w")),
+        "zendure_device_inverse_max_power_w": _round1(row.get("zendure_device_inverse_max_power_w")),
+        "zendure_device_charge_max_limit_w": _round1(row.get("zendure_device_charge_max_limit_w")),
+        "zendure_grid_off_mode": _safe_int(row.get("zendure_grid_off_mode")) if row.get("zendure_grid_off_mode") not in (None, "") else "",
+        "zendure_flash_protection_active": _bool01(row.get("zendure_flash_protection_active")),
+        "zendure_flash_protection_reason": str(row.get("zendure_flash_protection_reason", "") or ""),
+        "zendure_command_state_complete": _bool01(row.get("zendure_command_state_complete")),
+        "zendure_command_state_reason": str(row.get("zendure_command_state_reason", "") or ""),
+        "zendure_command_state_source": str(row.get("zendure_command_state_source", "") or ""),
+        "zendure_power_observation_direction": str(row.get("zendure_power_observation_direction", "") or ""),
+        "zendure_power_observation_confidence": str(row.get("zendure_power_observation_confidence", "") or ""),
+        "zendure_power_observation_signed_w": _round1(row.get("zendure_power_observation_signed_w")),
+        "zendure_power_observation_magnitude_w": _round1(row.get("zendure_power_observation_magnitude_w")),
+        "zendure_power_observation_age_s": _round1(row.get("zendure_power_observation_age_s")),
+        "zendure_power_observation_reason": str(row.get("zendure_power_observation_reason", "") or ""),
         "command_uncertain_mqtt_active": _bool01(row.get("command_uncertain_mqtt_active")),
         "command_uncertain_mqtt_status": str(row.get("command_uncertain_mqtt_status", "") or ""),
         "command_not_effective_active": _bool01(row.get("command_not_effective_active")),
@@ -968,6 +1026,15 @@ class MeasurementV4Logger:
         if free_mb is not None and free_mb < min_free:
             return self.status(config, "paused_disk_low", f"Freier Speicher unter {min_free} MB", path=path, free_mb=free_mb, target_info=target_info)
 
+        upgraded_path = self._schema_upgrade_path_if_needed(path, profile)
+        if upgraded_path != path:
+            path = upgraded_path
+            directory = os.path.dirname(path)
+            target_info = dict(target_info)
+            target_info["path"] = path
+            os.makedirs(directory, exist_ok=True)
+            free_mb = self._free_disk_mb(directory)
+
         schema_error = self._active_file_schema_error(path, profile)
         if schema_error:
             return self.status(config, "paused_invalid_schema", schema_error, path=path, free_mb=free_mb, target_info=target_info)
@@ -1240,6 +1307,46 @@ class MeasurementV4Logger:
         writer = csv.DictWriter(buffer, fieldnames=fields, extrasaction="ignore", delimiter=";")
         writer.writerow({field: self._serialize(row.get(field, "")) for field in fields})
         return len(buffer.getvalue().encode("utf-8"))
+
+    def _schema_upgrade_path_if_needed(self, path: str, profile: str) -> str:
+        """Keep older V4 files immutable and continue in a fresh RC12 file."""
+        if not os.path.exists(path) or os.path.getsize(path) == 0:
+            return path
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace", newline="") as f:
+                first = f.readline().strip()
+        except Exception:
+            return path
+        fields = [part.strip() for part in first.split(";")]
+        previous_contract = ""
+        if fields == rc11_header_for_profile(profile):
+            previous_contract = "ZEC-MEASUREMENT-V4-RC11"
+        elif fields == rc10_header_for_profile(profile):
+            previous_contract = "ZEC-MEASUREMENT-V4-RC10"
+        else:
+            return path
+
+        if self._open_path == path:
+            self.close()
+        directory = os.path.dirname(path)
+        filename = os.path.basename(path)
+        stem, ext = os.path.splitext(filename)
+        new_path = os.path.join(directory, f"{stem}_schema_rc12_{self._session_suffix}{ext}")
+        if os.path.exists(new_path):
+            new_path = os.path.join(directory, f"{stem}_schema_rc12_{self._session_suffix}_{uuid.uuid4().hex[:6]}{ext}")
+        for base, mapped in list(self._session_path_map.items()):
+            if mapped == path:
+                self._session_path_map[base] = new_path
+        self._runtime_best_effort(directory, {
+            "event_type": "logging_file_rotated",
+            "logical_stream_id": self._logical_stream_id,
+            "previous_path": path,
+            "new_path": new_path,
+            "rotation_reason": "HEADER_CHANGED",
+            "previous_contract": previous_contract,
+            "new_contract": "ZEC-MEASUREMENT-V4-RC12",
+        })
+        return new_path
 
     def _active_file_schema_error(self, path: str, profile: str) -> str:
         if not os.path.exists(path) or os.path.getsize(path) == 0:

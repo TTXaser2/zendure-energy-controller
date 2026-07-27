@@ -77,14 +77,16 @@ def _unit_rows(units: Iterable[Dict[str, Any]]) -> str:
         key = f"zendure.units.{idx-1}"
         rows.append(
             f'''<div class="zec-unit-row" data-unit-index="{idx-1}">
-              <span class="zec-unit-name">{_e(unit.get('name') or f'Unit {idx}')}</span>
+              <span class="zec-unit-name" data-zec="{key}.name">{_e(unit.get('name') or f'Unit {idx}')}</span>
               <span data-zec="{key}.detail">{_e(unit.get('detail') or '—')}</span>
             </div>'''
         )
     return "".join(rows)
 
 
-def _nav(analysis_available: bool, analysis_port: int) -> str:
+def _nav(analysis_available: bool, analysis_port: int, *, preview_mode: bool = False) -> str:
+    if preview_mode:
+        return f'<a class="is-active" href="/">{_icon("home")}<span>Status-Vorschau</span></a>'
     links = [
         f'<a class="is-active" href="/">{_icon("home")}<span>Status</span></a>',
         f'<a href="/graph">{_icon("graph")}<span>Graph</span></a>',
@@ -107,12 +109,18 @@ def render_status_page_v2(
     analysis_port: int,
 ) -> str:
     payload = dict(payload or {})
+    for key in ("system", "grid", "mode", "zendure", "primary", "source"):
+        payload.setdefault(key, {})
     payload.setdefault("logging", {})
     payload.setdefault("resources", {})
     payload.setdefault("diag", {})
     payload.setdefault("events", {"items": [], "open_count": 0})
     dark = bool(cfg.get("UI_DARK_MODE", False))
     theme = "dark" if dark else "light"
+    topology = dict(payload.get("topology") or {})
+    primary_present = bool(topology.get("primary_storage_present", payload.get("primary", {}).get("present", True)))
+    preview = dict(payload.get("preview") or {})
+    preview_mode = bool(preview.get("active"))
     units = list(payload.get("zendure", {}).get("units") or [])[:2]
     if not units:
         units = [{"name": "Zendure", "soc": payload.get("zendure", {}).get("soc"), "detail": "—"}]
@@ -143,9 +151,45 @@ def render_status_page_v2(
           <div class="zec-unit-list">{_unit_rows(units)}</div>
         '''
 
+    primary_card = ""
+    if primary_present:
+        primary_card = f'''
+      <article class="zec-card zec-primary-card" data-card="primary">
+        <header class="zec-card-header"><div class="zec-card-title">{_icon('primary')}<h2>Primärspeicher</h2></div>{_info_button('Primärspeicher','Diese Karte zeigt den SMA-/Primärspeicher. ZEC steuert ihn nicht direkt, berücksichtigt SOC und Lade-/Entladeleistung jedoch für Harvest, Cross-Charge-Schutz und die defensive Speicherpriorität.')}</header>
+        <div class="zec-storage-layout zec-storage-layout-single">
+          {_ring('primary', 'SMA', payload['primary'].get('soc'), 'SOC aktuell')}
+          <div class="zec-storage-details">
+            <div class="zec-detail-row"><span>Istleistung</span><strong data-zec="primary.actual">{_e(payload['primary'].get('actual'))}</strong></div>
+            <div class="zec-detail-row"><span>Status</span><strong data-zec="primary.status">{_e(payload['primary'].get('status'))}</strong></div>
+            <div class="zec-detail-row zec-harmony-row"><span>Harmonisierung</span><strong data-zec="primary.line">{_e(payload['primary'].get('line'))}</strong></div>
+          </div>
+        </div>
+        <footer class="zec-card-footer"><span class="zec-status-dot { _e(payload['primary'].get('tone','ok')) }"></span><span><b data-zec="primary.source">{_e(payload['primary'].get('source'))}</b> · <span data-zec="primary.freshness_text">{_e(payload['primary'].get('freshness_text'))}</span></span></footer>
+      </article>
+        '''
+
+    preview_banner = ""
+    if preview_mode:
+        current = str(preview.get("scenario") or "")
+        scenario_links = []
+        for item in list(preview.get("scenarios") or []):
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("key") or "")
+            label = str(item.get("label") or key)
+            active = " is-active" if key == current else ""
+            scenario_links.append(f'<a class="zec-preview-scenario{active}" href="/?scenario={_e(key)}">{_e(label)}</a>')
+        preview_banner = f'''
+  <div class="zec-preview-banner" role="status">
+    <div><strong>UI-VORSCHAU</strong><span>Simulierte Speicher- und Statusdaten · keine Steuerwirkung</span></div>
+    <nav aria-label="Vorschau-Szenario">{"".join(scenario_links)}</nav>
+  </div>
+        '''
+
     warnings = list(payload.get("system", {}).get("warnings") or [])
     warnings_html = "".join(f"<li>{_e(w)}</li>" for w in warnings) or "<li>Keine aktiven Warnungen oder Fehler.</li>"
     bootstrap = json.dumps(payload, ensure_ascii=False).replace("</", "<" + "\\/")
+    body_class = "zec-status-v2 is-preview" if preview_mode else "zec-status-v2"
 
     return f'''<!doctype html>
 <html lang="de" data-theme="{theme}">
@@ -156,10 +200,10 @@ def render_status_page_v2(
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/status_v2.css?v={_e(APP_VERSION_LABEL)}">
 </head>
-<body class="zec-status-v2">
+<body class="{body_class}">
   <header class="zec-topbar">
     <div class="zec-brand"><span class="zec-wordmark">ZENDURE</span><span class="zec-product">Energy Controller</span><span class="zec-brand-divider" aria-hidden="true"></span></div>
-    <nav class="zec-main-nav" aria-label="Hauptnavigation">{_nav(analysis_available, analysis_port)}</nav>
+    <nav class="zec-main-nav" aria-label="Hauptnavigation">{_nav(analysis_available, analysis_port, preview_mode=preview_mode)}</nav>
     <div class="zec-topbar-right">
       <div class="zec-system-menu-wrap">
         <button id="systemStatusButton" class="zec-system-pill { _e(payload['system'].get('kind','ok')) }" type="button" aria-expanded="false">
@@ -173,24 +217,17 @@ def render_status_page_v2(
       </div>
       <span class="zec-version-pill">{_e(APP_VERSION_LABEL)}</span>
       <span class="zec-clock">{_icon('clock')}<b id="localClock">{_e(payload.get('server_time'))}</b></span>
-      <details id="expertMenuDetails" class="zec-expert-menu-wrap">
-        <summary id="expertMenuButton" class="zec-expert-button" aria-label="Expertenmenü öffnen">Experte <span aria-hidden="true">▾</span></summary>
-        <div id="expertMenu" class="zec-expert-menu">
-          <a href="/mqtt-diagnostics">MQTT Diagnose</a>
-          <a href="/measurements">Messdaten-CSV</a>
-          <a href="/status_old">Alte Statusseite</a>
-          <a href="/graph_old">Alter Graph</a>
-        </div>
-      </details>
+      {'' if preview_mode else f'<details id="expertMenuDetails" class="zec-expert-menu-wrap"><summary id="expertMenuButton" class="zec-expert-button" aria-label="Expertenmenü öffnen">Experte <span aria-hidden="true">▾</span></summary><div id="expertMenu" class="zec-expert-menu"><a href="/mqtt-diagnostics">MQTT Diagnose</a><a href="/measurements">Messdaten-CSV</a><a href="/status_old">Alte Statusseite</a><a href="/graph_old">Alter Graph</a></div></details>'}
     </div>
   </header>
+  {preview_banner}
 
   <div id="criticalBanner" class="zec-critical-banner" {'hidden' if payload['system'].get('kind') != 'bad' else ''}>
     <strong>Schutzmodus aktiv.</strong> <span data-zec="system.critical_text">{_e(payload['system'].get('critical_text') or 'Regelung ist eingeschränkt.')}</span>
   </div>
 
   <main class="zec-page-shell">
-    <section class="zec-main-grid" aria-label="Aktueller Systemstatus">
+    <section class="zec-main-grid{' is-no-primary' if not primary_present else ''}" aria-label="Aktueller Systemstatus" data-primary-storage-present="{'true' if primary_present else 'false'}">
       <article class="zec-card zec-grid-card" data-card="grid">
         <header class="zec-card-header"><div class="zec-card-title">{_icon('meter')}<h2>Netzleistung</h2></div>{_info_button('Netzleistung','Diese Karte zeigt den aktuellen ungefilterten Netzleistungswert am Netzanschlusspunkt. Negative Werte bedeuten Einspeisung/Export, positive Werte Netzbezug. Der Mini-Graph zeigt die letzten Messpunkte und reagiert direkt auf die Maus.')}</header>
         <div class="zec-card-center">
@@ -223,18 +260,7 @@ def render_status_page_v2(
         <footer class="zec-card-footer"><span class="zec-status-dot { _e(payload['zendure'].get('tone','ok')) }"></span><span>Telemetrie: <b data-zec="zendure.source">{_e(payload['zendure'].get('source'))}</b></span></footer>
       </article>
 
-      <article class="zec-card zec-primary-card" data-card="primary">
-        <header class="zec-card-header"><div class="zec-card-title">{_icon('primary')}<h2>Primärspeicher</h2></div>{_info_button('Primärspeicher','Diese Karte zeigt den SMA-/Primärspeicher. ZEC steuert ihn nicht direkt, berücksichtigt SOC und Lade-/Entladeleistung jedoch für Harvest, Cross-Charge-Schutz und die defensive Speicherpriorität.')}</header>
-        <div class="zec-storage-layout zec-storage-layout-single">
-          {_ring('primary', 'SMA', payload['primary'].get('soc'), 'SOC aktuell')}
-          <div class="zec-storage-details">
-            <div class="zec-detail-row"><span>Istleistung</span><strong data-zec="primary.actual">{_e(payload['primary'].get('actual'))}</strong></div>
-            <div class="zec-detail-row"><span>Status</span><strong data-zec="primary.status">{_e(payload['primary'].get('status'))}</strong></div>
-            <div class="zec-detail-row zec-harmony-row"><span>Harmonisierung</span><strong data-zec="primary.line">{_e(payload['primary'].get('line'))}</strong></div>
-          </div>
-        </div>
-        <footer class="zec-card-footer"><span class="zec-status-dot { _e(payload['primary'].get('tone','ok')) }"></span><span><b data-zec="primary.source">{_e(payload['primary'].get('source'))}</b> · <span data-zec="primary.freshness_text">{_e(payload['primary'].get('freshness_text'))}</span></span></footer>
-      </article>
+      {primary_card}
 
       <article class="zec-card zec-source-card" data-card="source">
         <header class="zec-card-header"><div class="zec-card-title">{_icon('radio')}<h2>Netzleistungsquelle</h2></div>{_info_button('Netzleistungsquelle','Diese Karte zeigt die aktive Netzleistungsquelle, deren Aktualität und ob mehrere erkannte SMA-Geräte korrekt auf das konfigurierte Zielgerät gefiltert werden. Alte verworfene Einzelmesswerte ändern den aktuellen Quellenstatus nicht.')}</header>
@@ -262,7 +288,7 @@ def render_status_page_v2(
 
     <section class="zec-lower-grid">
       <article class="zec-lower-card" data-lower="logging">
-        <header class="zec-card-header"><div class="zec-card-title">{_icon('database')}<h2>Messdaten / Logging</h2></div>{_info_button('Messdaten / Logging','Zeigt CSV-Protokoll, SQLite-Graphspeicher, Speicherziel, Queue, Fallback und verfügbaren Speicher. Dateisystemdaten werden ausschließlich gecacht im Web-Backend erfasst; der Regelzyklus bleibt unberührt.')}</header>
+        <header class="zec-card-header"><div class="zec-card-title">{_icon('database')}<h2>Messdaten / Logging</h2></div>{_info_button('Messdaten / Logging','Zeigt CSV-Protokoll, SQLite-Graphspeicher, Speicherziel, Queue, Fallback sowie belegten und freien Speicher. Dateisystemdaten werden ausschließlich gecacht im Web-Backend erfasst; der Regelzyklus bleibt unberührt.')}</header>
         <div class="zec-health-rows">
           <div><span>CSV-Protokoll</span><strong data-zec="logging.status">{_e(payload['logging'].get('status'))}</strong></div>
           <div><span>SQLite-Graphspeicher</span><strong data-zec="logging.db">{_e(payload['logging'].get('db'))}</strong></div>
@@ -272,7 +298,7 @@ def render_status_page_v2(
           <div><span>Queue</span><strong data-zec="logging.queue_text">—</strong></div>
           <div><span>Letzter DB-Schreibvorgang</span><strong data-zec="logging.last_write">{_e(payload['logging'].get('last_write'))}</strong></div>
           <div><span>Fallback</span><strong data-zec="logging.fallback_text">—</strong></div>
-          <div><span>Freier Speicher</span><strong data-zec="logging.free_text">—</strong></div>
+          <div><span>Belegter Speicher</span><strong data-zec="logging.used_text">—</strong></div>
         </div>
         <div class="zec-meter"><div class="zec-meter-fill" data-meter="logging.disk"></div></div>
         <footer class="zec-card-footer"><span class="zec-status-dot {_e(payload['logging'].get('tone','ok'))}"></span><span data-zec="logging.footer">Messdatenspeicherung wird bewertet</span></footer>
@@ -302,11 +328,13 @@ def render_status_page_v2(
           <div><span>Zendure-Telemetrie</span><strong data-zec="diag.mqtt">{_e(payload['diag'].get('mqtt'))}</strong></div>
           <div><span>Lokale API</span><strong data-zec="diag.api">{_e(payload['diag'].get('api'))}</strong></div>
           <div><span>Kommandowirkung</span><strong data-zec="diag.effect">{_e(payload['diag'].get('effect'))}</strong></div>
+          <div><span>Flash-Schutz</span><strong data-zec="diag.flash_protection">{_e(payload['diag'].get('flash_protection'))}</strong></div>
+          <div><span>Offgrid-Last</span><strong data-zec="diag.offgrid_text">{_e(payload['diag'].get('offgrid_text'))}</strong></div>
         </div>
         <div class="zec-timing-title">Durchlaufzeiten – letzter Durchlauf</div>
         <div class="zec-timing-total"><span>Aktiver Gesamtdurchlauf <small>ohne Wartezeit / Sleep</small></span><strong data-zec="diag.loop_text">{_e(payload['diag'].get('loop_text'))}</strong></div>
-        <div class="zec-cycle-meta" data-zec="diag.cycle_meta">{_e(payload['diag'].get('cycle_meta_text') or '—')}</div>
         <div id="diagTimingTree" class="zec-timing-tree"></div>
+        <div class="zec-cycle-meta" data-zec="diag.cycle_meta">{_e(payload['diag'].get('cycle_meta_text') or '—')}</div>
         <div id="diagTimingDistribution" class="zec-timing-distribution" role="img" aria-label="Zeitverteilung des letzten aktiven Controller-Durchlaufs"></div>
         <div class="zec-health-rows compact zec-async-timing">
           <div><span>SQLite-Schreiben, asynchron</span><strong data-zec="diag.sqlite_text">—</strong></div>
@@ -315,7 +343,8 @@ def render_status_page_v2(
         <div class="zec-health-rows compact">
           <div><span>Analyse / Replay</span><strong data-zec="diag.analysis">{_e(payload['diag'].get('analysis'))}</strong></div>
           <div><span>Controller-Laufzeit</span><strong data-zec="diag.uptime_text">—</strong></div>
-          <div class="zec-full-row"><span>Letzter erfolgreicher Zendure-Kommandoabgleich</span><strong data-zec="diag.resync_text">{_e(payload['diag'].get('resync_text'))}</strong></div>
+          <div class="zec-full-row"><span>Letzter ausgeführter Zendure-Kommandoabgleich</span><strong data-zec="diag.resync_text">{_e(payload['diag'].get('resync_text'))}</strong></div>
+          <div class="zec-full-row"><span>Wirkung anschließend bestätigt</span><strong data-zec="diag.effect_confirmation_text">{_e(payload['diag'].get('effect_confirmation_text'))}</strong></div>
           <div class="zec-full-row"><span>Letzter unterdrückter Abgleichversuch</span><strong data-zec="diag.resync_suppressed_text">{_e(payload['diag'].get('resync_suppressed_text'))}</strong></div>
         </div>
         <footer class="zec-card-footer"><span class="zec-status-dot ok"></span><span data-zec="diag.footer">Controller und Schnittstellen werden bewertet</span></footer>

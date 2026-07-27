@@ -28,11 +28,15 @@ fi
 
 CONTROLLER_WAS_ACTIVE=0
 REPLAY_WAS_ACTIVE=0
+PREVIEW_WAS_ACTIVE=0
 if systemctl is-active --quiet zendure-controller.service; then
     CONTROLLER_WAS_ACTIVE=1
 fi
 if systemctl is-active --quiet zendure-replay.service; then
     REPLAY_WAS_ACTIVE=1
+fi
+if systemctl is-active --quiet zendure-status-preview.service; then
+    PREVIEW_WAS_ACTIVE=1
 fi
 
 recover_on_error() {
@@ -44,10 +48,16 @@ recover_on_error() {
     if [ "$REPLAY_WAS_ACTIVE" -eq 1 ]; then
         sudo systemctl start zendure-replay.service || true
     fi
+    if [ "$PREVIEW_WAS_ACTIVE" -eq 1 ]; then
+        sudo systemctl start zendure-status-preview.service || true
+    fi
     echo "Recovery-Hinweis: Falls ein Dienst nicht startet, Backup liegt unter: ${BACKUP}"
     sudo systemctl status zendure-controller.service --no-pager -l || true
     if [ "$REPLAY_WAS_ACTIVE" -eq 1 ]; then
         sudo systemctl status zendure-replay.service --no-pager -l || true
+    fi
+    if [ "$PREVIEW_WAS_ACTIVE" -eq 1 ]; then
+        sudo systemctl status zendure-status-preview.service --no-pager -l || true
     fi
 }
 trap recover_on_error ERR
@@ -60,6 +70,7 @@ echo "Backup: ${BACKUP}"
 echo "Stoppe Dienste..."
 sudo systemctl stop zendure-controller.service || true
 sudo systemctl stop zendure-replay.service || true
+sudo systemctl stop zendure-status-preview.service || true
 
 echo "Erstelle Backup des aktuellen Installationsverzeichnisses..."
 cd /opt
@@ -169,6 +180,9 @@ fi
 if [ -f "${TARGET}/systemd/zendure-replay.service" ]; then
     sudo cp "${TARGET}/systemd/zendure-replay.service" /etc/systemd/system/zendure-replay.service
 fi
+if [ -f "${TARGET}/systemd/zendure-status-preview.service" ]; then
+    sudo cp "${TARGET}/systemd/zendure-status-preview.service" /etc/systemd/system/zendure-status-preview.service
+fi
 sudo systemctl daemon-reload
 
 echo "Starte Live-Dienst..."
@@ -178,6 +192,10 @@ if [ "$REPLAY_WAS_ACTIVE" -eq 1 ]; then
     echo "Starte zuvor aktiven Analyse-Dienst..."
     sudo systemctl start zendure-replay.service
 fi
+if [ "$PREVIEW_WAS_ACTIVE" -eq 1 ]; then
+    echo "Starte zuvor aktiven Status-Vorschaudienst..."
+    sudo systemctl start zendure-status-preview.service
+fi
 
 trap - ERR
 
@@ -185,6 +203,9 @@ echo "Dienststatus:"
 systemctl status zendure-controller.service --no-pager -l
 if [ "$REPLAY_WAS_ACTIVE" -eq 1 ]; then
     systemctl status zendure-replay.service --no-pager -l
+fi
+if [ "$PREVIEW_WAS_ACTIVE" -eq 1 ]; then
+    systemctl status zendure-status-preview.service --no-pager -l
 fi
 
 echo "Ready-Check (maximal 20 Sekunden):"
@@ -221,4 +242,11 @@ else
     echo "Der optionale Analyse-Dienst wurde installiert, aber nicht aktiviert."
     echo "Start bei Bedarf: sudo systemctl start zendure-replay.service"
     echo "Optional dauerhaft aktivieren: sudo systemctl enable zendure-replay.service"
+fi
+if [ "$PREVIEW_WAS_ACTIVE" -eq 1 ]; then
+    echo "Der Status-Vorschaudienst war vor dem Update aktiv und wurde wieder gestartet."
+else
+    echo "Der passive Status-Vorschaudienst wurde installiert, aber nicht aktiviert."
+    echo "Start zur UI-Prüfung: sudo systemctl start zendure-status-preview.service"
+    echo "Aufruf: http://<PI-IP>:8091/"
 fi

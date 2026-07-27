@@ -49,6 +49,19 @@ STANDARD_HEADER: List[str] = [
     "zendure_actual_power_fresh",
     "zendure_actual_power_age_s",
     "zendure_actual_power_source",
+    "zendure_raw_pack_input_w",
+    "zendure_raw_grid_input_w",
+    "zendure_raw_output_home_w",
+    "zendure_raw_output_pack_w",
+    "zendure_raw_grid_off_w",
+    "zendure_raw_solar_input_w",
+    "zendure_grid_signed_power_w",
+    "zendure_battery_signed_power_w",
+    "zendure_battery_charge_power_w",
+    "zendure_battery_discharge_power_w",
+    "zendure_offgrid_power_w",
+    "zendure_offgrid_active",
+    "zendure_power_balance_residual_w",
     "zendure_soc_raw_percent",
     "zendure_soc_percent",
     "control_soc_percent",
@@ -146,14 +159,114 @@ STANDARD_HEADER: List[str] = [
     "command_mqtt_connected",
     "command_mqtt_success",
     "command_delta_w",
+    "command_lifecycle_state",
+    "command_desired_sequence_id",
+    "command_desired_intent",
+    "command_desired_smart_mode",
+    "command_desired_ac_mode",
+    "command_desired_input_limit_w",
+    "command_desired_output_limit_w",
+    "command_desired_signed_target_w",
+    "command_desired_reason",
+    "command_desired_safety_relevant",
+    "command_publish_event",
+    "command_publish_fields",
     "command_effect_category",
     "command_effect_reason",
+    "command_effect_confirmed",
+    "command_effect_confirmed_time",
+    "command_neutralization_active",
+    "command_neutralization_reason",
+    "command_mismatch_resolution",
+    "zendure_command_smart_mode",
+    "zendure_command_ac_mode",
+    "zendure_command_input_limit_w",
+    "zendure_command_output_limit_w",
+    "zendure_device_inverse_max_power_w",
+    "zendure_device_charge_max_limit_w",
+    "zendure_grid_off_mode",
+    "zendure_flash_protection_active",
+    "zendure_flash_protection_reason",
+    "zendure_command_state_complete",
+    "zendure_command_state_reason",
+    "zendure_command_state_source",
+    "zendure_power_observation_direction",
+    "zendure_power_observation_confidence",
+    "zendure_power_observation_signed_w",
+    "zendure_power_observation_magnitude_w",
+    "zendure_power_observation_age_s",
+    "zendure_power_observation_reason",
     "command_uncertain_mqtt_active",
     "command_uncertain_mqtt_status",
     "command_not_effective_active",
     "command_not_effective_duration_s",
     "command_resync_count",
     "command_resync_reason",
+]
+
+# Fields added by RC11 for the command lifecycle and independent power
+# observation.
+RC11_COMMAND_LIFECYCLE_FIELDS = {
+    "command_lifecycle_state",
+    "command_desired_sequence_id",
+    "command_desired_intent",
+    "command_desired_ac_mode",
+    "command_desired_input_limit_w",
+    "command_desired_output_limit_w",
+    "command_desired_signed_target_w",
+    "command_desired_reason",
+    "command_desired_safety_relevant",
+    "command_publish_event",
+    "command_publish_fields",
+    "command_effect_confirmed",
+    "command_effect_confirmed_time",
+    "command_neutralization_active",
+    "command_neutralization_reason",
+    "zendure_power_observation_direction",
+    "zendure_power_observation_confidence",
+    "zendure_power_observation_signed_w",
+    "zendure_power_observation_magnitude_w",
+    "zendure_power_observation_age_s",
+    "zendure_power_observation_reason",
+    "zendure_raw_pack_input_w",
+    "zendure_raw_grid_input_w",
+    "zendure_raw_output_home_w",
+    "zendure_raw_output_pack_w",
+}
+
+# RC12 adds the verified smartMode/command read-back contract and separates
+# grid-side, battery-side and off-grid power boundaries.
+RC12_COMMAND_CONTRACT_FIELDS = {
+    "command_desired_smart_mode",
+    "command_mismatch_resolution",
+    "zendure_command_smart_mode",
+    "zendure_command_ac_mode",
+    "zendure_command_input_limit_w",
+    "zendure_command_output_limit_w",
+    "zendure_device_inverse_max_power_w",
+    "zendure_device_charge_max_limit_w",
+    "zendure_grid_off_mode",
+    "zendure_flash_protection_active",
+    "zendure_flash_protection_reason",
+    "zendure_command_state_complete",
+    "zendure_command_state_reason",
+    "zendure_command_state_source",
+    "zendure_raw_grid_off_w",
+    "zendure_raw_solar_input_w",
+    "zendure_grid_signed_power_w",
+    "zendure_battery_signed_power_w",
+    "zendure_battery_charge_power_w",
+    "zendure_battery_discharge_power_w",
+    "zendure_offgrid_power_w",
+    "zendure_offgrid_active",
+    "zendure_power_balance_residual_w",
+}
+
+RC11_STANDARD_HEADER: List[str] = [
+    field for field in STANDARD_HEADER if field not in RC12_COMMAND_CONTRACT_FIELDS
+]
+RC10_STANDARD_HEADER: List[str] = [
+    field for field in RC11_STANDARD_HEADER if field not in RC11_COMMAND_LIFECYCLE_FIELDS
 ]
 
 EXTENDED_FIELDS: List[str] = [
@@ -163,6 +276,8 @@ EXTENDED_FIELDS: List[str] = [
 ]
 
 EXTENDED_HEADER: List[str] = STANDARD_HEADER + EXTENDED_FIELDS
+RC11_EXTENDED_HEADER: List[str] = RC11_STANDARD_HEADER + EXTENDED_FIELDS
+RC10_EXTENDED_HEADER: List[str] = RC10_STANDARD_HEADER + EXTENDED_FIELDS
 
 OPERATING_MODE_VALUES = {
     "AUTO", "HOLD", "HOLD_DEADBAND", "NIGHT_DISCHARGE", "FIXED_CHARGE",
@@ -233,6 +348,14 @@ EXTENDED_GROUP_STATUS_VALUES = {"OK", "MISSING", "STALE", "RETAINED_ONLY", "NO_L
 
 def header_for_profile(profile: str) -> List[str]:
     return EXTENDED_HEADER if str(profile).lower() == "extended" else STANDARD_HEADER
+
+
+def rc11_header_for_profile(profile: str) -> List[str]:
+    return RC11_EXTENDED_HEADER if str(profile).lower() == "extended" else RC11_STANDARD_HEADER
+
+
+def rc10_header_for_profile(profile: str) -> List[str]:
+    return RC10_EXTENDED_HEADER if str(profile).lower() == "extended" else RC10_STANDARD_HEADER
 
 
 def header_hash(fields: List[str]) -> str:
