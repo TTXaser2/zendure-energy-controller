@@ -87,6 +87,14 @@ class ZendureController:
         self._neutralization_physical_signature: str = ""
         self._neutralization_confirmed_signature: str = ""
         self._command_effect_last_charge_soc: Optional[float] = None
+        # RC14 high-SOC charge-acceptance episode state.  The fields are
+        # intentionally scalar so the Pi never accumulates an unbounded sample
+        # history.  They are reset whenever the charge intent/static command
+        # contract no longer applies.
+        self._charge_acceptance_zero_since_epoch: Optional[float] = None
+        self._charge_acceptance_zero_cycles: int = 0
+        self._charge_acceptance_last_positive_w: Optional[int] = None
+        self._charge_acceptance_taper_steps: int = 0
         self._last_published_intent: str = INTENT_IDLE
 
     def log(self, message: str) -> None:
@@ -211,6 +219,10 @@ class ZendureController:
             "_neutralization_physical_signature": "",
             "_neutralization_confirmed_signature": "",
             "_command_effect_last_charge_soc": None,
+            "_charge_acceptance_zero_since_epoch": None,
+            "_charge_acceptance_zero_cycles": 0,
+            "_charge_acceptance_last_positive_w": None,
+            "_charge_acceptance_taper_steps": 0,
             "_last_published_intent": INTENT_IDLE,
             "_last_resync_signature": "",
             "_last_resync_epoch": 0.0,
@@ -222,6 +234,40 @@ class ZendureController:
         for name, value in defaults.items():
             if not hasattr(self, name):
                 setattr(self, name, value)
+
+    def _reset_charge_acceptance_episode(self) -> None:
+        self._charge_acceptance_zero_since_epoch = None
+        self._charge_acceptance_zero_cycles = 0
+        self._charge_acceptance_last_positive_w = None
+        self._charge_acceptance_taper_steps = 0
+        with self.state.lock:
+            self.state.command_effect_reference_w = 0
+
+    def _confirmed_charge_reference(self, cfg: Dict[str, Any], target_w: int) -> Tuple[int, Dict[str, Any]]:
+        """Return the fresh, statically confirmed charge reference for RC14.
+
+        The volatile controller target and the device read-back may legitimately
+        differ for a few seconds under cloud-driven regulation.  Acceptance
+        classification therefore confirms only the static command invariants
+        and uses the smaller positive value as the physically acknowledged
+        reference.  No requested direction is used to reinterpret telemetry.
+        """
+        snapshot = self._command_state_snapshot(cfg)
+        target = max(0, int(target_w or 0))
+        readback = max(0, int(snapshot.get("input_limit_w") or 0))
+        min_target_w = max(1, int(cfg.get("COMMAND_EFFECT_MIN_TARGET_W", 120) or 120))
+        static_confirmed = bool(
+            target > 0
+            and snapshot.get("complete")
+            and snapshot.get("smart_mode") == 1
+            and snapshot.get("ac_mode") == "Input mode"
+            and int(snapshot.get("output_limit_w") or 0) == 0
+            and readback >= min_target_w
+        )
+        reference = min(target, readback) if static_confirmed else 0
+        with self.state.lock:
+            self.state.command_effect_reference_w = int(reference)
+        return int(reference), snapshot
 
     def request_stop(self) -> None:
         self._running = False
@@ -1662,6 +1708,8 @@ class ZendureController:
 
         if desired_intent == INTENT_IDLE:
             desired_intent = intent_for_signed_target(target)
+        if desired_intent != INTENT_CHARGE or target <= 0:
+            self._reset_charge_acceptance_episode()
 
         # Production dynamic control is not effect-evaluable until the volatile
         # smartMode contract and the four command-state properties have been
@@ -1671,6 +1719,7 @@ class ZendureController:
         if desired_intent in {INTENT_CHARGE, INTENT_DISCHARGE} and self._smart_mode_contract_supported():
             command_snapshot = self._command_state_snapshot(cfg)
             if not command_snapshot.get("flash_protection_active") or not command_snapshot.get("complete"):
+                self._reset_charge_acceptance_episode()
                 with self.state.lock:
                     self.state.command_lifecycle_state = "COMMAND_STATE_VERIFYING"
                     self.state.command_effect_category = "COMMAND_STATE_VERIFYING"
@@ -1724,6 +1773,7 @@ class ZendureController:
         observation = self._command_power_observation(now, cfg)
         telemetry_valid = bool(status == "ZENDURE_MQTT_OK" and live_confirmed and observation["valid"])
         if not telemetry_valid:
+            self._reset_charge_acceptance_episode()
             if self._command_effect_telemetry_pause_epoch is None:
                 self._command_effect_telemetry_pause_epoch = now
             with self.state.lock:
@@ -1799,6 +1849,7 @@ class ZendureController:
             return
 
         if signed_actual is None and magnitude >= threshold_w:
+            self._reset_charge_acceptance_episode()
             if self._command_effect_telemetry_pause_epoch is None:
                 self._command_effect_telemetry_pause_epoch = now
             category = (
@@ -1834,6 +1885,7 @@ class ZendureController:
 
         min_target_w = max(0, int(cfg.get("COMMAND_EFFECT_MIN_TARGET_W", 120) or 120))
         if abs(target) < min_target_w:
+            self._reset_charge_acceptance_episode()
             self._command_effect_watch_intent = desired_intent
             self._command_effect_watch_target = target
             self._command_effect_watch_start_epoch = None
@@ -1878,10 +1930,34 @@ class ZendureController:
             and ((target > 0 and int(signed_actual) >= threshold_w) or (target < 0 and int(signed_actual) <= -threshold_w))
         )
         tracking = same_direction and abs(int(target) - int(signed_actual)) <= tolerance_w
+        if target > 0:
+            reference_w, command_snapshot = self._confirmed_charge_reference(cfg, target)
+        else:
+            reference_w, command_snapshot = 0, self._command_state_snapshot(cfg)
+            with self.state.lock:
+                self.state.command_effect_reference_w = 0
         timeout_s = max(10, int(cfg.get("COMMAND_EFFECT_TIMEOUT_SECONDS", 90) or 90))
         resend_s = max(timeout_s, int(cfg.get("COMMAND_EFFECT_FORCE_RESEND_SECONDS", 120) or 120))
 
         if tracking:
+            with self.state.lock:
+                tracking_soc = self.state.battery_soc
+            tracking_high_soc = bool(
+                target > 0
+                and reference_w >= min_target_w
+                and tracking_soc is not None
+                and float(tracking_soc) >= float(int(cfg.get("MAX_SOC_PERCENT", 100) or 100) - 10)
+            )
+            if tracking_high_soc:
+                observed_tracking_w = max(0, int(signed_actual or 0))
+                previous_positive = self._charge_acceptance_last_positive_w
+                if previous_positive is not None and observed_tracking_w <= previous_positive - 10:
+                    self._charge_acceptance_taper_steps += 1
+                self._charge_acceptance_last_positive_w = observed_tracking_w
+                self._charge_acceptance_zero_since_epoch = None
+                self._charge_acceptance_zero_cycles = 0
+            else:
+                self._reset_charge_acceptance_episode()
             was_mismatch = bool(self.state.command_not_effective_active)
             self._command_tracking_mismatch_start_epoch = None
             self._command_effect_watch_start_epoch = None
@@ -1905,14 +1981,15 @@ class ZendureController:
                 self.state.add_event("Zendure-Kommandowirkung wiederhergestellt")
             return
 
-        # Near the configured upper SOC limit, a confirmed battery charge flow
-        # with materially lower grid-side power is a device/BMS acceptance
-        # limit, not evidence that the MQTT command state was lost.  Tracking is
-        # explicitly *not* confirmed, but no resync is triggered.
+        # RC14: High-SOC charge acceptance is evaluated against the fresh,
+        # statically confirmed device command state.  Exact equality with the
+        # latest cloud-driven target is deliberately not required; the smaller
+        # of current target and positive read-back limit is the reference.
         with self.state.lock:
             acceptance_state = str(self.state.charge_acceptance_state or "ok")
             acceptance_reason = str(self.state.charge_acceptance_reason or "-")
             battery_charge_w = int(self.state.zendure_battery_charge_power_w or 0)
+            battery_discharge_w = int(self.state.zendure_battery_discharge_power_w or 0)
             soc_percent = self.state.battery_soc
             current_grid_power = float(self.state.grid_power or 0.0)
         previous_charge_soc = self._command_effect_last_charge_soc
@@ -1924,31 +2001,112 @@ class ZendureController:
             self._command_effect_last_charge_soc = float(soc_percent)
         elif target <= 0:
             self._command_effect_last_charge_soc = None
+
         max_soc_percent = int(cfg.get("MAX_SOC_PERCENT", 100) or 100)
-        command_snapshot = self._command_state_snapshot(cfg)
-        desired_batch = self._desired_command_batch
-        desired_state_confirmed = bool(
-            desired_batch is not None
-            and desired_batch.intent == INTENT_CHARGE
-            and self._command_state_matches_batch(command_snapshot, desired_batch)
+        high_soc = bool(
+            soc_percent is not None
+            and float(soc_percent) >= float(max_soc_percent - 10)
         )
-        high_soc_acceptance_limited = bool(
+        static_charge_state_confirmed = bool(
+            desired_intent == INTENT_CHARGE
+            and reference_w >= min_target_w
+            and command_snapshot.get("complete")
+            and command_snapshot.get("smart_mode") == 1
+            and command_snapshot.get("ac_mode") == "Input mode"
+            and int(command_snapshot.get("output_limit_w") or 0) == 0
+        )
+        no_battery_discharge = battery_discharge_w < 20
+        no_direction_conflict = observation.get("direction") not in {"DISCHARGE", "CONFLICT"}
+        common_acceptance_invariants = bool(
             target > 0
+            and high_soc
+            and static_charge_state_confirmed
+            and soc_non_falling
+            and no_battery_discharge
+            and no_direction_conflict
+            and acceptance_state in {"limited", "not_accepting"}
+        )
+
+        observed_charge_w = max(
+            0,
+            int(signed_actual) if signed_actual is not None and int(signed_actual) > 0 else 0,
+            battery_charge_w,
+        )
+        if common_acceptance_invariants and observed_charge_w >= 20:
+            previous_positive = self._charge_acceptance_last_positive_w
+            if previous_positive is not None and observed_charge_w <= previous_positive - 10:
+                self._charge_acceptance_taper_steps += 1
+            self._charge_acceptance_last_positive_w = observed_charge_w
+            self._charge_acceptance_zero_since_epoch = None
+            self._charge_acceptance_zero_cycles = 0
+        elif common_acceptance_invariants and observed_charge_w < 20:
+            if self._charge_acceptance_zero_since_epoch is None:
+                self._charge_acceptance_zero_since_epoch = now
+                self._charge_acceptance_zero_cycles = 1
+            else:
+                self._charge_acceptance_zero_cycles += 1
+        else:
+            self._reset_charge_acceptance_episode()
+
+        limited_while_charging = bool(
+            common_acceptance_invariants
             and observation.get("direction") == "CHARGE"
             and signed_actual is not None
             and int(signed_actual) >= 20
-            and desired_state_confirmed
-            and soc_non_falling
-            and current_grid_power <= -max(80, int(cfg.get("DEADBAND_W", 80) or 80))
-            and acceptance_state in {"limited", "not_accepting"}
-            and soc_percent is not None
-            and float(soc_percent) >= float(max_soc_percent - 10)
-            and battery_charge_w >= max(20, min(threshold_w, 50))
+            and battery_charge_w >= 20
         )
-        if high_soc_acceptance_limited:
+
+        zero_elapsed_s = (
+            max(0.0, now - float(self._charge_acceptance_zero_since_epoch))
+            if self._charge_acceptance_zero_since_epoch is not None else 0.0
+        )
+        at_or_above_max = bool(
+            soc_percent is not None and float(soc_percent) >= float(max_soc_percent)
+        )
+        below_max_independent_support = bool(
+            current_grid_power <= -max(80, int(cfg.get("DEADBAND_W", 80) or 80))
+            or self._charge_acceptance_taper_steps >= 2
+            or zero_elapsed_s >= 10.0
+        )
+        zero_not_accepting_candidate = bool(
+            common_acceptance_invariants
+            and observation.get("direction") == "NEUTRAL"
+            and observed_charge_w < 20
+            and battery_charge_w < 20
+            and (
+                acceptance_state == "not_accepting"
+                or (not at_or_above_max and acceptance_state == "limited" and self._charge_acceptance_taper_steps >= 2)
+            )
+            and (at_or_above_max or below_max_independent_support)
+        )
+        zero_not_accepting_confirmed = bool(
+            zero_not_accepting_candidate
+            and self._charge_acceptance_zero_cycles >= 3
+            and zero_elapsed_s >= 6.0
+        )
+
+        if zero_not_accepting_candidate and not zero_not_accepting_confirmed:
+            # A short, bounded confirmation window prevents a known BMS stop at
+            # Max-SOC from entering the 90/120-s mismatch/resync chain.
+            self._command_tracking_mismatch_start_epoch = None
+            self._command_effect_watch_start_epoch = now
+            with self.state.lock:
+                self._clear_command_not_effective_locked()
+                self.state.command_lifecycle_state = "ACTIVE_ACCEPTANCE_VERIFYING"
+                self.state.command_effect_category = "COMMAND_PENDING"
+                self.state.command_effect_reason = (
+                    f"HIGH_SOC_NOT_ACCEPTING wird bestätigt: Referenz +{reference_w} W, "
+                    f"netzseitig {actual_text}, Batterie +{battery_charge_w} W; "
+                    f"{self._charge_acceptance_zero_cycles}/3 Zyklen, {zero_elapsed_s:.1f}/6.0 s."
+                )
+                self.state.command_effect_confirmed = False
+            return
+
+        if limited_while_charging or zero_not_accepting_confirmed:
             was_mismatch = bool(self.state.command_not_effective_active)
             self._command_tracking_mismatch_start_epoch = None
             self._command_effect_watch_start_epoch = now
+            subtype = "HIGH_SOC_CHARGE_LIMITED" if limited_while_charging else "HIGH_SOC_NOT_ACCEPTING"
             with self.state.lock:
                 self._clear_command_not_effective_locked()
                 if was_mismatch:
@@ -1956,8 +2114,8 @@ class ZendureController:
                 self.state.command_lifecycle_state = "ACTIVE_ACCEPTANCE_LIMITED"
                 self.state.command_effect_category = "COMMAND_CHARGE_ACCEPTANCE_LIMITED"
                 self.state.command_effect_reason = (
-                    f"Laderichtung und Batterieladung sind bestätigt, die Ladeannahme ist bei hohem SOC begrenzt: "
-                    f"Soll {target:+d} W, netzseitig {actual_text}, Batterie +{battery_charge_w} W. {acceptance_reason}"
+                    f"{subtype}: statischer Lade-Command-State und Referenz +{reference_w} W sind bestätigt; "
+                    f"netzseitig {actual_text}, Batterie +{battery_charge_w} W. {acceptance_reason}"
                 )
                 self.state.command_effect_confirmed = False
             if was_mismatch:
@@ -2937,13 +3095,15 @@ class ZendureController:
         return required
 
     def update_charge_acceptance_diagnostic(self, cfg: Dict[str, Any]) -> None:
+        target_w = max(0, int(self.state.last_input_power or 0))
+        reference_w, _ = self._confirmed_charge_reference(cfg, target_w)
         result = classify_charge_acceptance(
             soc_percent=self.state.battery_soc,
             max_soc_percent=cfg.get("MAX_SOC_PERCENT", 100),
-            target_charge_w=self.state.last_input_power,
+            target_charge_w=reference_w or target_w,
             actual_charge_w=self.state.zendure_battery_charge_power_w,
             grid_power_w=self.state.grid_power,
-            min_effective_target_w=max(100, int(cfg.get("MIN_EFFECTIVE_SURPLUS_FOR_CHARGE_W", 150)) // 2),
+            min_effective_target_w=max(1, int(cfg.get("COMMAND_EFFECT_MIN_TARGET_W", 120) or 120)),
             export_threshold_w=max(80, int(cfg.get("DEADBAND_W", 80))),
         )
         with self.state.lock:

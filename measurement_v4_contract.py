@@ -176,6 +176,9 @@ STANDARD_HEADER: List[str] = [
     "command_state_gate_state",
     "command_state_retry_remaining_s",
     "command_neutralization_episode_id",
+    "charge_acceptance_state",
+    "charge_acceptance_reason",
+    "command_effect_reference_w",
     "command_effect_category",
     "command_effect_reason",
     "command_effect_confirmed",
@@ -248,6 +251,13 @@ RC13_COMMAND_SAFETY_FIELDS = {
     "command_neutralization_episode_id",
 }
 
+# RC14 makes the high-SOC acceptance decision directly reproducible from V4.
+RC14_HIGH_SOC_ACCEPTANCE_FIELDS = {
+    "charge_acceptance_state",
+    "charge_acceptance_reason",
+    "command_effect_reference_w",
+}
+
 # RC12 adds the verified smartMode/command read-back contract and separates
 # grid-side, battery-side and off-grid power boundaries.
 RC12_COMMAND_CONTRACT_FIELDS = {
@@ -276,8 +286,11 @@ RC12_COMMAND_CONTRACT_FIELDS = {
     "zendure_power_balance_residual_w",
 }
 
+RC13_STANDARD_HEADER: List[str] = [
+    field for field in STANDARD_HEADER if field not in RC14_HIGH_SOC_ACCEPTANCE_FIELDS
+]
 RC12_STANDARD_HEADER: List[str] = [
-    field for field in STANDARD_HEADER if field not in RC13_COMMAND_SAFETY_FIELDS
+    field for field in RC13_STANDARD_HEADER if field not in RC13_COMMAND_SAFETY_FIELDS
 ]
 RC11_STANDARD_HEADER: List[str] = [
     field for field in RC12_STANDARD_HEADER if field not in RC12_COMMAND_CONTRACT_FIELDS
@@ -293,6 +306,7 @@ EXTENDED_FIELDS: List[str] = [
 ]
 
 EXTENDED_HEADER: List[str] = STANDARD_HEADER + EXTENDED_FIELDS
+RC13_EXTENDED_HEADER: List[str] = RC13_STANDARD_HEADER + EXTENDED_FIELDS
 RC12_EXTENDED_HEADER: List[str] = RC12_STANDARD_HEADER + EXTENDED_FIELDS
 RC11_EXTENDED_HEADER: List[str] = RC11_STANDARD_HEADER + EXTENDED_FIELDS
 RC10_EXTENDED_HEADER: List[str] = RC10_STANDARD_HEADER + EXTENDED_FIELDS
@@ -366,6 +380,10 @@ EXTENDED_GROUP_STATUS_VALUES = {"OK", "MISSING", "STALE", "RETAINED_ONLY", "NO_L
 
 def header_for_profile(profile: str) -> List[str]:
     return EXTENDED_HEADER if str(profile).lower() == "extended" else STANDARD_HEADER
+
+
+def rc13_header_for_profile(profile: str) -> List[str]:
+    return RC13_EXTENDED_HEADER if str(profile).lower() == "extended" else RC13_STANDARD_HEADER
 
 
 def rc12_header_for_profile(profile: str) -> List[str]:

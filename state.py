@@ -180,6 +180,7 @@ class ControllerState:
     command_resync_suppressed_reason: str = ""
     command_effect_category: str = "COMMAND_IDLE"
     command_effect_reason: str = "Kein aktiver Command-Effect-Watch."
+    command_effect_reference_w: int = 0
     command_lifecycle_state: str = "IDLE"
     command_desired_sequence_id: int = 0
     command_desired_intent: str = "IDLE"
@@ -1616,6 +1617,7 @@ class ControllerState:
                 "command_resync_suppressed_reason": self.command_resync_suppressed_reason,
                 "command_effect_state_category": self.command_effect_category,
                 "command_effect_state_reason": self.command_effect_reason,
+                "command_effect_reference_w": self.command_effect_reference_w,
                 "command_lifecycle_state": self.command_lifecycle_state,
                 "command_desired_sequence_id": self.command_desired_sequence_id,
                 "command_desired_intent": self.command_desired_intent,
@@ -1821,6 +1823,7 @@ class ControllerState:
                 "command_resync_suppressed_reason": self.command_resync_suppressed_reason,
                 "command_effect_state_category": self.command_effect_category,
                 "command_effect_state_reason": self.command_effect_reason,
+                "command_effect_reference_w": self.command_effect_reference_w,
                 "command_lifecycle_state": self.command_lifecycle_state,
                 "command_desired_sequence_id": self.command_desired_sequence_id,
                 "command_desired_intent": self.command_desired_intent,

@@ -111,11 +111,20 @@ def classify_charge_acceptance(
     at_or_above_max = soc >= max_soc
 
     if at_or_above_max and ratio < 0.20:
-        return {"state": "not_accepting", "reason": "SOC am/über Max-SOC; Ladeanforderung wird praktisch nicht angenommen."}
+        return {
+            "state": "not_accepting",
+            "reason": "HIGH_SOC_NOT_ACCEPTING: SOC am/über Max-SOC; Ladeanforderung wird praktisch nicht angenommen.",
+        }
     if high_soc and ratio < 0.20 and still_exporting:
-        return {"state": "not_accepting", "reason": "Hoher SOC, weiterhin Einspeisung, nahezu keine reale Ladeleistung."}
+        return {
+            "state": "not_accepting",
+            "reason": "HIGH_SOC_NOT_ACCEPTING: Hoher SOC, weiterhin Einspeisung, nahezu keine reale Ladeleistung.",
+        }
     if high_soc and ratio < 0.90:
-        return {"state": "limited", "reason": "Hoher SOC; reale Ladeleistung bleibt deutlich unter Soll."}
+        return {
+            "state": "limited",
+            "reason": "HIGH_SOC_CHARGE_LIMITED: Hoher SOC; reale Ladeleistung bleibt deutlich unter Soll.",
+        }
     if ratio < 0.35 and still_exporting:
         return {"state": "suspect", "reason": "Ladeanforderung wird deutlich unterschritten und es bleibt Einspeisung."}
     if ratio < 0.70:

@@ -1,0 +1,87 @@
+{
+  "fixture_id": "RC13_TAPER_20260727_162520_163140",
+  "source": {
+    "package": "zec_rc13_ladeende_20260727_164254.zip",
+    "package_sha256": "d0f57d4304acaa5bfad7c96e1096ad521ebb5bfb5c767495e9a630ce638fc5eb",
+    "controller_version": "12.11.2-rc13",
+    "time_zone": "Europe/Berlin",
+    "window_local": {
+      "start": "2026-07-27T16:25:20+02:00",
+      "end": "2026-07-27T16:31:40+02:00"
+    },
+    "rows": 124
+  },
+  "normative_source": "ZEC_ANALYSE_REGELWERK_V1.1.md",
+  "episode_expectations": [
+    {
+      "id": "limited_taper_98_percent",
+      "window_local": [
+        "2026-07-27T16:25:28+02:00",
+        "2026-07-27T16:31:11+02:00"
+      ],
+      "expected_command_effect_family": "COMMAND_CHARGE_ACCEPTANCE_LIMITED",
+      "expected_full_state_resync_count": 0,
+      "must_not_claim": [
+        "COMMAND_TARGET_TRACKING_EFFECTIVE",
+        "COMMAND_RECOVERED"
+      ],
+      "rationale": "High-SOC-Ladeannahme fällt trotz bestätigtem statischem Command-State von rund 579 W über 125/74 W ab."
+    },
+    {
+      "id": "not_accepting_at_max_soc",
+      "window_local": [
+        "2026-07-27T16:31:14+02:00",
+        "2026-07-27T16:31:32+02:00"
+      ],
+      "expected_command_effect_family": "COMMAND_CHARGE_ACCEPTANCE_LIMITED",
+      "expected_subreason": "HIGH_SOC_NOT_ACCEPTING",
+      "expected_full_state_resync_count": 0,
+      "rationale": "SOC 100 %, aktives Lade-Limit rückgelesen, reale Netz- und Batterieladung 0 W."
+    },
+    {
+      "id": "max_soc_neutralization",
+      "window_local": [
+        "2026-07-27T16:31:35+02:00",
+        "2026-07-27T16:31:40+02:00"
+      ],
+      "expected_command_effect_family": "COMMAND_NEUTRALIZATION_CONFIRMED",
+      "expected_neutralization_publish_batches": 1,
+      "expected_mismatch_resolution": "MISMATCH_SUPERSEDED_BY_SAFETY_NEUTRALIZATION",
+      "rationale": "Neuer Sicherheitsintent löst die Ladeabweichung ab; keine falsche Recovery-Bezeichnung."
+    }
+  ],
+  "anchor_checkpoints": [
+    {
+      "time_local": "2026-07-27T16:26:59+02:00",
+      "soc_percent": 98,
+      "target_w_approx": 1449,
+      "actual_charge_w_approx": 125,
+      "expected": "COMMAND_CHARGE_ACCEPTANCE_LIMITED"
+    },
+    {
+      "time_local": "2026-07-27T16:29:02+02:00",
+      "soc_percent": 98,
+      "target_w_approx": 1112,
+      "actual_charge_w_approx": 74,
+      "expected": "COMMAND_CHARGE_ACCEPTANCE_LIMITED"
+    },
+    {
+      "time_local": "2026-07-27T16:31:14+02:00",
+      "soc_percent": 100,
+      "target_and_readback_w_approx": 1532,
+      "actual_charge_w_approx": 0,
+      "expected": "COMMAND_CHARGE_ACCEPTANCE_LIMITED/HIGH_SOC_NOT_ACCEPTING"
+    },
+    {
+      "time_local": "2026-07-27T16:31:35+02:00",
+      "soc_percent": 100,
+      "target_w_approx": 0,
+      "expected": "COMMAND_NEUTRALIZATION_CONFIRMED"
+    }
+  ],
+  "negative_controls_required": [
+    "SOC 10 %, Soll/Readback +2397 W, Ist 0 W -> COMMAND_MISMATCH_CONFIRMED und Resync recoveryfähig.",
+    "acMode falsch oder outputLimit != 0 -> keine Acceptance-Reklassifikation.",
+    "Power-Richtung DISCHARGE/CONFLICT -> COMMAND_TELEMETRY_UNCERTAIN beziehungsweise Mismatch, nicht Acceptance limited."
+  ]
+}
