@@ -193,6 +193,7 @@
     text('primary.actual', p.primary?.actual);
     text('primary.status', p.primary?.status);
     text('primary.line', p.primary?.line);
+    text('primary.harvest_calculation', p.primary?.harvest_calculation);
     text('primary.source', p.primary?.source);
     text('primary.freshness_text', p.primary?.freshness_text);
     const pf = $('[data-card="primary"] .zec-card-footer'); if (pf) setDot(pf, p.primary?.tone);

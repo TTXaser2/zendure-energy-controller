@@ -1,0 +1,28 @@
+{
+  "source_package": "zec_rc14_fixed_discharge_failure_20260728_171257.zip",
+  "source_package_sha256": "2973e20b7dcf236763f844d7fe901c173de775a05c427dfae4af5d134621a2e1",
+  "episode_start_utc": "2026-07-28T14:55:10.264Z",
+  "episode_end_exclusive_utc": "2026-07-28T15:12:39.051Z",
+  "episode_rows": 333,
+  "effective_target_w": -2000,
+  "desired_sequence_id": 29,
+  "rc14_observed_publish_counts": {
+    "FULL_STATE_COMMAND_SENT": 1,
+    "COMMAND_LIMIT_UPDATED": 157,
+    "FULL_STATE_RESYNC_SENT": 8,
+    "total": 166
+  },
+  "rc15_expected_publish_counts": {
+    "FULL_STATE_COMMAND_SENT": 1,
+    "COMMAND_LIMIT_UPDATED": 0,
+    "FULL_STATE_RESYNC_SENT": 8,
+    "total": 9
+  },
+  "first_inverse_max_power_2000_evidence_utc": "2026-07-26T22:32:21.154Z",
+  "manual_fixed_discharge_activation_utc": "2026-07-28T14:55:10.264Z",
+  "inverse_max_power_preexisted_manual_command": true,
+  "notes": [
+    "The user changed the configured fixed discharge request from 2000 W to 2300 W, but the effective desired target remained -2000 W.",
+    "No credentials, device identifiers, hosts or tokens are included in the compact fixture."
+  ]
+}

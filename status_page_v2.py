@@ -162,6 +162,7 @@ def render_status_page_v2(
             <div class="zec-detail-row"><span>Istleistung</span><strong data-zec="primary.actual">{_e(payload['primary'].get('actual'))}</strong></div>
             <div class="zec-detail-row"><span>Status</span><strong data-zec="primary.status">{_e(payload['primary'].get('status'))}</strong></div>
             <div class="zec-detail-row zec-harmony-row"><span>Harmonisierung</span><strong data-zec="primary.line">{_e(payload['primary'].get('line'))}</strong></div>
+            <div class="zec-detail-row"><span>Harvest-Rechnung</span><strong data-zec="primary.harvest_calculation">{_e(payload['primary'].get('harvest_calculation'))}</strong></div>
           </div>
         </div>
         <footer class="zec-card-footer"><span class="zec-status-dot { _e(payload['primary'].get('tone','ok')) }"></span><span><b data-zec="primary.source">{_e(payload['primary'].get('source'))}</b> · <span data-zec="primary.freshness_text">{_e(payload['primary'].get('freshness_text'))}</span></span></footer>

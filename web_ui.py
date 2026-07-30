@@ -3561,6 +3561,33 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
         harmony = "Harvest: Zendure übernimmt Restüberschuss" if "FULL" in hreason or (primary_soc is not None and primary_soc >= 99) else "Harvest: Parallel-Ernte aktiv · Primärspeicher bleibt priorisiert"
     if "CROSS_CHARGE" in str(s.get("active_limiters") or "") or bool(s.get("cross_charge_guard_limited")):
         harmony = "Cross-Charge-Schutz: Zendure-Leistung wird begrenzt"
+
+    harvest_semantics = str(s.get("harvest_target_semantics") or "NOT_APPLICABLE")
+    if harvest_semantics == "ABSOLUTE_EXPORT_CAPTURE":
+        ref = _safe_float(s.get("harvest_reference_charge_w")) or 0.0
+        export = _safe_float(s.get("rest_surplus_export_w")) or 0.0
+        capture = _safe_float(s.get("harvest_export_capture_target_w")) or 0.0
+        harvest_calculation = (
+            f"0-W-Netzziel: {_zec_num(ref, 'W')} + {_zec_num(export, 'W')} "
+            f"= {_zec_num(capture, 'W')}"
+        )
+    elif harvest_semantics == "ABSOLUTE_SHARE_OR_EXPORT_CAPTURE":
+        total = _safe_float(s.get("harvest_total_available_charge_w")) or 0.0
+        primary_share = _safe_float(s.get("harvest_primary_share_target_w")) or 0.0
+        share_target = _safe_float(s.get("harvest_zendure_share_target_w")) or 0.0
+        capture = _safe_float(s.get("harvest_export_capture_target_w")) or 0.0
+        selected = str(s.get("harvest_target_selected_by") or "NOT_APPLICABLE")
+        raw = _safe_float(s.get("harvest_candidate_raw_w")) or 0.0
+        harvest_calculation = (
+            f"0-W-Netzziel: T {_zec_num(total, 'W')} · SMA {_zec_num(primary_share, 'W')} · "
+            f"Zendure-Share {_zec_num(share_target, 'W')} · Exportaufnahme {_zec_num(capture, 'W')} · "
+            f"{selected} → {_zec_num(raw, 'W')}"
+        )
+    elif harvest_semantics == "INCREMENTAL_FALLBACK":
+        fallback_reason = str(s.get("harvest_reference_fallback_reason") or "Referenz unsicher")
+        harvest_calculation = f"Inkrementeller Fallback · physische Referenz nicht bestätigt · {fallback_reason}"
+    else:
+        harvest_calculation = "nicht aktiv"
     primary_tone = _status_unit_tone(primary_soc, cfg, valid=primary_valid and primary_fresh)
     primary_age = _safe_float(_first_snapshot_value(s, "second_battery_data_age_seconds", "last_sma_battery_update_age_seconds"))
     primary_freshness = "aktuell" if primary_valid and primary_fresh and (primary_age is None or primary_age <= 10) else (f"verzögert, {int(primary_age)} s" if primary_valid and primary_age is not None else "nicht aktuell")
@@ -3757,6 +3784,7 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "actual_raw": primary_power if primary_present else None,
             "status": primary_status if primary_present else "nicht konfiguriert",
             "line": harmony if primary_present else "",
+            "harvest_calculation": harvest_calculation if primary_present else "",
             "source": second_battery_name(cfg) if primary_present else "",
             "age": primary_age if primary_present else None,
             "freshness_text": primary_freshness if primary_present else "",

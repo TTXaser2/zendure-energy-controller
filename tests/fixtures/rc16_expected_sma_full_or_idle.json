@@ -1,0 +1,6 @@
+{
+  "rows": 3,
+  "representative_old_target_w": 300,
+  "representative_new_target_w": 597,
+  "formula": "observed_charge_w + remaining_export_w - profile_reserve_w"
+}

@@ -137,6 +137,31 @@ class ControllerState:
     harvest_primary_share_reserve_w: float = 0.0
     harvest_candidate_raw_w: float = 0.0
     harvest_candidate_after_primary_w: float = 0.0
+    # RC16 / RC-B: make the SMA_FULL_OR_IDLE absolute-target calculation
+    # reproducible without conflating a delta, a physical observation and an
+    # absolute controller target.
+    harvest_target_semantics: str = "NOT_APPLICABLE"
+    harvest_reference_charge_w: float = 0.0
+    harvest_reference_charge_source: str = "NONE"
+    harvest_reference_charge_confidence: str = "NONE"
+    harvest_reference_charge_age_s: Optional[float] = None
+    harvest_reference_charge_valid: bool = False
+    harvest_reference_fallback_reason: str = ""
+    harvest_profile_reserve_w: float = 0.0
+    harvest_candidate_delta_w: float = 0.0
+    harvest_candidate_absolute_w: float = 0.0
+    harvest_input_time_skew_s: Optional[float] = None
+    # RC17: explicit 0-W network target and separated strategic/capture paths.
+    harvest_network_target_w: float = 0.0
+    harvest_total_available_charge_w: float = 0.0
+    harvest_primary_share_target_w: float = 0.0
+    harvest_zendure_share_target_w: float = 0.0
+    harvest_export_capture_target_w: float = 0.0
+    harvest_target_selected_by: str = "NOT_APPLICABLE"
+    harvest_calculation_branch: str = "NOT_APPLICABLE"
+    harvest_entry_min_export_w: float = 0.0
+    harvest_command_path_eligible: bool = False
+    harvest_command_path_block_reason: str = ""
     harvest_limiter_reason: str = ""
     harvest_capacity_mode: str = "off"
     primary_remaining_capacity_kwh: Optional[float] = None
@@ -202,6 +227,19 @@ class ControllerState:
     command_state_gate_state: str = "UNPROTECTED"
     command_state_retry_remaining_s: float = 0.0
     command_neutralization_episode_id: int = 0
+    # RC15: read-back is evaluated independently from local publish history.
+    command_readback_matches_desired: bool = False
+    command_readback_mismatch_fields: str = "NOT_EVALUABLE"
+    command_late_effect_guard_active: bool = False
+    command_late_effect_guard_previous_intent: str = ""
+    command_late_effect_guard_pending_intent: str = ""
+    command_late_effect_guard_pending_target_w: int = 0
+    command_late_effect_guard_duration_s: float = 0.0
+    command_late_effect_guard_reason: str = ""
+    command_late_effect_guard_activation_count: int = 0
+    command_late_effect_guard_blocked_command_count: int = 0
+    command_ac_mode_change_count: int = 0
+    physical_power_direction_change_count: int = 0
     # Read-back of the complete Zendure command state.  Dynamic limit writes are
     # allowed only while smartMode=1 is fresh and the static command invariants
     # (AC mode and inactive limit) are confirmed.
@@ -210,6 +248,7 @@ class ControllerState:
     zendure_command_input_limit_w: Optional[int] = None
     zendure_command_output_limit_w: Optional[int] = None
     zendure_device_inverse_max_power_w: Optional[int] = None
+    zendure_device_inverse_max_power_source: str = ""
     zendure_device_charge_max_limit_w: Optional[int] = None
     zendure_grid_off_mode: Optional[int] = None
     zendure_command_state_updated_epoch: Optional[float] = None
@@ -942,6 +981,8 @@ class ControllerState:
         with self.lock:
             setattr(self, target[0], normalized)
             setattr(self, target[1], epoch)
+            if key == "inverseMaxPower":
+                self.zendure_device_inverse_max_power_source = str(source or "UNKNOWN")
             self.zendure_command_state_updated_epoch = epoch
             self.zendure_command_state_source = str(source or "UNKNOWN")
             self._refresh_zendure_command_state_locked(epoch)
@@ -989,6 +1030,8 @@ class ControllerState:
                 "input_limit_w": self.zendure_command_input_limit_w,
                 "output_limit_w": self.zendure_command_output_limit_w,
                 "inverse_max_power_w": self.zendure_device_inverse_max_power_w,
+                "inverse_max_power_source": self.zendure_device_inverse_max_power_source,
+                "inverse_max_power_updated_epoch": self.zendure_device_inverse_max_power_updated_epoch,
                 "charge_max_limit_w": self.zendure_device_charge_max_limit_w,
                 "grid_off_mode": self.zendure_grid_off_mode,
                 "flash_protection_active": self.zendure_flash_protection_active,
@@ -1512,6 +1555,33 @@ class ControllerState:
                 "harvest_primary_share_reserve_w": round(float(self.harvest_primary_share_reserve_w or 0.0), 1),
                 "harvest_candidate_raw_w": round(float(self.harvest_candidate_raw_w or 0.0), 1),
                 "harvest_candidate_after_primary_w": round(float(self.harvest_candidate_after_primary_w or 0.0), 1),
+                "harvest_target_semantics": self.harvest_target_semantics,
+                "harvest_reference_charge_w": round(float(self.harvest_reference_charge_w or 0.0), 1),
+                "harvest_reference_charge_source": self.harvest_reference_charge_source,
+                "harvest_reference_charge_confidence": self.harvest_reference_charge_confidence,
+                "harvest_reference_charge_age_s": (
+                    None if self.harvest_reference_charge_age_s is None
+                    else round(float(self.harvest_reference_charge_age_s), 1)
+                ),
+                "harvest_reference_charge_valid": self.harvest_reference_charge_valid,
+                "harvest_reference_fallback_reason": self.harvest_reference_fallback_reason,
+                "harvest_profile_reserve_w": round(float(self.harvest_profile_reserve_w or 0.0), 1),
+                "harvest_candidate_delta_w": round(float(self.harvest_candidate_delta_w or 0.0), 1),
+                "harvest_candidate_absolute_w": round(float(self.harvest_candidate_absolute_w or 0.0), 1),
+                "harvest_input_time_skew_s": (
+                    None if self.harvest_input_time_skew_s is None
+                    else round(float(self.harvest_input_time_skew_s), 1)
+                ),
+                "harvest_network_target_w": round(float(self.harvest_network_target_w or 0.0), 1),
+                "harvest_total_available_charge_w": round(float(self.harvest_total_available_charge_w or 0.0), 1),
+                "harvest_primary_share_target_w": round(float(self.harvest_primary_share_target_w or 0.0), 1),
+                "harvest_zendure_share_target_w": round(float(self.harvest_zendure_share_target_w or 0.0), 1),
+                "harvest_export_capture_target_w": round(float(self.harvest_export_capture_target_w or 0.0), 1),
+                "harvest_target_selected_by": self.harvest_target_selected_by,
+                "harvest_calculation_branch": self.harvest_calculation_branch,
+                "harvest_entry_min_export_w": round(float(self.harvest_entry_min_export_w or 0.0), 1),
+                "harvest_command_path_eligible": self.harvest_command_path_eligible,
+                "harvest_command_path_block_reason": self.harvest_command_path_block_reason,
                 "harvest_limiter_reason": self.harvest_limiter_reason,
                 "harvest_capacity_mode": self.harvest_capacity_mode,
                 "primary_remaining_capacity_kwh": None if self.primary_remaining_capacity_kwh is None else round(float(self.primary_remaining_capacity_kwh), 3),
@@ -1636,6 +1706,18 @@ class ControllerState:
                 "command_state_gate_state": self.command_state_gate_state,
                 "command_state_retry_remaining_s": self.command_state_retry_remaining_s,
                 "command_neutralization_episode_id": self.command_neutralization_episode_id,
+                "command_readback_matches_desired": self.command_readback_matches_desired,
+                "command_readback_mismatch_fields": self.command_readback_mismatch_fields,
+                "command_late_effect_guard_active": self.command_late_effect_guard_active,
+                "command_late_effect_guard_previous_intent": self.command_late_effect_guard_previous_intent,
+                "command_late_effect_guard_pending_intent": self.command_late_effect_guard_pending_intent,
+                "command_late_effect_guard_pending_target_w": self.command_late_effect_guard_pending_target_w,
+                "command_late_effect_guard_duration_s": self.command_late_effect_guard_duration_s,
+                "command_late_effect_guard_reason": self.command_late_effect_guard_reason,
+                "command_late_effect_guard_activation_count": self.command_late_effect_guard_activation_count,
+                "command_late_effect_guard_blocked_command_count": self.command_late_effect_guard_blocked_command_count,
+                "command_ac_mode_change_count": self.command_ac_mode_change_count,
+                "physical_power_direction_change_count": self.physical_power_direction_change_count,
                 "command_effect_confirmed": self.command_effect_confirmed,
                 "command_effect_confirmed_time": self.command_effect_confirmed_time,
                 "command_effect_confirmed_reason": self.command_effect_confirmed_reason,
@@ -1648,6 +1730,11 @@ class ControllerState:
                 "zendure_command_input_limit_w": self.zendure_command_input_limit_w,
                 "zendure_command_output_limit_w": self.zendure_command_output_limit_w,
                 "zendure_device_inverse_max_power_w": self.zendure_device_inverse_max_power_w,
+                "zendure_device_inverse_max_power_source": self.zendure_device_inverse_max_power_source,
+                "zendure_device_inverse_max_power_age_s": (
+                    round(max(0.0, now_epoch - float(self.zendure_device_inverse_max_power_updated_epoch)), 1)
+                    if self.zendure_device_inverse_max_power_updated_epoch is not None else ""
+                ),
                 "zendure_device_charge_max_limit_w": self.zendure_device_charge_max_limit_w,
                 "zendure_grid_off_mode": self.zendure_grid_off_mode,
                 "zendure_flash_protection_active": self.zendure_flash_protection_active,
@@ -1842,6 +1929,18 @@ class ControllerState:
                 "command_state_gate_state": self.command_state_gate_state,
                 "command_state_retry_remaining_s": self.command_state_retry_remaining_s,
                 "command_neutralization_episode_id": self.command_neutralization_episode_id,
+                "command_readback_matches_desired": self.command_readback_matches_desired,
+                "command_readback_mismatch_fields": self.command_readback_mismatch_fields,
+                "command_late_effect_guard_active": self.command_late_effect_guard_active,
+                "command_late_effect_guard_previous_intent": self.command_late_effect_guard_previous_intent,
+                "command_late_effect_guard_pending_intent": self.command_late_effect_guard_pending_intent,
+                "command_late_effect_guard_pending_target_w": self.command_late_effect_guard_pending_target_w,
+                "command_late_effect_guard_duration_s": self.command_late_effect_guard_duration_s,
+                "command_late_effect_guard_reason": self.command_late_effect_guard_reason,
+                "command_late_effect_guard_activation_count": self.command_late_effect_guard_activation_count,
+                "command_late_effect_guard_blocked_command_count": self.command_late_effect_guard_blocked_command_count,
+                "command_ac_mode_change_count": self.command_ac_mode_change_count,
+                "physical_power_direction_change_count": self.physical_power_direction_change_count,
                 "command_effect_confirmed": self.command_effect_confirmed,
                 "command_effect_confirmed_time": self.command_effect_confirmed_time,
                 "command_effect_confirmed_reason": self.command_effect_confirmed_reason,
@@ -1854,6 +1953,8 @@ class ControllerState:
                 "zendure_command_input_limit_w": self.zendure_command_input_limit_w,
                 "zendure_command_output_limit_w": self.zendure_command_output_limit_w,
                 "zendure_device_inverse_max_power_w": self.zendure_device_inverse_max_power_w,
+                "zendure_device_inverse_max_power_source": self.zendure_device_inverse_max_power_source,
+                "zendure_device_inverse_max_power_age_s": age_seconds(self.zendure_device_inverse_max_power_updated_epoch),
                 "zendure_device_charge_max_limit_w": self.zendure_device_charge_max_limit_w,
                 "zendure_grid_off_mode": self.zendure_grid_off_mode,
                 "zendure_flash_protection_active": self.zendure_flash_protection_active,
@@ -2023,6 +2124,33 @@ class ControllerState:
                 "harvest_primary_share_reserve_w": round(float(self.harvest_primary_share_reserve_w or 0.0), 1),
                 "harvest_candidate_raw_w": round(float(self.harvest_candidate_raw_w or 0.0), 1),
                 "harvest_candidate_after_primary_w": round(float(self.harvest_candidate_after_primary_w or 0.0), 1),
+                "harvest_target_semantics": self.harvest_target_semantics,
+                "harvest_reference_charge_w": round(float(self.harvest_reference_charge_w or 0.0), 1),
+                "harvest_reference_charge_source": self.harvest_reference_charge_source,
+                "harvest_reference_charge_confidence": self.harvest_reference_charge_confidence,
+                "harvest_reference_charge_age_s": (
+                    None if self.harvest_reference_charge_age_s is None
+                    else round(float(self.harvest_reference_charge_age_s), 1)
+                ),
+                "harvest_reference_charge_valid": self.harvest_reference_charge_valid,
+                "harvest_reference_fallback_reason": self.harvest_reference_fallback_reason,
+                "harvest_profile_reserve_w": round(float(self.harvest_profile_reserve_w or 0.0), 1),
+                "harvest_candidate_delta_w": round(float(self.harvest_candidate_delta_w or 0.0), 1),
+                "harvest_candidate_absolute_w": round(float(self.harvest_candidate_absolute_w or 0.0), 1),
+                "harvest_input_time_skew_s": (
+                    None if self.harvest_input_time_skew_s is None
+                    else round(float(self.harvest_input_time_skew_s), 1)
+                ),
+                "harvest_network_target_w": round(float(self.harvest_network_target_w or 0.0), 1),
+                "harvest_total_available_charge_w": round(float(self.harvest_total_available_charge_w or 0.0), 1),
+                "harvest_primary_share_target_w": round(float(self.harvest_primary_share_target_w or 0.0), 1),
+                "harvest_zendure_share_target_w": round(float(self.harvest_zendure_share_target_w or 0.0), 1),
+                "harvest_export_capture_target_w": round(float(self.harvest_export_capture_target_w or 0.0), 1),
+                "harvest_target_selected_by": self.harvest_target_selected_by,
+                "harvest_calculation_branch": self.harvest_calculation_branch,
+                "harvest_entry_min_export_w": round(float(self.harvest_entry_min_export_w or 0.0), 1),
+                "harvest_command_path_eligible": self.harvest_command_path_eligible,
+                "harvest_command_path_block_reason": self.harvest_command_path_block_reason,
                 "harvest_limiter_reason": self.harvest_limiter_reason,
                 "harvest_capacity_mode": self.harvest_capacity_mode,
                 "primary_remaining_capacity_kwh": None if self.primary_remaining_capacity_kwh is None else round(float(self.primary_remaining_capacity_kwh), 3),

@@ -22,6 +22,9 @@ from measurement_v4_contract import (
     header_for_profile,
     header_hash,
     rc10_header_for_profile,
+    rc16_header_for_profile,
+    rc15_header_for_profile,
+    rc14_header_for_profile,
     rc13_header_for_profile,
     rc12_header_for_profile,
     rc11_header_for_profile,
@@ -424,6 +427,27 @@ def build_v4_row(config: Dict[str, Any], row: Dict[str, Any], previous_effective
         "harvest_primary_share_reserve_w": _round1(row.get("harvest_primary_share_reserve_w")),
         "harvest_candidate_raw_w": _round1(row.get("harvest_candidate_raw_w")),
         "harvest_candidate_after_primary_w": _round1(row.get("harvest_candidate_after_primary_w")),
+        "harvest_target_semantics": str(row.get("harvest_target_semantics", "NOT_APPLICABLE") or "NOT_APPLICABLE"),
+        "harvest_reference_charge_w": _round1(row.get("harvest_reference_charge_w")),
+        "harvest_reference_charge_source": str(row.get("harvest_reference_charge_source", "NONE") or "NONE"),
+        "harvest_reference_charge_confidence": str(row.get("harvest_reference_charge_confidence", "NONE") or "NONE"),
+        "harvest_reference_charge_age_s": _round1(row.get("harvest_reference_charge_age_s")),
+        "harvest_reference_charge_valid": _bool01(row.get("harvest_reference_charge_valid")),
+        "harvest_reference_fallback_reason": str(row.get("harvest_reference_fallback_reason", "") or ""),
+        "harvest_profile_reserve_w": _round1(row.get("harvest_profile_reserve_w")),
+        "harvest_candidate_delta_w": _round1(row.get("harvest_candidate_delta_w")),
+        "harvest_candidate_absolute_w": _round1(row.get("harvest_candidate_absolute_w")),
+        "harvest_input_time_skew_s": _round1(row.get("harvest_input_time_skew_s")),
+        "harvest_network_target_w": _round1(row.get("harvest_network_target_w")),
+        "harvest_total_available_charge_w": _round1(row.get("harvest_total_available_charge_w")),
+        "harvest_primary_share_target_w": _round1(row.get("harvest_primary_share_target_w")),
+        "harvest_zendure_share_target_w": _round1(row.get("harvest_zendure_share_target_w")),
+        "harvest_export_capture_target_w": _round1(row.get("harvest_export_capture_target_w")),
+        "harvest_target_selected_by": str(row.get("harvest_target_selected_by", "NOT_APPLICABLE") or "NOT_APPLICABLE"),
+        "harvest_calculation_branch": str(row.get("harvest_calculation_branch", "NOT_APPLICABLE") or "NOT_APPLICABLE"),
+        "harvest_entry_min_export_w": _round1(row.get("harvest_entry_min_export_w")),
+        "harvest_command_path_eligible": _bool01(row.get("harvest_command_path_eligible")),
+        "harvest_command_path_block_reason": str(row.get("harvest_command_path_block_reason", "") or ""),
         "harvest_limiter_reason": str(row.get("harvest_limiter_reason", "") or ""),
         "harvest_capacity_mode": str(row.get("harvest_capacity_mode", "off") or "off"),
         "primary_remaining_capacity_kwh": _round1(row.get("primary_remaining_capacity_kwh")),
@@ -472,6 +496,18 @@ def build_v4_row(config: Dict[str, Any], row: Dict[str, Any], previous_effective
         "command_state_gate_state": str(row.get("command_state_gate_state", "") or ""),
         "command_state_retry_remaining_s": _round1(row.get("command_state_retry_remaining_s")),
         "command_neutralization_episode_id": _safe_int(row.get("command_neutralization_episode_id")) or 0,
+        "command_readback_matches_desired": _bool01(row.get("command_readback_matches_desired")),
+        "command_readback_mismatch_fields": str(row.get("command_readback_mismatch_fields", "") or ""),
+        "command_late_effect_guard_active": _bool01(row.get("command_late_effect_guard_active")),
+        "command_late_effect_guard_previous_intent": str(row.get("command_late_effect_guard_previous_intent", "") or ""),
+        "command_late_effect_guard_pending_intent": str(row.get("command_late_effect_guard_pending_intent", "") or ""),
+        "command_late_effect_guard_pending_target_w": _round1(row.get("command_late_effect_guard_pending_target_w")),
+        "command_late_effect_guard_duration_s": _round1(row.get("command_late_effect_guard_duration_s")),
+        "command_late_effect_guard_reason": str(row.get("command_late_effect_guard_reason", "") or ""),
+        "command_late_effect_guard_activation_count": _safe_int(row.get("command_late_effect_guard_activation_count")) or 0,
+        "command_late_effect_guard_blocked_command_count": _safe_int(row.get("command_late_effect_guard_blocked_command_count")) or 0,
+        "command_ac_mode_change_count": _safe_int(row.get("command_ac_mode_change_count")) or 0,
+        "physical_power_direction_change_count": _safe_int(row.get("physical_power_direction_change_count")) or 0,
         "charge_acceptance_state": str(row.get("charge_acceptance_state", "") or ""),
         "charge_acceptance_reason": str(row.get("charge_acceptance_reason", "") or ""),
         "command_effect_reference_w": _round1(row.get("command_effect_reference_w")),
@@ -487,6 +523,8 @@ def build_v4_row(config: Dict[str, Any], row: Dict[str, Any], previous_effective
         "zendure_command_input_limit_w": _round1(row.get("zendure_command_input_limit_w")),
         "zendure_command_output_limit_w": _round1(row.get("zendure_command_output_limit_w")),
         "zendure_device_inverse_max_power_w": _round1(row.get("zendure_device_inverse_max_power_w")),
+        "zendure_device_inverse_max_power_source": str(row.get("zendure_device_inverse_max_power_source", "") or ""),
+        "zendure_device_inverse_max_power_age_s": _round1(row.get("zendure_device_inverse_max_power_age_s")),
         "zendure_device_charge_max_limit_w": _round1(row.get("zendure_device_charge_max_limit_w")),
         "zendure_grid_off_mode": _safe_int(row.get("zendure_grid_off_mode")) if row.get("zendure_grid_off_mode") not in (None, "") else "",
         "zendure_flash_protection_active": _bool01(row.get("zendure_flash_protection_active")),
@@ -1320,7 +1358,7 @@ class MeasurementV4Logger:
         return len(buffer.getvalue().encode("utf-8"))
 
     def _schema_upgrade_path_if_needed(self, path: str, profile: str) -> str:
-        """Keep older V4 files immutable and continue in a fresh RC14 file."""
+        """Keep older V4 files immutable and continue in a fresh RC17 file."""
         if not os.path.exists(path) or os.path.getsize(path) == 0:
             return path
         try:
@@ -1330,7 +1368,13 @@ class MeasurementV4Logger:
             return path
         fields = [part.strip() for part in first.split(";")]
         previous_contract = ""
-        if fields == rc13_header_for_profile(profile):
+        if fields == rc16_header_for_profile(profile):
+            previous_contract = "ZEC-MEASUREMENT-V4-RC16"
+        elif fields == rc15_header_for_profile(profile):
+            previous_contract = "ZEC-MEASUREMENT-V4-RC15"
+        elif fields == rc14_header_for_profile(profile):
+            previous_contract = "ZEC-MEASUREMENT-V4-RC14"
+        elif fields == rc13_header_for_profile(profile):
             previous_contract = "ZEC-MEASUREMENT-V4-RC13"
         elif fields == rc12_header_for_profile(profile):
             previous_contract = "ZEC-MEASUREMENT-V4-RC12"
@@ -1346,9 +1390,9 @@ class MeasurementV4Logger:
         directory = os.path.dirname(path)
         filename = os.path.basename(path)
         stem, ext = os.path.splitext(filename)
-        new_path = os.path.join(directory, f"{stem}_schema_rc14_{self._session_suffix}{ext}")
+        new_path = os.path.join(directory, f"{stem}_schema_rc17_{self._session_suffix}{ext}")
         if os.path.exists(new_path):
-            new_path = os.path.join(directory, f"{stem}_schema_rc14_{self._session_suffix}_{uuid.uuid4().hex[:6]}{ext}")
+            new_path = os.path.join(directory, f"{stem}_schema_rc17_{self._session_suffix}_{uuid.uuid4().hex[:6]}{ext}")
         for base, mapped in list(self._session_path_map.items()):
             if mapped == path:
                 self._session_path_map[base] = new_path
@@ -1359,7 +1403,7 @@ class MeasurementV4Logger:
             "new_path": new_path,
             "rotation_reason": "HEADER_CHANGED",
             "previous_contract": previous_contract,
-            "new_contract": "ZEC-MEASUREMENT-V4-RC14",
+            "new_contract": "ZEC-MEASUREMENT-V4-RC17",
         })
         return new_path
 

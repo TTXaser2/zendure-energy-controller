@@ -12,12 +12,38 @@ from measurement_v4_contract import (
 
 class MeasurementV4ContractTests(unittest.TestCase):
     def test_standard_header_is_exact_and_unique(self):
-        self.assertEqual(203, len(STANDARD_HEADER))
+        self.assertEqual(238, len(STANDARD_HEADER))
         self.assertEqual(len(STANDARD_HEADER), len(set(STANDARD_HEADER)))
         self.assertEqual("schema_version", STANDARD_HEADER[0])
         self.assertEqual("command_resync_reason", STANDARD_HEADER[-1])
         for field in STANDARD_HEADER:
             self.assertFalse(field.endswith("_json"), field)
+        for field in (
+            "command_readback_matches_desired",
+            "command_late_effect_guard_active",
+            "command_late_effect_guard_activation_count",
+            "command_ac_mode_change_count",
+            "physical_power_direction_change_count",
+            "zendure_device_inverse_max_power_source",
+            "zendure_device_inverse_max_power_age_s",
+            "harvest_target_semantics",
+            "harvest_reference_charge_w",
+            "harvest_reference_charge_valid",
+            "harvest_candidate_delta_w",
+            "harvest_candidate_absolute_w",
+            "harvest_input_time_skew_s",
+            "harvest_network_target_w",
+            "harvest_total_available_charge_w",
+            "harvest_primary_share_target_w",
+            "harvest_zendure_share_target_w",
+            "harvest_export_capture_target_w",
+            "harvest_target_selected_by",
+            "harvest_calculation_branch",
+            "harvest_entry_min_export_w",
+            "harvest_command_path_eligible",
+            "harvest_command_path_block_reason",
+        ):
+            self.assertIn(field, STANDARD_HEADER)
 
     def test_extended_header_is_standard_plus_three_json_fields(self):
         self.assertEqual(STANDARD_HEADER + EXTENDED_FIELDS, EXTENDED_HEADER)

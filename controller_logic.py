@@ -96,6 +96,19 @@ class ZendureController:
         self._charge_acceptance_last_positive_w: Optional[int] = None
         self._charge_acceptance_taper_steps: int = 0
         self._last_published_intent: str = INTENT_IDLE
+        # RC15 late-effect guard. A confirmed active-command mismatch may leave a
+        # device-side command queued or delayed. Before neutral/opposite intent is
+        # allowed, establish 0/0 read-back plus independent physical neutrality.
+        self._late_effect_guard_active: bool = False
+        self._late_effect_guard_previous_intent: str = INTENT_IDLE
+        self._late_effect_guard_pending_intent: str = INTENT_IDLE
+        self._late_effect_guard_pending_target_w: int = 0
+        self._late_effect_guard_pending_reason: str = ""
+        self._late_effect_guard_started_monotonic: Optional[float] = None
+        self._late_effect_guard_first_neutral_monotonic: Optional[float] = None
+        self._late_effect_guard_neutral_observation_count: int = 0
+        self._late_effect_guard_last_observation_signature: str = ""
+        self._last_physical_non_neutral_direction: str = ""
 
     def log(self, message: str) -> None:
         cfg = self.config_manager.get()
@@ -224,6 +237,16 @@ class ZendureController:
             "_charge_acceptance_last_positive_w": None,
             "_charge_acceptance_taper_steps": 0,
             "_last_published_intent": INTENT_IDLE,
+            "_late_effect_guard_active": False,
+            "_late_effect_guard_previous_intent": INTENT_IDLE,
+            "_late_effect_guard_pending_intent": INTENT_IDLE,
+            "_late_effect_guard_pending_target_w": 0,
+            "_late_effect_guard_pending_reason": "",
+            "_late_effect_guard_started_monotonic": None,
+            "_late_effect_guard_first_neutral_monotonic": None,
+            "_late_effect_guard_neutral_observation_count": 0,
+            "_late_effect_guard_last_observation_signature": "",
+            "_last_physical_non_neutral_direction": "",
             "_last_resync_signature": "",
             "_last_resync_epoch": 0.0,
             "_last_zendure_mqtt_status": "",
@@ -242,6 +265,311 @@ class ZendureController:
         self._charge_acceptance_taper_steps = 0
         with self.state.lock:
             self.state.command_effect_reference_w = 0
+
+    def _unresolved_active_command_mismatch(self) -> bool:
+        """Return True only for an active mismatch that can still take effect late."""
+        with self.state.lock:
+            if self.state.command_not_effective_active:
+                return True
+            lifecycle = str(self.state.command_lifecycle_state or "")
+            resync_reason = str(self.state.command_resync_reason or "")
+        return bool(
+            lifecycle == "RECOVERY_VERIFYING"
+            and resync_reason.startswith("RESYNC_AFTER_CONFIRMED_MISMATCH")
+        )
+
+    def _set_late_effect_pending(self, intent: str, target_w: int, reason: str) -> None:
+        self._late_effect_guard_pending_intent = str(intent or INTENT_IDLE)
+        self._late_effect_guard_pending_target_w = int(target_w or 0)
+        self._late_effect_guard_pending_reason = str(reason or "")
+        with self.state.lock:
+            self.state.command_late_effect_guard_pending_intent = self._late_effect_guard_pending_intent
+            self.state.command_late_effect_guard_pending_target_w = self._late_effect_guard_pending_target_w
+
+    def _reset_late_effect_neutral_confirmation(self) -> None:
+        self._late_effect_guard_first_neutral_monotonic = None
+        self._late_effect_guard_neutral_observation_count = 0
+        self._late_effect_guard_last_observation_signature = ""
+
+    def _late_effect_guard_duration_s(self) -> float:
+        if not self._late_effect_guard_active or self._late_effect_guard_started_monotonic is None:
+            return 0.0
+        return max(0.0, time.monotonic() - float(self._late_effect_guard_started_monotonic))
+
+    def _update_late_effect_guard_state(self, *, reason: Optional[str] = None) -> None:
+        with self.state.lock:
+            self.state.command_late_effect_guard_active = bool(self._late_effect_guard_active)
+            self.state.command_late_effect_guard_previous_intent = (
+                self._late_effect_guard_previous_intent if self._late_effect_guard_active else ""
+            )
+            self.state.command_late_effect_guard_pending_intent = (
+                self._late_effect_guard_pending_intent if self._late_effect_guard_active else ""
+            )
+            self.state.command_late_effect_guard_pending_target_w = (
+                int(self._late_effect_guard_pending_target_w) if self._late_effect_guard_active else 0
+            )
+            self.state.command_late_effect_guard_duration_s = round(self._late_effect_guard_duration_s(), 1)
+            if reason is not None:
+                self.state.command_late_effect_guard_reason = str(reason)
+            elif not self._late_effect_guard_active:
+                self.state.command_late_effect_guard_reason = ""
+
+    def _ensure_late_effect_guard_neutralization(self) -> None:
+        """Send only volatile zero limits; retain the current AC mode."""
+        neutral = self._new_command_batch(
+            0,
+            reason="LATE_EFFECT_GUARD_NEUTRALIZATION",
+            explicit_neutralize=True,
+            ac_mode=self._last_non_neutral_ac_mode,
+            safety_relevant=True,
+        )
+        self._publish_command_batch(
+            neutral,
+            force=True,
+            publish_kind="late_effect_guard",
+        )
+        self._startup_deadband_neutralized = True
+
+    def _activate_late_effect_guard(self, previous_intent: str, pending_intent: str, target_w: int, reason: str) -> None:
+        self._late_effect_guard_active = True
+        self._late_effect_guard_previous_intent = str(previous_intent)
+        self._late_effect_guard_started_monotonic = time.monotonic()
+        self._reset_late_effect_neutral_confirmation()
+        self._set_late_effect_pending(pending_intent, target_w, reason)
+        with self.state.lock:
+            self.state.command_late_effect_guard_activation_count += 1
+            self.state.command_lifecycle_state = "LATE_EFFECT_NEUTRALIZING"
+            self.state.command_effect_category = "COMMAND_NEUTRALIZATION_PENDING"
+            self.state.command_effect_confirmed = False
+        self._update_late_effect_guard_state(
+            reason=(
+                f"Unaufgelöster {previous_intent}-Mismatch: sicherer 0/0-Zustand wird vor "
+                f"Folgeintent {pending_intent} bestätigt."
+            )
+        )
+        self.state.add_event(
+            f"Late-Effect-Guard aktiviert: {previous_intent} -> {pending_intent}"
+        )
+        self._ensure_late_effect_guard_neutralization()
+
+    def _late_effect_guard_blocks(self, requested_intent: str, target_w: int, reason: str) -> bool:
+        """Activate/maintain the guard and retain only the latest follow-up intent."""
+        self._ensure_command_lifecycle_attrs()
+        requested_intent = str(requested_intent or INTENT_IDLE)
+        if self._late_effect_guard_active:
+            self._set_late_effect_pending(requested_intent, target_w, reason)
+            if requested_intent in {INTENT_CHARGE, INTENT_DISCHARGE}:
+                with self.state.lock:
+                    self.state.command_late_effect_guard_blocked_command_count += 1
+            self._update_late_effect_guard_state()
+            return True
+
+        previous = self._desired_command_batch
+        if previous is None or previous.intent not in {INTENT_CHARGE, INTENT_DISCHARGE}:
+            return False
+        if requested_intent == previous.intent:
+            return False
+        if requested_intent not in {INTENT_NEUTRALIZE, INTENT_CHARGE, INTENT_DISCHARGE}:
+            return False
+        if not self._unresolved_active_command_mismatch():
+            return False
+
+        self._activate_late_effect_guard(
+            previous.intent,
+            requested_intent,
+            target_w,
+            reason,
+        )
+        if requested_intent in {INTENT_CHARGE, INTENT_DISCHARGE}:
+            with self.state.lock:
+                self.state.command_late_effect_guard_blocked_command_count += 1
+        return True
+
+    def _release_late_effect_guard(self, observation_text: str) -> None:
+        duration = self._late_effect_guard_duration_s()
+        previous_intent = self._late_effect_guard_previous_intent
+        self._late_effect_guard_active = False
+        self._late_effect_guard_previous_intent = INTENT_IDLE
+        self._late_effect_guard_started_monotonic = None
+        self._reset_late_effect_neutral_confirmation()
+        with self.state.lock:
+            self._clear_command_not_effective_locked()
+            self.state.command_mismatch_resolution = "LATE_EFFECT_GUARD_RELEASED"
+            self.state.command_neutralization_active = False
+            self.state.command_neutralization_since_epoch = None
+            self.state.command_neutralization_since_time = "-"
+            self.state.command_lifecycle_state = "LATE_EFFECT_GUARD_RELEASED"
+            self.state.command_effect_category = "COMMAND_NEUTRALIZATION_CONFIRMED"
+            self.state.command_effect_reason = (
+                f"Late-Effect-Guard nach {duration:.1f} s freigegeben; 0/0-Readback und "
+                f"physische Neutralität ({observation_text}) stabil bestätigt."
+            )
+            self.state.command_effect_confirmed = True
+            self.state.command_effect_confirmed_time = datetime.now().strftime("%H:%M:%S")
+            self.state.command_effect_confirmed_reason = self.state.command_effect_reason
+            self.state.command_late_effect_guard_duration_s = round(duration, 1)
+        self._update_late_effect_guard_state(reason="")
+        self.state.add_event(
+            f"Late-Effect-Guard freigegeben: vorheriger Intent {previous_intent}, Dauer {duration:.1f} s"
+        )
+
+    def _resend_late_effect_guard_neutralization(self, reason: str) -> None:
+        neutral = self._new_command_batch(
+            0,
+            reason="LATE_EFFECT_GUARD_NEUTRALIZATION",
+            explicit_neutralize=True,
+            ac_mode=self._last_non_neutral_ac_mode,
+            safety_relevant=True,
+        )
+        self._publish_command_batch(
+            neutral,
+            force=True,
+            publish_kind="late_effect_guard_resync",
+        )
+        now_text = datetime.now().strftime("%H:%M:%S")
+        with self.state.lock:
+            self.state.command_resync_count += 1
+            self.state.command_resync_last_time = now_text
+            self.state.command_resync_reason = str(reason)
+            self.state.command_lifecycle_state = "LATE_EFFECT_NEUTRALIZING"
+            self.state.command_effect_category = "COMMAND_RECOVERY_VERIFYING"
+            self.state.command_effect_reason = (
+                "Late-Effect-Guard: 0-W-Neutralisierung erneut gesendet; Readback und physische Wirkung werden weiter geprüft."
+            )
+        self.state.add_event(f"Late-Effect-Guard Neutralisierungs-Resync: {reason}")
+        self.log(f"[COMMAND_RESYNC] target=0W reason={reason}")
+
+    def _evaluate_late_effect_guard(
+        self,
+        cfg: Dict[str, Any],
+        observation: Dict[str, Any],
+        *,
+        absolute_tolerance_w: int,
+        actual_text: str,
+        now_epoch: float,
+    ) -> bool:
+        """Evaluate the guard with monotonic time and distinct power samples."""
+        if not self._late_effect_guard_active:
+            return False
+
+        snapshot = self._command_state_snapshot(cfg)
+        readback_zero = bool(
+            snapshot.get("complete")
+            and snapshot.get("smart_mode") == 1
+            and int(snapshot.get("input_limit_w") or 0) == 0
+            and int(snapshot.get("output_limit_w") or 0) == 0
+        )
+        direction = str(observation.get("direction") or "UNKNOWN")
+        magnitude = int(observation.get("magnitude") or 0)
+        physical_neutral = bool(
+            observation.get("valid")
+            and direction != "CONFLICT"
+            and magnitude <= int(absolute_tolerance_w)
+        )
+
+        duration_s = self._late_effect_guard_duration_s()
+        with self.state.lock:
+            self.state.command_late_effect_guard_duration_s = round(duration_s, 1)
+            self.state.command_neutralization_active = True
+            if self.state.command_neutralization_since_epoch is None:
+                self.state.command_neutralization_since_epoch = now_epoch
+                self.state.command_neutralization_since_time = datetime.now().strftime("%H:%M:%S")
+            power_epoch = (
+                self.state.zendure_power_observation_updated_epoch
+                if self.state.zendure_power_observation_updated_epoch is not None
+                else self.state.last_zendure_power_update_epoch
+            )
+
+        if readback_zero and physical_neutral:
+            signature = str(power_epoch or "")
+            if signature and signature != self._late_effect_guard_last_observation_signature:
+                self._late_effect_guard_last_observation_signature = signature
+                if self._late_effect_guard_first_neutral_monotonic is None:
+                    self._late_effect_guard_first_neutral_monotonic = time.monotonic()
+                    self._late_effect_guard_neutral_observation_count = 1
+                else:
+                    self._late_effect_guard_neutral_observation_count += 1
+
+            stable_elapsed_s = (
+                max(0.0, time.monotonic() - float(self._late_effect_guard_first_neutral_monotonic))
+                if self._late_effect_guard_first_neutral_monotonic is not None
+                else 0.0
+            )
+            if self._late_effect_guard_neutral_observation_count >= 2 and stable_elapsed_s >= 6.0:
+                self._neutralization_confirmed_signature = self._neutralization_physical_signature
+                self._release_late_effect_guard(actual_text)
+                return True
+
+            with self.state.lock:
+                self._clear_command_not_effective_locked()
+                self.state.command_lifecycle_state = "LATE_EFFECT_NEUTRAL_STABILIZING"
+                self.state.command_effect_category = "COMMAND_NEUTRALIZATION_PENDING"
+                self.state.command_effect_reason = (
+                    f"Late-Effect-Guard: 0/0 und {actual_text} bestätigt; "
+                    f"{self._late_effect_guard_neutral_observation_count}/2 frische Beobachtungen, "
+                    f"{stable_elapsed_s:.1f}/6.0 s stabil."
+                )
+                self.state.command_effect_confirmed = False
+            self._update_late_effect_guard_state()
+            return True
+
+        self._reset_late_effect_neutral_confirmation()
+        reason_parts = []
+        if not readback_zero:
+            reason_parts.append("0/0-Readback noch nicht frisch bestätigt")
+        if not physical_neutral:
+            reason_parts.append(f"physische Neutralität fehlt ({actual_text}, Richtung {direction})")
+        reason_text = "; ".join(reason_parts) or "Neutralitätsnachweis ausstehend"
+        with self.state.lock:
+            self.state.command_lifecycle_state = "LATE_EFFECT_NEUTRALIZING"
+            self.state.command_effect_category = "COMMAND_NEUTRALIZATION_PENDING"
+            self.state.command_effect_reason = f"Late-Effect-Guard: {reason_text}."
+            self.state.command_effect_confirmed = False
+        self._update_late_effect_guard_state(reason=reason_text)
+
+        timeout_s = max(5, int(cfg.get("COMMAND_NEUTRALIZATION_TIMEOUT_SECONDS", 30) or 30))
+        if duration_s >= timeout_s:
+            self._mark_mismatch(
+                target=0,
+                actual_text=actual_text,
+                elapsed_s=int(duration_s),
+                tolerance_w=absolute_tolerance_w,
+                neutral=True,
+            )
+            retry_s = max(5, int(cfg.get("COMMAND_RESYNC_COOLDOWN_SECONDS", 120) or 120))
+            if now_epoch - self._neutralization_last_resend_epoch >= retry_s:
+                if self._resync_permitted(0, "RESYNC_AFTER_LATE_EFFECT_GUARD_MISMATCH", cfg, confirmed_mismatch=True):
+                    self._resend_late_effect_guard_neutralization(
+                        f"RESYNC_AFTER_LATE_EFFECT_GUARD_MISMATCH_{int(duration_s)}s"
+                    )
+                    self._neutralization_last_resend_epoch = now_epoch
+        return True
+
+    def _update_command_readback_diagnostics(self, cfg: Dict[str, Any]) -> None:
+        batch = self._desired_command_batch
+        if batch is None or batch.intent == INTENT_IDLE:
+            matches = False
+            code = "NOT_EVALUABLE"
+        else:
+            snapshot = self._command_state_snapshot(cfg)
+            if not snapshot.get("complete"):
+                matches = False
+                code = "NOT_EVALUABLE"
+            else:
+                mismatches = []
+                if snapshot.get("smart_mode") != batch.smart_mode:
+                    mismatches.append("SMART_MODE")
+                if snapshot.get("ac_mode") != batch.ac_mode:
+                    mismatches.append("AC_MODE")
+                if int(snapshot.get("input_limit_w") or 0) != int(batch.input_limit_w):
+                    mismatches.append("INPUT_LIMIT")
+                if int(snapshot.get("output_limit_w") or 0) != int(batch.output_limit_w):
+                    mismatches.append("OUTPUT_LIMIT")
+                matches = not mismatches
+                code = "NONE" if matches else mismatches[0] if len(mismatches) == 1 else "MULTIPLE"
+        with self.state.lock:
+            self.state.command_readback_matches_desired = bool(matches)
+            self.state.command_readback_mismatch_fields = code
 
     def _confirmed_charge_reference(self, cfg: Dict[str, Any], target_w: int) -> Tuple[int, Dict[str, Any]]:
         """Return the fresh, statically confirmed charge reference for RC14.
@@ -1136,7 +1464,10 @@ class ZendureController:
         # the old active command recovered.
         with self.state.lock:
             if previous is not None and previous.intent != batch.intent and self.state.command_not_effective_active:
-                if batch.intent == INTENT_NEUTRALIZE and batch.safety_relevant:
+                if self._late_effect_guard_active and batch.intent == INTENT_NEUTRALIZE:
+                    resolution = "MISMATCH_HANDOFF_TO_LATE_EFFECT_GUARD"
+                    mismatch_resolution_event = "Vorheriger Kommando-Mismatch an Late-Effect-Guard übergeben"
+                elif batch.intent == INTENT_NEUTRALIZE and batch.safety_relevant:
                     resolution = "MISMATCH_SUPERSEDED_BY_SAFETY_NEUTRALIZATION"
                     mismatch_resolution_event = "Vorheriger Kommando-Mismatch durch sicherheitsrelevante Neutralisierung beendet"
                 else:
@@ -1278,11 +1609,14 @@ class ZendureController:
                 if self._mqtt_set_input_limit(0, force=force): published.append("input_limit")
                 if self._mqtt_set_output_limit(batch.output_limit_w, force=force): published.append("output_limit")
             elif batch.intent == INTENT_NEUTRALIZE:
-                if self._mqtt_set_ac_mode(batch.ac_mode, force=force): published.append("ac_mode")
+                if publish_kind not in {"late_effect_guard", "late_effect_guard_resync"} and self._mqtt_set_ac_mode(batch.ac_mode, force=force):
+                    published.append("ac_mode")
                 if self._mqtt_set_input_limit(0, force=force): published.append("input_limit")
                 if self._mqtt_set_output_limit(0, force=force): published.append("output_limit")
             event = (
                 "FULL_STATE_RESYNC_SENT" if publish_kind == "resync" and published
+                else "LATE_EFFECT_GUARD_NEUTRALIZATION_RESYNC_SENT" if publish_kind == "late_effect_guard_resync" and published
+                else "LATE_EFFECT_GUARD_NEUTRALIZATION_SENT" if publish_kind == "late_effect_guard" and published
                 else "FULL_STATE_NEUTRALIZATION_SENT" if publish_kind == "neutralization" and published
                 else None
             )
@@ -1300,10 +1634,10 @@ class ZendureController:
         state_matches = self._command_state_matches_batch(snapshot, batch)
         static_matches = self._command_static_invariants_match(snapshot, batch)
 
-        def publish_full_state(*, include_smart: bool, event: str) -> Tuple[str, ...]:
+        def publish_full_state(*, include_smart: bool, event: str, include_ac_mode: bool = True) -> Tuple[str, ...]:
             if include_smart and self._mqtt_set_smart_mode(True, force=True):
                 published.append("smart_mode")
-            if self._mqtt_set_ac_mode(batch.ac_mode, force=True):
+            if include_ac_mode and self._mqtt_set_ac_mode(batch.ac_mode, force=True):
                 published.append("ac_mode")
             if batch.intent == INTENT_CHARGE:
                 if self._mqtt_set_output_limit(0, force=True): published.append("output_limit")
@@ -1323,7 +1657,7 @@ class ZendureController:
             # A confirmed physical mismatch must remain recovery-capable even
             # when the command read-back already says 0/0. In that case the
             # resync deliberately republishes the full neutral state.
-            if state_matches and publish_kind != "resync":
+            if state_matches and publish_kind not in {"resync", "late_effect_guard", "late_effect_guard_resync"}:
                 self._set_command_state_gate(COMMAND_GATE_READY, now=now)
                 self._command_state_verification_signature = ""
                 self._command_state_verification_epoch = 0.0
@@ -1340,8 +1674,17 @@ class ZendureController:
                 self._record_desired_command_batch(batch, tuple(), forced=False, publish_event="COMMAND_STATE_WAITING")
                 return tuple()
 
-            event = "FULL_STATE_RESYNC_SENT" if publish_kind == "resync" else "FULL_STATE_NEUTRALIZATION_SENT"
-            result = publish_full_state(include_smart=not flash_active, event=event)
+            event = (
+                "FULL_STATE_RESYNC_SENT" if publish_kind == "resync"
+                else "LATE_EFFECT_GUARD_NEUTRALIZATION_RESYNC_SENT" if publish_kind == "late_effect_guard_resync"
+                else "LATE_EFFECT_GUARD_NEUTRALIZATION_SENT" if publish_kind == "late_effect_guard"
+                else "FULL_STATE_NEUTRALIZATION_SENT"
+            )
+            result = publish_full_state(
+                include_smart=not flash_active,
+                include_ac_mode=publish_kind not in {"late_effect_guard", "late_effect_guard_resync"},
+                event=event,
+            )
             self._set_command_state_gate(phase, retry_s=retry_s, now=now)
             return result
 
@@ -1465,12 +1808,23 @@ class ZendureController:
         reason: str = "",
     ) -> int:
         signed_target_w = int(signed_target_w or 0)
+        if signed_target_w != 0:
+            signed_target_w = self._clamp_signed_target_to_device_limits(
+                signed_target_w,
+                self.config_manager.get() if self.config_manager is not None else {},
+            )
+        requested_intent = intent_for_signed_target(
+            signed_target_w,
+            explicit_neutralize=(signed_target_w == 0),
+        )
+        resolved_reason = reason or ("ACTIVE_SIGNED_TARGET" if signed_target_w else "NEUTRAL_TARGET")
+        if self._late_effect_guard_blocks(requested_intent, signed_target_w, resolved_reason):
+            return 0
         with self.state.lock:
             mqtt_status = self.state.zendure_mqtt_overall_status
             live_confirmed = bool(self.state.zendure_mqtt_live_confirmed)
         self._mark_active_command_mqtt_uncertain(signed_target_w, mqtt_status, live_confirmed)
         explicit_neutralize = signed_target_w == 0 and (force_zero or force)
-        resolved_reason = reason or ("ACTIVE_SIGNED_TARGET" if signed_target_w else "NEUTRAL_TARGET")
         previous = self._desired_command_batch
         same_neutral_episode = bool(
             explicit_neutralize
@@ -1501,6 +1855,9 @@ class ZendureController:
         ac_mode: Optional[str] = None,
         force: Optional[bool] = None,
     ) -> None:
+        if self._late_effect_guard_blocks(INTENT_NEUTRALIZE, 0, reason):
+            self._startup_deadband_neutralized = True
+            return
         previous = self._desired_command_batch
         new_episode = not (
             previous is not None
@@ -1777,15 +2134,31 @@ class ZendureController:
             if self._command_effect_telemetry_pause_epoch is None:
                 self._command_effect_telemetry_pause_epoch = now
             with self.state.lock:
-                self.state.command_lifecycle_state = "TELEMETRY_UNCERTAIN"
+                self.state.command_lifecycle_state = (
+                    "LATE_EFFECT_NEUTRALIZING" if self._late_effect_guard_active else "TELEMETRY_UNCERTAIN"
+                )
                 self.state.command_effect_category = "COMMAND_TELEMETRY_UNCERTAIN"
                 self.state.command_effect_reason = (
+                    f"{'Late-Effect-Guard wartet; ' if self._late_effect_guard_active else ''}"
                     f"Wirksamkeit pausiert: MQTT={status or 'UNKNOWN'}, live={live_confirmed}, "
                     f"Leistungsbeobachtung={observation['direction']}/{observation['confidence']}."
                 )
                 self.state.command_effect_confirmed = False
+            if self._late_effect_guard_active:
+                self._reset_late_effect_neutral_confirmation()
+                self._update_late_effect_guard_state(reason="Telemetrie für Neutralitätsnachweis nicht frisch")
             return
         self._resume_effect_timers_after_telemetry_pause(now)
+
+        physical_direction = str(observation.get("direction") or "")
+        if physical_direction in {"CHARGE", "DISCHARGE"}:
+            if (
+                self._last_physical_non_neutral_direction
+                and self._last_physical_non_neutral_direction != physical_direction
+            ):
+                with self.state.lock:
+                    self.state.physical_power_direction_change_count += 1
+            self._last_physical_non_neutral_direction = physical_direction
 
         absolute_tolerance_w = max(10, int(cfg.get("COMMAND_EFFECT_TOLERANCE_W", 80) or 80))
         tolerance_percent = max(0.0, float(cfg.get("COMMAND_EFFECT_TOLERANCE_PERCENT", 10) or 0.0))
@@ -1798,6 +2171,15 @@ class ZendureController:
             if signed_actual is not None
             else f"{magnitude} W, Richtung {observation['direction']}"
         )
+
+        if self._evaluate_late_effect_guard(
+            cfg,
+            observation,
+            absolute_tolerance_w=absolute_tolerance_w,
+            actual_text=actual_text,
+            now_epoch=now,
+        ):
+            return
 
         if desired_intent == INTENT_NEUTRALIZE:
             with self.state.lock:
@@ -2236,17 +2618,17 @@ class ZendureController:
             return {
                 "name": "default",
                 "share": self._cfg_float(cfg, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY", 0.50),
-                "reserve_w": int(cfg.get("HARVEST_HIGH_SMA_SOC_MIN_EXPORT_W", 300) or 300),
+                "reserve_w": 0,
                 "entry_confirm_s": int(cfg.get("HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS", 30) or 30),
             }
         minutes = self._profile_clock_minutes()
         if 9 * 60 + 30 <= minutes < 11 * 60 + 30:
-            return {"name": "morning", "share": self._cfg_float(cfg, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MORNING", 0.60), "reserve_w": 250, "entry_confirm_s": 60}
+            return {"name": "morning", "share": self._cfg_float(cfg, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MORNING", 0.60), "reserve_w": 0, "entry_confirm_s": 60}
         if 11 * 60 + 30 <= minutes < 14 * 60 + 30:
-            return {"name": "midday", "share": self._cfg_float(cfg, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY", 0.50), "reserve_w": 150, "entry_confirm_s": 30}
+            return {"name": "midday", "share": self._cfg_float(cfg, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY", 0.50), "reserve_w": 0, "entry_confirm_s": 30}
         if 14 * 60 + 30 <= minutes < 18 * 60:
-            return {"name": "afternoon", "share": self._cfg_float(cfg, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_AFTERNOON", 0.35), "reserve_w": 100, "entry_confirm_s": 15}
-        return {"name": "default", "share": self._cfg_float(cfg, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY", 0.50), "reserve_w": int(cfg.get("HARVEST_HIGH_SMA_SOC_MIN_EXPORT_W", 300) or 300), "entry_confirm_s": int(cfg.get("HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS", 30) or 30)}
+            return {"name": "afternoon", "share": self._cfg_float(cfg, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_AFTERNOON", 0.35), "reserve_w": 0, "entry_confirm_s": 15}
+        return {"name": "default", "share": self._cfg_float(cfg, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY", 0.50), "reserve_w": 0, "entry_confirm_s": int(cfg.get("HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS", 30) or 30)}
 
     def _primary_threshold_w(self, cfg: Dict[str, Any], absolute_key: str, ratio_key: str, fallback_ratio: float) -> int:
         max_charge = self._rest_surplus_max_charge_w(cfg) or 0
@@ -2296,6 +2678,27 @@ class ZendureController:
             self.state.rest_surplus_exit_reason = str(reason or "")
             self.state.rest_surplus_harvest_reason = "NONE"
             self.state.rest_surplus_harvest_block_reason = str(reason or "")
+            self.state.harvest_target_semantics = "NOT_APPLICABLE"
+            self.state.harvest_reference_charge_w = 0.0
+            self.state.harvest_reference_charge_source = "NONE"
+            self.state.harvest_reference_charge_confidence = "NONE"
+            self.state.harvest_reference_charge_age_s = None
+            self.state.harvest_reference_charge_valid = False
+            self.state.harvest_reference_fallback_reason = ""
+            self.state.harvest_profile_reserve_w = 0.0
+            self.state.harvest_candidate_delta_w = 0.0
+            self.state.harvest_candidate_absolute_w = 0.0
+            self.state.harvest_input_time_skew_s = None
+            self.state.harvest_network_target_w = 0.0
+            self.state.harvest_total_available_charge_w = 0.0
+            self.state.harvest_primary_share_target_w = 0.0
+            self.state.harvest_zendure_share_target_w = 0.0
+            self.state.harvest_export_capture_target_w = 0.0
+            self.state.harvest_target_selected_by = "NOT_APPLICABLE"
+            self.state.harvest_calculation_branch = "NOT_APPLICABLE"
+            self.state.harvest_entry_min_export_w = 0.0
+            self.state.harvest_command_path_eligible = False
+            self.state.harvest_command_path_block_reason = ""
 
     def _update_harvest_capacity_diagnostics(self, cfg: Dict[str, Any]) -> None:
         with self.state.lock:
@@ -2339,12 +2742,12 @@ class ZendureController:
             second_soc = self.state.sma_battery_soc
             second_valid = bool(self.state.second_battery_data_valid and self.state.second_battery_data_fresh)
             zendure_soc = self.state.battery_soc
-            zendure_actual = float(self.state.actual_zendure_system_signed_power or 0.0)
-            zendure_target = float(self.state.last_input_power or 0.0)
             active = bool(self.state.rest_surplus_harvest_active)
             current_reason = self.state.rest_surplus_harvest_reason or "NONE"
-        zendure_charge = max(0.0, zendure_actual if zendure_actual > 0 else zendure_target)
-        charge_pressure = max(0.0, second_power) + zendure_charge + export_w
+        # RC17: the strategic total T is only valid after an independent
+        # Zendure AC reference has been validated in the target calculation.
+        # Never substitute last_input_power or another desired/read-back value.
+        charge_pressure = 0.0
 
         with self.state.lock:
             self.state.second_battery_charge_pressure_w = round(charge_pressure, 1)
@@ -2355,6 +2758,27 @@ class ZendureController:
             self.state.harvest_primary_near_limit_w = float(thresholds["saturation"])
             self.state.harvest_primary_target_share = float(profile.get("share", 0.50) or 0.50)
             self.state.rest_surplus_harvest_profile = str(profile.get("name", "default") or "default")
+            self.state.harvest_target_semantics = "NOT_APPLICABLE"
+            self.state.harvest_reference_charge_w = 0.0
+            self.state.harvest_reference_charge_source = "NONE"
+            self.state.harvest_reference_charge_confidence = "NONE"
+            self.state.harvest_reference_charge_age_s = None
+            self.state.harvest_reference_charge_valid = False
+            self.state.harvest_reference_fallback_reason = ""
+            self.state.harvest_profile_reserve_w = 0.0
+            self.state.harvest_candidate_delta_w = 0.0
+            self.state.harvest_candidate_absolute_w = 0.0
+            self.state.harvest_input_time_skew_s = None
+            self.state.harvest_network_target_w = 0.0
+            self.state.harvest_total_available_charge_w = 0.0
+            self.state.harvest_primary_share_target_w = 0.0
+            self.state.harvest_zendure_share_target_w = 0.0
+            self.state.harvest_export_capture_target_w = 0.0
+            self.state.harvest_target_selected_by = "NOT_APPLICABLE"
+            self.state.harvest_calculation_branch = "NOT_APPLICABLE"
+            self.state.harvest_entry_min_export_w = 0.0
+            self.state.harvest_command_path_eligible = False
+            self.state.harvest_command_path_block_reason = ""
 
         if not bool(cfg.get("REST_SURPLUS_HARVEST_ENABLED", False)):
             self._reset_rest_surplus_harvest("DISABLED")
@@ -2445,57 +2869,255 @@ class ZendureController:
             return bool(self.state.rest_surplus_harvest_active)
 
 
+    def _harvest_command_path_diagnostics(self) -> Tuple[bool, str]:
+        """Return command-path readiness for diagnostics only.
+
+        RC17 deliberately does not add a second control gate.  The existing
+        command pipeline remains authoritative for publish/recovery decisions.
+        """
+        with self.state.lock:
+            mqtt_connected = bool(self.state.mqtt_connected)
+            command_path_valid = bool(self.state.mqtt_command_path_valid)
+            command_path_reason = str(self.state.mqtt_command_path_validity_reason or "")
+            flash_active = bool(self.state.zendure_flash_protection_active)
+            flash_reason = str(self.state.zendure_flash_protection_reason or "")
+            state_complete = bool(self.state.zendure_command_state_complete)
+            state_reason = str(self.state.zendure_command_state_reason or "")
+            gate_state = str(self.state.command_state_gate_state or "")
+
+        if not mqtt_connected:
+            return False, "MQTT_DISCONNECTED"
+        if not command_path_valid:
+            return False, command_path_reason or "MQTT_COMMAND_PATH_INVALID"
+        if not flash_active:
+            return False, flash_reason or "FLASH_PROTECTION_NOT_CONFIRMED"
+        if not state_complete:
+            return False, state_reason or "COMMAND_STATE_INCOMPLETE"
+        if gate_state not in {"", COMMAND_GATE_READY}:
+            return False, gate_state
+        return True, ""
+
+    def _harvest_physical_reference(self, cfg: Dict[str, Any], now: float) -> Dict[str, Any]:
+        """Validate the independent Zendure AC grid-port observation.
+
+        The returned charge value is physical evidence only.  Desired target,
+        command read-back, pack power, off-grid power and SMA power are never
+        accepted as substitutes.
+        """
+        evidence_max_age_s = 15.0
+        with self.state.lock:
+            grid_valid = bool(self.state.grid_power_valid)
+            grid_epoch = self.state.last_shelly_update_epoch
+            obs_epoch = self.state.zendure_power_observation_updated_epoch
+            obs_signed = self.state.zendure_power_observation_signed_w
+            obs_direction = str(self.state.zendure_power_observation_direction or "UNKNOWN").upper()
+            obs_confidence = str(self.state.zendure_power_observation_confidence or "NONE").upper()
+            grid_input_epoch = self.state.actual_zendure_grid_input_update_epoch
+            output_home_epoch = self.state.actual_zendure_output_home_update_epoch
+
+        reference_age_s = max(0.0, now - float(obs_epoch)) if obs_epoch is not None else None
+        input_time_skew_s = (
+            abs(float(grid_epoch) - float(obs_epoch))
+            if grid_epoch is not None and obs_epoch is not None else None
+        )
+        grid_stale_timeout_s = max(1.0, float(
+            cfg.get(
+                "SMA_ENERGY_METER_STALE_TIMEOUT_SECONDS"
+                if str(cfg.get("GRID_METER_SOURCE", "shelly_http")) == "sma_energy_meter_udp"
+                else "SHELLY_STALE_TIMEOUT_SECONDS",
+                15,
+            ) or 15
+        ))
+        grid_age_s = max(0.0, now - float(grid_epoch)) if grid_epoch is not None else None
+
+        result = {
+            "valid": False,
+            "charge_w": 0.0,
+            "source": "NONE",
+            "confidence": "NONE",
+            "age_s": reference_age_s,
+            "fallback_reason": "",
+            "input_time_skew_s": input_time_skew_s,
+        }
+
+        if not grid_valid or grid_epoch is None or grid_age_s is None or grid_age_s > grid_stale_timeout_s:
+            result["fallback_reason"] = "GRID_SOURCE_INVALID"
+        elif obs_epoch is None:
+            result["fallback_reason"] = "REFERENCE_VALUE_MISSING"
+        elif reference_age_s is None or reference_age_s > evidence_max_age_s:
+            result["fallback_reason"] = "REFERENCE_STALE"
+        elif input_time_skew_s is None or input_time_skew_s > evidence_max_age_s:
+            result["fallback_reason"] = "INPUT_TIME_SKEW"
+        elif obs_direction == "CONFLICT":
+            result["fallback_reason"] = "REFERENCE_CONFLICT"
+        elif obs_direction == "DISCHARGE":
+            result["fallback_reason"] = "REFERENCE_DISCHARGE"
+        elif obs_direction == "UNKNOWN":
+            result["fallback_reason"] = "REFERENCE_UNKNOWN"
+        elif obs_signed is None:
+            result["fallback_reason"] = "REFERENCE_VALUE_MISSING"
+        elif obs_direction == "CHARGE" and obs_confidence == "HIGH" and float(obs_signed) > 0:
+            result.update({
+                "valid": True,
+                "charge_w": float(obs_signed),
+                "source": "ZENDURE_GRID_PORT_OBSERVATION",
+                "confidence": "HIGH",
+            })
+        elif obs_direction == "NEUTRAL" and obs_confidence == "MEDIUM":
+            grid_input_fresh = (
+                grid_input_epoch is not None
+                and (now - float(grid_input_epoch)) <= evidence_max_age_s
+            )
+            output_home_fresh = (
+                output_home_epoch is not None
+                and (now - float(output_home_epoch)) <= evidence_max_age_s
+            )
+            if grid_input_fresh and output_home_fresh:
+                result.update({
+                    "valid": True,
+                    "charge_w": 0.0,
+                    "source": "ZENDURE_GRID_PORT_NEUTRAL",
+                    "confidence": "MEDIUM",
+                })
+            else:
+                result["fallback_reason"] = "REFERENCE_VALUE_MISSING"
+        else:
+            result["fallback_reason"] = "REFERENCE_UNKNOWN"
+        return result
+
     def _rest_surplus_charge_pressure_target(self, cfg: Dict[str, Any], grid_power: float, last_input: int) -> Dict[str, Any]:
+        """Return the RC17 Harvest target with separated share/capture diagnostics."""
         thresholds = self._rest_surplus_thresholds(cfg)
         profile = thresholds.get("profile") or {}
         export_w = max(0.0, -float(grid_power or 0.0))
+        now = time.time()
+
         with self.state.lock:
             second_power = float(self.state.sma_battery_display_power or 0.0)
             reason = str(self.state.rest_surplus_harvest_reason or "NONE")
-            zendure_actual = float(self.state.actual_zendure_system_signed_power or 0.0)
-        zendure_charge = max(0.0, zendure_actual if zendure_actual > 0 else float(last_input or 0))
-        charge_pressure = max(0.0, second_power) + zendure_charge + export_w
+            effective_export = float(self.state.effective_export_power or 0.0)
+
+        reference = self._harvest_physical_reference(cfg, now)
+        command_path_eligible, command_path_block_reason = self._harvest_command_path_diagnostics()
+
+        target_semantics = "NOT_APPLICABLE"
+        target_selected_by = "NOT_APPLICABLE"
+        calculation_branch = reason if reason in {
+            "SMA_NEAR_LIMIT", "HIGH_SMA_SOC", "HIGH_SMA_SOC_SMA_NEAR_LIMIT",
+            "SMA_FULL_OR_IDLE"
+        } else ("EXPORT_HOLD_EXPORT_CAPTURE" if reason == "EXPORT_HOLD" else "NOT_APPLICABLE")
+        limiter = ""
+        fallback_reason = str(reference.get("fallback_reason") or "")
+        reference_valid = bool(reference.get("valid"))
+        reference_charge_w = float(reference.get("charge_w") or 0.0)
+        reference_source = str(reference.get("source") or "NONE")
+        reference_confidence = str(reference.get("confidence") or "NONE")
+        reference_age_s = reference.get("age_s")
+        input_time_skew_s = reference.get("input_time_skew_s")
+
         share = max(0.0, min(1.0, float(profile.get("share", 0.50) or 0.50)))
         floor_w = float(thresholds.get("critical_floor", 0) or 0)
         restart_w = float(thresholds.get("restart", 0) or 0)
-        reserve_w = float(profile.get("reserve_w", thresholds.get("high_min_export", 300)) or 0)
-        share_reserve = charge_pressure * share
-        primary_required = max(floor_w, share_reserve)
-        limiter = ""
+        sma_max_w = float(thresholds.get("max_charge", 0) or 0)
+        profile_share_unclamped_w = 0.0
+        primary_share_unclamped_w = 0.0
+        primary_share_target_w = 0.0
+        zendure_share_target_w = 0.0
+        export_capture_target_w = 0.0
+        total_available_charge_w = 0.0
+        candidate_absolute_w = 0.0
+        candidate_delta_w = export_w
 
-        if reason == "SMA_FULL_OR_IDLE" and export_w >= thresholds.get("high_min_export", 300):
-            # Wenn der Primärspeicher voll/idle ist, darf der Floor nicht den
-            # echten Export-Latch erneut auf 0 halten. In diesem Zweig wird nur
-            # realer Export geerntet, nicht Primärspeicher-Ladeleistung verdrängt.
-            raw_candidate = export_w - reserve_w
-            primary_required = 0.0
-            share_reserve = 0.0
-            limiter = "SMA_FULL_OR_IDLE"
+        if reference_valid:
+            sma_charge_w = max(0.0, second_power)
+            total_available_charge_w = sma_charge_w + reference_charge_w + export_w
+            export_capture_target_w = reference_charge_w + export_w
+
+            if reason in {"HIGH_SMA_SOC", "HIGH_SMA_SOC_SMA_NEAR_LIMIT"}:
+                profile_share_unclamped_w = share * total_available_charge_w
+                primary_share_unclamped_w = max(floor_w, profile_share_unclamped_w)
+                primary_share_target_w = min(sma_max_w, primary_share_unclamped_w)
+                zendure_share_target_w = max(0.0, total_available_charge_w - primary_share_target_w)
+                raw_candidate = max(zendure_share_target_w, export_capture_target_w)
+                target_semantics = "ABSOLUTE_SHARE_OR_EXPORT_CAPTURE"
+                if abs(zendure_share_target_w - export_capture_target_w) < 0.5:
+                    target_selected_by = "BOTH_EQUAL"
+                elif zendure_share_target_w > export_capture_target_w:
+                    target_selected_by = "STRATEGIC_SHARE"
+                else:
+                    target_selected_by = "EXPORT_CAPTURE"
+                if second_power < floor_w and second_power >= 0:
+                    limiter = "PRIMARY_FLOOR_LIMIT"
+                elif primary_share_target_w > floor_w:
+                    limiter = "PRIMARY_SHARE_LIMIT"
+                if reason == "HIGH_SMA_SOC" and restart_w > 0 and second_power < restart_w:
+                    limiter = limiter or "PRIMARY_RESTART_WAIT"
+            elif reason in {"SMA_NEAR_LIMIT", "SMA_FULL_OR_IDLE", "EXPORT_HOLD"}:
+                raw_candidate = export_capture_target_w
+                target_semantics = "ABSOLUTE_EXPORT_CAPTURE"
+                target_selected_by = "EXPORT_CAPTURE"
+                limiter = "EXPORT_CAPTURE"
+            else:
+                # Unknown/stale origin reason: keep recovery possible without
+                # reusing a desired/read-back value as physical evidence.
+                raw_candidate = export_capture_target_w
+                target_semantics = "ABSOLUTE_EXPORT_CAPTURE"
+                target_selected_by = "EXPORT_CAPTURE"
+                calculation_branch = "EXPORT_HOLD_EXPORT_CAPTURE"
+                limiter = "EXPORT_CAPTURE"
+
+            candidate_absolute_w = export_capture_target_w
         else:
-            raw_candidate = charge_pressure - primary_required - reserve_w
-            if second_power < floor_w and second_power >= 0:
-                limiter = "PRIMARY_FLOOR_LIMIT"
-            elif primary_required > floor_w:
-                limiter = "PRIMARY_SHARE_LIMIT"
-            if reason in {"HIGH_SMA_SOC", "EXPORT_HOLD"} and restart_w > 0 and second_power < restart_w:
-                # Unterhalb Restart bleibt Laden möglich, aber die Share/Floor-Reserve
-                # wirkt begrenzend; der Reason ist für Diagnose/Parametrierung sichtbar.
-                limiter = limiter or "PRIMARY_RESTART_WAIT"
+            raw_candidate = float(last_input or 0) + effective_export * float(cfg.get("CONTROL_GAIN", 0.30) or 0.30)
+            target_semantics = "INCREMENTAL_FALLBACK"
+            target_selected_by = "INCREMENTAL_FALLBACK"
+            calculation_branch = "INCREMENTAL_FALLBACK"
+            limiter = "INCREMENTAL_FALLBACK"
+            fallback_reason = fallback_reason or "INCREMENTAL_FALLBACK"
 
         candidate = max(0, int(round(raw_candidate)))
         with self.state.lock:
-            self.state.second_battery_charge_pressure_w = round(charge_pressure, 1)
-            self.state.harvest_primary_required_w = round(primary_required, 1)
-            self.state.harvest_primary_share_reserve_w = round(share_reserve, 1)
-            self.state.harvest_candidate_raw_w = round(raw_candidate, 1)
+            self.state.second_battery_charge_pressure_w = round(total_available_charge_w, 1)
+            self.state.harvest_primary_required_w = round(primary_share_target_w, 1)
+            self.state.harvest_primary_share_reserve_w = round(profile_share_unclamped_w, 1)
+            self.state.harvest_candidate_raw_w = round(max(0.0, raw_candidate), 1)
             self.state.harvest_candidate_after_primary_w = float(candidate)
+            self.state.harvest_target_semantics = target_semantics
+            self.state.harvest_reference_charge_w = round(reference_charge_w, 1)
+            self.state.harvest_reference_charge_source = reference_source
+            self.state.harvest_reference_charge_confidence = reference_confidence
+            self.state.harvest_reference_charge_age_s = reference_age_s
+            self.state.harvest_reference_charge_valid = reference_valid
+            self.state.harvest_reference_fallback_reason = fallback_reason
+            self.state.harvest_profile_reserve_w = 0.0
+            self.state.harvest_candidate_delta_w = round(candidate_delta_w, 1)
+            self.state.harvest_candidate_absolute_w = round(candidate_absolute_w, 1)
+            self.state.harvest_input_time_skew_s = input_time_skew_s
             self.state.harvest_limiter_reason = limiter
+            self.state.harvest_network_target_w = 0.0
+            self.state.harvest_total_available_charge_w = round(total_available_charge_w, 1)
+            self.state.harvest_primary_share_target_w = round(primary_share_target_w, 1)
+            self.state.harvest_zendure_share_target_w = round(zendure_share_target_w, 1)
+            self.state.harvest_export_capture_target_w = round(export_capture_target_w, 1)
+            self.state.harvest_target_selected_by = target_selected_by
+            self.state.harvest_calculation_branch = calculation_branch
+            self.state.harvest_entry_min_export_w = float(
+                thresholds.get("high_min_export")
+                if reason in {"HIGH_SMA_SOC", "HIGH_SMA_SOC_SMA_NEAR_LIMIT", "SMA_FULL_OR_IDLE"}
+                else thresholds.get("min_export", 0)
+            )
+            self.state.harvest_command_path_eligible = command_path_eligible
+            self.state.harvest_command_path_block_reason = command_path_block_reason
         return {
             "target": candidate,
             "reason": reason,
-            "charge_pressure_w": charge_pressure,
-            "primary_required_w": primary_required,
+            "charge_pressure_w": total_available_charge_w,
+            "primary_required_w": primary_share_target_w,
             "limiter": limiter,
+            "target_semantics": target_semantics,
+            "target_selected_by": target_selected_by,
+            "reference_valid": reference_valid,
+            "fallback_reason": fallback_reason,
         }
 
     def _rest_surplus_should_reduce_in_hold(self, cfg: Dict[str, Any]) -> bool:
@@ -2915,17 +3537,34 @@ class ZendureController:
             self.state.add_limiter("REST_SURPLUS_HARVEST")
             harvest_target = self._rest_surplus_charge_pressure_target(cfg, grid_power, int(last_input or 0))
             harvest_reason = str(harvest_target.get("reason") or "NONE")
-            if harvest_reason in {"HIGH_SMA_SOC", "HIGH_SMA_SOC_SMA_NEAR_LIMIT", "SMA_FULL_OR_IDLE", "EXPORT_HOLD"}:
+            if harvest_reason in {"SMA_NEAR_LIMIT", "HIGH_SMA_SOC", "HIGH_SMA_SOC_SMA_NEAR_LIMIT", "SMA_FULL_OR_IDLE", "EXPORT_HOLD"}:
                 raw_target = int(harvest_target.get("target", 0))
-                if raw_target <= 0 and export_w >= thresholds.get("high_min_export", thresholds.get("min_export", 80)) and harvest_reason in {"HIGH_SMA_SOC", "SMA_FULL_OR_IDLE"}:
-                    raw_target = int(round(export_w))
+                if raw_target <= 0 and export_w >= thresholds.get("min_export", 80):
+                    # RC17 latch recovery remains branch-correct.  With a valid
+                    # physical reference, the helper already returned C+E or
+                    # max(share, C+E).  With uncertain evidence it returned the
+                    # incremental fallback.  Never replace that by naked E when
+                    # C may already be positive.
+                    raw_target = int(harvest_target.get("target", 0))
                     with self.state.lock:
-                        self.state.rest_surplus_harvest_reason = "LATCH_RECOVERY"
                         self.state.harvest_limiter_reason = "LATCH_RECOVERY"
-                control_reason = f"Restüberschuss-Ernte: {harvest_reason} per Charge-Pressure-Allokation"
+                semantics = str(harvest_target.get("target_semantics") or "")
+                selected = str(harvest_target.get("target_selected_by") or "")
+                if semantics == "INCREMENTAL_FALLBACK":
+                    control_reason = (
+                        f"Restüberschuss-Ernte: {harvest_reason} mit inkrementellem AUTO-Fallback "
+                        f"({harvest_target.get('fallback_reason') or 'Referenz unsicher'})"
+                    )
+                else:
+                    control_reason = (
+                        f"Restüberschuss-Ernte: {harvest_reason}, 0-W-Netzziel, "
+                        f"Auswahl {selected or 'EXPORT_CAPTURE'}"
+                    )
             elif harvest_near_saturation:
-                raw_target = last_input + int(round(export_w))
-                control_reason = "Restüberschuss-Ernte: Primärspeicher nahe Ladegrenze, Netzexport wird Richtung 0 W geerntet"
+                # Defensive compatibility path; normally SMA_NEAR_LIMIT is now
+                # handled by the unified physical-reference calculation above.
+                raw_target = int(harvest_target.get("target", 0))
+                control_reason = "Restüberschuss-Ernte: Primärspeicher nahe Ladegrenze, 0-W-Netzziel"
             else:
                 # RC1: kein blindes 0-W-Halten mehr, wenn echter Export im aktiven
                 # Harvest-State vorhanden ist. Ohne gültigen High-SOC-/Near-Limit-
@@ -3163,6 +3802,8 @@ class ZendureController:
         required_sources = self.determine_cycle_required_sources(cfg)
         self.state.set_control_source_requirements(required_sources)
         self.state.update_data_validity_model(cfg)
+        self._update_command_readback_diagnostics(cfg)
+        self._update_late_effect_guard_state()
         self._timed_phase("charge_acceptance_diag_ms", self.update_charge_acceptance_diagnostic, cfg)
         self._timed_command_effect_phase(self.update_command_effect_monitor, cfg)
         self._timed_phase("graph_snapshot_ms", self.state.record_graph_point, int(cfg.get("GRAPH_HISTORY_LIMIT", 300)))

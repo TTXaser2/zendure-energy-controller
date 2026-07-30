@@ -1,88 +1,127 @@
-# Zendure Energy Controller V12.11.2-RC14
+# Zendure Energy Controller V12.11.2-RC17
 
-## Aktueller Release
+V12.11.2-RC17 implementiert die eng abgegrenzte **Harvest-Revision mit verbindlichem 0-W-Netzziel** auf Basis des finalen RC16-Stands.
 
-V12.11.2-RC14 ist die eng abgegrenzte High-SOC-Ladeannahme-Nachkorrektur zu RC13. RC13 hat Flash-Schutz, Command-State-Gate, Publish-Vertrag und Neutralization-Dedupe produktiv deutlich verbessert; die reale Ladeendepisode vom 27.07.2026 zeigte jedoch weiterhin falsche Command-Mismatches und zwei wirkungslose Full-State-Resyncs während des BMS-Tapers.
+## 1. Systemziel
 
-RC14 korrigiert ausschließlich diese Wirkungsklassifikation und die dafür fehlende Measurement-/Config-Reproduzierbarkeit.
-
-Wesentliche Änderungen:
-
-- High-SOC-Ladeannahme wird anhand frisch bestätigter **statischer Command-Invarianten** bewertet:
-  - `smartMode=1`,
-  - vollständiger Command-State,
-  - `acMode=Input mode`,
-  - `outputLimit=0`.
-- Exakte Gleichheit zwischen neuestem dynamischem Soll und rückgelesenem `inputLimit` ist nicht mehr erforderlich.
-- Der bestätigte Referenzwert lautet:
-
-  ```text
-  command_effect_reference_w = min(aktuelles positives Soll, rückgelesenes positives inputLimit)
-  ```
-
-- Standort-Netzexport ist bei real bestätigter, aber begrenzter Ladeleistung keine zwingende Voraussetzung mehr.
-- Vollständige 0-W-Nichtannahme am/über Max-SOC wird nach drei Zyklen und mindestens sechs Sekunden als geräte-/BMS-seitige Ladeannahmebegrenzung klassifiziert.
-- Unter Max-SOC bleibt der 0-W-Fall strenger und benötigt unabhängige Zusatzbelege wie Restexport, vorherigen Taper oder persistente Nichtannahmediagnose.
-- Echte Nichtwirkung bei niedrigem SOC bleibt mismatch- und resyncfähig.
-- Neue Measurement-V4-Felder:
-  - `charge_acceptance_state`
-  - `charge_acceptance_reason`
-  - `command_effect_reference_w`
-- `COMMAND_EFFECT_TOLERANCE_PERCENT` ist jetzt im Config-Snapshot und im `config_control_hash` enthalten.
-- Bestehende RC13-V4-Dateien bleiben unverändert; RC14 beginnt automatisch eine neue `schema_rc14`-Datei.
-- Die reale RC13-Taper-Episode mit 124 Produktivzyklen ist als Regressionstest enthalten.
-
-## Produktive Grundlage
-
-Vor dem RC14-Build wurde RC13 im Nachtbetrieb produktiv validiert:
-
-- acht Stunden NIGHT_DISCHARGE mit Soll −400 W und Median −399 W,
-- Nachtfenster-Exit mit genau einem Nullbatch,
-- physische 0-W-Bestätigung,
-- kein Nullspam,
-- keine ungeschützten Leistungsbefehle,
-- keine neue Resync-Serie.
-
-Diese Funktionen bleiben in RC14 unverändert und werden durch No-Regression-Tests abgesichert.
-
-## Sicherheitsabgrenzung
-
-RC14 verändert keine Regler-Zielwertformel und insbesondere nicht:
-
-- AUTO-Zielwertbildung,
-- NIGHT_DISCHARGE,
-- Cross-Charge-Zielwerte,
-- Harvest-Entry/-Hold/-Exit,
-- `SMA_FULL_OR_IDLE`,
-- Gerätecaps oder Offgrid-Konfiguration.
-
-Der Runtime-Schreibpfad bleibt begrenzt auf:
+Für alle Harvest-Ladezweige gilt:
 
 ```text
-smartMode = ON
-acMode
-inputLimit
-outputLimit
+PV-Erzeugung
+→ zuerst Hauslast
+→ danach verfügbare Speicherladung
+→ nur technisch nicht aufnehmbarer Rest ins Netz
 ```
-
-ZEC schreibt weiterhin keine persistenten Gerätecaps, SOC-Grenzen oder Offgrid-Einstellungen.
-
-## Bewusst nicht enthalten
-
-- Korrektur des `SMA_FULL_OR_IDLE`-Absolutziels,
-- asynchrone Entkopplung der lokalen Zendure-API,
-- Readiness-/Sticky-Error-Nacharbeit,
-- Änderung der Command-State-Gate-Steuerlogik,
-- produktiver Offgrid-Test,
-- Settings-Redesign,
-- Änderung der Excel-Lernsimulation.
-
-## Dokumentation
 
 ```text
-RELEASE_INFO_V12_11_2_RC14.md
-TECHNICAL_NOTES_V12_11_2_RC14.md
-UEBERGABE_ZEC_V12_11_2_RC14_HIGH_SOC_ACCEPTANCE.md
-SPEZIFIKATION_ZEC_V12_11_2_RC14_HIGH_SOC_ACCEPTANCE_FOLLOWUP.md
-README_INSTALLATION.md
+harvest_network_target_w = 0 W
+intentional_export_bias_w = 0 W
 ```
+
+Share, Floor, Zeitprofil und Entry-Schwellen dürfen keinen absichtlichen Restexport mehr erzeugen.
+
+## 2. Parallel-Harvest bleibt erhalten
+
+SMA bleibt Primärspeicher mit Vorrang, aber nicht mit Exklusivität. Ab dem bestehenden High-SOC-Eintritt darf Zendure weiterhin gezielt mehr als den momentanen Restexport übernehmen und dadurch SMA-Ladeleistung reduzieren, damit beide Speicher länger parallel Aufnahmeleistung für spätere PV-Spitzen bereitstellen.
+
+Für `HIGH_SMA_SOC` und `HIGH_SMA_SOC_SMA_NEAR_LIMIT` gilt:
+
+```text
+Zendure-Ziel = max(
+    strategisches Zendure-Share-Ziel,
+    physisches Export-Capture-Ziel
+)
+```
+
+Das Export-Capture-Ziel ist eine harte Untergrenze.
+
+## 3. Zielwertformeln
+
+```text
+E = verbleibender Netzexport
+C = unabhängig beobachtete Zendure-AC-Ladung
+S = aktuelle positive SMA-Ladung
+T = S + C + E
+```
+
+### SMA_NEAR_LIMIT
+
+```text
+Ziel = C + E
+```
+
+### HIGH_SMA_SOC / HIGH_SMA_SOC_SMA_NEAR_LIMIT
+
+```text
+SMA-Share-Ziel = min(
+    SECOND_BATTERY_MAX_CHARGE_POWER_W,
+    max(SMA-Floor, Profilanteil × T)
+)
+
+Zendure-Share-Ziel = T - SMA-Share-Ziel
+Export-Capture      = C + E
+Ziel                = max(Zendure-Share-Ziel, Export-Capture)
+```
+
+### SMA_FULL_OR_IDLE
+
+```text
+Ziel = C + E
+```
+
+Keine Profilreserve, kein SMA-Share und kein Floor-Abzug.
+
+## 4. Physische Referenz und Fallback
+
+Als physische Baseline ist ausschließlich die frische unabhängige Zendure-Netzportbeobachtung zulässig:
+
+- `CHARGE` mit Confidence `HIGH` und positivem signed Wert;
+- bestätigte `NEUTRAL`-Beobachtung mit Confidence `MEDIUM` und frischen expliziten AC-Richtungstopics.
+
+Sollwert, `inputLimit`-Readback, Pack-, Offgrid-, PV- oder SMA-Leistung werden nicht als AC-Istleistung verwendet.
+
+Bei stale, `UNKNOWN`, `CONFLICT`, `DISCHARGE`, fehlender Referenz oder unzulässigem Zeitversatz greift der bestehende inkrementelle AUTO-Exportregler. Der Fallback ist ausdrücklich als `INCREMENTAL_FALLBACK` diagnostiziert.
+
+## 5. Unverändert
+
+- Harvest Entry, Reason-Priorität, Hysterese, Hold und Exit;
+- Zeitfenster, Share-Prozente, Floor, Restart und Near-Limit-Schwellen;
+- normale AUTO-, DEADBAND-, NIGHT-, STOP- und feste Modi;
+- symmetrischer Cross-Charge-Schutz;
+- MAX-/MIN-SOC und RC14-Acceptance/Taper;
+- RC15-Publish-/Readback-Trennung und Late-Effect-Guard;
+- Command-State-Gate und Smart-Mode-/Flash-Schutz;
+- lokale Zendure-API, Offgrid-Semantik und Gerätecaps;
+- Config-Schema und Excel-Lernsimulation.
+
+RC17 führt keine neuen Config-Keys, keinen neuen Timer und keinen Zendure-Langzeitausfall-Regelmodus ein.
+
+## 6. Measurement V4
+
+RC17 ergänzt zehn additive Standardfelder:
+
+```text
+harvest_network_target_w
+harvest_total_available_charge_w
+harvest_primary_share_target_w
+harvest_zendure_share_target_w
+harvest_export_capture_target_w
+harvest_target_selected_by
+harvest_calculation_branch
+harvest_entry_min_export_w
+harvest_command_path_eligible
+harvest_command_path_block_reason
+```
+
+Der Standardheader umfasst 238 Felder. Ein RC16-Header mit 228 Feldern wird unverändert belassen; die Fortsetzung erfolgt in einer neuen Datei mit `schema_rc17` im Namen.
+
+## 7. Dokumentation
+
+```text
+RELEASE_INFO_V12_11_2_RC17.md
+TECHNICAL_NOTES_V12_11_2_RC17.md
+UEBERGABE_ZEC_V12_11_2_RC17_HARVEST_0W_NETZZIEL.md
+SPEZIFIKATION_ZEC_V12_11_2_RC17_HARVEST_0W_NETZZIEL_FINAL.md
+```
+
+Installation und unmittelbare Verifikation: `README_INSTALLATION.md`.

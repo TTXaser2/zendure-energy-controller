@@ -1,0 +1,8 @@
+{
+  "near_limit": {"sma_w": 2300, "zendure_w": 500, "export_w": 600, "expected_target_w": 1100},
+  "high_share_wins": {"sma_w": 2500, "zendure_w": 500, "export_w": 0, "share": 0.5, "expected_primary_w": 1500, "expected_target_w": 1500},
+  "high_capture_wins": {"sma_w": 1000, "zendure_w": 1500, "export_w": 500, "share": 0.5, "expected_share_w": 1500, "expected_capture_w": 2000, "expected_target_w": 2000},
+  "sma_max_clamp": {"total_w": 4500, "share": 0.6, "sma_max_w": 2300, "expected_primary_w": 2300, "expected_zendure_share_w": 2200},
+  "full_idle": {"zendure_w": 300, "export_w": 600, "expected_target_w": 900},
+  "fallback": {"last_input_w": 300, "export_w": 600, "gain": 0.3, "expected_target_w": 480}
+}

@@ -1,5 +1,6 @@
 import sys
 import types
+import time
 import unittest
 
 if "paho" not in sys.modules:
@@ -68,8 +69,13 @@ class HighSmaSocHarvestRc1Tests(unittest.TestCase):
         cfg = cfg_high()
         state = state_with_second_battery(+2000, soc=75)
         with state.lock:
+            now = time.time()
             state.last_input_power = 500
             state.battery_soc = 50
+            state.actual_zendure_grid_input_power = 500
+            state.actual_zendure_discharge_power = 0
+            state.actual_zendure_grid_input_update_epoch = now
+            state.actual_zendure_output_home_update_epoch = now
         controller, state, mqtt = make(cfg, state=state, shelly=OkShelly(0))
         for _ in range(2):
             controller.run_once(cfg)
@@ -89,18 +95,24 @@ class HighSmaSocHarvestRc1Tests(unittest.TestCase):
         self.assertFalse(state.rest_surplus_harvest_active)
         self.assertNotEqual("HIGH_SMA_SOC", state.rest_surplus_harvest_reason)
 
-    def test_primary_share_limits_zendure_when_primary_would_dwindle(self):
+    def test_export_capture_prevents_share_from_reducing_existing_charge(self):
         cfg = cfg_high()
         state = state_with_second_battery(+400, soc=80)
         with state.lock:
+            now = time.time()
             state.rest_surplus_harvest_active = True
             state.rest_surplus_harvest_reason = "HIGH_SMA_SOC"
             state.last_input_power = 2100
             state.battery_soc = 50
+            state.actual_zendure_grid_input_power = 2100
+            state.actual_zendure_discharge_power = 0
+            state.actual_zendure_grid_input_update_epoch = now
+            state.actual_zendure_output_home_update_epoch = now
         controller, state, mqtt = make(cfg, state=state, shelly=OkShelly(0))
         controller.run_once(cfg)
-        self.assertLess(state.last_input_power, 2100)
-        self.assertIn(state.harvest_limiter_reason, {"PRIMARY_FLOOR_LIMIT", "PRIMARY_SHARE_LIMIT", "PRIMARY_RESTART_WAIT"})
+        self.assertEqual(2100, state.last_input_power)
+        self.assertEqual("EXPORT_CAPTURE", state.harvest_target_selected_by)
+        self.assertEqual(2100.0, state.harvest_export_capture_target_w)
 
     def test_cross_charge_still_blocks_when_primary_discharges(self):
         cfg = cfg_high(CROSS_CHARGE_SIGNIFICANT_W=80)

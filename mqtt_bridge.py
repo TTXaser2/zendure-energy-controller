@@ -22,7 +22,14 @@ class MqttBridge:
         self.state = state
         self.config_getter = config_getter
         self.client = self._build_client()
-        self.last_sent_values: Dict[str, Any] = {}
+        # RC15: local publish history and device read-back are different facts.
+        # Keep a compatibility alias for older tests/integrations, but never
+        # update this cache from state topics.
+        self.last_published_values: Dict[str, Any] = {}
+        self.last_published_epoch_by_topic: Dict[str, float] = {}
+        self.last_device_readback_values: Dict[str, Any] = {}
+        self.last_device_readback_epoch_by_topic: Dict[str, float] = {}
+        self.last_sent_values = self.last_published_values
         self._connected_once = False
         self.app_logger = app_logger or RotatingAppLogger()
 
@@ -178,23 +185,27 @@ class MqttBridge:
 
                 if topic == topics["smart_mode_state"]:
                     self.state.update_zendure_command_property("smartMode", payload, "MQTT", now)
-                    self.last_sent_values[topics["smart_mode"]] = "ON" if str(payload).strip().upper() == "ON" else "OFF"
+                    self.last_device_readback_values[topics["smart_mode"]] = "ON" if str(payload).strip().upper() == "ON" else "OFF"
+                    self.last_device_readback_epoch_by_topic[topics["smart_mode"]] = now
 
                 elif topic == topics["ac_mode_state"]:
                     self.state.update_zendure_command_property("acMode", payload, "MQTT", now)
-                    self.last_sent_values[topics["ac_mode"]] = payload
+                    self.last_device_readback_values[topics["ac_mode"]] = payload
+                    self.last_device_readback_epoch_by_topic[topics["ac_mode"]] = now
 
                 elif topic == topics["input_limit_state"]:
                     self.state.update_zendure_command_property("inputLimit", payload, "MQTT", now)
                     try:
-                        self.last_sent_values[topics["input_limit"]] = int(float(payload))
+                        self.last_device_readback_values[topics["input_limit"]] = int(float(payload))
+                        self.last_device_readback_epoch_by_topic[topics["input_limit"]] = now
                     except Exception:
                         pass
 
                 elif topic == topics["output_limit_state"]:
                     self.state.update_zendure_command_property("outputLimit", payload, "MQTT", now)
                     try:
-                        self.last_sent_values[topics["output_limit"]] = int(float(payload))
+                        self.last_device_readback_values[topics["output_limit"]] = int(float(payload))
+                        self.last_device_readback_epoch_by_topic[topics["output_limit"]] = now
                     except Exception:
                         pass
 
@@ -301,7 +312,7 @@ class MqttBridge:
     def publish(self, topic: str, value: Any, force: bool = False, numeric: bool = True) -> bool:
         cfg = self.config_getter()
         min_change = int(cfg.get("MIN_COMMAND_CHANGE_W", 0))
-        old = self.last_sent_values.get(topic)
+        old = self.last_published_values.get(topic)
 
         if not force and old is not None:
             if numeric:
@@ -324,11 +335,36 @@ class MqttBridge:
         if cfg.get("LOG_MQTT", False):
             self.log(f"[MQTT] {topic} -> {value}")
 
-        self.client.publish(topic, str(value), retain=False)
-        self.last_sent_values[topic] = value
+        try:
+            result = self.client.publish(topic, str(value), retain=False)
+        except Exception as exc:
+            with self.state.lock:
+                self.state.last_mqtt_command_skipped = f"PUBLISH_FAILED:{topic.split('/')[-2]} -> {value}"
+            self.log(f"[MQTT] Publish-Ausnahme: {topic} -> {value}: {exc}")
+            return False
+        # Paho returns MQTTMessageInfo with rc=MQTT_ERR_SUCCESS on local
+        # acceptance. Historical test doubles often return None; preserve that
+        # compatibility while refusing to advance publish history on an explicit
+        # non-zero rc.
+        rc = getattr(result, "rc", 0)
+        try:
+            publish_ok = int(rc) == int(getattr(mqtt, "MQTT_ERR_SUCCESS", 0))
+        except Exception:
+            publish_ok = not bool(rc)
+        if not publish_ok:
+            with self.state.lock:
+                self.state.last_mqtt_command_skipped = f"PUBLISH_FAILED:{topic.split('/')[-2]} -> {value}"
+            self.log(f"[MQTT] Publish fehlgeschlagen rc={rc}: {topic} -> {value}")
+            return False
+
+        previous = self.last_published_values.get(topic)
+        self.last_published_values[topic] = value
+        self.last_published_epoch_by_topic[topic] = time.time()
         with self.state.lock:
             self.state.last_mqtt_command = f"{topic.split('/')[-2]} -> {value}"
             self.state.mqtt_commands_sent += 1
+            if topic == self.topics(cfg)["ac_mode"] and previous is not None and str(previous) != str(value):
+                self.state.command_ac_mode_change_count += 1
         return True
 
     def set_smart_mode(self, enabled: bool = True, force: bool = False) -> bool:

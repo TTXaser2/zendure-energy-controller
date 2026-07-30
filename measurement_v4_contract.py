@@ -128,6 +128,27 @@ STANDARD_HEADER: List[str] = [
     "harvest_primary_share_reserve_w",
     "harvest_candidate_raw_w",
     "harvest_candidate_after_primary_w",
+    "harvest_target_semantics",
+    "harvest_reference_charge_w",
+    "harvest_reference_charge_source",
+    "harvest_reference_charge_confidence",
+    "harvest_reference_charge_age_s",
+    "harvest_reference_charge_valid",
+    "harvest_reference_fallback_reason",
+    "harvest_profile_reserve_w",
+    "harvest_candidate_delta_w",
+    "harvest_candidate_absolute_w",
+    "harvest_input_time_skew_s",
+    "harvest_network_target_w",
+    "harvest_total_available_charge_w",
+    "harvest_primary_share_target_w",
+    "harvest_zendure_share_target_w",
+    "harvest_export_capture_target_w",
+    "harvest_target_selected_by",
+    "harvest_calculation_branch",
+    "harvest_entry_min_export_w",
+    "harvest_command_path_eligible",
+    "harvest_command_path_block_reason",
     "harvest_limiter_reason",
     "harvest_capacity_mode",
     "primary_remaining_capacity_kwh",
@@ -176,6 +197,18 @@ STANDARD_HEADER: List[str] = [
     "command_state_gate_state",
     "command_state_retry_remaining_s",
     "command_neutralization_episode_id",
+    "command_readback_matches_desired",
+    "command_readback_mismatch_fields",
+    "command_late_effect_guard_active",
+    "command_late_effect_guard_previous_intent",
+    "command_late_effect_guard_pending_intent",
+    "command_late_effect_guard_pending_target_w",
+    "command_late_effect_guard_duration_s",
+    "command_late_effect_guard_reason",
+    "command_late_effect_guard_activation_count",
+    "command_late_effect_guard_blocked_command_count",
+    "command_ac_mode_change_count",
+    "physical_power_direction_change_count",
     "charge_acceptance_state",
     "charge_acceptance_reason",
     "command_effect_reference_w",
@@ -191,6 +224,8 @@ STANDARD_HEADER: List[str] = [
     "zendure_command_input_limit_w",
     "zendure_command_output_limit_w",
     "zendure_device_inverse_max_power_w",
+    "zendure_device_inverse_max_power_source",
+    "zendure_device_inverse_max_power_age_s",
     "zendure_device_charge_max_limit_w",
     "zendure_grid_off_mode",
     "zendure_flash_protection_active",
@@ -258,6 +293,56 @@ RC14_HIGH_SOC_ACCEPTANCE_FIELDS = {
     "command_effect_reference_w",
 }
 
+# RC17 separates strategic share allocation from physical export capture and
+# makes the 0-W network target directly reproducible.
+RC17_HARVEST_ZERO_GRID_TARGET_FIELDS = {
+    "harvest_network_target_w",
+    "harvest_total_available_charge_w",
+    "harvest_primary_share_target_w",
+    "harvest_zendure_share_target_w",
+    "harvest_export_capture_target_w",
+    "harvest_target_selected_by",
+    "harvest_calculation_branch",
+    "harvest_entry_min_export_w",
+    "harvest_command_path_eligible",
+    "harvest_command_path_block_reason",
+}
+
+# RC16 makes the SMA_FULL_OR_IDLE absolute-target calculation directly
+# reproducible and exposes its independent physical reference/fallback.
+RC16_RCB_ABSOLUTE_TARGET_FIELDS = {
+    "harvest_target_semantics",
+    "harvest_reference_charge_w",
+    "harvest_reference_charge_source",
+    "harvest_reference_charge_confidence",
+    "harvest_reference_charge_age_s",
+    "harvest_reference_charge_valid",
+    "harvest_reference_fallback_reason",
+    "harvest_profile_reserve_w",
+    "harvest_candidate_delta_w",
+    "harvest_candidate_absolute_w",
+    "harvest_input_time_skew_s",
+}
+
+# RC15 separates local publish history from read-back and adds the narrowly
+# scoped late-effect guard plus measurable wear/reaction counters.
+RC15_PUBLISH_READBACK_GUARD_FIELDS = {
+    "command_readback_matches_desired",
+    "command_readback_mismatch_fields",
+    "command_late_effect_guard_active",
+    "command_late_effect_guard_previous_intent",
+    "command_late_effect_guard_pending_intent",
+    "command_late_effect_guard_pending_target_w",
+    "command_late_effect_guard_duration_s",
+    "command_late_effect_guard_reason",
+    "command_late_effect_guard_activation_count",
+    "command_late_effect_guard_blocked_command_count",
+    "command_ac_mode_change_count",
+    "physical_power_direction_change_count",
+    "zendure_device_inverse_max_power_source",
+    "zendure_device_inverse_max_power_age_s",
+}
+
 # RC12 adds the verified smartMode/command read-back contract and separates
 # grid-side, battery-side and off-grid power boundaries.
 RC12_COMMAND_CONTRACT_FIELDS = {
@@ -286,8 +371,17 @@ RC12_COMMAND_CONTRACT_FIELDS = {
     "zendure_power_balance_residual_w",
 }
 
+RC16_STANDARD_HEADER: List[str] = [
+    field for field in STANDARD_HEADER if field not in RC17_HARVEST_ZERO_GRID_TARGET_FIELDS
+]
+RC15_STANDARD_HEADER: List[str] = [
+    field for field in RC16_STANDARD_HEADER if field not in RC16_RCB_ABSOLUTE_TARGET_FIELDS
+]
+RC14_STANDARD_HEADER: List[str] = [
+    field for field in RC15_STANDARD_HEADER if field not in RC15_PUBLISH_READBACK_GUARD_FIELDS
+]
 RC13_STANDARD_HEADER: List[str] = [
-    field for field in STANDARD_HEADER if field not in RC14_HIGH_SOC_ACCEPTANCE_FIELDS
+    field for field in RC14_STANDARD_HEADER if field not in RC14_HIGH_SOC_ACCEPTANCE_FIELDS
 ]
 RC12_STANDARD_HEADER: List[str] = [
     field for field in RC13_STANDARD_HEADER if field not in RC13_COMMAND_SAFETY_FIELDS
@@ -306,6 +400,9 @@ EXTENDED_FIELDS: List[str] = [
 ]
 
 EXTENDED_HEADER: List[str] = STANDARD_HEADER + EXTENDED_FIELDS
+RC16_EXTENDED_HEADER: List[str] = RC16_STANDARD_HEADER + EXTENDED_FIELDS
+RC15_EXTENDED_HEADER: List[str] = RC15_STANDARD_HEADER + EXTENDED_FIELDS
+RC14_EXTENDED_HEADER: List[str] = RC14_STANDARD_HEADER + EXTENDED_FIELDS
 RC13_EXTENDED_HEADER: List[str] = RC13_STANDARD_HEADER + EXTENDED_FIELDS
 RC12_EXTENDED_HEADER: List[str] = RC12_STANDARD_HEADER + EXTENDED_FIELDS
 RC11_EXTENDED_HEADER: List[str] = RC11_STANDARD_HEADER + EXTENDED_FIELDS
@@ -380,6 +477,18 @@ EXTENDED_GROUP_STATUS_VALUES = {"OK", "MISSING", "STALE", "RETAINED_ONLY", "NO_L
 
 def header_for_profile(profile: str) -> List[str]:
     return EXTENDED_HEADER if str(profile).lower() == "extended" else STANDARD_HEADER
+
+
+def rc16_header_for_profile(profile: str) -> List[str]:
+    return RC16_EXTENDED_HEADER if str(profile).lower() == "extended" else RC16_STANDARD_HEADER
+
+
+def rc15_header_for_profile(profile: str) -> List[str]:
+    return RC15_EXTENDED_HEADER if str(profile).lower() == "extended" else RC15_STANDARD_HEADER
+
+
+def rc14_header_for_profile(profile: str) -> List[str]:
+    return RC14_EXTENDED_HEADER if str(profile).lower() == "extended" else RC14_STANDARD_HEADER
 
 
 def rc13_header_for_profile(profile: str) -> List[str]:

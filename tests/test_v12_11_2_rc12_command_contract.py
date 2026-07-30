@@ -270,11 +270,13 @@ class Rc12CommandContractTests(unittest.TestCase):
         controller._publish_neutralization("MAX_SOC_LIMIT", ac_mode="Input mode")
         controller.update_command_effect_monitor(cfg)
 
-        self.assertEqual("MISMATCH_SUPERSEDED_BY_SAFETY_NEUTRALIZATION", state.command_mismatch_resolution)
-        self.assertEqual("NEUTRALIZATION_CONFIRMED", state.command_lifecycle_state)
-        self.assertEqual("COMMAND_NEUTRALIZATION_CONFIRMED", state.command_effect_category)
-        self.assertFalse(state.command_not_effective_active)
-        self.assertEqual("FULL_STATE_NEUTRALIZATION_SENT", state.command_publish_event)
+        self.assertEqual("MISMATCH_HANDOFF_TO_LATE_EFFECT_GUARD", state.command_mismatch_resolution)
+        self.assertTrue(state.command_late_effect_guard_active)
+        self.assertEqual("CHARGE", state.command_late_effect_guard_previous_intent)
+        self.assertEqual("NEUTRALIZE", state.command_late_effect_guard_pending_intent)
+        self.assertIn(state.command_lifecycle_state, {"LATE_EFFECT_NEUTRALIZING", "LATE_EFFECT_NEUTRAL_STABILIZING"})
+        self.assertFalse(state.command_effect_confirmed)
+        self.assertEqual("LATE_EFFECT_GUARD_NEUTRALIZATION_SENT", state.command_publish_event)
 
     def test_verified_local_mqtt_command_topics_are_exact(self):
         device_id = "HEC4NENCN492025"
