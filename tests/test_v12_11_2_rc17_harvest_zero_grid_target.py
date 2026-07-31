@@ -246,7 +246,7 @@ class Rc17HarvestZeroGridTargetTests(unittest.TestCase):
 
     def test_rc17_measurement_contract_is_additive_and_reproducible(self):
         self.assertEqual(228, len(RC16_STANDARD_HEADER))
-        self.assertEqual(238, len(STANDARD_HEADER))
+        self.assertEqual(246, len(STANDARD_HEADER))
         row = build_v4_row(cfg_high(), {
             "mode": "CHARGE",
             "epoch_s": 1_800_000_000.0,

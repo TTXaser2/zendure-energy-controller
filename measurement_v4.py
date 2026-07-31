@@ -5,6 +5,7 @@
 # the legacy V3 csv_logger field list so V3 can remain available during the V12.10 release-candidate phase.
 
 import csv
+from collections import deque
 import hashlib
 import json
 import os
@@ -22,6 +23,7 @@ from measurement_v4_contract import (
     header_for_profile,
     header_hash,
     rc10_header_for_profile,
+    rc17_header_for_profile,
     rc16_header_for_profile,
     rc15_header_for_profile,
     rc14_header_for_profile,
@@ -300,6 +302,30 @@ def build_v4_row(config: Dict[str, Any], row: Dict[str, Any], previous_effective
         effective_surplus = max(0.0, -scenario_without)
 
     pack_info = _temperature_aggregates(row)
+    target_raw_stage = _safe_float(row.get("target_raw_w"))
+    target_power_stage = _safe_float(row.get("target_after_power_limit_w", row.get("target_after_soc_limits_w", row.get("target_limited_w"))))
+    target_filtered_stage = _safe_float(row.get("target_after_smoothing_w", row.get("target_filtered_w")))
+    target_step_stage = _safe_float(row.get("target_after_ramp_w", row.get("target_step_limited_w")))
+    stage_tolerance_w = 0.5
+    power_limiter_names = (
+        "CONFIG_MAX_CHARGE_POWER", "CONFIG_MAX_DISCHARGE_POWER",
+        "ZENDURE_DEVICE_CHARGE_MAX_LIMIT", "ZENDURE_DEVICE_INVERSE_MAX_POWER",
+        "ZENDURE_DEVICE_CHARGE_LIMIT", "ZENDURE_DEVICE_DISCHARGE_LIMIT",
+        "MAX_CHARGE", "MAX_DISCHARGE", "POWER_LIMIT",
+    )
+    power_changed = (
+        target_raw_stage is not None and target_power_stage is not None
+        and abs(target_power_stage - target_raw_stage) > stage_tolerance_w
+    ) or any(name in active_limiters for name in power_limiter_names)
+    smoothing_changed = (
+        target_power_stage is not None and target_filtered_stage is not None
+        and abs(target_filtered_stage - target_power_stage) > stage_tolerance_w
+    )
+    step_changed = (
+        target_filtered_stage is not None and target_step_stage is not None
+        and abs(target_step_stage - target_filtered_stage) > stage_tolerance_w
+    )
+
     cycle_duration_ms = _safe_int(row.get("loop_duration_ms"))
     if cycle_duration_ms is None:
         dt_s = _safe_float(row.get("dt_s"))
@@ -388,6 +414,14 @@ def build_v4_row(config: Dict[str, Any], row: Dict[str, Any], previous_effective
         "zendure_mqtt_stale_group_count": stale_mqtt_count,
         "zendure_mqtt_retained_only": _bool01(row.get("zendure_mqtt_retained_only")),
         "zendure_mqtt_after_broker_restart": _bool01(row.get("zendure_mqtt_after_broker_restart_no_live_updates")),
+        "zendure_local_api_snapshot_sequence": _safe_int(row.get("zendure_local_api_snapshot_sequence")) or 0,
+        "zendure_local_api_success_sequence": _safe_int(row.get("zendure_local_api_success_sequence")) or 0,
+        "zendure_local_api_new_success_applied": _bool01(row.get("zendure_local_api_new_success_applied")),
+        "zendure_local_api_last_success_age_s": _round1(row.get("zendure_local_api_last_success_age_s")),
+        "zendure_local_api_snapshot_valid": _bool01(row.get("zendure_local_api_snapshot_valid")),
+        "zendure_local_api_snapshot_stale": _bool01(row.get("zendure_local_api_snapshot_stale")),
+        "zendure_local_api_request_duration_ms": _round1(row.get("zendure_local_api_request_duration_ms")),
+        "zendure_local_api_snapshot_apply_ms": _round1(row.get("zendure_local_api_snapshot_apply_ms")),
         "second_battery_power_raw_w": _round1(row.get("raw_second_battery_power_w", row.get("second_battery_raw_power_w"))),
         "second_battery_power_w": _round1(row.get("second_battery_power_w", row.get("norm_second_battery_power_w"))),
         "second_battery_power_valid": _bool01(row.get("second_battery_valid", row.get("second_battery_data_valid"))),
@@ -459,14 +493,14 @@ def build_v4_row(config: Dict[str, Any], row: Dict[str, Any], previous_effective
         "target_raw_w": _round1(row.get("target_raw_w")),
         "target_filtered_w": _round1(row.get("target_after_smoothing_w", row.get("target_filtered_w"))),
         "target_step_limited_w": _round1(row.get("target_after_ramp_w", row.get("target_step_limited_w"))),
-        "target_limited_w": _round1(row.get("target_after_soc_limits_w", row.get("target_limited_w"))),
+        "target_limited_w": _round1(row.get("target_after_power_limit_w", row.get("target_after_soc_limits_w", row.get("target_limited_w")))),
         "target_final_w": _round1(target_final),
         "target_final_reason": target_reason,
         "target_changed_by_deadband": "1" if "DEADBAND" in control_reason.upper() or _bool01(row.get("deadband_active")) == "1" else "0",
-        "target_changed_by_smoothing": "1" if "SMOOTH" in control_reason.upper() or "SMOOTH" in active_limiters else "0",
-        "target_changed_by_step_limit": "1" if "RAMP" in control_reason.upper() or "STEP" in control_reason.upper() else "0",
+        "target_changed_by_smoothing": "1" if smoothing_changed else "0",
+        "target_changed_by_step_limit": "1" if step_changed else "0",
         "target_changed_by_soc_limit": "1" if any(x in active_limiters for x in ("MIN_SOC", "MAX_SOC")) else "0",
-        "target_changed_by_power_limit": "1" if any(x in active_limiters for x in ("MAX_CHARGE", "MAX_DISCHARGE", "POWER_LIMIT")) else "0",
+        "target_changed_by_power_limit": "1" if power_changed else "0",
         "target_changed_by_cross_charge": "1" if cross_charge_limited else "0",
         "target_changed_by_mode": "1" if operating_mode in {"NIGHT_DISCHARGE", "FIXED_CHARGE", "FIXED_DISCHARGE", "STOP_HOLD"} else "0",
         "target_changed_by_safe_state": "1" if target_reason == "SAFE_STATE" else "0",
@@ -1027,6 +1061,12 @@ class MeasurementV4Logger:
         self._manifest = ManifestStore()
         self._snapshots = ConfigSnapshotStore()
         self._runtime = RuntimeEventWriter()
+        # RC18 runtime diagnostics are staged in memory and flushed inside the
+        # already existing Measurement-V4 write phase. This prevents API worker
+        # status events from adding a separate path-resolution/file-I/O phase to
+        # the time-critical controller decision path.
+        self._pending_runtime_events = deque(maxlen=64)
+        self._last_runtime_directory: Optional[str] = None
         self._fallback_active_previous = False
         self._fallback_counter_since_start = 0
         self._last_fallback_time = ""
@@ -1040,6 +1080,8 @@ class MeasurementV4Logger:
         self._manifest_meta: Dict[str, Dict[str, Any]] = {}
 
     def close(self) -> None:
+        if self._last_runtime_directory:
+            self._flush_pending_runtime_events(self._last_runtime_directory)
         if self._fh is not None:
             try:
                 self._fh.flush()
@@ -1070,6 +1112,8 @@ class MeasurementV4Logger:
         path = str(target_info.get("path") or "")
         directory = os.path.dirname(path)
         os.makedirs(directory, exist_ok=True)
+        self._last_runtime_directory = directory
+        self._flush_pending_runtime_events(directory)
         free_mb = self._free_disk_mb(directory)
         min_free = int(config.get("MEASUREMENT_LOG_MIN_FREE_DISK_MB", 500))
         if free_mb is not None and free_mb < min_free:
@@ -1358,7 +1402,7 @@ class MeasurementV4Logger:
         return len(buffer.getvalue().encode("utf-8"))
 
     def _schema_upgrade_path_if_needed(self, path: str, profile: str) -> str:
-        """Keep older V4 files immutable and continue in a fresh RC17 file."""
+        """Keep older V4 files immutable and continue in a fresh RC18 file."""
         if not os.path.exists(path) or os.path.getsize(path) == 0:
             return path
         try:
@@ -1368,7 +1412,9 @@ class MeasurementV4Logger:
             return path
         fields = [part.strip() for part in first.split(";")]
         previous_contract = ""
-        if fields == rc16_header_for_profile(profile):
+        if fields == rc17_header_for_profile(profile):
+            previous_contract = "ZEC-MEASUREMENT-V4-RC17"
+        elif fields == rc16_header_for_profile(profile):
             previous_contract = "ZEC-MEASUREMENT-V4-RC16"
         elif fields == rc15_header_for_profile(profile):
             previous_contract = "ZEC-MEASUREMENT-V4-RC15"
@@ -1390,9 +1436,9 @@ class MeasurementV4Logger:
         directory = os.path.dirname(path)
         filename = os.path.basename(path)
         stem, ext = os.path.splitext(filename)
-        new_path = os.path.join(directory, f"{stem}_schema_rc17_{self._session_suffix}{ext}")
+        new_path = os.path.join(directory, f"{stem}_schema_rc18_{self._session_suffix}{ext}")
         if os.path.exists(new_path):
-            new_path = os.path.join(directory, f"{stem}_schema_rc17_{self._session_suffix}_{uuid.uuid4().hex[:6]}{ext}")
+            new_path = os.path.join(directory, f"{stem}_schema_rc18_{self._session_suffix}_{uuid.uuid4().hex[:6]}{ext}")
         for base, mapped in list(self._session_path_map.items()):
             if mapped == path:
                 self._session_path_map[base] = new_path
@@ -1403,7 +1449,7 @@ class MeasurementV4Logger:
             "new_path": new_path,
             "rotation_reason": "HEADER_CHANGED",
             "previous_contract": previous_contract,
-            "new_contract": "ZEC-MEASUREMENT-V4-RC17",
+            "new_contract": "ZEC-MEASUREMENT-V4-RC18",
         })
         return new_path
 
@@ -1472,6 +1518,24 @@ class MeasurementV4Logger:
             return int((usage.f_bavail * usage.f_frsize) / 1024 / 1024)
         except Exception:
             return None
+
+    def write_runtime_event(self, config: Dict[str, Any], event: Dict[str, Any]) -> None:
+        """Stage one bounded diagnostic event for the next V4 logging phase.
+
+        No path lookup or file operation is performed here. The config argument
+        is retained for the public logger hook and future event metadata, but the
+        active target is deliberately resolved only by ``log()``.
+        """
+        self._pending_runtime_events.append(dict(event))
+
+    def _flush_pending_runtime_events(self, directory: str) -> None:
+        while self._pending_runtime_events:
+            event = self._pending_runtime_events[0]
+            try:
+                self._runtime.write(directory, event)
+            except Exception:
+                break
+            self._pending_runtime_events.popleft()
 
     def _runtime_best_effort(self, directory: str, event: Dict[str, Any]) -> None:
         try:

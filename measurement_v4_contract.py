@@ -89,6 +89,14 @@ STANDARD_HEADER: List[str] = [
     "zendure_mqtt_stale_group_count",
     "zendure_mqtt_retained_only",
     "zendure_mqtt_after_broker_restart",
+    "zendure_local_api_snapshot_sequence",
+    "zendure_local_api_success_sequence",
+    "zendure_local_api_new_success_applied",
+    "zendure_local_api_last_success_age_s",
+    "zendure_local_api_snapshot_valid",
+    "zendure_local_api_snapshot_stale",
+    "zendure_local_api_request_duration_ms",
+    "zendure_local_api_snapshot_apply_ms",
     "second_battery_power_raw_w",
     "second_battery_power_w",
     "second_battery_power_valid",
@@ -293,6 +301,19 @@ RC14_HIGH_SOC_ACCEPTANCE_FIELDS = {
     "command_effect_reference_w",
 }
 
+# RC18 moves the local Zendure API out of the synchronous rule cycle and
+# records only the eight cycle-relevant snapshot/apply values.
+RC18_ASYNC_LOCAL_API_FIELDS = {
+    "zendure_local_api_snapshot_sequence",
+    "zendure_local_api_success_sequence",
+    "zendure_local_api_new_success_applied",
+    "zendure_local_api_last_success_age_s",
+    "zendure_local_api_snapshot_valid",
+    "zendure_local_api_snapshot_stale",
+    "zendure_local_api_request_duration_ms",
+    "zendure_local_api_snapshot_apply_ms",
+}
+
 # RC17 separates strategic share allocation from physical export capture and
 # makes the 0-W network target directly reproducible.
 RC17_HARVEST_ZERO_GRID_TARGET_FIELDS = {
@@ -371,8 +392,11 @@ RC12_COMMAND_CONTRACT_FIELDS = {
     "zendure_power_balance_residual_w",
 }
 
+RC17_STANDARD_HEADER: List[str] = [
+    field for field in STANDARD_HEADER if field not in RC18_ASYNC_LOCAL_API_FIELDS
+]
 RC16_STANDARD_HEADER: List[str] = [
-    field for field in STANDARD_HEADER if field not in RC17_HARVEST_ZERO_GRID_TARGET_FIELDS
+    field for field in RC17_STANDARD_HEADER if field not in RC17_HARVEST_ZERO_GRID_TARGET_FIELDS
 ]
 RC15_STANDARD_HEADER: List[str] = [
     field for field in RC16_STANDARD_HEADER if field not in RC16_RCB_ABSOLUTE_TARGET_FIELDS
@@ -400,6 +424,7 @@ EXTENDED_FIELDS: List[str] = [
 ]
 
 EXTENDED_HEADER: List[str] = STANDARD_HEADER + EXTENDED_FIELDS
+RC17_EXTENDED_HEADER: List[str] = RC17_STANDARD_HEADER + EXTENDED_FIELDS
 RC16_EXTENDED_HEADER: List[str] = RC16_STANDARD_HEADER + EXTENDED_FIELDS
 RC15_EXTENDED_HEADER: List[str] = RC15_STANDARD_HEADER + EXTENDED_FIELDS
 RC14_EXTENDED_HEADER: List[str] = RC14_STANDARD_HEADER + EXTENDED_FIELDS
@@ -477,6 +502,10 @@ EXTENDED_GROUP_STATUS_VALUES = {"OK", "MISSING", "STALE", "RETAINED_ONLY", "NO_L
 
 def header_for_profile(profile: str) -> List[str]:
     return EXTENDED_HEADER if str(profile).lower() == "extended" else STANDARD_HEADER
+
+
+def rc17_header_for_profile(profile: str) -> List[str]:
+    return RC17_EXTENDED_HEADER if str(profile).lower() == "extended" else RC17_STANDARD_HEADER
 
 
 def rc16_header_for_profile(profile: str) -> List[str]:

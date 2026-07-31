@@ -1,127 +1,109 @@
-# Zendure Energy Controller V12.11.2-RC17
+# Zendure Energy Controller V12.11.2-RC19
 
-V12.11.2-RC17 implementiert die eng abgegrenzte **Harvest-Revision mit verbindlichem 0-W-Netzziel** auf Basis des finalen RC16-Stands.
+V12.11.2-RC19 ist ein eng abgegrenzter **Status- und Diagnose-Stabilisierungsrelease** auf Basis des finalen RC18-Stands.
 
-## 1. Systemziel
+## 1. RC19-Korrekturen
 
-Für alle Harvest-Ladezweige gilt:
+### Exakte Modus- und Pfadsemantik
 
-```text
-PV-Erzeugung
-→ zuerst Hauslast
-→ danach verfügbare Speicherladung
-→ nur technisch nicht aufnehmbarer Rest ins Netz
-```
+Unsichere Teilstringprüfungen wurden durch exakte Tokens ersetzt:
 
 ```text
-harvest_network_target_w = 0 W
-intentional_export_bias_w = 0 W
+CHARGE     → Einspeisung wird reduziert
+DISCHARGE  → Netzbezug wird reduziert
+STOP_HOLD  → Manueller Stopp – Zendure bleibt neutral
 ```
 
-Share, Floor, Zeitprofil und Entry-Schwellen dürfen keinen absichtlichen Restexport mehr erzeugen.
+Damit kann `DISCHARGE` nicht mehr wegen des enthaltenen Wortteils `CHARGE` als Ladepfad erscheinen und `STOP_HOLD` nicht mehr als normaler Deadband-HOLD.
 
-## 2. Parallel-Harvest bleibt erhalten
+### Kapazitätsdiagnose in allen Modi
 
-SMA bleibt Primärspeicher mit Vorrang, aber nicht mit Exklusivität. Ab dem bestehenden High-SOC-Eintritt darf Zendure weiterhin gezielt mehr als den momentanen Restexport übernehmen und dadurch SMA-Ladeleistung reduzieren, damit beide Speicher länger parallel Aufnahmeleistung für spätere PV-Spitzen bereitstellen.
+Die Restkapazität bis Max-SOC wird in einer zentralen Housekeeping-Phase auf jedem Zykluspfad aktualisiert. Das gilt auch für SAFE_STATE, STOP_HOLD, NIGHT und feste Modi.
 
-Für `HIGH_SMA_SOC` und `HIGH_SMA_SOC_SMA_NEAR_LIMIT` gilt:
+### Requested vs. Applied in festen Modi
+
+Die Statusseite trennt bei `MANUAL_FIXED_CHARGE` und `MANUAL_FIXED_DISCHARGE`:
 
 ```text
-Zendure-Ziel = max(
-    strategisches Zendure-Share-Ziel,
-    physisches Export-Capture-Ziel
-)
+Angefordert
+Wirksames Ziel
+Config-/Gerätebegrenzung
 ```
 
-Das Export-Capture-Ziel ist eine harte Untergrenze.
+Die ETA verwendet das wirksame, bereits gecappte Ziel. Read-only Zendure-Gerätecaps werden weiterhin nicht verändert.
 
-## 3. Zielwertformeln
+### Local-API-Worker sichtbar
+
+„Controller & Schnittstellen“ zeigt nun:
+
+- API-Nutzungsart und aktive Quelle;
+- Workerzustand und letzten Erfolg;
+- asynchrone HTTP-Dauer;
+- synchrone Snapshotübernahme;
+- Details zu Versuch, Snapshot, Fehlerfolge, Backoff und Fehlercode im Info-Popover.
+
+### Installer-Ready-Check
+
+Der Installer wartet bis zu 90 Sekunden auf valides JSON mit `ready=true`. Ein lediglich erreichbarer Endpoint mit `ready=false` gilt nicht mehr als erfolgreicher Abschluss.
+
+## 2. RC18-Basis: asynchrone lokale Zendure-API
+
+Der HTTP-Aufruf `/properties/report` läuft weiterhin in genau einem Hintergrundworker. Der Regelzyklus liest nur einen immutable Latest-Snapshot und wartet nicht auf Netzwerk-I/O.
+
+Quellenpriorität:
 
 ```text
-E = verbleibender Netzexport
-C = unabhängig beobachtete Zendure-AC-Ladung
-S = aktuelle positive SMA-Ladung
-T = S + C + E
+MQTT frisch
+→ MQTT bleibt primäre SOC-/Leistungsquelle
+
+MQTT stale/fehlend + API-Fallback aktiv + API-Snapshot frisch
+→ lokale API darf als Fallback übernehmen
+
+beide Quellen stale/fehlend
+→ bestehende Freshness-/Safe-State-Logik
 ```
 
-### SMA_NEAR_LIMIT
+## 3. Measurement V4
+
+RC19 erweitert das Schema nicht:
 
 ```text
-Ziel = C + E
+Standard: 246 Felder · Hash 7842bfef39d47f93
+Extended: 249 Felder · Hash 8f61d07e66428a6e
 ```
 
-### HIGH_SMA_SOC / HIGH_SMA_SOC_SMA_NEAR_LIMIT
+Die RC18-Zielpipeline-Diagnose bleibt erhalten:
 
 ```text
-SMA-Share-Ziel = min(
-    SECOND_BATTERY_MAX_CHARGE_POWER_W,
-    max(SMA-Floor, Profilanteil × T)
-)
-
-Zendure-Share-Ziel = T - SMA-Share-Ziel
-Export-Capture      = C + E
-Ziel                = max(Zendure-Share-Ziel, Export-Capture)
+target_raw_w
+→ target_limited_w
+→ target_filtered_w
+→ target_step_limited_w
+→ target_final_w
 ```
 
-### SMA_FULL_OR_IDLE
+## 4. Unverändert
+
+RC19 verändert nicht:
+
+- AUTO-, HOLD-, NIGHT-, STOP- oder feste Command-Algorithmen;
+- RC17-Harvest-Formeln und 0-W-Netzziel;
+- Cross-Charge;
+- Command-Lifecycle, Resync und Late-Effect-Guard;
+- Neutralisierung und Publish-Deduplizierung;
+- Smart-Mode-/Flash-Schutz;
+- Offgrid-Semantik und read-only Gerätecaps;
+- produktive Configwerte oder Defaults;
+- Storage-Retention/Kompression;
+- Excel-Lernsimulation.
+
+## 5. Dokumentation
 
 ```text
-Ziel = C + E
+RELEASE_INFO_V12_11_2_RC19.md
+TECHNICAL_NOTES_V12_11_2_RC19.md
+UEBERGABE_ZEC_V12_11_2_RC19_STATUS_DIAGNOSE_STABILISIERUNG.md
+BUILD_VALIDATION_V12_11_2_RC19.md
 ```
 
-Keine Profilreserve, kein SMA-Share und kein Floor-Abzug.
-
-## 4. Physische Referenz und Fallback
-
-Als physische Baseline ist ausschließlich die frische unabhängige Zendure-Netzportbeobachtung zulässig:
-
-- `CHARGE` mit Confidence `HIGH` und positivem signed Wert;
-- bestätigte `NEUTRAL`-Beobachtung mit Confidence `MEDIUM` und frischen expliziten AC-Richtungstopics.
-
-Sollwert, `inputLimit`-Readback, Pack-, Offgrid-, PV- oder SMA-Leistung werden nicht als AC-Istleistung verwendet.
-
-Bei stale, `UNKNOWN`, `CONFLICT`, `DISCHARGE`, fehlender Referenz oder unzulässigem Zeitversatz greift der bestehende inkrementelle AUTO-Exportregler. Der Fallback ist ausdrücklich als `INCREMENTAL_FALLBACK` diagnostiziert.
-
-## 5. Unverändert
-
-- Harvest Entry, Reason-Priorität, Hysterese, Hold und Exit;
-- Zeitfenster, Share-Prozente, Floor, Restart und Near-Limit-Schwellen;
-- normale AUTO-, DEADBAND-, NIGHT-, STOP- und feste Modi;
-- symmetrischer Cross-Charge-Schutz;
-- MAX-/MIN-SOC und RC14-Acceptance/Taper;
-- RC15-Publish-/Readback-Trennung und Late-Effect-Guard;
-- Command-State-Gate und Smart-Mode-/Flash-Schutz;
-- lokale Zendure-API, Offgrid-Semantik und Gerätecaps;
-- Config-Schema und Excel-Lernsimulation.
-
-RC17 führt keine neuen Config-Keys, keinen neuen Timer und keinen Zendure-Langzeitausfall-Regelmodus ein.
-
-## 6. Measurement V4
-
-RC17 ergänzt zehn additive Standardfelder:
-
-```text
-harvest_network_target_w
-harvest_total_available_charge_w
-harvest_primary_share_target_w
-harvest_zendure_share_target_w
-harvest_export_capture_target_w
-harvest_target_selected_by
-harvest_calculation_branch
-harvest_entry_min_export_w
-harvest_command_path_eligible
-harvest_command_path_block_reason
-```
-
-Der Standardheader umfasst 238 Felder. Ein RC16-Header mit 228 Feldern wird unverändert belassen; die Fortsetzung erfolgt in einer neuen Datei mit `schema_rc17` im Namen.
-
-## 7. Dokumentation
-
-```text
-RELEASE_INFO_V12_11_2_RC17.md
-TECHNICAL_NOTES_V12_11_2_RC17.md
-UEBERGABE_ZEC_V12_11_2_RC17_HARVEST_0W_NETZZIEL.md
-SPEZIFIKATION_ZEC_V12_11_2_RC17_HARVEST_0W_NETZZIEL_FINAL.md
-```
-
-Installation und unmittelbare Verifikation: `README_INSTALLATION.md`.
+Die RC18-Spezifikationen und Errata bleiben als normative Vorgeschichte im Paket erhalten. Installation und unmittelbare Verifikation: `README_INSTALLATION.md`.

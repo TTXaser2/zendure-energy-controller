@@ -306,7 +306,7 @@ class Rc16RcbAbsoluteTargetTests(unittest.TestCase):
     def test_rc16_v4_contract_and_row_are_additive(self):
         self.assertEqual(217, len(RC15_STANDARD_HEADER))
         self.assertEqual(228, len(RC16_STANDARD_HEADER))
-        self.assertEqual(238, len(STANDARD_HEADER))
+        self.assertEqual(246, len(STANDARD_HEADER))
         row = build_v4_row(cfg_high(), {
             "mode": "CHARGE",
             "epoch_s": 1_800_000_000.0,

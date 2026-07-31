@@ -109,6 +109,8 @@ class ControllerState:
     current_target_power: int = 0
     zendure_target_signed_power: int = 0
     last_target_before_smoothing: int = 0
+    last_target_after_power_limit: int = 0
+    target_power_limit_reason: str = "NONE"
     last_target_after_smoothing: int = 0
     last_target_after_ramp: int = 0
     cross_charge_guard_latched: bool = False
@@ -320,6 +322,28 @@ class ControllerState:
     local_api_pack_soc_level: Optional[int] = None
     zendure_telemetry_source: str = "none"
     zendure_local_api_fallback_active: bool = False
+    # RC18 asynchronous local-API worker diagnostics. Monotonic timestamps are
+    # retained only in memory; wall-clock values are used for display/logging.
+    zendure_local_api_worker_state: str = "DISABLED"
+    zendure_local_api_worker_config_generation: int = 0
+    zendure_local_api_snapshot_sequence: int = 0
+    zendure_local_api_success_sequence: int = 0
+    zendure_local_api_new_success_applied: bool = False
+    zendure_local_api_latest_attempt_ok: Optional[bool] = None
+    zendure_local_api_last_attempt_epoch: Optional[float] = None
+    zendure_local_api_last_attempt_monotonic: Optional[float] = None
+    zendure_local_api_last_success_epoch: Optional[float] = None
+    zendure_local_api_last_success_monotonic: Optional[float] = None
+    zendure_local_api_snapshot_valid: bool = False
+    zendure_local_api_snapshot_stale: bool = True
+    zendure_local_api_snapshot_stale_after_s: float = 30.0
+    zendure_local_api_request_duration_ms: Optional[float] = None
+    zendure_local_api_last_request_duration_ms: Optional[float] = None
+    zendure_local_api_snapshot_apply_ms: Optional[float] = None
+    zendure_local_api_consecutive_errors: int = 0
+    zendure_local_api_backoff_remaining_s: float = 0.0
+    zendure_local_api_latest_error_code: str = "NONE"
+    zendure_local_api_parse_warning_count: int = 0
     sma_battery_power: float = 0.0
     # Normierte Darstellungsleistung: positiv = Laden, negativ = Entladen.
     sma_battery_display_power: float = 0.0
@@ -770,7 +794,7 @@ class ControllerState:
             self.last_mqtt_zendure_sensor_update_epoch = now
             self.last_mqtt_zendure_sensor_update_time = now_text
 
-    def update_zendure_battery_metrics(self, source: str, battery_metrics: List[Dict[str, Any]]) -> None:
+    def update_zendure_battery_metrics(self, source: str, battery_metrics: List[Dict[str, Any]], update_epoch: Optional[float] = None) -> None:
         """Merge Zendure battery/headunit metrics by serial number.
 
         MQTT and the local API are stored separately for temperature values. This
@@ -779,8 +803,8 @@ class ControllerState:
         source, but the displayed temperature prefers MQTT while MQTT is fresh.
         """
         with self.lock:
-            now_epoch = time.time()
-            now_text = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            now_epoch = time.time() if update_epoch is None else float(update_epoch)
+            now_text = datetime.fromtimestamp(now_epoch).strftime("%Y-%m-%d %H:%M:%S")
             updated = False
 
             def source_is_fresh(src_info: Dict[str, Any], timeout_seconds: int = 120) -> bool:
@@ -1053,7 +1077,7 @@ class ControllerState:
             self.zendure_command_state_complete = False
             self.zendure_command_state_reason = f"{reason}: vollständiger Command-State muss neu rückgelesen werden."
 
-    def update_zendure_headunit_power(self, source: str, pack_input: Any = None, output_home: Any = None, grid_input: Any = None, output_pack: Any = None, grid_off: Any = None, solar_input: Any = None) -> None:
+    def update_zendure_headunit_power(self, source: str, pack_input: Any = None, output_home: Any = None, grid_input: Any = None, output_pack: Any = None, grid_off: Any = None, solar_input: Any = None, update_epoch: Optional[float] = None) -> None:
         """Update and separate Zendure grid, battery and off-grid power flows.
 
         The compatibility field ``actual_zendure_system_signed_power`` now
@@ -1078,7 +1102,7 @@ class ControllerState:
             op = to_int(output_pack)
             go = to_int(grid_off)
             si = to_int(solar_input)
-            now = time.time()
+            now = time.time() if update_epoch is None else float(update_epoch)
             if pi is not None:
                 self.actual_zendure_charge_power = pi
                 self.actual_zendure_pack_input_update_epoch = now
@@ -1101,7 +1125,7 @@ class ControllerState:
             self._refresh_zendure_headunit_power_locked(now=now)
 
             self.last_zendure_power_update_epoch = now
-            self.last_zendure_power_update_time = datetime.now().strftime("%H:%M:%S")
+            self.last_zendure_power_update_time = datetime.fromtimestamp(now).strftime("%H:%M:%S")
 
     def _refresh_zendure_headunit_power_locked(self, now: Optional[float] = None) -> None:
         now = time.time() if now is None else float(now)
@@ -1507,6 +1531,17 @@ class ControllerState:
                 "zendure_ac_home_power": self.actual_zendure_discharge_power,
                 "zendure_telemetry_source": self.zendure_telemetry_source,
                 "zendure_api_fallback_active": self.zendure_local_api_fallback_active,
+                "zendure_local_api_snapshot_sequence": self.zendure_local_api_snapshot_sequence,
+                "zendure_local_api_success_sequence": self.zendure_local_api_success_sequence,
+                "zendure_local_api_new_success_applied": self.zendure_local_api_new_success_applied,
+                "zendure_local_api_last_success_age_s": (
+                    round(max(0.0, time.monotonic() - self.zendure_local_api_last_success_monotonic), 3)
+                    if self.zendure_local_api_last_success_monotonic is not None else None
+                ),
+                "zendure_local_api_snapshot_valid": self.zendure_local_api_snapshot_valid,
+                "zendure_local_api_snapshot_stale": self.zendure_local_api_snapshot_stale,
+                "zendure_local_api_request_duration_ms": self.zendure_local_api_request_duration_ms,
+                "zendure_local_api_snapshot_apply_ms": self.zendure_local_api_snapshot_apply_ms,
                 "battery_temperature_c": self.current_battery_temperature_c,
 
                 # Zweitbatterie / Cross-Charge
@@ -1624,8 +1659,10 @@ class ControllerState:
                 "target_limiters_summary": technical_limiter_text(active_limiters),
                 "target_raw_w": signed_stage(self.last_target_before_smoothing),
                 "target_after_deadband_w": signed_stage(self.last_target_before_smoothing),
-                "target_after_cross_charge_w": signed_stage(self.last_target_before_smoothing),
-                "target_after_soc_limits_w": signed_stage(self.last_target_before_smoothing),
+                "target_after_cross_charge_w": target_signed,
+                "target_after_power_limit_w": signed_stage(self.last_target_after_power_limit),
+                "target_after_soc_limits_w": signed_stage(self.last_target_after_power_limit),
+                "target_power_limit_reason": self.target_power_limit_reason,
                 "target_after_smoothing_w": signed_stage(self.last_target_after_smoothing),
                 "target_after_ramp_w": signed_stage(self.last_target_after_ramp),
                 "target_final_w": target_signed,
@@ -1825,6 +1862,22 @@ class ControllerState:
                     return None
                 return max(0, int(now_epoch - epoch_value))
 
+            def signed_target_stage(value: Any) -> int:
+                try:
+                    magnitude = abs(int(float(value or 0)))
+                except Exception:
+                    magnitude = 0
+                if self.last_output_power > 0 and self.last_input_power <= 0:
+                    return -magnitude
+                if self.last_input_power > 0 and self.last_output_power <= 0:
+                    return magnitude
+                return 0 if magnitude == 0 else int(value or 0)
+
+            current_signed_target = signed_zendure_target_w(
+                self.last_input_power,
+                self.last_output_power,
+            )
+
             return {
                 "uptime_seconds": int(now_epoch - self.startup_epoch),
                 "raw_grid_power": self.raw_grid_power,
@@ -1869,8 +1922,15 @@ class ControllerState:
                 "actual_zendure_power_age_s": self.actual_zendure_power_age_s,
                 "actual_zendure_power_validity_reason": self.actual_zendure_power_validity_reason,
                 "current_target_power": self.current_target_power,
-                "zendure_target_signed_power": self.zendure_target_signed_power,
+                "zendure_target_signed_power": current_signed_target,
+                "target_raw_w": signed_target_stage(self.last_target_before_smoothing),
+                "target_after_power_limit_w": signed_target_stage(self.last_target_after_power_limit),
+                "target_after_smoothing_w": signed_target_stage(self.last_target_after_smoothing),
+                "target_after_ramp_w": signed_target_stage(self.last_target_after_ramp),
+                "target_final_w": current_signed_target,
                 "last_target_before_smoothing": self.last_target_before_smoothing,
+                "last_target_after_power_limit": self.last_target_after_power_limit,
+                "target_power_limit_reason": self.target_power_limit_reason,
                 "last_target_after_smoothing": self.last_target_after_smoothing,
                 "last_target_after_ramp": self.last_target_after_ramp,
                 "current_mode": self.current_mode,
@@ -2019,6 +2079,37 @@ class ControllerState:
                 "last_local_api_update_age_seconds": age_seconds(self.last_local_api_update_epoch),
                 "last_local_api_error": self.last_local_api_error,
                 "last_local_api_error_time": self.last_local_api_error_time,
+                "zendure_local_api_worker_state": self.zendure_local_api_worker_state,
+                "zendure_local_api_worker_config_generation": self.zendure_local_api_worker_config_generation,
+                "zendure_local_api_snapshot_sequence": self.zendure_local_api_snapshot_sequence,
+                "zendure_local_api_success_sequence": self.zendure_local_api_success_sequence,
+                "zendure_local_api_new_success_applied": self.zendure_local_api_new_success_applied,
+                "zendure_local_api_latest_attempt_ok": self.zendure_local_api_latest_attempt_ok,
+                "zendure_local_api_last_attempt_time": (
+                    datetime.fromtimestamp(self.zendure_local_api_last_attempt_epoch).strftime("%Y-%m-%d %H:%M:%S")
+                    if self.zendure_local_api_last_attempt_epoch is not None else "-"
+                ),
+                "zendure_local_api_last_attempt_age_s": (
+                    round(max(0.0, time.monotonic() - self.zendure_local_api_last_attempt_monotonic), 3)
+                    if self.zendure_local_api_last_attempt_monotonic is not None else None
+                ),
+                "zendure_local_api_last_success_time": (
+                    datetime.fromtimestamp(self.zendure_local_api_last_success_epoch).strftime("%Y-%m-%d %H:%M:%S")
+                    if self.zendure_local_api_last_success_epoch is not None else "-"
+                ),
+                "zendure_local_api_last_success_age_s": (
+                    round(max(0.0, time.monotonic() - self.zendure_local_api_last_success_monotonic), 3)
+                    if self.zendure_local_api_last_success_monotonic is not None else None
+                ),
+                "zendure_local_api_snapshot_valid": self.zendure_local_api_snapshot_valid,
+                "zendure_local_api_snapshot_stale": self.zendure_local_api_snapshot_stale,
+                "zendure_local_api_snapshot_stale_after_s": self.zendure_local_api_snapshot_stale_after_s,
+                "zendure_local_api_request_duration_ms": self.zendure_local_api_last_request_duration_ms,
+                "zendure_local_api_snapshot_apply_ms": self.zendure_local_api_snapshot_apply_ms,
+                "zendure_local_api_consecutive_errors": self.zendure_local_api_consecutive_errors,
+                "zendure_local_api_backoff_remaining_s": self.zendure_local_api_backoff_remaining_s,
+                "zendure_local_api_latest_error_code": self.zendure_local_api_latest_error_code,
+                "zendure_local_api_parse_warning_count": self.zendure_local_api_parse_warning_count,
                 "last_sma_battery_update_time": self.last_sma_battery_update_time,
                 "last_sma_battery_update_age_seconds": age_seconds(self.last_sma_battery_update_epoch),
                 "last_zendure_power_update_time": self.last_zendure_power_update_time,

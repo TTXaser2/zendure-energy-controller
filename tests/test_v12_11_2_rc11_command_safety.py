@@ -456,7 +456,7 @@ class Rc11CommandSafetyTests(unittest.TestCase):
             self.assertTrue(os.path.exists(old_path))
             new_files = [
                 name for name in os.listdir(tmp)
-                if name.startswith("custom_measurements_schema_rc17_") and name.endswith(".csv")
+                if name.startswith("custom_measurements_schema_rc18_") and name.endswith(".csv")
             ]
             self.assertEqual(1, len(new_files))
             with open(os.path.join(tmp, new_files[0]), encoding="utf-8", newline="") as f:
@@ -483,7 +483,7 @@ class Rc11CommandSafetyTests(unittest.TestCase):
             self.assertTrue(os.path.exists(old_path))
             new_files = [
                 name for name in os.listdir(tmp)
-                if name.startswith("custom_rc11_measurements_schema_rc17_") and name.endswith(".csv")
+                if name.startswith("custom_rc11_measurements_schema_rc18_") and name.endswith(".csv")
             ]
             self.assertEqual(1, len(new_files))
             with open(os.path.join(tmp, new_files[0]), encoding="utf-8", newline="") as f:
@@ -508,7 +508,7 @@ class Rc11CommandSafetyTests(unittest.TestCase):
             self.assertTrue(os.path.exists(old_path))
             new_files = [
                 name for name in os.listdir(tmp)
-                if name.startswith("custom_rc12_measurements_schema_rc17_") and name.endswith(".csv")
+                if name.startswith("custom_rc12_measurements_schema_rc18_") and name.endswith(".csv")
             ]
             self.assertEqual(1, len(new_files))
             with open(os.path.join(tmp, new_files[0]), encoding="utf-8", newline="") as f:
@@ -532,7 +532,7 @@ class Rc11CommandSafetyTests(unittest.TestCase):
             self.assertTrue(os.path.exists(old_path))
             new_files = [
                 name for name in os.listdir(tmp)
-                if name.startswith("custom_rc13_measurements_schema_rc17_") and name.endswith(".csv")
+                if name.startswith("custom_rc13_measurements_schema_rc18_") and name.endswith(".csv")
             ]
             self.assertEqual(1, len(new_files))
             with open(os.path.join(tmp, new_files[0]), encoding="utf-8", newline="") as f:
@@ -556,7 +556,7 @@ class Rc11CommandSafetyTests(unittest.TestCase):
             self.assertTrue(os.path.exists(old_path))
             new_files = [
                 name for name in os.listdir(tmp)
-                if name.startswith("custom_rc14_measurements_schema_rc17_") and name.endswith(".csv")
+                if name.startswith("custom_rc14_measurements_schema_rc18_") and name.endswith(".csv")
             ]
             self.assertEqual(1, len(new_files))
             with open(os.path.join(tmp, new_files[0]), encoding="utf-8", newline="") as f:
@@ -568,7 +568,7 @@ class Rc11CommandSafetyTests(unittest.TestCase):
             rotations = [e for e in events if e.get("rotation_reason") == "HEADER_CHANGED"]
             self.assertTrue(rotations)
             self.assertEqual("ZEC-MEASUREMENT-V4-RC14", rotations[-1].get("previous_contract"))
-            self.assertEqual("ZEC-MEASUREMENT-V4-RC17", rotations[-1].get("new_contract"))
+            self.assertEqual("ZEC-MEASUREMENT-V4-RC18", rotations[-1].get("new_contract"))
 
 
     def test_custom_rc15_measurement_file_is_preserved_and_rc16_uses_new_session_file(self):
@@ -587,7 +587,7 @@ class Rc11CommandSafetyTests(unittest.TestCase):
             self.assertTrue(os.path.exists(old_path))
             new_files = [
                 name for name in os.listdir(tmp)
-                if name.startswith("custom_rc15_measurements_schema_rc17_") and name.endswith(".csv")
+                if name.startswith("custom_rc15_measurements_schema_rc18_") and name.endswith(".csv")
             ]
             self.assertEqual(1, len(new_files))
             with open(os.path.join(tmp, new_files[0]), encoding="utf-8", newline="") as f:
@@ -599,7 +599,7 @@ class Rc11CommandSafetyTests(unittest.TestCase):
             rotations = [e for e in events if e.get("rotation_reason") == "HEADER_CHANGED"]
             self.assertTrue(rotations)
             self.assertEqual("ZEC-MEASUREMENT-V4-RC15", rotations[-1].get("previous_contract"))
-            self.assertEqual("ZEC-MEASUREMENT-V4-RC17", rotations[-1].get("new_contract"))
+            self.assertEqual("ZEC-MEASUREMENT-V4-RC18", rotations[-1].get("new_contract"))
 
     def test_custom_rc16_measurement_file_is_preserved_and_rc17_uses_new_session_file(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -617,7 +617,7 @@ class Rc11CommandSafetyTests(unittest.TestCase):
             self.assertTrue(os.path.exists(old_path))
             new_files = [
                 name for name in os.listdir(tmp)
-                if name.startswith("custom_rc16_measurements_schema_rc17_") and name.endswith(".csv")
+                if name.startswith("custom_rc16_measurements_schema_rc18_") and name.endswith(".csv")
             ]
             self.assertEqual(1, len(new_files))
             with open(os.path.join(tmp, new_files[0]), encoding="utf-8", newline="") as f:
@@ -629,7 +629,7 @@ class Rc11CommandSafetyTests(unittest.TestCase):
             rotations = [e for e in events if e.get("rotation_reason") == "HEADER_CHANGED"]
             self.assertTrue(rotations)
             self.assertEqual("ZEC-MEASUREMENT-V4-RC16", rotations[-1].get("previous_contract"))
-            self.assertEqual("ZEC-MEASUREMENT-V4-RC17", rotations[-1].get("new_contract"))
+            self.assertEqual("ZEC-MEASUREMENT-V4-RC18", rotations[-1].get("new_contract"))
 
     def test_force_resend_zero_includes_mode_and_both_limits(self):
         controller, state, mqtt, cfg = self.make_controller()

@@ -29,7 +29,16 @@ from command_lifecycle import (
     intent_for_signed_target,
 )
 from state import ControllerState
-from zendure_local_api import ZendureLocalApiClient, zendure_temp_to_celsius
+from zendure_local_api import (
+    ZendureLocalApiClient,
+    ZendureLocalApiWorker,
+    WORKER_BACKOFF,
+    WORKER_DISABLED,
+    WORKER_IDLE,
+    WORKER_REQUESTING,
+    WORKER_STOPPED,
+    WORKER_STOPPING,
+)
 from cross_charge import cross_charge_enabled, normalize_discharge_power_w, display_power_w
 
 
@@ -52,6 +61,18 @@ class ZendureController:
         self.sma_energy_meter = sma_energy_meter_client or SmaEnergyMeterClient()
         self.csv_logger = csv_logger
         self.zendure_api = zendure_api_client
+        if isinstance(zendure_api_client, ZendureLocalApiWorker):
+            self.zendure_api_worker = zendure_api_client
+        elif isinstance(zendure_api_client, ZendureLocalApiClient):
+            self.zendure_api_worker = ZendureLocalApiWorker(zendure_api_client, config_manager.get())
+        else:
+            # Historical unit-test doubles do not provide a worker transport.
+            # Their controller paths remain deterministic and local-API-free.
+            self.zendure_api_worker = None
+        self._last_seen_local_api_snapshot_sequence: int = 0
+        self._last_applied_local_api_success_sequence: int = 0
+        self._last_seen_local_api_attempt_monotonic: Optional[float] = None
+        self._last_local_api_worker_state: str = WORKER_DISABLED
         self.app_logger = app_logger or RotatingAppLogger()
         self._running = True
         self._cycle_timing_parts: Dict[str, int] = {}
@@ -116,6 +137,18 @@ class ZendureController:
             print(message)
         self.app_logger.log(cfg, message)
 
+    def _write_local_api_runtime_event(self, cfg: Dict[str, Any], event_type: str, values: Dict[str, Any]) -> None:
+        writer = getattr(self.csv_logger, "write_runtime_event", None)
+        if not callable(writer):
+            return
+        event = {"event_type": event_type}
+        event.update(values)
+        try:
+            writer(cfg, event)
+        except Exception:
+            # Runtime events are diagnostic only and must never affect control.
+            pass
+
     def _timed_phase(self, name: str, func, *args, **kwargs):
         started = time.perf_counter_ns()
         try:
@@ -125,20 +158,23 @@ class ZendureController:
             self._cycle_timing_parts[name] = float(self._cycle_timing_parts.get(name, 0.0)) + elapsed_ms
 
     def _timed_local_api_phase(self, cfg: Dict[str, Any]):
-        """Measure the optional local API only when a real poll was attempted.
+        """Compatibility alias for the RC18 snapshot-apply phase."""
+        return self._timed_local_api_snapshot_apply_phase(cfg)
 
-        ``should_poll()`` can skip most controller cycles because of its polling
-        interval or backoff.  Recording those cheap no-op calls as 0,0 ms is
-        misleading in the operations dashboard.  ``fetch_report()`` updates
-        ``last_poll_epoch`` before every actual request, including failed ones,
-        so comparing the timestamp is a side-effect-free execution marker.
-        """
-        before = getattr(self.zendure_api, "last_poll_epoch", None)
-        result = self._timed_phase("zendure_local_api_ms", self.update_zendure_telemetry_from_local_api, cfg)
-        after = getattr(self.zendure_api, "last_poll_epoch", None)
-        if after == before:
-            self._cycle_timing_parts.pop("zendure_local_api_ms", None)
-        return result
+    def _timed_local_api_snapshot_apply_phase(self, cfg: Dict[str, Any]):
+        """Apply a new immutable worker snapshot without waiting for HTTP I/O."""
+        started = time.perf_counter_ns()
+        processed = self.update_zendure_telemetry_from_local_api_snapshot(cfg)
+        if not processed:
+            self._cycle_timing_parts.pop("zendure_local_api_snapshot_apply_ms", None)
+            return False
+        elapsed_ms = (time.perf_counter_ns() - started) / 1_000_000.0
+        self._cycle_timing_parts["zendure_local_api_snapshot_apply_ms"] = float(
+            self._cycle_timing_parts.get("zendure_local_api_snapshot_apply_ms", 0.0)
+        ) + elapsed_ms
+        with self.state.lock:
+            self.state.zendure_local_api_snapshot_apply_ms = elapsed_ms
+        return True
 
     def _timed_control_phase(self, func, *args, **kwargs):
         """Measure controller decision work excluding actual MQTT setter calls.
@@ -599,8 +635,25 @@ class ZendureController:
 
     def request_stop(self) -> None:
         self._running = False
+        if self.zendure_api_worker is not None:
+            self.zendure_api_worker.request_stop()
 
     def close(self) -> None:
+        if self.zendure_api_worker is not None:
+            try:
+                self.zendure_api_worker.request_stop()
+                self.zendure_api_worker.join(timeout=self.zendure_api_worker.join_timeout_s())
+                if self.zendure_api_worker.is_alive():
+                    self.log("[LOCAL_API] Worker konnte innerhalb des Join-Timeouts nicht vollständig beendet werden.")
+                elif self._last_local_api_worker_state != WORKER_STOPPED:
+                    final_snapshot = self.zendure_api_worker.latest_snapshot()
+                    self._write_local_api_runtime_event(self.config_manager.get(), "local_api_worker_stopped", {
+                        "snapshot_sequence": final_snapshot.snapshot_sequence,
+                        "success_sequence": final_snapshot.data_success_sequence,
+                    })
+                    self._last_local_api_worker_state = WORKER_STOPPED
+            except Exception as exc:
+                self.log(f"[LOCAL_API] Fehler beim Beenden des Workers: {exc}")
         try:
             self.csv_logger.close()
         except Exception:
@@ -611,6 +664,11 @@ class ZendureController:
             pass
 
     def run_forever(self) -> None:
+        if self.zendure_api_worker is not None:
+            self.zendure_api_worker.start()
+            self._write_local_api_runtime_event(self.config_manager.get(), "local_api_worker_started", {
+                "worker_config_generation": self.zendure_api_worker.config_generation,
+            })
         self.log("[CTRL] Hauptschleife gestartet")
         while self._running:
             loop_start = time.time()
@@ -622,6 +680,14 @@ class ZendureController:
             if changed:
                 self.log("[CONFIG] Änderung geladen")
                 self._timed_phase("mqtt_refresh_subscriptions_ms", self.mqtt.refresh_subscriptions)
+                if self.zendure_api_worker is not None:
+                    previous_generation = self.zendure_api_worker.config_generation
+                    generation = self.zendure_api_worker.update_config(cfg)
+                    if generation != previous_generation:
+                        self._write_local_api_runtime_event(cfg, "local_api_config_generation_changed", {
+                            "previous_generation": previous_generation,
+                            "worker_config_generation": generation,
+                        })
 
             run_once_started = time.perf_counter_ns()
             try:
@@ -645,7 +711,7 @@ class ZendureController:
             self._cycle_timing_parts["cycle_total_without_sleep_ms"] = total_ms
             leaf_keys = (
                 "config_reload_ms", "mqtt_refresh_subscriptions_ms",
-                "zendure_local_api_ms", "sma_energy_meter_ms",
+                "zendure_local_api_snapshot_apply_ms", "sma_energy_meter_ms",
                 "grid_control_read_ms", "grid_display_read_ms",
                 "cycle_display_metrics_ms", "cross_charge_metrics_ms",
                 "control_decision_ms", "mqtt_command_path_ms",
@@ -689,6 +755,9 @@ class ZendureController:
             self.state.control_required_sources = []
             self.state.control_missing_required_sources = []
             self.state.control_data_quality = "not_evaluated"
+            self.state.zendure_local_api_new_success_applied = False
+            self.state.zendure_local_api_request_duration_ms = None
+            self.state.zendure_local_api_snapshot_apply_ms = None
 
         if cfg.get("MQTT_DISCONNECTED_SAFE_STATE", False) and not self.state.mqtt_connected:
             self._reset_rest_surplus_harvest("MQTT_DISCONNECTED")
@@ -700,7 +769,7 @@ class ZendureController:
         # werden, weil diese Betriebsarten ohne Netzanschlusspunktmessung funktionieren.
         # Grid/Shelly-kompatible HTTP-/SMA-Daten werden für die Statusseite in festen Modi zusätzlich
         # best-effort aktualisiert, aber nicht als Pflichtquelle für diese Modi benutzt.
-        self._timed_local_api_phase(cfg)
+        self._timed_local_api_snapshot_apply_phase(cfg)
         self._timed_phase("sma_energy_meter_ms", self.update_sma_energy_meter_status, cfg)
         # Per-cycle housekeeping: display/CSV metrics that are derived from
         # asynchronous MQTT/API raw values must be refreshed before any early
@@ -997,130 +1066,229 @@ class ZendureController:
         return (time.time() - last_power) <= cfg.get("ZENDURE_POWER_STALE_TIMEOUT_SECONDS", 90)
 
     def update_zendure_telemetry_from_local_api(self, cfg: Dict[str, Any]) -> None:
-        """Use the local Zendure API as a read-only telemetry fallback.
+        """Compatibility wrapper for the RC18 immutable snapshot apply."""
+        self.update_zendure_telemetry_from_local_api_snapshot(cfg)
 
-        MQTT remains the primary source when it is fresh. The local API is
-        polled periodically for diagnostics and temperature data. It updates
-        the active SOC and actual power only if fallback-only mode is disabled
-        or if MQTT telemetry is currently stale/missing.
+    def update_zendure_telemetry_from_local_api_snapshot(self, cfg: Dict[str, Any]) -> bool:
+        """Apply at most one new worker snapshot in the controller thread.
+
+        The method performs no network I/O and never waits for the worker. It
+        returns ``True`` only when a new worker snapshot/attempt was processed.
         """
-        if not self.zendure_api.should_poll(cfg):
-            return
+        worker = self.zendure_api_worker
+        if worker is None:
+            return False
 
-        try:
-            report = self.zendure_api.fetch_report(cfg)
-        except Exception as exc:
+        snapshot = worker.latest_snapshot()
+        current_generation = worker.config_generation
+        now_monotonic = time.monotonic()
+        stale_after_s = max(
+            30.0,
+            3.0 * max(1.0, float(cfg.get("ZENDURE_LOCAL_API_POLL_INTERVAL_SECONDS", 5) or 5)),
+        )
+        success_age_s = (
+            max(0.0, now_monotonic - float(snapshot.last_success_monotonic))
+            if snapshot.last_success_monotonic is not None else None
+        )
+        snapshot_valid = bool(
+            snapshot.successful_data is not None
+            and snapshot.successful_data_config_generation == current_generation
+        )
+        snapshot_stale = bool(
+            not snapshot_valid
+            or success_age_s is None
+            or success_age_s > stale_after_s
+        )
+
+        with self.state.lock:
+            self.state.zendure_local_api_worker_state = snapshot.worker_state
+            self.state.zendure_local_api_worker_config_generation = current_generation
+            self.state.zendure_local_api_snapshot_sequence = snapshot.snapshot_sequence
+            self.state.zendure_local_api_success_sequence = snapshot.data_success_sequence
+            self.state.zendure_local_api_latest_attempt_ok = snapshot.latest_attempt_ok
+            self.state.zendure_local_api_last_attempt_epoch = snapshot.last_attempt_wall_epoch
+            self.state.zendure_local_api_last_attempt_monotonic = snapshot.last_attempt_monotonic
+            self.state.zendure_local_api_last_success_epoch = snapshot.last_success_wall_epoch
+            self.state.zendure_local_api_last_success_monotonic = snapshot.last_success_monotonic
+            self.state.zendure_local_api_snapshot_valid = snapshot_valid
+            self.state.zendure_local_api_snapshot_stale = snapshot_stale
+            self.state.zendure_local_api_snapshot_stale_after_s = stale_after_s
+            self.state.zendure_local_api_last_request_duration_ms = snapshot.request_duration_ms
+            self.state.zendure_local_api_consecutive_errors = snapshot.consecutive_error_count
+            self.state.zendure_local_api_backoff_remaining_s = snapshot.backoff_remaining_s(now_monotonic)
+            self.state.zendure_local_api_latest_error_code = snapshot.latest_error_code
+            self.state.zendure_local_api_parse_warning_count = snapshot.parse_warning_count
+
+        if snapshot.snapshot_sequence == self._last_seen_local_api_snapshot_sequence:
+            return False
+        self._last_seen_local_api_snapshot_sequence = snapshot.snapshot_sequence
+
+        previous_worker_state = self._last_local_api_worker_state
+        self._last_local_api_worker_state = snapshot.worker_state
+        if snapshot.worker_state == WORKER_BACKOFF and previous_worker_state != WORKER_BACKOFF:
+            self._write_local_api_runtime_event(cfg, "local_api_backoff_entered", {
+                "snapshot_sequence": snapshot.snapshot_sequence,
+                "success_sequence": snapshot.data_success_sequence,
+                "backoff_remaining_s": round(snapshot.backoff_remaining_s(now_monotonic), 3),
+                "error_code": snapshot.latest_error_code,
+            })
+        elif previous_worker_state == WORKER_BACKOFF and snapshot.worker_state != WORKER_BACKOFF:
+            self._write_local_api_runtime_event(cfg, "local_api_backoff_left", {
+                "snapshot_sequence": snapshot.snapshot_sequence,
+                "success_sequence": snapshot.data_success_sequence,
+            })
+        if snapshot.worker_state == WORKER_STOPPED and previous_worker_state != WORKER_STOPPED:
+            self._write_local_api_runtime_event(cfg, "local_api_worker_stopped", {
+                "snapshot_sequence": snapshot.snapshot_sequence,
+            })
+
+        attempt_is_new = bool(
+            snapshot.last_attempt_monotonic is not None
+            and snapshot.last_attempt_monotonic != self._last_seen_local_api_attempt_monotonic
+        )
+        if attempt_is_new:
+            self._last_seen_local_api_attempt_monotonic = snapshot.last_attempt_monotonic
             with self.state.lock:
-                self.state.last_local_api_error = str(exc)
-                self.state.last_local_api_error_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            return
+                self.state.zendure_local_api_request_duration_ms = snapshot.request_duration_ms
+            attempt_event = {
+                "snapshot_sequence": snapshot.snapshot_sequence,
+                "success_sequence": snapshot.data_success_sequence,
+                "worker_config_generation": snapshot.config_generation,
+                "attempt_ok": snapshot.latest_attempt_ok,
+                "request_duration_ms": None if snapshot.request_duration_ms is None else round(snapshot.request_duration_ms, 3),
+                "consecutive_errors": snapshot.consecutive_error_count,
+                "backoff_remaining_s": round(snapshot.backoff_remaining_s(now_monotonic), 3),
+                "error_code": snapshot.latest_error_code,
+                "parse_warning_count": snapshot.parse_warning_count,
+            }
+            self._write_local_api_runtime_event(cfg, "local_api_attempt_completed", attempt_event)
+            if snapshot.latest_error_code == "SUPERSEDED_CONFIG":
+                self._write_local_api_runtime_event(cfg, "local_api_snapshot_discarded_generation_mismatch", attempt_event)
+            elif snapshot.latest_attempt_ok is False:
+                self._write_local_api_runtime_event(cfg, "local_api_worker_error", attempt_event)
+            if snapshot.parse_warning_count:
+                self._write_local_api_runtime_event(cfg, "local_api_parse_warning", attempt_event)
 
-        now = time.time()
-        now_text = datetime.now().strftime("%H:%M:%S")
-        props = report.get("properties", {}) if isinstance(report, dict) else {}
-        pack_data = report.get("packData", []) if isinstance(report, dict) else []
-        first_pack = pack_data[0] if isinstance(pack_data, list) and pack_data else {}
+            with self.state.lock:
+                if snapshot.latest_attempt_ok:
+                    self.state.last_local_api_error = "none"
+                    self.state.last_local_api_error_time = "-"
+                elif snapshot.latest_error_code != "SUPERSEDED_CONFIG":
+                    self.state.last_local_api_error = snapshot.latest_error_text or snapshot.latest_error_code
+                    if snapshot.last_attempt_wall_epoch is not None:
+                        self.state.last_local_api_error_time = datetime.fromtimestamp(
+                            snapshot.last_attempt_wall_epoch
+                        ).strftime("%Y-%m-%d %H:%M:%S")
 
-        electric_level = self._safe_int(props.get("electricLevel"))
-        pack_soc = self._safe_int(first_pack.get("socLevel"))
-        priority = str(cfg.get("ZENDURE_LOCAL_API_SOC_PRIORITY", "properties_first"))
-        if priority == "pack_first":
-            api_soc = pack_soc if pack_soc is not None else electric_level
-        else:
-            api_soc = electric_level if electric_level is not None else pack_soc
-
-        pack_input = self._safe_int(props.get("packInputPower"))
-        output_home = self._safe_int(props.get("outputHomePower"))
-        grid_input = self._safe_int(props.get("gridInputPower"))
-        output_pack = self._safe_int(props.get("outputPackPower"))
-        grid_off = self._safe_int(props.get("gridOffPower"))
-        solar_input = self._safe_int(props.get("solarInputPower"))
-
-        # Command/configuration read-back is orthogonal to the telemetry fallback
-        # decision.  The local API is read-only and provides a second source for
-        # flash protection, current AC mode, limits and device-side safety caps.
-        for property_name in (
-            "smartMode", "acMode", "inputLimit", "outputLimit",
-            "inverseMaxPower", "chargeMaxLimit", "gridOffMode",
+        if (
+            snapshot.data_success_sequence <= self._last_applied_local_api_success_sequence
+            or not snapshot_valid
+            or snapshot_stale
+            or snapshot.successful_data is None
         ):
-            if property_name in props:
-                self.state.update_zendure_command_property(property_name, props.get(property_name), "Lokale API", now)
+            return True
+
+        data = snapshot.successful_data
+        success_epoch = float(snapshot.last_success_wall_epoch or time.time())
+        success_text = datetime.fromtimestamp(success_epoch).strftime("%H:%M:%S")
+
+        command_properties = {
+            "smartMode": data.smart_mode,
+            "acMode": data.ac_mode,
+            "inputLimit": data.input_limit_w,
+            "outputLimit": data.output_limit_w,
+            "inverseMaxPower": data.inverse_max_power_w,
+            "chargeMaxLimit": data.charge_max_limit_w,
+            "gridOffMode": data.grid_off_mode,
+        }
+        for property_name, value in command_properties.items():
+            if value is not None:
+                self.state.update_zendure_command_property(property_name, value, "Lokale API", success_epoch)
 
         pack_metrics = []
-        headunit_temp = zendure_temp_to_celsius(props.get("hyperTmp"))
-        if headunit_temp is not None:
+        if data.headunit_temperature_c is not None:
             pack_metrics.append({
-                "pack_sn": str(report.get("sn", cfg.get("DEVICE_ID", "headunit"))) if isinstance(report, dict) else "headunit",
-                "temperature_c": headunit_temp,
-                "temperature_raw": props.get("hyperTmp"),
+                "pack_sn": data.device_sn or str(cfg.get("DEVICE_ID", "headunit")),
+                "temperature_c": data.headunit_temperature_c,
+                "temperature_raw": data.headunit_temperature_raw,
             })
-        if isinstance(pack_data, list):
-            for idx, pack in enumerate(pack_data):
-                if not isinstance(pack, dict):
-                    continue
-                item = {"pack_sn": str(pack.get("sn", f"pack-{idx+1}"))}
-                temp = zendure_temp_to_celsius(pack.get("maxTemp"))
-                if temp is not None:
-                    item["temperature_c"] = temp
-                    item["temperature_raw"] = pack.get("maxTemp")
-                if pack.get("power") is not None:
-                    item["power_w"] = pack.get("power")
-                if pack.get("socLevel") is not None:
-                    item["soc_percent"] = pack.get("socLevel")
-                if pack.get("state") is not None:
-                    item["state"] = pack.get("state")
-                pack_metrics.append(item)
+        for pack in data.packs:
+            item: Dict[str, Any] = {"pack_sn": pack.pack_sn}
+            if pack.temperature_c is not None:
+                item["temperature_c"] = pack.temperature_c
+                item["temperature_raw"] = pack.temperature_raw
+            if pack.power_w is not None:
+                item["power_w"] = pack.power_w
+            if pack.soc_percent is not None:
+                item["soc_percent"] = pack.soc_percent
+            if pack.state is not None:
+                item["state"] = pack.state
+            pack_metrics.append(item)
 
         mqtt_fresh = self.mqtt_soc_is_fresh(cfg)
         fallback_only = bool(cfg.get("ZENDURE_LOCAL_API_TELEMETRY_FALLBACK_ONLY", True))
-        use_api_as_active_soc = bool(api_soc is not None and (not fallback_only or not mqtt_fresh))
-        use_api_as_active_power = bool((
-            pack_input is not None or output_home is not None or grid_input is not None
-            or output_pack is not None or grid_off is not None or solar_input is not None
-        ) and (not fallback_only or not self.zendure_power_is_fresh(cfg)))
+        use_api_as_active_soc = bool(
+            data.selected_api_soc is not None and (not fallback_only or not mqtt_fresh)
+        )
+        has_power = any(value is not None for value in (
+            data.pack_input_power_w,
+            data.output_home_power_w,
+            data.grid_input_power_w,
+            data.output_pack_power_w,
+            data.grid_off_power_w,
+            data.solar_input_power_w,
+        ))
+        use_api_as_active_power = bool(
+            has_power and (not fallback_only or not self.zendure_power_is_fresh(cfg))
+        )
 
         with self.state.lock:
-            self.state.local_api_electric_level = electric_level
-            self.state.local_api_pack_soc_level = pack_soc
-            self.state.local_api_soc = api_soc
-            self.state.last_local_api_update_epoch = now
-            self.state.last_local_api_update_time = now_text
+            self.state.local_api_electric_level = data.electric_level
+            self.state.local_api_pack_soc_level = data.pack_soc_level
+            self.state.local_api_soc = data.selected_api_soc
+            self.state.last_local_api_update_epoch = success_epoch
+            self.state.last_local_api_update_time = success_text
             self.state.last_local_api_error = "none"
             self.state.last_local_api_error_time = "-"
+            self.state.zendure_local_api_new_success_applied = True
 
             if use_api_as_active_soc:
-                self.state.battery_soc = int(api_soc)
-                self.state.last_soc_update_epoch = now
-                self.state.last_soc_update_time = now_text
+                self.state.battery_soc = int(data.selected_api_soc)
+                self.state.last_soc_update_epoch = success_epoch
+                self.state.last_soc_update_time = success_text
                 self.state.zendure_telemetry_source = "Lokale API"
                 self.state.zendure_local_api_fallback_active = fallback_only
 
-            if use_api_as_active_power:
-                self.state.update_zendure_headunit_power(
-                    "Lokale API",
-                    pack_input=pack_input,
-                    output_home=output_home,
-                    grid_input=grid_input,
-                    output_pack=output_pack,
-                    grid_off=grid_off,
-                    solar_input=solar_input,
-                )
-                if not use_api_as_active_soc and not fallback_only:
+        if use_api_as_active_power:
+            self.state.update_zendure_headunit_power(
+                "Lokale API",
+                pack_input=data.pack_input_power_w,
+                output_home=data.output_home_power_w,
+                grid_input=data.grid_input_power_w,
+                output_pack=data.output_pack_power_w,
+                grid_off=data.grid_off_power_w,
+                solar_input=data.solar_input_power_w,
+                update_epoch=success_epoch,
+            )
+            if not use_api_as_active_soc and not fallback_only:
+                with self.state.lock:
                     self.state.zendure_telemetry_source = "Lokale API"
 
         if use_api_as_active_soc and fallback_only:
             self.state.add_limiter("ZENDURE_API_FALLBACK")
-
         if pack_metrics:
-            self.state.update_zendure_battery_metrics("Lokale API", pack_metrics)
+            self.state.update_zendure_battery_metrics("Lokale API", pack_metrics, update_epoch=success_epoch)
 
-    def _safe_int(self, value: Any) -> Optional[int]:
-        if value is None:
-            return None
-        try:
-            return int(float(value))
-        except Exception:
-            return None
+        self._last_applied_local_api_success_sequence = snapshot.data_success_sequence
+        self._write_local_api_runtime_event(cfg, "local_api_snapshot_applied", {
+            "snapshot_sequence": snapshot.snapshot_sequence,
+            "success_sequence": snapshot.data_success_sequence,
+            "worker_config_generation": snapshot.successful_data_config_generation,
+            "success_epoch": success_epoch,
+            "soc_fallback_active": bool(use_api_as_active_soc and fallback_only),
+            "power_fallback_active": bool(use_api_as_active_power and fallback_only),
+        })
+        return True
 
     def second_battery_data_is_fresh(self, cfg: Dict[str, Any]) -> bool:
         """Return True when the latest second-battery MQTT values are fresh."""
@@ -1224,6 +1392,10 @@ class ZendureController:
     def update_cycle_display_metrics(self, cfg: Dict[str, Any]) -> None:
         """Housekeeping for values that must be current on every cycle path."""
         self.update_second_battery_display_metrics(cfg)
+        # Capacity diagnostics are presentation/measurement housekeeping, not a
+        # Harvest-only control result.  Keep them current in SAFE_STATE,
+        # STOP_HOLD, NIGHT and fixed modes as well as AUTO/HOLD.
+        self._update_harvest_capacity_diagnostics(cfg)
         self.state.refresh_zendure_headunit_power()
 
     def mark_grid_not_used_for_control(self) -> None:
@@ -1399,6 +1571,39 @@ class ZendureController:
                 self.state.add_limiter("ZENDURE_DEVICE_DISCHARGE_LIMIT")
             return -max(0, int(clamped))
         return 0
+
+    def _fixed_mode_power_limit_reason(
+        self,
+        signed_requested_w: int,
+        signed_applied_w: int,
+        cfg: Dict[str, Any],
+    ) -> str:
+        """Identify the effective cap for a manual fixed target.
+
+        The helper is diagnostic only.  It does not change the already applied
+        command and keeps read-only Zendure device caps distinct from config
+        limits.
+        """
+        requested = int(signed_requested_w or 0)
+        applied = int(signed_applied_w or 0)
+        if requested == applied:
+            return "NONE"
+        snapshot = self._command_state_snapshot(cfg)
+        if requested > 0:
+            config_cap = max(0, int(cfg.get("MAX_CHARGE_POWER_W", abs(requested)) or 0))
+            device_cap = snapshot.get("charge_max_limit_w")
+            if device_cap is not None and int(device_cap) > 0 and abs(applied) <= int(device_cap) < abs(requested):
+                return "ZENDURE_DEVICE_CHARGE_MAX_LIMIT"
+            if config_cap < abs(requested):
+                return "CONFIG_MAX_CHARGE_POWER"
+        elif requested < 0:
+            config_cap = max(0, int(cfg.get("MAX_DISCHARGE_POWER_W", abs(requested)) or 0))
+            device_cap = snapshot.get("inverse_max_power_w")
+            if device_cap is not None and int(device_cap) > 0 and abs(applied) <= int(device_cap) < abs(requested):
+                return "ZENDURE_DEVICE_INVERSE_MAX_POWER"
+            if config_cap < abs(requested):
+                return "CONFIG_MAX_DISCHARGE_POWER"
+        return "POWER_LIMIT"
 
     @staticmethod
     def _command_state_matches_batch(snapshot: Dict[str, Any], batch: DesiredCommandBatch) -> bool:
@@ -3141,6 +3346,8 @@ class ZendureController:
             self.state.last_input_power = 0
             self.state.current_target_power = 0
             self.state.last_target_before_smoothing = 0
+            self.state.last_target_after_power_limit = 0
+            self.state.target_power_limit_reason = "NONE"
             self.state.last_target_after_smoothing = 0
             self.state.last_target_after_ramp = 0
             self.state.safe_state_counter += 1
@@ -3182,6 +3389,8 @@ class ZendureController:
             self.state.last_input_power = 0
             self.state.current_target_power = 0
             self.state.last_target_before_smoothing = 0
+            self.state.last_target_after_power_limit = 0
+            self.state.target_power_limit_reason = "NONE"
             self.state.last_target_after_smoothing = 0
             self.state.last_target_after_ramp = 0
             self.state.control_reason = reason
@@ -3207,25 +3416,29 @@ class ZendureController:
             )
             return
 
-        target = min(
-            int(cfg.get("MANUAL_FIXED_DISCHARGE_POWER_W", 0)),
-            int(cfg.get("MAX_DISCHARGE_POWER_W", 0)),
-        )
-        target = max(0, target)
-
-        applied_signed = self._publish_signed_target(-target, reason="MANUAL_FIXED_DISCHARGE")
+        requested_target = max(0, int(cfg.get("MANUAL_FIXED_DISCHARGE_POWER_W", 0) or 0))
+        requested_signed = -requested_target
+        applied_signed = self._publish_signed_target(requested_signed, reason="MANUAL_FIXED_DISCHARGE")
         target = max(0, -int(applied_signed))
+        power_limit_reason = self._fixed_mode_power_limit_reason(requested_signed, applied_signed, cfg)
+        if power_limit_reason != "NONE":
+            self.state.add_limiter(power_limit_reason)
 
         with self.state.lock:
             self.state.last_input_power = 0
             self.state.last_output_power = target
             self.state.current_target_power = target
-            self.state.last_target_before_smoothing = target
+            self.state.last_target_before_smoothing = requested_target
+            self.state.last_target_after_power_limit = target
+            self.state.target_power_limit_reason = power_limit_reason
             self.state.last_target_after_smoothing = target
             self.state.last_target_after_ramp = target
             self.state.control_reason = f"Manuelle feste Entladung bis {target_soc} % SOC"
             self.state.technical_control_path = "MANUAL -> FIXED_DISCHARGE -> OUTPUT"
-            self.state.last_control_action = f"MANUAL_DISCHARGE -> {target} W"
+            self.state.last_control_action = (
+                f"MANUAL_DISCHARGE requested={requested_target} W -> applied={target} W"
+                if requested_target != target else f"MANUAL_DISCHARGE -> {target} W"
+            )
 
         self.state.set_mode("MANUAL_FIXED_DISCHARGE")
         if cfg.get("LOG_MANUAL", False):
@@ -3248,25 +3461,29 @@ class ZendureController:
             )
             return
 
-        target = min(
-            int(cfg.get("MANUAL_FIXED_CHARGE_POWER_W", 0)),
-            int(cfg.get("MAX_CHARGE_POWER_W", 0)),
-        )
-        target = max(0, target)
-
-        applied_signed = self._publish_signed_target(target, reason="MANUAL_FIXED_CHARGE")
+        requested_target = max(0, int(cfg.get("MANUAL_FIXED_CHARGE_POWER_W", 0) or 0))
+        requested_signed = requested_target
+        applied_signed = self._publish_signed_target(requested_signed, reason="MANUAL_FIXED_CHARGE")
         target = max(0, int(applied_signed))
+        power_limit_reason = self._fixed_mode_power_limit_reason(requested_signed, applied_signed, cfg)
+        if power_limit_reason != "NONE":
+            self.state.add_limiter(power_limit_reason)
 
         with self.state.lock:
             self.state.last_output_power = 0
             self.state.last_input_power = target
             self.state.current_target_power = target
-            self.state.last_target_before_smoothing = target
+            self.state.last_target_before_smoothing = requested_target
+            self.state.last_target_after_power_limit = target
+            self.state.target_power_limit_reason = power_limit_reason
             self.state.last_target_after_smoothing = target
             self.state.last_target_after_ramp = target
             self.state.control_reason = f"Manuelle feste Beladung bis {target_soc} % SOC"
             self.state.technical_control_path = "MANUAL -> FIXED_CHARGE -> INPUT"
-            self.state.last_control_action = f"MANUAL_CHARGE -> {target} W"
+            self.state.last_control_action = (
+                f"MANUAL_CHARGE requested={requested_target} W -> applied={target} W"
+                if requested_target != target else f"MANUAL_CHARGE -> {target} W"
+            )
 
         self.state.set_mode("MANUAL_FIXED_CHARGE")
         if cfg.get("LOG_MANUAL", False):
@@ -3377,6 +3594,8 @@ class ZendureController:
             self.state.last_output_power = 0
             self.state.current_target_power = 0
             self.state.last_target_before_smoothing = 0
+            self.state.last_target_after_power_limit = 0
+            self.state.target_power_limit_reason = "NONE"
             self.state.last_target_after_smoothing = 0
             self.state.last_target_after_ramp = 0
             self.state.control_reason = "Nachtfenster beendet: feste Nachtentladung neutralisiert"
@@ -3416,6 +3635,8 @@ class ZendureController:
                 self.state.last_output_power = 0
                 self.state.current_target_power = 0
                 self.state.last_target_before_smoothing = 0
+                self.state.last_target_after_power_limit = 0
+                self.state.target_power_limit_reason = "NONE"
                 self.state.last_target_after_smoothing = 0
                 self.state.last_target_after_ramp = 0
                 self.state.control_reason = f"Feste Nachtentladung pausiert: Reserve-SOC {effective_stop_soc} % erreicht; AUTO-Regelung bleibt aktiv"
@@ -3446,6 +3667,8 @@ class ZendureController:
             self.state.last_output_power = target
             self.state.current_target_power = target
             self.state.last_target_before_smoothing = target
+            self.state.last_target_after_power_limit = target
+            self.state.target_power_limit_reason = "NONE"
             self.state.last_target_after_smoothing = target
             self.state.last_target_after_ramp = target
             self.state.control_reason = "Nachtmodus aktiv"
@@ -3478,6 +3701,9 @@ class ZendureController:
 
         raw_target = last_output + int(grid_power * cfg.get("CONTROL_GAIN", 0.30))
         target = max(0, min(raw_target, int(cfg["MAX_DISCHARGE_POWER_W"])))
+        power_limit_reason = "CONFIG_MAX_DISCHARGE_POWER" if target != max(0, raw_target) else "NONE"
+        if power_limit_reason != "NONE":
+            self.state.add_limiter(power_limit_reason)
         target_smoothed = self.smooth_transition(last_output, target, cfg)
         target_ramped = self.limit_power_step(last_output, target_smoothed, cfg)
 
@@ -3494,6 +3720,8 @@ class ZendureController:
             self.state.last_output_power = final_output
             self.state.current_target_power = max(self.state.last_input_power, self.state.last_output_power)
             self.state.last_target_before_smoothing = raw_target
+            self.state.last_target_after_power_limit = target
+            self.state.target_power_limit_reason = power_limit_reason
             self.state.last_target_after_smoothing = target_smoothed
             self.state.last_target_after_ramp = self.state.current_target_power
             self.state.control_reason = correction.get("reason") if correction.get("active") else "Netzbezug erkannt -> Zendure entlädt"
@@ -3583,6 +3811,9 @@ class ZendureController:
             raw_target = last_input + int(effective * cfg.get("CONTROL_GAIN", 0.30))
             control_reason = "PV-Überschuss erkannt -> Zendure lädt"
         target = max(0, min(raw_target, int(cfg["MAX_CHARGE_POWER_W"])))
+        power_limit_reason = "CONFIG_MAX_CHARGE_POWER" if target != max(0, raw_target) else "NONE"
+        if power_limit_reason != "NONE":
+            self.state.add_limiter(power_limit_reason)
         target_smoothed = self.smooth_transition(last_input, target, cfg)
         target_ramped = self.limit_power_step(last_input, target_smoothed, cfg)
 
@@ -3599,6 +3830,8 @@ class ZendureController:
             self.state.last_input_power = final_input
             self.state.current_target_power = max(self.state.last_input_power, self.state.last_output_power)
             self.state.last_target_before_smoothing = raw_target
+            self.state.last_target_after_power_limit = target
+            self.state.target_power_limit_reason = power_limit_reason
             self.state.last_target_after_smoothing = target_smoothed
             self.state.last_target_after_ramp = self.state.current_target_power
             self.state.control_reason = correction.get("reason") if correction.get("active") else control_reason
@@ -3632,6 +3865,8 @@ class ZendureController:
             self.state.last_input_power = target
             self.state.current_target_power = target
             self.state.last_target_before_smoothing = target
+            self.state.last_target_after_power_limit = target
+            self.state.target_power_limit_reason = "NONE"
             self.state.last_target_after_smoothing = target
             self.state.last_target_after_ramp = target
             self.state.control_reason = reason
@@ -3650,6 +3885,8 @@ class ZendureController:
             self.state.last_output_power = target
             self.state.current_target_power = target
             self.state.last_target_before_smoothing = target
+            self.state.last_target_after_power_limit = target
+            self.state.target_power_limit_reason = "NONE"
             self.state.last_target_after_smoothing = target
             self.state.last_target_after_ramp = target
             self.state.control_reason = reason
@@ -3776,10 +4013,17 @@ class ZendureController:
             self.state.last_loop_duration_ms = round((time.time() - loop_start) * 1000.0, 3)
             self.state.last_limit_reason = ", ".join(self.state.active_limiters) if self.state.active_limiters else "none"
             path = self.state.technical_control_path
+            path_tokens = {
+                token.strip().upper()
+                for token in str(path or "").split("->")
+                if token.strip()
+            }
             mode = self.state.current_mode
             self.state.grid_power_used_for_control = path.startswith("GRID")
             self.state.effective_export_power_used_for_control = path.startswith("GRID") and (
-                "CHARGE" in path or "CROSS_CHARGE" in path or "REST_SURPLUS_HARVEST" in path
+                "CHARGE_CONTROL" in path_tokens
+                or "CROSS_CHARGE" in path_tokens
+                or "REST_SURPLUS_HARVEST" in path_tokens
             )
             self.state.soc_used_for_control = (
                 mode in {

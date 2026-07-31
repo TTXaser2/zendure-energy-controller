@@ -246,7 +246,9 @@ def render_status_page_v2(
           <div class="zec-mode-public" data-zec="mode.text">{_e(payload['mode'].get('text'))}</div>
         </div>
         <div class="zec-mode-details">
-          <div class="zec-mode-row"><span>Ziel</span><strong data-zec="mode.target">{_e(payload['mode'].get('target'))}</strong></div>
+          <div class="zec-mode-row"><span data-zec="mode.target_label">{_e(payload['mode'].get('target_label') or 'Ziel')}</span><strong data-zec="mode.target">{_e(payload['mode'].get('target'))}</strong></div>
+          <div class="zec-mode-row" data-mode-detail="requested" {'hidden' if not payload['mode'].get('requested_target') else ''}><span>Angefordert</span><strong data-zec="mode.requested_target">{_e(payload['mode'].get('requested_target'))}</strong></div>
+          <div class="zec-mode-row" data-mode-detail="limit" {'hidden' if not payload['mode'].get('limit_text') else ''}><span>Begrenzung</span><strong data-zec="mode.limit_text">{_e(payload['mode'].get('limit_text'))}</strong></div>
           <div class="zec-mode-row"><span>Grund</span><strong data-zec="mode.reason">{_e(payload['mode'].get('reason'))}</strong></div>
           <div class="zec-mode-projection" data-zec="mode.projection">{_e(payload['mode'].get('projection'))}</div>
           <div class="zec-mode-row zec-last-change"><span>Letzte Änderung</span><strong data-zec="mode.last_change">{_e(payload['mode'].get('last_change'))}</strong></div>
@@ -328,6 +330,7 @@ def render_status_page_v2(
           <div><span>MQTT-Broker</span><strong data-zec="diag.broker">{_e(payload['diag'].get('broker'))}</strong></div>
           <div><span>Zendure-Telemetrie</span><strong data-zec="diag.mqtt">{_e(payload['diag'].get('mqtt'))}</strong></div>
           <div><span>Lokale API</span><strong data-zec="diag.api">{_e(payload['diag'].get('api'))}</strong></div>
+          <div><span>API-Hintergrundworker</span><strong data-zec="diag.api_worker_text">{_e(payload['diag'].get('api_worker_text'))}</strong></div>
           <div><span>Kommandowirkung</span><strong data-zec="diag.effect">{_e(payload['diag'].get('effect'))}</strong></div>
           <div><span>Flash-Schutz</span><strong data-zec="diag.flash_protection">{_e(payload['diag'].get('flash_protection'))}</strong></div>
           <div><span>Offgrid-Last</span><strong data-zec="diag.offgrid_text">{_e(payload['diag'].get('offgrid_text'))}</strong></div>
@@ -338,6 +341,8 @@ def render_status_page_v2(
         <div class="zec-cycle-meta" data-zec="diag.cycle_meta">{_e(payload['diag'].get('cycle_meta_text') or '—')}</div>
         <div id="diagTimingDistribution" class="zec-timing-distribution" role="img" aria-label="Zeitverteilung des letzten aktiven Controller-Durchlaufs"></div>
         <div class="zec-health-rows compact zec-async-timing">
+          <div><span>Zendure Local API, asynchron</span><strong data-zec="diag.api_request_text">{_e(payload['diag'].get('api_request_text') or '—')}</strong></div>
+          <div><span>API-Snapshotübernahme, synchron</span><strong data-zec="diag.api_apply_text">{_e(payload['diag'].get('api_apply_text') or '—')}</strong></div>
           <div><span>SQLite-Schreiben, asynchron</span><strong data-zec="diag.sqlite_text">—</strong></div>
           <div><span>Langsamster erfasster Teilabschnitt</span><strong data-zec="diag.slowest_text">{_e(payload['diag'].get('slowest_step') or '—')} · {_e(payload['diag'].get('slowest_ms') if payload['diag'].get('slowest_ms') is not None else '—')} ms</strong></div>
         </div>

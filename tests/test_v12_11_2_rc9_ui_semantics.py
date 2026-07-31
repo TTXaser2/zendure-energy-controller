@@ -17,8 +17,8 @@ class V12112Rc9UiSemanticsTests(unittest.TestCase):
         web_ui._replay_health_cache.update({"port": None, "available": False, "checked_epoch": 0.0})
 
     def test_version(self):
-        self.assertEqual("12.11.2-rc17", version.APP_VERSION)
-        self.assertEqual("V12.11.2-RC17", version.APP_VERSION_LABEL)
+        self.assertEqual("12.11.2-rc19", version.APP_VERSION)
+        self.assertEqual("V12.11.2-RC19", version.APP_VERSION_LABEL)
 
     def test_replay_probe_uses_lightweight_health_json(self):
         response = Mock()
@@ -202,7 +202,7 @@ class V12112Rc9UiSemanticsTests(unittest.TestCase):
                 "MEASUREMENT_DB_ENABLED": False,
                 "ZENDURE_LOCAL_API_ENABLED": True,
             }, snap, events=[])
-        self.assertEqual(["lokale API nicht erreichbar"], payload["events"]["technical_restrictions"])
+        self.assertEqual(["lokale API eingeschränkt"], payload["events"]["technical_restrictions"])
         js = Path("static/status_v2.js").read_text(encoding="utf-8")
         self.assertIn("Keine offene Störung · ${restrictions.length} technische Einschränkung", js)
 

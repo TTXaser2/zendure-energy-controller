@@ -792,6 +792,15 @@ class CsvRotatingLogger:
             "measurement_primary_exception": target_info.get("primary_exception", ""),
         }
 
+    def write_runtime_event(self, config: Dict[str, Any], event: Dict[str, Any]) -> None:
+        """Best-effort V4 runtime event hook used by asynchronous diagnostics."""
+        if measurement_schema_version(config) != "4":
+            return
+        if self._v4_logger is None:
+            from measurement_v4 import MeasurementV4Logger
+            self._v4_logger = MeasurementV4Logger()
+        self._v4_logger.write_runtime_event(config, event)
+
     def get_current_path(self, config: Dict[str, Any]) -> str:
         if measurement_schema_version(config) == "4":
             if self._v4_logger is None:

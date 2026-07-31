@@ -2036,6 +2036,36 @@ def night_mode_projection_text(cfg: Dict[str, Any], s: Dict[str, Any], current_m
         return f"Voraussichtliches Ende: nicht berechenbar – {html.escape(str(exc))}"
 
 
+def _fixed_mode_effective_power_w(cfg: Dict[str, Any], s: Dict[str, Any], current_mode: str) -> float:
+    """Return the actually applied fixed-mode target for ETA calculations."""
+    final_target = _safe_float(s.get("target_final_w"))
+    if current_mode in {"MANUAL_FIXED_DISCHARGE", "FIXED_DISCHARGE"}:
+        if final_target is not None and final_target < 0:
+            return abs(final_target)
+        applied = _safe_float(s.get("last_output_power"))
+        if applied is not None and applied > 0:
+            return applied
+        requested = max(0.0, float(cfg.get("MANUAL_FIXED_DISCHARGE_POWER_W", 0) or 0))
+        global_cap = max(0.0, float(cfg.get("MAX_DISCHARGE_POWER_W", requested) or 0))
+        device_cap = _safe_float(s.get("zendure_device_inverse_max_power_w"))
+        limits = [requested, global_cap]
+        if device_cap is not None and device_cap > 0:
+            limits.append(device_cap)
+        return min(limits)
+    if final_target is not None and final_target > 0:
+        return final_target
+    applied = _safe_float(s.get("last_input_power"))
+    if applied is not None and applied > 0:
+        return applied
+    requested = max(0.0, float(cfg.get("MANUAL_FIXED_CHARGE_POWER_W", 0) or 0))
+    global_cap = max(0.0, float(cfg.get("MAX_CHARGE_POWER_W", requested) or 0))
+    device_cap = _safe_float(s.get("zendure_device_charge_max_limit_w"))
+    limits = [requested, global_cap]
+    if device_cap is not None and device_cap > 0:
+        limits.append(device_cap)
+    return min(limits)
+
+
 def fixed_mode_projection_text(cfg: Dict[str, Any], s: Dict[str, Any], current_mode: str) -> str:
     """Projection for manual fixed charge/discharge modes, mirroring night mode UX."""
     if current_mode not in {"MANUAL_FIXED_DISCHARGE", "MANUAL_FIXED_CHARGE", "FIXED_DISCHARGE", "FIXED_CHARGE"}:
@@ -2057,7 +2087,7 @@ def fixed_mode_projection_text(cfg: Dict[str, Any], s: Dict[str, Any], current_m
 
         if current_mode in {"MANUAL_FIXED_DISCHARGE", "FIXED_DISCHARGE"}:
             target_soc = max(float(cfg.get("MIN_SOC_PERCENT", 0) or 0), float(cfg.get("MANUAL_FIXED_DISCHARGE_TARGET_SOC", cfg.get("MIN_SOC_PERCENT", 0)) or 0))
-            power_w = min(float(cfg.get("MANUAL_FIXED_DISCHARGE_POWER_W", 0) or 0), float(cfg.get("MAX_DISCHARGE_POWER_W", 0) or 0))
+            power_w = _fixed_mode_effective_power_w(cfg, s, current_mode)
             after = "STOP_HOLD" if str(cfg.get("MANUAL_DISCHARGE_AFTER_TARGET", "AUTO")) == "STOP_HOLD" else "Automatik-Modus"
             if power_w <= 0:
                 return f"Manuelle feste Entladung bis {target_soc:.0f} % SOC · Prognose nicht berechenbar – Entladeleistung ist 0 W"
@@ -2068,7 +2098,7 @@ def fixed_mode_projection_text(cfg: Dict[str, Any], s: Dict[str, Any], current_m
             return f"Manuelle feste Entladung bis {target_soc:.0f} % SOC, voraussichtlich erreicht um {eta.strftime('%H:%M')} Uhr · danach {after}"
 
         target_soc = min(float(cfg.get("MAX_SOC_PERCENT", 100) or 100), float(cfg.get("MANUAL_FIXED_CHARGE_TARGET_SOC", cfg.get("MAX_SOC_PERCENT", 100)) or 100))
-        power_w = min(float(cfg.get("MANUAL_FIXED_CHARGE_POWER_W", 0) or 0), float(cfg.get("MAX_CHARGE_POWER_W", 0) or 0))
+        power_w = _fixed_mode_effective_power_w(cfg, s, current_mode)
         after = "STOP_HOLD" if str(cfg.get("MANUAL_CHARGE_AFTER_TARGET", "AUTO")) == "STOP_HOLD" else "Automatik-Modus"
         if power_w <= 0:
             return f"Manuelle feste Ladung bis {target_soc:.0f} % SOC · Prognose nicht berechenbar – Ladeleistung ist 0 W"
@@ -2436,7 +2466,8 @@ def build_status_page_legacy(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
     timing_step_labels = {
         "config_reload_ms": "Config laden",
         "mqtt_refresh_subscriptions_ms": "MQTT-Subscriptions",
-        "zendure_local_api_ms": "Zendure API",
+        "zendure_local_api_snapshot_apply_ms": "Zendure API-Snapshot",
+        "zendure_local_api_ms": "Zendure API (historisch)",
         "cycle_display_metrics_ms": "Statuswerte",
         "grid_display_read_ms": "Grid-Anzeige",
         "grid_control_read_ms": "Grid-Regelwert",
@@ -2487,10 +2518,14 @@ def build_status_page_legacy(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
         timing_stats = json.loads(str(s.get("last_cycle_timing_stats_json") or "{}"))
     except Exception:
         timing_stats = {}
-    local_api_ms = timing_obj.get("zendure_local_api_ms")
+    local_api_ms = timing_obj.get("zendure_local_api_snapshot_apply_ms")
     local_api_details = (
         f"Modus: {html.escape(local_api_mode)}<br>"
-        f"Letzter Zyklus: {html.escape(str(local_api_ms if local_api_ms is not None else '-'))} ms<br>"
+        f"Snapshot-Übernahme im letzten Zyklus: {html.escape(str(local_api_ms if local_api_ms is not None else '-'))} ms<br>"
+        f"Letzter Hintergrundrequest: {html.escape(str(s.get('zendure_local_api_last_request_duration_ms') if s.get('zendure_local_api_last_request_duration_ms') is not None else '-'))} ms<br>"
+        f"Worker: {html.escape(str(s.get('zendure_local_api_worker_state') or 'DISABLED'))}<br>"
+        f"Letzter Erfolg: {age_text(s.get('zendure_local_api_last_success_age_s'))}<br>"
+        f"Fehlerfolge: {int(s.get('zendure_local_api_consecutive_errors') or 0)} · Backoff: {round(float(s.get('zendure_local_api_backoff_remaining_s') or 0), 1)} s<br>"
         f"Langsamster Teil letzter Zyklus: {html.escape(slowest_label)} {slowest_ms if slowest_label != '-' else '-'} ms"
     )
 
@@ -2711,7 +2746,7 @@ def build_status_page_legacy(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
     <div class="section">{heading_link('Diagnose', 'Sicherheit / Fallback', 2)}<div class="section-tools"><a href="#" onclick="expandSectionInfo('status-diagnostics'); return false;">Alle Infos auf- und zuklappen</a></div><div class="grid" id="status-diagnostics">
         {status_card('Aktive Betriebslogik', html.escape(path_human), html.escape(str(s['last_control_action'])), 'gray', 'Die aktive Betriebslogik beschreibt den aktuell verwendeten Entscheidungsweg des Controllers in verständlicher Form. Der technische Code bleibt darunter sichtbar, damit man Events, Graphdaten und Logausgaben eindeutig zuordnen kann.', path_code)}
         {status_card('Aktive Zykluszeit', f'{active_cycle_ms} ms', timing_details, 'gray', 'Die aktive Zykluszeit ist die Zeit, in der der Controller für einen Regelzyklus tatsächlich arbeitet: Datenquellen prüfen, Regelentscheidung berechnen, MQTT-Kommandopfad ausführen, Status aktualisieren und Messdaten schreiben. Nicht enthalten ist die geplante Wartezeit bis zum nächsten Regelintervall. Der langsamste Teil zeigt, welcher echte Abschnitt innerhalb des letzten Zyklus am meisten Zeit benötigt hat.')}
-        {status_card('Zendure Local API Timing', html.escape(local_api_mode), local_api_details, 'gray', 'Zeigt, ob die lokale Zendure-API deaktiviert, nur als Diagnose, als Fallback oder als aktive Telemetriequelle genutzt wird. Lange lokale API-Antworten können einzelne Regelzyklen verlängern; dies ist Diagnose, keine Regelstrategieänderung.', settings_group='Netzwerk')}
+        {status_card('Zendure Local API Timing', html.escape(local_api_mode), local_api_details, 'gray', 'Die HTTP-Abfrage läuft ab RC18 asynchron. Der Regelzyklus übernimmt nur den neuesten unveränderlichen Snapshot und wartet nie auf Netzwerk-I/O.', settings_group='Netzwerk')}
         {status_card('Fehler', str(s['consecutive_errors']), f'Letzter Fehler: {html.escape(str(s["last_error"]))}<br>Zeitpunkt: {html.escape(str(s.get("last_error_time", "-")))}<br>Safe-State: {s["safe_state_counter"]}x', 'red', 'Der Fehlerzähler zählt direkt aufeinanderfolgende Fehler. Safe-State bedeutet: Lade- und Entladeleistung werden auf 0 W gesetzt, um bei unsicheren Daten oder Kommunikationsproblemen keine unkontrollierte Energieverschiebung auszulösen.')}
         {status_card('Messdaten-Logging', measurement_mode, measurement_log_details, 'gray', 'Messdaten-Logging ist optional und nachgelagert. Standard speichert vollständige Reglerdiagnose inklusive MQTT-Stale-Aggregat und Szenario ohne Zendure. Erweitert ergänzt große Detaildaten für Simulation, What-if und tiefe MQTT-/Freshness-Analyse. USB-/SD-Fallback-Details sind Betriebsdiagnose und werden im Runtime-Log dokumentiert; die Regelung läuft weiter, auch wenn Logging pausiert oder fehlschlägt.', settings_group='Messdaten / Historie')}
         {status_card('Analyse-Weboberfläche', f'Port {replay_port}', analysis_link_html, 'gray', 'Die Analyse läuft bewusst getrennt vom Live-Regler. Der Dienst wird mitgeliefert, aber nicht automatisch aktiviert.')}
@@ -3058,24 +3093,56 @@ def _mode_public_text(mode: str, target: Any) -> str:
     return mode_label(mode)
 
 
+def _technical_path_tokens(path: Any) -> set[str]:
+    """Return exact technical-control-path tokens.
+
+    Status text must never classify ``DISCHARGE`` as ``CHARGE`` or
+    ``STOP_HOLD`` as ``HOLD`` merely because one word contains the other.
+    """
+    return {
+        token.strip().upper()
+        for token in str(path or "").split("->")
+        if token.strip()
+    }
+
+
+def _power_limit_public_text(reason: Any) -> str:
+    mapping = {
+        "CONFIG_MAX_CHARGE_POWER": "Globales Ladelimit",
+        "CONFIG_MAX_DISCHARGE_POWER": "Globales Entladelimit",
+        "ZENDURE_DEVICE_CHARGE_MAX_LIMIT": "Zendure-Gerätecap chargeMaxLimit",
+        "ZENDURE_DEVICE_INVERSE_MAX_POWER": "Zendure-Gerätecap inverseMaxPower",
+        "ZENDURE_DEVICE_CHARGE_LIMIT": "Zendure-Gerätecap Laden",
+        "ZENDURE_DEVICE_DISCHARGE_LIMIT": "Zendure-Gerätecap Entladen",
+    }
+    text = str(reason or "NONE").strip().upper()
+    if text in {"", "NONE"}:
+        return ""
+    return mapping.get(text, text.replace("_", " ").title())
+
+
 def _reason_public_text(s: Dict[str, Any]) -> str:
     reason = str(s.get("control_reason") or s.get("target_final_reason") or "")
     path = str(s.get("technical_control_path") or "")
+    path_tokens = _technical_path_tokens(path)
     harvest = str(s.get("rest_surplus_harvest_reason") or "")
     mode = str(s.get("current_mode") or "")
+    intent = str(s.get("command_desired_intent") or "").upper()
     if mode == "NIGHT_DISCHARGE":
         return "Nachtfenster aktiv"
     if mode in {"MANUAL_FIXED_CHARGE", "FIXED_CHARGE", "MANUAL_FIXED_DISCHARGE", "FIXED_DISCHARGE"}:
         return "Manueller fester Modus"
+    if mode == "STOP_HOLD":
+        return "Manueller Stopp – Zendure bleibt neutral"
     if mode == "SAFE_STATE":
         return str(s.get("control_reason") or "Schutzmodus aktiv")
-    if "REST_SURPLUS" in reason or "HARVEST" in path or (harvest not in {"", "NONE"} and mode.startswith("AUTO")):
+    if "REST_SURPLUS" in reason or "REST_SURPLUS_HARVEST" in path_tokens or (harvest not in {"", "NONE"} and mode.startswith("AUTO")):
         return "Restüberschuss wird gespeichert"
-    if "CROSS_CHARGE" in reason or "CROSS_CHARGE" in path or "CROSS_CHARGE" in str(s.get("active_limiters") or ""):
+    if "CROSS_CHARGE" in reason or "CROSS_CHARGE" in path_tokens or "CROSS_CHARGE" in str(s.get("active_limiters") or ""):
         return "Batterie-zu-Batterie-Umladung wird begrenzt"
-    if "GRID_EXPORT" in reason or "CHARGE" in path:
+    if "GRID_EXPORT" in reason or intent == "CHARGE" or mode in {"CHARGE", "AUTO_CHARGE"} or "CHARGE_CONTROL" in path_tokens:
         return "Einspeisung wird reduziert"
-    if "GRID_IMPORT" in reason or "DISCHARGE" in path:
+    if "GRID_IMPORT" in reason or intent == "DISCHARGE" or mode in {"DISCHARGE", "AUTO_DISCHARGE"} or "DISCHARGE_CONTROL" in path_tokens:
         return "Netzbezug wird reduziert"
     if "NIGHT" in reason:
         return "Nachtfenster aktiv"
@@ -3083,7 +3150,7 @@ def _reason_public_text(s: Dict[str, Any]) -> str:
         return "Oberes SOC-Limit erreicht"
     if "MIN_SOC" in reason:
         return "Unteres SOC-Limit erreicht"
-    if "DEADBAND" in reason or "HOLD" in path:
+    if "DEADBAND" in reason or mode in {"HOLD", "HOLD_DEADBAND"} or "HOLD" in path_tokens:
         return "Netzleistung nahe 0 W"
     return reason or "Regelentscheidung aktiv"
 
@@ -3307,6 +3374,7 @@ def _timing_step_public_label(value: Any) -> str:
     return {
         "config_reload_ms": "Konfigurationsprüfung",
         "mqtt_refresh_subscriptions_ms": "MQTT-Subscriptions",
+        "zendure_local_api_snapshot_apply_ms": "Zendure API-Snapshot",
         "zendure_local_api_ms": "Zendure Local API",
         "cycle_display_metrics_ms": "Statusaufbereitung",
         "grid_display_read_ms": "Netzwert für Anzeige",
@@ -3372,10 +3440,9 @@ def _timing_phase_rows(timing: Dict[str, Any]) -> List[Dict[str, Any]]:
 
     rows = [
         ("config", "Konfigurationsprüfung", total("config_reload_ms", "mqtt_refresh_subscriptions_ms"), False),
-        # The controller records this key only when should_poll() led to a real
-        # local-API request attempt.  Keep the row visible when omitted so 0,0 ms
-        # is not confused with an executed request.
-        ("local_api", "Zendure Local API", total("zendure_local_api_ms"), True),
+        # RC18 performs HTTP in a background worker. Only immutable snapshot
+        # application belongs to the synchronous active-cycle breakdown.
+        ("local_api", "Zendure Local API", total("zendure_local_api_snapshot_apply_ms", "zendure_local_api_ms"), True),
         ("energy_data", "SMA- und Netzdaten", total("sma_energy_meter_ms", "grid_control_read_ms", "grid_display_read_ms"), False),
         ("diagnostics", "Status- und Diagnoseaufbereitung", total("cycle_display_metrics_ms", "cross_charge_metrics_ms", "charge_acceptance_diag_ms", "graph_snapshot_ms"), False),
         ("control", "Regelentscheidung", total("control_decision_ms"), False),
@@ -3457,6 +3524,18 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
         "actual_zendure_system_power",
     )
     mode = str(s.get("current_mode") or "-")
+    fixed_modes = {"MANUAL_FIXED_DISCHARGE", "MANUAL_FIXED_CHARGE", "FIXED_DISCHARGE", "FIXED_CHARGE"}
+    target_raw = _safe_float(s.get("target_raw_w"))
+    target_effective = _safe_float(target)
+    target_limit_reason = str(s.get("target_power_limit_reason") or "NONE")
+    show_fixed_limit = bool(
+        mode in fixed_modes
+        and target_raw is not None
+        and target_effective is not None
+        and abs(target_raw - target_effective) > 0.5
+    )
+    fixed_requested_text = _signed_power_phrase(target_raw) if show_fixed_limit else ""
+    fixed_limit_text = _power_limit_public_text(target_limit_reason) if show_fixed_limit else ""
 
     grid = _safe_float(_first_snapshot_value(s, "raw_grid_power", "grid_power", "grid_power_w"))
     grid_valid = bool(s.get("grid_power_valid")) and grid is not None
@@ -3531,8 +3610,23 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             weighted_num += cap * soc
             weighted_den += cap
     system_soc = weighted_num / weighted_den if weighted_den > 0 else (_safe_float(units[0].get("soc")) if len(units) == 1 else None)
-    remaining = s.get("zendure_remaining_capacity_kwh")
     max_soc = _safe_float(cfg.get("MAX_SOC_PERCENT")) or 99
+    # Derive the UI value from the current SOC/capacity snapshot so an earlier
+    # AUTO/Harvest value can never remain frozen in STOP_HOLD, SAFE_STATE,
+    # NIGHT or a fixed mode.  The controller also updates the shared state every
+    # cycle; this view-side calculation is an additional read-only safeguard.
+    remaining = None
+    if weighted_den > 0 and system_soc is not None:
+        remaining = max(0.0, weighted_den * max(0.0, max_soc - system_soc) / 100.0)
+    elif system_soc is not None:
+        capacity_kwh = _safe_float(cfg.get("ZENDURE_BATTERY_CAPACITY_KWH"))
+        if capacity_kwh is None or capacity_kwh <= 0:
+            capacity_wh = _safe_float(cfg.get("ZENDURE_BATTERY_CAPACITY_WH"))
+            capacity_kwh = (capacity_wh / 1000.0) if capacity_wh is not None and capacity_wh > 0 else None
+        if capacity_kwh is not None and capacity_kwh > 0:
+            remaining = max(0.0, capacity_kwh * max(0.0, max_soc - system_soc) / 100.0)
+    if remaining is None:
+        remaining = _safe_float(s.get("zendure_remaining_capacity_kwh"))
     zendure_tone = "warn" if command_warning else (units[0].get("tone") if len(units) == 1 else ("warn" if any(u.get("tone") != "ok" for u in units) else "ok"))
 
     primary_power = _safe_float(_first_snapshot_value(
@@ -3606,7 +3700,7 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
     else:
         device_line = "Geräteerkennung nicht verfügbar"
     source_age = _safe_float(_first_snapshot_value(s, "sma_energy_meter_last_update_age_seconds", "grid_power_age_seconds"))
-    age_text = f"vor {int(source_age)} s" if source_age is not None else "nicht verfügbar"
+    source_age_text = f"vor {int(source_age)} s" if source_age is not None else "nicht verfügbar"
     source_tone = "ok" if grid_valid and matched else ("warn" if grid_valid else "bad")
     auto_text = "Messquelle aktuell · AUTO nutzt diesen Wert" if mode.startswith("AUTO") and grid_valid else ("Messquelle aktuell" if grid_valid else "AUTO wartet auf aktuelle Netzwerte")
 
@@ -3629,9 +3723,72 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
     db_path = str(s.get("measurement_db_path") or resolve_measurement_db_path(cfg) or "")
     metrics = get_system_metrics(db_path or "/", ttl_s=5.0)
     local_api_error = str(s.get("last_local_api_error") or "none")
-    api_enabled = bool(cfg.get("ZENDURE_LOCAL_API_ENABLED", True))
-    api_text = "Deaktiviert" if not api_enabled else ("Aktuell" if local_api_error.lower() in {"", "none", "ok"} else "Nicht erreichbar")
-    api_tone = "unknown" if not api_enabled else ("ok" if api_text == "Aktuell" else "warn")
+    local_ip_present = bool(str(cfg.get("ZENDURE_LOCAL_IP", "") or "").strip())
+    if "ZENDURE_LOCAL_API_USE_FOR_TELEMETRY" in cfg:
+        api_worker_enabled = bool(cfg.get("ZENDURE_LOCAL_API_USE_FOR_TELEMETRY", False) and local_ip_present)
+        api_diagnostics_enabled = bool(cfg.get("ZENDURE_LOCAL_API_ENABLED", False) and local_ip_present)
+    else:
+        # Compatibility for older synthetic preview/test payloads.
+        api_worker_enabled = bool(cfg.get("ZENDURE_LOCAL_API_ENABLED", False))
+        api_diagnostics_enabled = api_worker_enabled
+    api_enabled = api_worker_enabled or api_diagnostics_enabled
+    if api_worker_enabled:
+        api_mode = "Fallback-only" if bool(cfg.get("ZENDURE_LOCAL_API_TELEMETRY_FALLBACK_ONLY", True)) else "Aktive Telemetriequelle"
+    elif api_diagnostics_enabled:
+        api_mode = "Nur Diagnose"
+    else:
+        api_mode = "Deaktiviert"
+    api_worker_state = str(s.get("zendure_local_api_worker_state") or ("DISABLED" if not api_worker_enabled else "IDLE")).upper()
+    api_snapshot_valid = bool(s.get("zendure_local_api_snapshot_valid"))
+    api_snapshot_stale = bool(s.get("zendure_local_api_snapshot_stale", True))
+    api_success_age_s = _safe_float(s.get("zendure_local_api_last_success_age_s"))
+    api_attempt_age_s = _safe_float(s.get("zendure_local_api_last_attempt_age_s"))
+    api_latest_attempt_ok = s.get("zendure_local_api_latest_attempt_ok")
+    api_request_ms = _safe_float(s.get("zendure_local_api_request_duration_ms"))
+    api_apply_ms = _safe_float(s.get("zendure_local_api_snapshot_apply_ms"))
+    api_errors = int(s.get("zendure_local_api_consecutive_errors") or 0)
+    api_backoff_s = _safe_float(s.get("zendure_local_api_backoff_remaining_s")) or 0.0
+    api_error_code = str(s.get("zendure_local_api_latest_error_code") or "NONE")
+    telemetry_source = str(s.get("zendure_telemetry_source") or "").strip()
+    fallback_active = bool(s.get("zendure_local_api_fallback_active"))
+    if not api_enabled:
+        api_text, api_tone = "Deaktiviert", "unknown"
+    elif not api_worker_enabled:
+        api_text, api_tone = "Nur Diagnose · kein Hintergrundworker", "unknown"
+    elif api_worker_state == "BACKOFF":
+        api_text, api_tone = "Hintergrundworker im Backoff", "warn"
+    elif api_worker_state in {"STOPPING", "STOPPED"}:
+        api_text, api_tone = "Hintergrundworker gestoppt", "warn"
+    elif api_snapshot_valid and not api_snapshot_stale:
+        api_text, api_tone = "Snapshot aktuell", "ok"
+    elif api_snapshot_valid:
+        api_text, api_tone = "Snapshot veraltet", "warn"
+    elif local_api_error.lower() not in {"", "none", "ok"}:
+        api_text, api_tone = "Noch kein gültiger Snapshot", "warn"
+    else:
+        api_text, api_tone = "Hintergrundworker startet", "unknown"
+    if api_worker_enabled and api_snapshot_valid and not api_snapshot_stale:
+        if fallback_active or "api" in telemetry_source.lower():
+            api_source_text = "API liefert aktive Telemetrie"
+        elif bool(cfg.get("ZENDURE_LOCAL_API_TELEMETRY_FALLBACK_ONLY", True)):
+            api_source_text = "MQTT ist Primärquelle"
+        else:
+            api_source_text = "API steht als Telemetriequelle bereit"
+        if api_worker_state == "BACKOFF":
+            api_text = f"Snapshot aktuell · Worker im Backoff · {api_source_text}"
+        else:
+            api_text = f"Snapshot aktuell · {api_source_text}"
+    api_success_text = (
+        "noch keiner"
+        if api_success_age_s is None
+        else f"vor {api_success_age_s:.1f} s"
+    )
+    api_worker_text = (
+        f"{api_worker_state} · letzter Erfolg {api_success_text}"
+        if api_worker_enabled else ("Nicht aktiv · Diagnosezugriff synchron über Web" if api_diagnostics_enabled else "Deaktiviert")
+    )
+    api_request_text = "—" if api_request_ms is None else f"letzter Request {api_request_ms:.1f} ms"
+    api_apply_text = "nicht im letzten Zyklus" if api_apply_ms is None else f"{api_apply_ms:.3f} ms"
     mqtt_public, mqtt_tone = _zendure_mqtt_public_status(s.get("zendure_mqtt_overall_status"))
     effect_raw = s.get("command_effect_state_category") or s.get("command_effect_category") or ""
     effect_public, effect_tone = _command_effect_public_status(effect_raw)
@@ -3715,8 +3872,8 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
     disk_used_pct = (100.0 * used_bytes / float(total_bytes)) if total_bytes and used_bytes is not None else None
     analysis_available = replay_service_available(cfg)
     technical_restrictions: List[str] = []
-    if api_enabled and api_text != "Aktuell":
-        technical_restrictions.append("lokale API nicht erreichbar")
+    if api_worker_enabled and api_tone in {"warn", "bad"}:
+        technical_restrictions.append("lokale API eingeschränkt")
     if not analysis_available:
         technical_restrictions.append("Analyse-/Replay-Service nicht erreichbar")
     throttling = metrics.get("throttling") or {}
@@ -3755,6 +3912,10 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "text": _mode_public_text(mode, target),
             "target": _signed_power_phrase(target),
             "target_raw": target,
+            "target_label": "Wirksames Ziel" if show_fixed_limit else "Ziel",
+            "requested_target": fixed_requested_text,
+            "limit_text": fixed_limit_text,
+            "limit_reason": target_limit_reason if show_fixed_limit else "",
             "reason": _reason_public_text(s),
             "last_change": s.get("last_mode_change_time") or "-",
             "projection": projection,
@@ -3794,7 +3955,7 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "name": source_name,
             "device_line": device_line,
             "age": source_age,
-            "age_text": age_text,
+            "age_text": source_age_text,
             "packets_min": packets,
             "packets_text": f"{packets}/min",
             "auto_text": auto_text,
@@ -3850,6 +4011,23 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "mqtt_raw": s.get("zendure_mqtt_overall_status") or "",
             "api": api_text,
             "api_tone": api_tone,
+            "api_mode": api_mode,
+            "api_worker_text": api_worker_text,
+            "api_worker_state": api_worker_state,
+            "api_snapshot_valid": api_snapshot_valid,
+            "api_snapshot_stale": api_snapshot_stale,
+            "api_last_success_age_s": api_success_age_s,
+            "api_last_attempt_age_s": api_attempt_age_s,
+            "api_latest_attempt_ok": api_latest_attempt_ok,
+            "api_last_request_duration_ms": api_request_ms,
+            "api_request_text": api_request_text,
+            "api_snapshot_apply_ms": api_apply_ms,
+            "api_apply_text": api_apply_text,
+            "api_consecutive_errors": api_errors,
+            "api_backoff_remaining_s": api_backoff_s,
+            "api_error_code": api_error_code,
+            "api_telemetry_source": telemetry_source or "—",
+            "api_fallback_active": fallback_active,
             "effect": effect_public,
             "effect_tone": effect_tone,
             "effect_raw": effect_raw,

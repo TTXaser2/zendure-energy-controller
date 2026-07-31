@@ -208,32 +208,48 @@ if [ "$PREVIEW_WAS_ACTIVE" -eq 1 ]; then
     systemctl status zendure-status-preview.service --no-pager -l
 fi
 
-echo "Ready-Check (maximal 20 Sekunden):"
+echo "Ready-Check (maximal 90 Sekunden, wartet auf ready=true):"
 READY_OK=0
 READY_BODY="$(mktemp)"
 READY_JSON="$(mktemp)"
-READY_DEADLINE=$((SECONDS + 20))
+READY_DEADLINE=$((SECONDS + 90))
 READY_ATTEMPT=0
 while [ "$SECONDS" -lt "$READY_DEADLINE" ]; do
     READY_ATTEMPT=$((READY_ATTEMPT + 1))
     if curl -fsS --connect-timeout 1 --max-time 1 "http://127.0.0.1:8080/ready" > "$READY_BODY" 2>/dev/null \
        && python3 -m json.tool < "$READY_BODY" > "$READY_JSON" 2>/dev/null; then
-        echo "Ready nach Versuch ${READY_ATTEMPT}:"
-        cat "$READY_JSON"
-        READY_OK=1
-        break
+        if python3 - "$READY_BODY" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    payload = json.load(handle)
+raise SystemExit(0 if payload.get("ready") is True else 1)
+PY
+        then
+            echo "Ready nach Versuch ${READY_ATTEMPT}:"
+            cat "$READY_JSON"
+            READY_OK=1
+            break
+        fi
     fi
     sleep 0.5
 done
-rm -f "$READY_BODY" "$READY_JSON"
 
 if [ "$READY_OK" -ne 1 ]; then
-    echo "FEHLER: Der Controller-Dienst läuft, aber /ready lieferte innerhalb von 20 Sekunden kein gültiges JSON."
+    echo "FEHLER: Der Controller-Dienst läuft, aber /ready meldete innerhalb von 90 Sekunden nicht ready=true."
+    if [ -s "$READY_JSON" ]; then
+        echo "Letzte gültige /ready-Antwort:"
+        cat "$READY_JSON"
+    fi
+    rm -f "$READY_BODY" "$READY_JSON"
     echo "Bitte unmittelbar prüfen:"
     echo "  systemctl status zendure-controller.service --no-pager -l"
     echo "  journalctl -u zendure-controller.service -n 100 --no-pager"
     exit 1
 fi
+
+rm -f "$READY_BODY" "$READY_JSON"
 
 echo "Update abgeschlossen und Ready-Check erfolgreich."
 if [ "$REPLAY_WAS_ACTIVE" -eq 1 ]; then

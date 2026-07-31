@@ -43,8 +43,8 @@ class V12112Rc8BacklogCompletionTests(unittest.TestCase):
         return controller
 
     def test_version(self):
-        self.assertEqual("12.11.2-rc17", version.APP_VERSION)
-        self.assertEqual("V12.11.2-RC17", version.APP_VERSION_LABEL)
+        self.assertEqual("12.11.2-rc19", version.APP_VERSION)
+        self.assertEqual("V12.11.2-RC19", version.APP_VERSION_LABEL)
 
     def test_neutral_fresh_actual_clears_only_stale_diagnostic_uncertainty(self):
         controller = self._controller_for_effect_monitor(actual=0, age=1.0)
@@ -159,11 +159,12 @@ class V12112Rc8BacklogCompletionTests(unittest.TestCase):
 
     def test_update_script_waits_for_valid_ready_json(self):
         script = Path("tools/update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn("READY_DEADLINE=$((SECONDS + 20))", script)
+        self.assertIn("READY_DEADLINE=$((SECONDS + 90))", script)
         self.assertIn('while [ "$SECONDS" -lt "$READY_DEADLINE" ]', script)
         self.assertIn("python3 -m json.tool", script)
         self.assertIn("Update abgeschlossen und Ready-Check erfolgreich", script)
-        self.assertIn("innerhalb von 20 Sekunden kein gültiges JSON", script)
+        self.assertIn("innerhalb von 90 Sekunden nicht ready=true", script)
+        self.assertIn('payload.get("ready") is True', script)
         self.assertNotIn('curl -s "http://127.0.0.1:8080/ready" | python3 -m json.tool || true', script)
 
     def test_fastapi_uses_lifespan_and_ui_test_closes_file(self):

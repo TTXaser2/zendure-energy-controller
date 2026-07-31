@@ -1,49 +1,46 @@
-# Zendure Energy Controller V12.11.2-RC17 – Installation und Verifikation
+# Zendure Energy Controller V12.11.2-RC19 – Installation und Verifikation
 
 ## 1. Voraussetzungen
 
-- bestehende produktive RC16-Installation;
-- RC17-ZIP unverändert unter `/home/pi/Downloads/`;
+- bestehende produktive RC18-Installation;
+- `zendure_controller_v12_11_2_rc19.zip` unverändert unter `/home/pi/Downloads/`;
 - produktive `config.json` bleibt außerhalb des ZIP und wird vom Update-Skript erhalten.
 
-RC17 führt keine neuen Pflicht-Config-Keys und keine Config-Migration ein.
+RC19 führt keine neuen Config-Keys und keine Configmigration ein.
 
 ## 2. Prüfen und installieren
 
-Die konkrete SHA256-Prüfsumme steht in der mitgelieferten externen `.sha256`-Datei und im Release-Manifest.
+Den in der Releaseübergabe genannten SHA256-Wert direkt mit der lokalen Datei vergleichen:
 
 ```bash
-set -euo pipefail
 cd /home/pi/Downloads
-sha256sum -c zendure_controller_v12_11_2_rc17.zip.sha256
-/opt/zendure-controller/tools/update_zendure_controller.sh v12_11_2_rc17
+sha256sum zendure_controller_v12_11_2_rc19.zip
 ```
 
-Das Update-Skript stoppt nur die zuvor aktiven ZEC-Dienste, erstellt ein Backup, erhält `config.json`, installiert RC17, führt Python-Syntaxchecks und Unit-Tests aus und startet die zuvor aktiven Dienste wieder.
+Erst bei exakt passendem Hash:
+
+```bash
+/opt/zendure-controller/tools/update_zendure_controller.sh v12_11_2_rc19
+```
+
+Das Update-Skript erstellt ein Backup, erhält `config.json`, führt Syntax- und Unit-Tests aus, startet die zuvor aktiven ZEC-Dienste wieder und wartet maximal 90 Sekunden auf `/ready` mit `ready=true`.
 
 ## 3. Unmittelbare Verifikation
 
 ```bash
-set -euo pipefail
-
 grep -E 'APP_VERSION|APP_VERSION_LABEL' /opt/zendure-controller/version.py
 
-for service in \
-  zendure-controller.service \
-  zendure-replay.service \
-  zendure-status-preview.service
-do
-  printf '%-40s ' "$service"
-  systemctl is-active "$service"
-done
+systemctl is-active zendure-controller.service
 
 curl -fsS http://127.0.0.1:8080/ready | python3 -m json.tool
-curl -fsS http://127.0.0.1:8080/status > /tmp/zec-rc17-status.json
+curl -fsS http://127.0.0.1:8080/status > /tmp/zec-rc19-status.json
 
 python3 - <<'PY'
 import json
-with open('/tmp/zec-rc17-status.json', encoding='utf-8') as f:
-    s = json.load(f)
+
+with open('/tmp/zec-rc19-status.json', encoding='utf-8') as handle:
+    status = json.load(handle)
+
 for key in (
     'current_mode',
     'battery_soc',
@@ -51,86 +48,84 @@ for key in (
     'zendure_command_smart_mode',
     'zendure_command_state_complete',
     'command_state_gate_state',
-    'command_readback_matches_desired',
     'command_late_effect_guard_active',
-    'rest_surplus_harvest_reason',
-    'harvest_target_semantics',
-    'harvest_reference_charge_w',
-    'harvest_reference_charge_source',
-    'harvest_reference_charge_confidence',
-    'harvest_reference_charge_age_s',
-    'harvest_reference_charge_valid',
-    'harvest_reference_fallback_reason',
-    'harvest_network_target_w',
-    'harvest_total_available_charge_w',
-    'harvest_primary_share_target_w',
-    'harvest_zendure_share_target_w',
-    'harvest_export_capture_target_w',
-    'harvest_target_selected_by',
-    'harvest_calculation_branch',
-    'harvest_entry_min_export_w',
-    'harvest_command_path_eligible',
-    'harvest_command_path_block_reason',
-    'harvest_profile_reserve_w',
+    'target_raw_w',
+    'target_after_power_limit_w',
+    'target_final_w',
+    'target_power_limit_reason',
+    'zendure_remaining_capacity_kwh',
+    'zendure_local_api_worker_state',
+    'zendure_local_api_snapshot_sequence',
+    'zendure_local_api_success_sequence',
+    'zendure_local_api_last_success_age_s',
+    'zendure_local_api_snapshot_valid',
+    'zendure_local_api_snapshot_stale',
+    'zendure_local_api_request_duration_ms',
+    'zendure_local_api_snapshot_apply_ms',
+    'zendure_local_api_consecutive_errors',
+    'zendure_local_api_backoff_remaining_s',
+    'zendure_local_api_latest_error_code',
 ):
-    print(f'{key:48} {s.get(key, "<fehlt>")}')
+    print(f'{key:52} {status.get(key, "<fehlt>")}')
 PY
 
-journalctl -u zendure-controller.service --since '-20 minutes' --no-pager | tail -n 200
+journalctl -u zendure-controller.service \
+  --since '-20 minutes' \
+  --no-pager \
+  | tail -n 250
 ```
 
 Erwartet nach der Startphase:
 
 ```text
-APP_VERSION = "12.11.2-rc17"
-APP_VERSION_LABEL = "V12.11.2-RC17"
+APP_VERSION = "12.11.2-rc19"
+APP_VERSION_LABEL = "V12.11.2-RC19"
+ready = true
 zendure_flash_protection_active = true
 zendure_command_smart_mode = 1
 zendure_command_state_complete = true
-command_late_effect_guard_active = false im normalen Betrieb
-harvest_profile_reserve_w = 0.0 bei aktiver RC17-Harvest-Rechnung
-harvest_network_target_w = 0.0 bei aktiver RC17-Harvest-Rechnung
+Local-API-Snapshot gültig/frisch, sofern Worker aktiviert
 ```
 
-Außerhalb eines aktiven Harvest-Zweigs ist `harvest_target_semantics=NOT_APPLICABLE` korrekt.
+## 4. UI-Verifikation
 
-## 4. Measurement V4
+Auf der modernen Statusseite prüfen:
 
-RC17 besitzt 238 Standardfelder. Ein vorhandener RC16-Header mit 228 Feldern wird erkannt und unverändert belassen; die neue Datei trägt `schema_rc17` im Namen. Ältere RC10–RC15-Header werden ebenfalls weiterhin erkannt und nicht verändert.
+1. `DISCHARGE` zeigt „Netzbezug wird reduziert“.
+2. `STOP_HOLD` zeigt „Manueller Stopp – Zendure bleibt neutral“.
+3. „Rest bis Max-SOC“ passt zu aktuellem SOC, Max-SOC und Kapazität.
+4. „Controller & Schnittstellen“ zeigt Local API und API-Hintergrundworker.
+5. Das Info-Popover enthält Request-/Apply-Dauer, Snapshot, Fehlerfolge, Backoff und Quelle.
 
-## 5. Produktivabnahme
+## 5. Feste Modi
 
-Keine seltenen Fehlerzustände künstlich provozieren. Die Harvest-Branches werden anhand natürlicher Episoden getrennt bewertet:
+Nur im Rahmen eines ohnehin kontrolliert geplanten Tests prüfen:
 
 ```text
-SMA_NEAR_LIMIT
-HIGH_SMA_SOC
-HIGH_SMA_SOC_SMA_NEAR_LIMIT
-SMA_FULL_OR_IDLE
-legitime Hold-Phase, sobald natürlich vorhanden
+Angefordert
+Wirksames Ziel
+Begrenzung
 ```
 
-Je Episode sind nachzuweisen:
-
-- Zustand und Reason;
-- frische unabhängige Eingangsdaten;
-- korrekte Branch-Rechnung und Auswahl;
-- unveränderte Smoothing-/Step-/Cap-/Cross-Charge-Pipeline;
-- Geräte-Readback und tatsächliche AC-Leistung;
-- plausible SOC-/Energiebilanz;
-- Restexportkonvergenz Richtung 0 W;
-- keine Mismatch-, Resync- oder Same-State-Publish-Serie;
-- keine zusätzlichen `acMode`-, 0-W- oder physischen Richtungswechsel.
-
-Für ausreichend stationäre, nicht gecappte, nicht getaperte und nicht Cross-Charge-limitierte Episoden gelten als Auswertungsziele:
+Beispiel bei 2.400 W Anforderung und 2.000 W read-only Gerätecap:
 
 ```text
-Median |control_grid_power_w| <= max(DEADBAND_W, 100 W)
-p95   |control_grid_power_w| <= max(2 × DEADBAND_W, 200 W)
+Angefordert:     −2,40 kW Entladen
+Wirksames Ziel:  −2,00 kW Entladen
+Begrenzung:      Zendure-Gerätecap inverseMaxPower = 2.000 W
 ```
 
-## 6. Rollback
+Die ETA muss mit 2.000 W rechnen. Nach Ziel-SOC sind 0/0-Readback und physisch beendete Entladung zu bestätigen.
 
-Das Update-Skript nennt den erzeugten Backup-Pfad. Bei einer neuen RC17-Regression kann auf das unmittelbar zuvor erzeugte RC16-Backup oder auf das unveränderte RC16-ZIP zurückgegangen werden.
+## 6. Measurement V4
 
-RC16 bleibt eine technisch sichere Rückfallebene, enthält jedoch weiterhin die absichtliche Profilreserve und die unvollständige High-SOC-/Near-Limit-Export-Capture-Untergrenze. Es ist daher nicht der fachliche Zielstand.
+Keine Headerrotation gegenüber RC18:
+
+```text
+Standard: 246 Felder · 7842bfef39d47f93
+Extended: 249 Felder · 8f61d07e66428a6e
+```
+
+## 7. Rollback
+
+Das Update-Skript nennt den erzeugten Backup-Pfad. Bei einer RC19-Regression kann auf dieses RC18-Backup oder auf das unveränderte RC18-ZIP zurückgegangen werden.
