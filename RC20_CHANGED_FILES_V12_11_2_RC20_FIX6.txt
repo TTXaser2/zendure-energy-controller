@@ -1,0 +1,38 @@
+Zendure Energy Controller V12.11.2-RC20 Fix 6
+Build-ID: rc20-audit-fix6-20260806
+Vergleichsbasis: RC20 Fix 5 / rc20-audit-fix5-20260806
+
+Neue Dateien: 5
+  + BUILD_VALIDATION_V12_11_2_RC20_FIX6.md
+  + RC20_CHANGED_FILES_V12_11_2_RC20_FIX6.txt
+  + README_INSTALLATION_V12_11_2_RC20_FIX6.md
+  + ZEC_V12_11_2_RC20_UI_AND_RECOVERY_FIX6_REPORT.md
+  + tests/test_v12_11_2_rc20_fix6_ui_recovery.py
+
+Geänderte Dateien: 21
+  * BUILD_VALIDATION_V12_11_2_RC20.md
+  * RC20_CHANGED_FILES.txt
+  * RC20_SOURCE_MANIFEST.sha256
+  * README.md
+  * README_INSTALLATION.md
+  * RELEASE_INFO_V12_11_2_RC20.md
+  * TECHNICAL_NOTES_V12_11_2_RC20.md
+  * UEBERGABE_ZEC_V12_11_2_RC20_SETTINGS_RELEASE.md
+  * controller_logic.py
+  * operational_events.py
+  * static/settings_v2.css
+  * static/settings_v2.js
+  * static/status_v2.css
+  * static/status_v2.js
+  * status_page_v2.py
+  * tests/test_v12_11_2_rc20_release_integration.py
+  * tests/test_v12_11_rc9_modern_ui.py
+  * tests/test_v12_8_15_night_mode.py
+  * tools/update_zendure_controller.sh
+  * version.py
+  * web_ui.py
+
+Gelöschte Dateien: 0
+
+Regler-AST-Delta: vier SOC-Grenzpfade geändert, soc_limit_hold neu; übrige Reglerfunktionen unverändert.
+Keine Laufzeitlogs, SQLite-Dateien, Caches oder Backupkopien im Paket.

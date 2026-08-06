@@ -23,7 +23,7 @@ class V1211Rc9ModernUiTests(unittest.TestCase):
     def test_graph_page_is_modern_and_exposes_old_graph(self):
         html = build_graph_page(dict(DEFAULT_CONFIG))
         self.assertIn('Graph / Live-Verlauf', html)
-        self.assertIn('class="modern-page"', html)
+        self.assertIn('class="modern-page zec-shell"', html)
         self.assertIn('/graph_old', html)
         self.assertIn('Page Visibility', inspect.getsource(build_graph_page)) if False else None
 

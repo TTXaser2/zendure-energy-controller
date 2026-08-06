@@ -33,8 +33,8 @@ class V12112Rc6UiDiagnosticsHotfixTests(unittest.TestCase):
         raise AssertionError(f"Route {method} {path} not found")
 
     def test_version(self):
-        self.assertEqual("12.11.2-rc19", version.APP_VERSION)
-        self.assertEqual("V12.11.2-RC19", version.APP_VERSION_LABEL)
+        self.assertEqual("12.11.2-rc20", version.APP_VERSION)
+        self.assertEqual("V12.11.2-RC20", version.APP_VERSION_LABEL)
 
     def test_wide_desktop_has_four_columns_medium_two_mobile_one(self):
         css = Path("static/status_v2.css").read_text(encoding="utf-8")

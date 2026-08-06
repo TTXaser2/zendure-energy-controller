@@ -418,8 +418,8 @@ def validate_config_semantics(
         sign = _int_value(cfg, "SECOND_BATTERY_DISCHARGE_SIGN", 1)
         if sign not in (-1, 1):
             issues.append(_issue("ERROR", "Das Entlade-Vorzeichen der Zusatzbatterie muss entweder 1 oder -1 sein.", ["SECOND_BATTERY_DISCHARGE_SIGN"], "Zweitbatterie", "SECOND_BATTERY_SIGN_INVALID"))
-        if _int_value(cfg, "SMA_DISCHARGE_BLOCK_W", 80) <= 0:
-            issues.append(_issue("ERROR", "Die Entlade-Blockgrenze der Zusatzbatterie muss größer als 0 Watt sein.", ["SMA_DISCHARGE_BLOCK_W"], "Zweitbatterie", "SMA_BLOCK_ZERO"))
+        if _int_value(cfg, "CROSS_CHARGE_SIGNIFICANT_W", 80) <= 0:
+            issues.append(_issue("ERROR", "Die Cross-Charge-Signifikanzschwelle muss größer als 0 Watt sein.", ["CROSS_CHARGE_SIGNIFICANT_W"], "Zweitbatterie", "CROSS_CHARGE_SIGNIFICANT_ZERO"))
         if _int_value(cfg, "SECOND_BATTERY_STALE_TIMEOUT_SECONDS", 30) < 5:
             issues.append(_issue("WARNING", "Ein sehr kurzer Daten-Timeout kann bei kurzen MQTT-Pausen unnötig schnell zur Blockierung der Zendure-Ladung führen.", ["SECOND_BATTERY_STALE_TIMEOUT_SECONDS"], "Zweitbatterie", "SECOND_BATTERY_TIMEOUT_LOW"))
         if profile == PROFILE_CUSTOM and topics.get("soc") == "" and topics.get("capacity") == "":

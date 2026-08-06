@@ -5,17 +5,20 @@
 # See LICENSE, NOTICE and DISCLAIMER.md for license, attribution and warranty information.
 
 import csv
+import hashlib
 from contextlib import asynccontextmanager
 import html
 import io
 import json
 import os
+import secrets
 import shlex
 import subprocess
 import threading
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional
+from urllib.parse import urlsplit
 
 import requests
 from fastapi import FastAPI, Request
@@ -23,14 +26,17 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, JSONResponse
 
 from config_manager import CONFIG_SCHEMA, ConfigManager, validate_config
+from settings_model import build_settings_model
+from settings_service import SettingsService
 from config_validator import ValidationIssue, restart_relevant_changes, split_issues, validate_config_semantics
 from cross_charge import cross_charge_enabled
 from csv_logger import rows_to_csv, estimate_retention_hours, measurement_log_mode, detected_log_mounts, resolve_log_path
 from measurement_db import query_graph_points, query_measurement_date_range, resolve_measurement_db_path, db_status_for_config
-from version import APP_VERSION, APP_VERSION_LABEL, CSV_SCHEMA
-from status_page_v2 import render_status_page_v2
+from version import APP_BUILD_ID, APP_VERSION, APP_VERSION_LABEL, CSV_SCHEMA
+from status_page_v2 import render_global_topbar, render_status_page_v2
 from system_metrics import get_system_metrics
 from operational_events import OperationalEventJournal, read_recent_events
+from storage_inventory import StorageInventory
 from state import ControllerState
 from translations import (
     limiter_label,
@@ -165,25 +171,28 @@ def restart_labels(keys: Iterable[str]) -> str:
     return ", ".join(labels) if labels else "-"
 
 
+RESTART_HELPER_PATH = "/usr/local/sbin/zendure-controller-restart"
+
+
 def service_restart_enabled(cfg: Dict[str, Any]) -> bool:
-    return bool(cfg.get("WEB_SERVICE_RESTART_ENABLED", False)) and bool(str(cfg.get("SERVICE_RESTART_COMMAND", "")).strip())
+    # The helper path is fixed and never comes from config.  The existence and
+    # sudo allowlist are verified by the installer/preflight; the boolean is the
+    # user's explicit UI enable switch.
+    return bool(cfg.get("WEB_SERVICE_RESTART_ENABLED", False))
 
 
-def trigger_service_restart(cfg: Dict[str, Any]) -> None:
-    command = str(cfg.get("SERVICE_RESTART_COMMAND", "")).strip()
-    if not command:
-        raise RuntimeError("SERVICE_RESTART_COMMAND ist leer.")
-    args = shlex.split(command)
-    if not args:
-        raise RuntimeError("SERVICE_RESTART_COMMAND ist ungültig.")
-    subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+def trigger_service_restart(_cfg: Dict[str, Any]) -> None:
+    # Installer self-tests must be side-effect free even when executed on a
+    # productive host where the fixed helper is already installed.
+    if os.environ.get("ZEC_INSTALLER_PREFLIGHT") == "1":
+        return
+    if not os.path.isfile(RESTART_HELPER_PATH) or not os.access(RESTART_HELPER_PATH, os.X_OK):
+        raise RuntimeError(f"Fester Restart-Helper fehlt oder ist nicht ausführbar: {RESTART_HELPER_PATH}")
+    subprocess.Popen(["sudo", RESTART_HELPER_PATH], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def delayed_service_restart(cfg: Dict[str, Any], delay_seconds: float = 1.0) -> None:
-    # Copy the relevant command now; after the service restarts, the original
-    # config object may no longer exist in this process.
-    local_cfg = dict(cfg)
-    timer = threading.Timer(delay_seconds, trigger_service_restart, args=[local_cfg])
+    timer = threading.Timer(delay_seconds, trigger_service_restart, args=[dict(cfg)])
     timer.daemon = True
     timer.start()
 
@@ -224,35 +233,119 @@ FAVICON_SVG = """<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>
 
 
 def build_ready_payload(cfg: Dict[str, Any], snap: Dict[str, Any]) -> Dict[str, Any]:
-    """Return a detailed machine-readable readiness status for monitoring."""
-    now_status = "ok"
+    """Return the complete bounded readiness proof used by HTTP and recovery.
+
+    This gate deliberately includes the independent command/read-back path. A
+    live process with fresh grid/SOC data is not operationally ready while a
+    command mismatch, resync/late-effect episode or incomplete Zendure command
+    state is open.
+    """
     checks: Dict[str, Any] = {}
 
     mqtt_ok = bool(snap.get("mqtt_connected"))
     checks["mqtt"] = {"ok": mqtt_ok, "connected": mqtt_ok}
 
-    shelly_age = snap.get("last_shelly_update_age_seconds")
-    shelly_timeout = int(cfg.get("SHELLY_STALE_TIMEOUT_SECONDS", 15))
-    shelly_ok = shelly_age is not None and int(shelly_age) <= shelly_timeout
-    checks["shelly"] = {"ok": shelly_ok, "age_seconds": shelly_age, "timeout_seconds": shelly_timeout}
+    grid_age = snap.get("last_shelly_update_age_seconds")
+    grid_timeout = int(cfg.get("SHELLY_STALE_TIMEOUT_SECONDS", 15))
+    grid_ok = bool(snap.get("grid_power_valid", True)) and grid_age is not None and int(grid_age) <= grid_timeout
+    checks["grid_measurement"] = {
+        "ok": grid_ok, "age_seconds": grid_age, "timeout_seconds": grid_timeout,
+        "reason": snap.get("grid_power_validity_reason"),
+    }
 
     soc_age = snap.get("last_soc_update_age_seconds")
     soc_timeout = int(cfg.get("SOC_STALE_TIMEOUT_SECONDS", 90))
-    soc_ok = snap.get("battery_soc") is not None and soc_age is not None and int(soc_age) <= soc_timeout
+    soc_ok = bool(snap.get("soc_valid", True)) and snap.get("battery_soc") is not None and soc_age is not None and int(soc_age) <= soc_timeout
     checks["zendure_soc"] = {
-        "ok": soc_ok,
-        "soc_percent": snap.get("battery_soc"),
+        "ok": soc_ok, "soc_percent": snap.get("battery_soc"),
         "source": snap.get("zendure_telemetry_source"),
         "fallback_active": snap.get("zendure_local_api_fallback_active"),
-        "age_seconds": soc_age,
-        "timeout_seconds": soc_timeout,
+        "age_seconds": soc_age, "timeout_seconds": soc_timeout,
+        "reason": snap.get("soc_validity_reason"),
     }
 
     if cross_charge_enabled(cfg):
-        evcc_age = snap.get("last_sma_battery_update_age_seconds")
-        evcc_timeout = int(cfg.get("SECOND_BATTERY_STALE_TIMEOUT_SECONDS", cfg.get("EVCC_STALE_TIMEOUT_SECONDS", 30)))
-        evcc_ok = evcc_age is not None and int(evcc_age) <= evcc_timeout
-        checks["cross_charge_second_battery"] = {"ok": evcc_ok, "age_seconds": evcc_age, "timeout_seconds": evcc_timeout}
+        second_age = snap.get("last_sma_battery_update_age_seconds")
+        second_timeout = int(cfg.get("SECOND_BATTERY_STALE_TIMEOUT_SECONDS", cfg.get("EVCC_STALE_TIMEOUT_SECONDS", 30)))
+        second_ok = bool(snap.get("second_battery_valid", True)) and second_age is not None and int(second_age) <= second_timeout
+        checks["cross_charge_second_battery"] = {
+            "ok": second_ok, "age_seconds": second_age, "timeout_seconds": second_timeout,
+            "reason": snap.get("second_battery_validity_reason"),
+        }
+
+    command_path_ok = bool(
+        snap.get("mqtt_command_path_available")
+        and snap.get("mqtt_command_path_fresh")
+        and snap.get("mqtt_command_path_valid")
+    )
+    checks["command_path"] = {
+        "ok": command_path_ok,
+        "available": bool(snap.get("mqtt_command_path_available")),
+        "fresh": bool(snap.get("mqtt_command_path_fresh")),
+        "valid": bool(snap.get("mqtt_command_path_valid")),
+        "age_seconds": snap.get("mqtt_command_path_age_seconds"),
+        "reason": snap.get("mqtt_command_path_validity_reason"),
+    }
+
+    command_complete = bool(snap.get("zendure_command_state_complete"))
+    smart_mode_ok = snap.get("zendure_command_smart_mode") == 1
+    ac_mode = str(snap.get("zendure_command_ac_mode") or "")
+    input_limit = snap.get("zendure_command_input_limit_w")
+    output_limit = snap.get("zendure_command_output_limit_w")
+    static_invariant_ok = bool(
+        ac_mode in {"Input mode", "Output mode"}
+        and input_limit is not None and output_limit is not None
+        and ((ac_mode == "Input mode" and int(output_limit) == 0)
+             or (ac_mode == "Output mode" and int(input_limit) == 0))
+    )
+    checks["command_state"] = {
+        "ok": command_complete and smart_mode_ok and static_invariant_ok,
+        "complete": command_complete,
+        "smart_mode": snap.get("zendure_command_smart_mode"),
+        "ac_mode": ac_mode,
+        "input_limit_w": input_limit,
+        "output_limit_w": output_limit,
+        "static_invariant_ok": static_invariant_ok,
+        "source": snap.get("zendure_command_state_source"),
+        "reason": snap.get("zendure_command_state_reason"),
+    }
+
+    desired_exists = int(snap.get("command_desired_sequence_id") or 0) > 0
+    desired_match = (not desired_exists) or bool(snap.get("command_readback_matches_desired"))
+    checks["command_readback"] = {
+        "ok": desired_match,
+        "desired_sequence_id": int(snap.get("command_desired_sequence_id") or 0),
+        "matches_desired": bool(snap.get("command_readback_matches_desired")),
+        "mismatch_fields": snap.get("command_readback_mismatch_fields"),
+    }
+
+    lifecycle = str(snap.get("command_lifecycle_state") or "")
+    unhealthy_lifecycle = lifecycle in {
+        "MISMATCH_CONFIRMED", "RECOVERY_VERIFYING", "TELEMETRY_UNCERTAIN",
+        "LATE_EFFECT_NEUTRALIZING", "LATE_EFFECT_NEUTRAL_STABILIZING",
+        "COMMAND_STATE_VERIFYING",
+    }
+    no_open_episode = not any((
+        bool(snap.get("command_uncertain_mqtt_active")),
+        bool(snap.get("command_not_effective_active")),
+        bool(snap.get("command_late_effect_guard_active")),
+        unhealthy_lifecycle,
+    ))
+    checks["command_guards"] = {
+        "ok": no_open_episode,
+        "uncertain_mqtt_active": bool(snap.get("command_uncertain_mqtt_active")),
+        "not_effective_active": bool(snap.get("command_not_effective_active")),
+        "late_effect_guard_active": bool(snap.get("command_late_effect_guard_active")),
+        "lifecycle_state": lifecycle,
+        "effect_category": snap.get("command_effect_category"),
+    }
+
+    actual_power_ok = bool(snap.get("actual_zendure_power_valid"))
+    checks["zendure_power_telemetry"] = {
+        "ok": actual_power_ok,
+        "age_seconds": snap.get("actual_zendure_power_age_s"),
+        "reason": snap.get("actual_zendure_power_validity_reason"),
+    }
 
     safe_state = snap.get("current_mode") == "SAFE_STATE"
     checks["controller"] = {
@@ -264,18 +357,23 @@ def build_ready_payload(cfg: Dict[str, Any], snap: Dict[str, Any]) -> Dict[str, 
     }
 
     failed = [name for name, item in checks.items() if isinstance(item, dict) and not item.get("ok", False)]
-    if failed:
-        now_status = "degraded"
-    if safe_state:
-        now_status = "safe_state"
-
+    proof_source = {
+        "safe_state_counter": int(snap.get("safe_state_counter") or 0),
+        "command_resync_count": int(snap.get("command_resync_count") or 0),
+        "late_guard_activation_count": int(snap.get("command_late_effect_guard_activation_count") or 0),
+    }
+    proof_revision = hashlib.sha256(json.dumps(proof_source, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    status = "safe_state" if safe_state else ("degraded" if failed else "ok")
     return {
-        "status": now_status,
+        "status": status,
         "ready": not failed and not safe_state,
         "version": APP_VERSION,
+        "build_id": APP_BUILD_ID,
         "uptime_seconds": snap.get("uptime_seconds"),
         "checks": checks,
         "failed_checks": failed,
+        "proof_revision": proof_revision,
+        "proof_counters": proof_source,
     }
 
 
@@ -285,6 +383,7 @@ def build_health_payload(snap: Dict[str, Any]) -> Dict[str, Any]:
         "status": "ok",
         "alive": True,
         "version": APP_VERSION,
+        "build_id": APP_BUILD_ID,
         "uptime_seconds": snap.get("uptime_seconds"),
     }
 
@@ -536,30 +635,164 @@ def build_grid_mini_payload(snap: Dict[str, Any], max_points: int = 48) -> Dict[
     return {"points": points, "count": len(points), "snapshot_epoch_ms": int(time.time() * 1000)}
 
 
+def _inventory_cache_path(cfg: Dict[str, Any]) -> str:
+    dirs = _measurement_log_dirs(cfg)
+    return os.path.join(dirs[0], "zec_storage_inventory_cache.json") if dirs else ""
+
+
+def _load_storage_inventory_cache(path: str) -> Dict[str, Any]:
+    if not path:
+        return {"schema": 1, "files": {}}
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        if isinstance(data, dict) and isinstance(data.get("files"), dict):
+            return data
+    except Exception:
+        pass
+    return {"schema": 1, "files": {}}
+
+
+def _write_storage_inventory_cache(path: str, data: Dict[str, Any]) -> None:
+    if not path:
+        return
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = f"{path}.tmp.{os.getpid()}"
+        with open(tmp, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, ensure_ascii=False, sort_keys=True, indent=2)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            if 'tmp' in locals() and os.path.exists(tmp):
+                os.unlink(tmp)
+        except Exception:
+            pass
+
+
+def _measurement_manifest_entries(cfg: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    entries: Dict[str, Dict[str, Any]] = {}
+    for directory in _measurement_log_dirs(cfg):
+        path = os.path.join(directory, "zec_measurement_manifest.json")
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                manifest = json.load(handle)
+        except Exception:
+            continue
+        for item in list((manifest or {}).get("files") or []):
+            if not isinstance(item, dict):
+                continue
+            rel = str(item.get("relative_path") or item.get("file_name") or "").strip()
+            if not rel:
+                continue
+            entries[os.path.abspath(os.path.join(directory, rel))] = item
+    return entries
+
+
+def _inventory_entry_from_scan(path: str, max_rows_per_file: int) -> Dict[str, Any]:
+    first_dt: Optional[datetime] = None
+    last_dt: Optional[datetime] = None
+    row_count = 0
+    for row in _read_csv_rows(path):
+        if row_count >= max_rows_per_file:
+            break
+        dt = _parse_measurement_dt(row)
+        if dt is None:
+            continue
+        row_count += 1
+        if first_dt is None or dt < first_dt:
+            first_dt = dt
+        if last_dt is None or dt > last_dt:
+            last_dt = dt
+    return {
+        "row_count": row_count,
+        "first": first_dt.isoformat(sep=" ", timespec="seconds") if first_dt else "",
+        "last": last_dt.isoformat(sep=" ", timespec="seconds") if last_dt else "",
+        "readable": bool(first_dt is not None and last_dt is not None),
+        "source": "scan",
+    }
+
+
 def measurement_availability(cfg: Dict[str, Any], max_rows_per_file: int = 250000) -> Dict[str, Any]:
+    """Build an incremental inventory without rescanning unchanged V4 files.
+
+    The writer manifest is authoritative for row count/time bounds where
+    available.  A small persistent cache covers closed legacy files.  Only new
+    or changed files missing both sources are scanned.
+    """
     files = _measurement_csv_files(cfg)
+    cache_path = _inventory_cache_path(cfg)
+    old_cache = _load_storage_inventory_cache(cache_path)
+    cached_files = dict(old_cache.get("files") or {})
+    manifests = _measurement_manifest_entries(cfg)
+    next_cache: Dict[str, Dict[str, Any]] = {}
     first_dt: Optional[datetime] = None
     last_dt: Optional[datetime] = None
     row_count = 0
     readable_files = 0
+    reused = 0
+    from_manifest = 0
+    scanned = 0
+
     for path in files:
-        seen = 0
-        file_has_rows = False
-        for row in _read_csv_rows(path):
-            seen += 1
-            if seen > max_rows_per_file:
-                break
-            dt = _parse_measurement_dt(row)
-            if dt is None:
-                continue
-            file_has_rows = True
-            row_count += 1
-            if first_dt is None or dt < first_dt:
-                first_dt = dt
-            if last_dt is None or dt > last_dt:
-                last_dt = dt
-        if file_has_rows:
+        absolute = os.path.abspath(path)
+        try:
+            stat = os.stat(absolute)
+            signature = {"size": int(stat.st_size), "mtime_ns": int(stat.st_mtime_ns)}
+        except Exception:
+            continue
+        previous = cached_files.get(absolute) if isinstance(cached_files.get(absolute), dict) else None
+        entry: Dict[str, Any]
+        if previous and int(previous.get("size", -1)) == signature["size"] and int(previous.get("mtime_ns", -1)) == signature["mtime_ns"]:
+            entry = dict(previous)
+            entry["source"] = "cache"
+            reused += 1
+        else:
+            manifest = manifests.get(absolute)
+            manifest_rows = manifest.get("row_count") if isinstance(manifest, dict) else None
+            first_epoch = manifest.get("first_measurement_epoch_ms") if isinstance(manifest, dict) else None
+            last_epoch = manifest.get("last_measurement_epoch_ms") if isinstance(manifest, dict) else None
+            try:
+                valid_manifest = int(manifest_rows) >= 0 and int(first_epoch) > 0 and int(last_epoch) > 0
+            except Exception:
+                valid_manifest = False
+            if valid_manifest:
+                first_manifest = datetime.fromtimestamp(int(first_epoch) / 1000.0)
+                last_manifest = datetime.fromtimestamp(int(last_epoch) / 1000.0)
+                entry = {
+                    "row_count": int(manifest_rows),
+                    "first": first_manifest.isoformat(sep=" ", timespec="seconds"),
+                    "last": last_manifest.isoformat(sep=" ", timespec="seconds"),
+                    "readable": True,
+                    "source": "manifest",
+                }
+                from_manifest += 1
+            else:
+                entry = _inventory_entry_from_scan(absolute, max_rows_per_file)
+                scanned += 1
+            entry.update(signature)
+        next_cache[absolute] = dict(entry)
+        try:
+            item_first = datetime.fromisoformat(str(entry.get("first") or ""))
+            item_last = datetime.fromisoformat(str(entry.get("last") or ""))
+        except Exception:
+            item_first = item_last = None
+        if bool(entry.get("readable")) and item_first is not None and item_last is not None:
             readable_files += 1
+            row_count += max(0, int(entry.get("row_count") or 0))
+            if first_dt is None or item_first < first_dt:
+                first_dt = item_first
+            if last_dt is None or item_last > last_dt:
+                last_dt = item_last
+
+    _write_storage_inventory_cache(cache_path, {
+        "schema": 1,
+        "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "files": next_cache,
+    })
     mode = measurement_log_mode(cfg)
     return {
         "logging_mode": mode,
@@ -570,7 +803,12 @@ def measurement_availability(cfg: Dict[str, Any], max_rows_per_file: int = 25000
         "available": first_dt is not None and last_dt is not None,
         "start": first_dt.isoformat(sep=" ", timespec="seconds") if first_dt else "",
         "end": last_dt.isoformat(sep=" ", timespec="seconds") if last_dt else "",
-        "files": [os.path.basename(p) for p in files[-10:]],
+        "files": [os.path.basename(path) for path in files[-10:]],
+        "inventory_cache_path": cache_path,
+        "inventory_files_reused": reused,
+        "inventory_files_from_manifest": from_manifest,
+        "inventory_files_scanned": scanned,
+        "inventory_strategy": "incremental_manifest_cache",
     }
 
 
@@ -1074,10 +1312,44 @@ def analysis_service_url(cfg: Dict[str, Any]) -> str:
 
 def create_app(config_manager: ConfigManager, state: ControllerState, on_config_saved=None) -> FastAPI:
     event_journal = OperationalEventJournal(config_manager.get, state)
+    settings_service = SettingsService(config_manager)
+    storage_inventory = StorageInventory(lambda: measurement_availability(config_manager.get()))
+    csrf_cookie_name = "zec_settings_csrf"
+    restart_lock = threading.Lock()
+    restart_state = {"last_attempt_monotonic": 0.0, "in_flight": False}
+    repair_lock = threading.RLock()
+    repair_previews: Dict[str, Dict[str, Any]] = {}
+    repair_state = {"last_attempt_monotonic": 0.0, "in_flight": False}
+
+    def csrf_token_for(request: Request) -> str:
+        token = str(request.cookies.get(csrf_cookie_name) or "")
+        if len(token) < 32:
+            token = secrets.token_urlsafe(32)
+        return token
+
+    def verify_admin_request(request: Request) -> str:
+        cookie_token = str(request.cookies.get(csrf_cookie_name) or "")
+        header_token = str(request.headers.get("x-csrf-token") or "")
+        if not cookie_token or not secrets.compare_digest(cookie_token, header_token):
+            raise PermissionError("CSRF_TOKEN_INVALID")
+        host = str(request.headers.get("host") or "").lower()
+        origin = str(request.headers.get("origin") or "")
+        referer = str(request.headers.get("referer") or "")
+        source = origin or referer
+        if not source:
+            raise PermissionError("ORIGIN_REQUIRED")
+        try:
+            source_host = str(urlsplit(source).netloc or "").lower()
+        except Exception:
+            source_host = ""
+        if not source_host or source_host != host:
+            raise PermissionError("ORIGIN_MISMATCH")
+        return cookie_token
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         event_journal.start()
+        storage_inventory.refresh_async()
         try:
             yield
         finally:
@@ -1109,9 +1381,11 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
         snap = state.snapshot()
         snap["controller_version"] = APP_VERSION
         snap["controller_version_label"] = APP_VERSION_LABEL
+        snap["controller_build_id"] = APP_BUILD_ID
         snap.pop("graph_history", None)
         snap.pop("event_history", None)
         snap.pop("mqtt_topic_diagnostics", None)
+        snap["settings_runtime"] = config_manager.status()
         return snap
 
     @app.get("/status-view-data")
@@ -1170,9 +1444,30 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
     def measurements_page():
         return html_or_headless(build_measurements_page, config_manager.get())
 
+    @app.get("/storage/status")
+    def storage_status():
+        """O(1) copy of the last completed inventory; never scans storage."""
+        return storage_inventory.snapshot()
+
+    @app.post("/storage/inventory-refresh")
+    async def storage_inventory_refresh(request: Request):
+        try:
+            verify_admin_request(request)
+        except PermissionError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=403)
+        result = storage_inventory.refresh_async()
+        event_journal.record_admin_action(
+            "STORAGE_INVENTORY_REFRESH",
+            "Manuelle Aktualisierung des gecachten Storage-Inventars angefordert.",
+            result,
+        )
+        return JSONResponse(result, status_code=202 if result.get("status") == "scheduled" else 200)
+
     @app.get("/measurements/availability")
     def measurements_availability():
-        data = measurement_availability(config_manager.get())
+        # Legacy adapter: the expensive CSV inventory is never rebuilt in this
+        # request. Existing consumers receive the cached snapshot.
+        data = storage_inventory.snapshot()
         try:
             data["measurement_db"] = db_status_for_config(config_manager.get())
         except Exception as exc:
@@ -1213,7 +1508,7 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
                 writer.writerow({k: row.get(k, "") for k in writer.fieldnames})
                 rows_written += 1
         if writer is None:
-            availability = measurement_availability(cfg)
+            availability = storage_inventory.snapshot()
             if not availability.get("available") and not availability.get("logging_active"):
                 msg = "Keine Messdaten verfügbar. Messdaten-Logging ist deaktiviert; bitte in den Settings aktivieren, damit künftig Daten exportiert werden können."
             else:
@@ -1227,89 +1522,175 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
 
     @app.get("/config")
     def get_config():
-        return config_manager.get()
+        response = JSONResponse({
+            "configured": config_manager.redacted_config(configured=True),
+            "effective": config_manager.redacted_config(configured=False),
+            "status": config_manager.status(),
+        })
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
     @app.get("/health")
     def health():
         cfg = config_manager.get()
-        return build_health_payload(state.snapshot())
+        return build_health_payload(state.readiness_snapshot())
 
     @app.get("/ready")
     def ready():
         cfg = config_manager.get()
-        payload = build_ready_payload(cfg, state.snapshot())
+        payload = build_ready_payload(cfg, state.readiness_snapshot(cfg.get("ZENDURE_COMMAND_STATE_FRESH_SECONDS", 30)))
+        runtime_status = config_manager.status()
+        payload["settings_runtime"] = {
+            "startup_mode": runtime_status.get("startup_mode"),
+            "config_health": runtime_status.get("config_health"),
+            "effective_source": runtime_status.get("effective_source"),
+            "pending_restart": runtime_status.get("pending_restart"),
+        }
+        if not runtime_status.get("control_allowed"):
+            payload["ready"] = False
+            payload["status"] = "not_ready"
+            failed = list(payload.get("failed_checks") or [])
+            if "settings_runtime_control_gate" not in failed:
+                failed.append("settings_runtime_control_gate")
+            payload["failed_checks"] = failed
         return payload
 
     @app.get("/settings", response_class=HTMLResponse)
     def settings_page(request: Request):
         cfg = config_manager.get()
-        saved = request.query_params.get("saved") == "1"
-        restart_required = request.query_params.get("restart_required") == "1"
-        restart_keys = request.query_params.get("restart_keys", "")
-        issues = validate_config_semantics(cfg, current=cfg, perform_live_checks=False, base_dir=os.getcwd())
-        return html_or_headless(build_settings_page, cfg, validation_issues=issues, saved=saved, restart_required=restart_required, restart_keys=restart_keys)
+        if cfg.get("HEADLESS_MODE", False):
+            return HTMLResponse(build_headless_page(cfg), status_code=403)
+        token = csrf_token_for(request)
+        snap = state.snapshot()
+        status_payload = build_status_view_payload(cfg, snap)
+        response = HTMLResponse(build_settings_page(
+            cfg, csrf_token=token, system_payload=status_payload.get("system"),
+            server_time=str(status_payload.get("server_time") or ""),
+        ))
+        response.set_cookie(
+            csrf_cookie_name,
+            token,
+            httponly=True,
+            secure=request.url.scheme == "https",
+            samesite="strict",
+            path="/",
+            max_age=3600,
+        )
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
-    @app.post("/settings/validate")
-    async def validate_settings_preview(request: Request):
+    @app.get("/settings/model")
+    def settings_model(request: Request):
+        cfg = config_manager.get()
+        if cfg.get("HEADLESS_MODE", False):
+            return JSONResponse({"status": "disabled", "reason": "headless"}, status_code=403)
+        token = csrf_token_for(request)
+        state_snapshot = state.snapshot()
+        payload = build_settings_model(config_manager, state_snapshot, csrf_token=token)
+        ready_payload = build_ready_payload(config_manager.get(), state.readiness_snapshot(config_manager.get().get("ZENDURE_COMMAND_STATE_FRESH_SECONDS", 30)))
+        payload["ready_status"] = ready_payload
+        payload["runtime"]["ready"] = ready_payload.get("ready")
+        payload["storage_status"] = storage_inventory.snapshot()
+        response = JSONResponse(payload)
+        response.set_cookie(
+            csrf_cookie_name,
+            token,
+            httponly=True,
+            secure=request.url.scheme == "https",
+            samesite="strict",
+            path="/",
+            max_age=3600,
+        )
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @app.post("/settings/preview")
+    async def settings_preview(request: Request):
         if config_manager.get().get("HEADLESS_MODE", False):
-            return JSONResponse({"status": "disabled", "issues": []}, status_code=403)
-        form = await request.form()
-        current_cfg = config_manager.get()
-        raw_cfg = dict(current_cfg)
-        for key, meta in CONFIG_SCHEMA.items():
-            if meta.get("type") == "bool":
-                raw_cfg[key] = key in form
-            elif key in form:
-                raw_cfg[key] = form.get(key)
-        issues = apply_night_time_form_fields(raw_cfg, form)
-        issues += validate_config_semantics(raw_cfg, current=current_cfg, perform_live_checks=False, base_dir=os.getcwd())
-        buckets = split_issues(issues)
-        return JSONResponse({
-            "errors": len(buckets.get("ERROR", [])),
-            "warnings": len(buckets.get("WARNING", [])),
-            "infos": len(buckets.get("INFO", [])),
-            "issues": [issue.as_dict() for issue in issues],
-        })
+            return JSONResponse({"error": "HEADLESS_MODE"}, status_code=403)
+        try:
+            session_token = verify_admin_request(request)
+            payload = await request.json()
+            result = settings_service.preview(payload, session_token, state.snapshot())
+            response = JSONResponse(result, status_code=200 if result.get("status") == "ready" else 422)
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        except PermissionError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=403)
+        except RuntimeError as exc:
+            code = str(exc)
+            return JSONResponse({"error": code}, status_code=409 if "CONFLICT" in code else 400)
+        except (ValueError, json.JSONDecodeError) as exc:
+            return JSONResponse({"error": str(exc)}, status_code=422)
+
+    @app.post("/settings/commit")
+    async def settings_commit(request: Request):
+        if config_manager.get().get("HEADLESS_MODE", False):
+            return JSONResponse({"error": "HEADLESS_MODE"}, status_code=403)
+        try:
+            session_token = verify_admin_request(request)
+            payload = await request.json()
+            result = settings_service.commit(payload, session_token)
+            if on_config_saved and result.get("live_applied_keys"):
+                on_config_saved()
+            response = JSONResponse(result)
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        except PermissionError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=403)
+        except KeyError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=410)
+        except RuntimeError as exc:
+            code = str(exc)
+            return JSONResponse({"error": code}, status_code=409 if "CONFLICT" in code else 500)
+        except ValueError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=422)
+
+    @app.post("/settings/storage-probe")
+    async def settings_storage_probe(request: Request):
+        """Explicit write probe. GET/model/preview never call this action."""
+        try:
+            verify_admin_request(request)
+            payload = await request.json()
+            target = str(payload.get("path") or "").strip()
+            if not target or not os.path.isabs(target):
+                return JSONResponse({"error": "ABSOLUTE_PATH_REQUIRED"}, status_code=422)
+            if not os.path.isdir(target):
+                return JSONResponse({"error": "DIRECTORY_NOT_FOUND"}, status_code=422)
+            probe = os.path.join(target, ".zec-settings-probe-" + secrets.token_hex(12) + ".tmp")
+            cleanup_error = ""
+            try:
+                fd = os.open(probe, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                try:
+                    os.write(fd, b"ZEC RC20 storage probe\n")
+                    os.fsync(fd)
+                finally:
+                    os.close(fd)
+            finally:
+                try:
+                    if os.path.exists(probe):
+                        os.remove(probe)
+                except OSError as exc:
+                    cleanup_error = type(exc).__name__
+            return {"status": "ok" if not cleanup_error else "cleanup_error", "path": target, "cleanup_error": cleanup_error or None}
+        except PermissionError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=403)
+        except OSError as exc:
+            return JSONResponse({"error": type(exc).__name__}, status_code=500)
+
+    # Legacy form endpoints remain registered as explicit no-write tombstones so
+    # old bookmarks or scripts cannot bypass the RC20 preview/commit contract.
+    @app.post("/settings/validate")
+    async def validate_settings_preview_legacy(_request: Request):
+        return JSONResponse({"error": "LEGACY_ENDPOINT_REMOVED", "use": "/settings/preview"}, status_code=410)
 
     @app.post("/save-config")
-    async def save_config_web(request: Request):
-        if config_manager.get().get("HEADLESS_MODE", False):
-            return HTMLResponse(build_headless_page(config_manager.get()), status_code=403)
-        form = await request.form()
-        current_cfg = config_manager.get()
-        raw_cfg = dict(current_cfg)
-        for key, meta in CONFIG_SCHEMA.items():
-            if meta.get("type") == "bool":
-                raw_cfg[key] = key in form
-            elif key in form:
-                raw_cfg[key] = form.get(key)
-        validation_issues = apply_night_time_form_fields(raw_cfg, form)
-
-        validation_issues += validate_settings_before_save(raw_cfg, current_cfg)
-        issue_buckets = split_issues(validation_issues)
-        confirmed_warnings = form.get("_confirm_warnings") == "1"
-        cfg, _ = validate_config(raw_cfg)
-
-        if issue_buckets.get("ERROR"):
-            return HTMLResponse(build_settings_page(cfg, validation_issues, validation_state="error"), status_code=400)
-
-        if issue_buckets.get("WARNING") and not confirmed_warnings:
-            return HTMLResponse(build_settings_page(cfg, validation_issues, validation_state="warning"), status_code=409)
-
-        changed_restart_keys = restart_relevant_changes(cfg, current_cfg)
-        config_manager.save(cfg)
-        if on_config_saved:
-            on_config_saved()
-        if changed_restart_keys:
-            return RedirectResponse(
-                url="/settings?saved=1&restart_required=1&restart_keys=" + html.escape(",".join(changed_restart_keys), quote=True),
-                status_code=303,
-            )
-        return RedirectResponse(url="/settings?saved=1", status_code=303)
+    async def save_config_web_legacy(_request: Request):
+        return JSONResponse({"error": "LEGACY_ENDPOINT_REMOVED", "use": "/settings/preview and /settings/commit"}, status_code=410)
 
     @app.get("/graph", response_class=HTMLResponse)
     def graph_page():
-        return html_or_headless(build_graph_page, config_manager.get())
+        return html_or_headless(build_graph_page, config_manager.get(), state.snapshot())
 
     @app.get("/graph_old", response_class=HTMLResponse)
     def graph_old_page():
@@ -1375,18 +1756,154 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
             return PlainTextResponse("Handbuch-PDF wurde nicht gefunden. Bitte docs/Zendure_Energy_Controller_Handbuch.pdf mitinstallieren.", status_code=404)
         return FileResponse(path, media_type="application/pdf", filename=os.path.basename(path))
 
-    @app.post("/restart-service", response_class=HTMLResponse)
+    @app.post("/restart-service")
     async def restart_service(request: Request):
         cfg = config_manager.get()
         if cfg.get("HEADLESS_MODE", False):
-            return HTMLResponse(build_headless_page(cfg), status_code=403)
-        if not service_restart_enabled(cfg):
-            return HTMLResponse(build_restart_service_page(cfg, enabled=False, redirect_url=status_url_after_restart(request, cfg)), status_code=403)
+            return JSONResponse({"error": "HEADLESS_MODE"}, status_code=403)
         try:
+            verify_admin_request(request)
+            payload = await request.json()
+        except PermissionError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=403)
+        if str(payload.get("confirmation") or "") != "RESTART_SERVICE":
+            return JSONResponse({"error": "EXPLICIT_CONFIRMATION_REQUIRED"}, status_code=422)
+        if not service_restart_enabled(cfg):
+            return JSONResponse({"error": "RESTART_DISABLED"}, status_code=403)
+        if not os.path.isfile(RESTART_HELPER_PATH) or not os.access(RESTART_HELPER_PATH, os.X_OK):
+            return JSONResponse({"error": "RESTART_HELPER_UNAVAILABLE"}, status_code=503)
+        if config_manager.status().get("configured_file_valid") is not True:
+            return JSONResponse({"error": "CONFIGURED_STARTUP_CANDIDATE_INVALID"}, status_code=409)
+        now = time.monotonic()
+        with restart_lock:
+            if restart_state["in_flight"]:
+                return JSONResponse({"error": "RESTART_ALREADY_IN_FLIGHT"}, status_code=409)
+            if now - float(restart_state["last_attempt_monotonic"] or 0) < 60.0:
+                return JSONResponse({"error": "RESTART_COOLDOWN"}, status_code=429)
+            restart_state["in_flight"] = True
+            restart_state["last_attempt_monotonic"] = now
+        try:
+            redirect_url = status_url_after_restart(request, config_manager.get_configured())
+            state.add_event("MANUAL_WEB_SERVICE_RESTART")
+            event_journal.record_admin_action(
+                "MANUAL_WEB_SERVICE_RESTART",
+                "Manueller Dienstneustart über die geschützte Settings-Aktion bestätigt.",
+                {"expected_version": APP_VERSION, "expected_build_id": APP_BUILD_ID, "redirect_url": redirect_url},
+            )
             delayed_service_restart(cfg, delay_seconds=1.2)
-            return HTMLResponse(build_restart_service_page(cfg, enabled=True, redirect_url=status_url_after_restart(request, cfg)))
+            return {
+                "status": "restart_scheduled",
+                "redirect_url": redirect_url,
+                "ready_url": "/ready",
+                "expected_version": APP_VERSION,
+                "expected_build_id": APP_BUILD_ID,
+                "success_condition": "ready=true, version=expected_version and build_id=expected_build_id",
+            }
         except Exception as exc:
-            return HTMLResponse(build_restart_service_page(cfg, enabled=True, error=str(exc), redirect_url=status_url_after_restart(request, cfg)), status_code=500)
+            with restart_lock:
+                restart_state["in_flight"] = False
+            return JSONResponse({"error": type(exc).__name__, "message": str(exc)}, status_code=500)
+
+    def _pointer_repair_binding(status: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        store = status.get("last_good_store") or {}
+        selected = store.get("selected_slot")
+        slots = store.get("slots") or {}
+        slot_status = slots.get(selected) if selected in ("A", "B") else None
+        if not isinstance(slot_status, dict):
+            return None
+        manifest_path = config_manager.last_good_store.manifest_path_for(str(selected))
+        try:
+            with open(manifest_path, "rb") as handle:
+                manifest_bytes = handle.read()
+            manifest_hash = hashlib.sha256(manifest_bytes).hexdigest()
+        except OSError:
+            return None
+        return {
+            "store_revision": status.get("last_good_store_revision"),
+            "target_slot": selected,
+            "generation_id": int(slot_status.get("generation_id") or 0),
+            "typed_revision": str(slot_status.get("typed_revision") or ""),
+            "config_hash": str(slot_status.get("config_hash") or ""),
+            "manifest_hash": manifest_hash,
+        }
+
+    @app.post("/admin/last-good-pointer-repair/preview")
+    async def last_good_pointer_repair_preview(request: Request):
+        try:
+            session_token = verify_admin_request(request)
+        except PermissionError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=403)
+        status = config_manager.status()
+        if not status.get("last_good_store_repair_required"):
+            return JSONResponse({"error": "REPAIR_NOT_ELIGIBLE"}, status_code=409)
+        binding = _pointer_repair_binding(status)
+        if binding is None or binding.get("target_slot") not in ("A", "B"):
+            return JSONResponse({"error": "REPAIR_TARGET_NOT_VERIFIABLE"}, status_code=409)
+        token = secrets.token_urlsafe(24)
+        record = {
+            "session": session_token,
+            **binding,
+            "expires": time.monotonic() + 300.0,
+        }
+        with repair_lock:
+            repair_previews.clear()
+            repair_previews[token] = record
+        return {
+            "status": "ready",
+            "action_token": token,
+            **binding,
+            "confirmation_phrase": "REPAIR_POINTER",
+            "effects": ["Current-Pointer atomar auf den verifizierten Slot setzen"],
+            "non_effects": ["keine Slotdatei", "keine Primärconfig", "keine Runtimeänderung", "keine Gerätekommandos"],
+        }
+
+    @app.post("/admin/last-good-pointer-repair/commit")
+    async def last_good_pointer_repair_commit(request: Request):
+        try:
+            session_token = verify_admin_request(request)
+            payload = await request.json()
+        except PermissionError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=403)
+        if str(payload.get("confirmation") or "") != "REPAIR_POINTER":
+            return JSONResponse({"error": "EXPLICIT_CONFIRMATION_REQUIRED"}, status_code=422)
+        token = str(payload.get("action_token") or "")
+        now = time.monotonic()
+        with repair_lock:
+            record = repair_previews.pop(token, None)
+            if repair_state["in_flight"]:
+                return JSONResponse({"error": "REPAIR_ALREADY_IN_FLIGHT"}, status_code=409)
+            if now - float(repair_state["last_attempt_monotonic"] or 0) < 60.0:
+                return JSONResponse({"error": "REPAIR_COOLDOWN"}, status_code=429)
+            if record and record.get("expires", 0) > now and record.get("session") == session_token:
+                repair_state["in_flight"] = True
+                repair_state["last_attempt_monotonic"] = now
+        if not record or record.get("expires", 0) <= now:
+            return JSONResponse({"error": "ACTION_TOKEN_EXPIRED"}, status_code=410)
+        if record.get("session") != session_token:
+            return JSONResponse({"error": "ACTION_SESSION_MISMATCH"}, status_code=403)
+        try:
+            current_status = config_manager.status()
+            current_binding = _pointer_repair_binding(current_status)
+            expected_binding = {key: record.get(key) for key in (
+                "store_revision", "target_slot", "generation_id", "typed_revision", "config_hash", "manifest_hash"
+            )}
+            if current_binding != expected_binding:
+                return JSONResponse({"error": "REPAIR_BINDING_CHANGED"}, status_code=409)
+            result = config_manager.last_good_store.repair_pointer(
+                str(record.get("store_revision") or ""),
+                str(record.get("target_slot") or ""),
+            )
+            event_journal.record_admin_action(
+                "LAST_GOOD_POINTER_REPAIR",
+                "Last-Good-Current-Pointer nach vollständiger Tokenbindung atomar repariert.",
+                expected_binding,
+            )
+            return result
+        except RuntimeError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=409)
+        finally:
+            with repair_lock:
+                repair_state["in_flight"] = False
 
     @app.get("/zendure-properties")
     def zendure_properties():
@@ -2792,17 +3309,113 @@ def _ui_icon(name: str) -> str:
     return f'<svg class="zec-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">{body}</svg>'
 
 
-def _modern_body_start(cfg: Dict[str, Any], active: str, force_dark: bool = False) -> str:
+def _shared_topbar_live_script() -> str:
+    """Live status binding for pages using the shared shell without status_v2.js."""
+    return """<script>
+    (() => {
+      'use strict';
+      const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+      function apply(payload) {
+        const system = payload && payload.system ? payload.system : {};
+        const kind = system.kind || 'unknown';
+        const button = document.getElementById('systemStatusButton');
+        if (button) {
+          button.className = `zec-system-pill ${kind}`;
+          button.setAttribute('aria-expanded', 'false');
+        }
+        const label = document.querySelector('[data-zec="system.label"]');
+        if (label) label.textContent = system.label || 'Systemstatus';
+        const dot = document.getElementById('globalStatusNavDot');
+        if (dot) {
+          dot.className = `zec-nav-live-dot ${kind}`;
+          dot.setAttribute('aria-label', `Aktueller Systemstatus: ${kind}`);
+        }
+        const list = document.getElementById('systemWarningList');
+        if (list) {
+          const warnings = Array.isArray(system.warnings) ? system.warnings : [];
+          list.innerHTML = (warnings.length ? warnings : ['Keine aktiven Warnungen oder Fehler.']).map(x => `<li>${esc(x)}</li>`).join('');
+        }
+        if (payload && payload.server_time) document.querySelectorAll('[data-zec="server_time"]').forEach(el => { el.textContent = payload.server_time; });
+      }
+      function bind() {
+        const button = document.getElementById('systemStatusButton');
+        const menu = document.getElementById('systemStatusMenu');
+        if (button && menu) {
+          button.addEventListener('click', event => {
+            event.stopPropagation();
+            const opening = menu.hidden;
+            menu.hidden = !opening;
+            button.setAttribute('aria-expanded', String(opening));
+          });
+          document.addEventListener('click', event => {
+            if (!menu.hidden && !event.target.closest('.zec-system-menu-wrap')) {
+              menu.hidden = true;
+              button.setAttribute('aria-expanded', 'false');
+            }
+          });
+        }
+        document.querySelectorAll('.analysis-service-link').forEach(link => link.addEventListener('click', event => {
+          event.preventDefault();
+          const port = Number(link.dataset.replayPort || 8090);
+          window.location.href = `${window.location.protocol}//${window.location.hostname}:${port}/`;
+        }));
+        const clock = document.getElementById('localClock');
+        if (clock) setInterval(() => { clock.textContent = new Date().toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit', second:'2-digit'}); }, 1000);
+      }
+      let inFlight = false;
+      async function refresh() {
+        if (document.visibilityState === 'hidden' || inFlight) return;
+        inFlight = true;
+        try {
+          const response = await fetch('/status-view-data', {cache:'no-store'});
+          if (response.ok) apply(await response.json());
+        } catch (_) {} finally { inFlight = false; }
+      }
+      document.addEventListener('DOMContentLoaded', () => { bind(); refresh(); setInterval(refresh, 3000); });
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'hidden') refresh(); });
+    })();
+    </script>"""
+
+
+def _modern_body_start(
+    cfg: Dict[str, Any],
+    active: str,
+    force_dark: bool = False,
+    *,
+    system_payload: Optional[Dict[str, Any]] = None,
+    server_time: str = "",
+) -> str:
     cfg2 = dict(cfg or {})
     cfg2["__hide_nav"] = True
     dark = bool(force_dark or cfg2.get("UI_DARK_MODE", False))
-    # Modern pages use explicit theme classes. This decouples the new dashboard
-    # from the legacy page theme and allows a true mock-up-fidelity light shell.
     theme_class = "modern-dark" if dark else "modern-light"
+    base = build_base_header("Zendure Energy Controller", cfg=cfg2)
+    theme = "dark" if dark else "light"
+    base = base.replace("<html>", f'<html data-theme="{theme}">', 1)
+    base = base.replace(
+        "</head>",
+        f'<link rel="stylesheet" href="/static/status_v2.css?v={html.escape(APP_VERSION_LABEL)}">'
+        "</head>",
+        1,
+    )
+    topbar = render_global_topbar(
+        active=active,
+        analysis_available=replay_service_available(cfg or {}),
+        analysis_port=int((cfg or {}).get("REPLAY_WEB_PORT", 8090) or 8090),
+        system=system_payload,
+        server_time=server_time or datetime.now().strftime("%H:%M:%S"),
+    )
+    shell_css = """<style>
+      body.zec-modern-body .container{max-width:none!important;width:100%!important;padding:0 22px 28px!important}
+      body.zec-modern-body .container>.zec-topbar{margin:0 -22px 22px!important}
+      @media(max-width:760px){body.zec-modern-body .container{width:100%!important;padding:0 10px 20px!important}body.zec-modern-body .container>.zec-topbar{margin:0 -10px 16px!important}}
+    </style>"""
     return (
-        build_base_header("Zendure Energy Controller", cfg=cfg2)
-        + f'<script>document.body.classList.add("zec-modern-body","{theme_class}");</script>'
-        + _modern_topbar(active, cfg or {})
+        base
+        + f'<script>document.body.classList.add("zec-modern-body","{theme_class}","zec-shared-shell");</script>'
+        + shell_css
+        + topbar
+        + _shared_topbar_live_script()
     )
 
 
@@ -3619,10 +4232,8 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
     if weighted_den > 0 and system_soc is not None:
         remaining = max(0.0, weighted_den * max(0.0, max_soc - system_soc) / 100.0)
     elif system_soc is not None:
-        capacity_kwh = _safe_float(cfg.get("ZENDURE_BATTERY_CAPACITY_KWH"))
-        if capacity_kwh is None or capacity_kwh <= 0:
-            capacity_wh = _safe_float(cfg.get("ZENDURE_BATTERY_CAPACITY_WH"))
-            capacity_kwh = (capacity_wh / 1000.0) if capacity_wh is not None and capacity_wh > 0 else None
+        capacity_wh = _safe_float(cfg.get("ZENDURE_BATTERY_CAPACITY_WH"))
+        capacity_kwh = (capacity_wh / 1000.0) if capacity_wh is not None and capacity_wh > 0 else None
         if capacity_kwh is not None and capacity_kwh > 0:
             remaining = max(0.0, capacity_kwh * max(0.0, max_soc - system_soc) / 100.0)
     if remaining is None:
@@ -3882,8 +4493,36 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
     resource_tone = "bad" if current_throttle or ((metrics.get("temperature_c") or 0) >= 75) or ((metrics.get("ram_used_percent") or 0) >= 92) else ("warn" if historic_throttle or ((metrics.get("temperature_c") or 0) >= 65) or ((metrics.get("ram_used_percent") or 0) >= 75) else "ok")
     event_rows = events if events is not None else read_recent_events(cfg, days=2, limit=250)
     open_events = [e for e in event_rows if e.get("status") == "open"]
+    active_event_rows = [
+        e for e in open_events
+        if str(e.get("severity") or "").lower() in {"warning", "error"}
+    ]
+    seen_event_titles = set()
+    for event in active_event_rows:
+        title = str(event.get("title") or event.get("event_type") or "Betriebsereignis").strip()
+        marker = title.casefold()
+        if not title or marker in seen_event_titles:
+            continue
+        seen_event_titles.add(marker)
+        warnings.append(f"Offenes Betriebsereignis: {title}")
+        if len(seen_event_titles) >= 5:
+            break
+    open_error_count = sum(1 for e in active_event_rows if str(e.get("severity") or "").lower() == "error")
+    if mode == "SAFE_STATE":
+        status_kind = "bad"
+        system_status = "Safe-State"
+    elif open_error_count:
+        status_kind = "bad"
+        system_status = f"Fehler {open_error_count}"
+    elif warnings:
+        status_kind = "warn"
+        system_status = f"Warnung {len(warnings)}"
+    else:
+        status_kind = "ok"
+        system_status = "System OK"
     return {
         "version": APP_VERSION_LABEL,
+        "build_id": APP_BUILD_ID,
         "snapshot_epoch_ms": int(time.time() * 1000),
         "server_time": datetime.now().strftime("%H:%M:%S"),
         "snapshot_time": datetime.now().isoformat(timespec="seconds"),
@@ -4246,7 +4885,9 @@ def build_status_page_rc2_legacy(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
         <div class="card-status"><span class="status-dot ok"></span><span data-zec="primary.source">{html.escape(payload['primary']['source'])}</span> · aktuell</div>
       </section>'''
 
-    page = _modern_body_start(cfg, "status")
+    page = _modern_body_start(
+        cfg, "status", system_payload=payload.get("system"), server_time=str(payload.get("server_time") or "")
+    )
     page += f'''
     <style>
       :root {{ --zec-page-bg:#f5f7fb; --zec-card-bg:#ffffff; --zec-text-main:#0f172a; --zec-text-muted:#64748b; --zec-accent-blue:#2563eb; --zec-status-ok:#16a34a; --zec-status-warn:#f59e0b; --zec-status-error:#dc2626; --zec-status-unknown:#94a3b8; --zec-ring-track:#e5e7eb; --zec-ring-inner-bg:var(--zec-card-bg); --zec-card-border:#e5e7eb; }}
@@ -4430,8 +5071,18 @@ def build_graph_page_legacy(cfg: Dict[str, Any]) -> str:
 
 
 
-def build_graph_page(cfg: Dict[str, Any]) -> str:
-    page = _modern_body_start(cfg, "graph", force_dark=True)
+def build_graph_page(cfg: Dict[str, Any], s: Optional[Dict[str, Any]] = None) -> str:
+    status_payload = build_status_view_payload(cfg, dict(s or {})) if s is not None else {
+        "system": {"kind": "unknown", "label": "Status wird geladen", "warnings": []},
+        "server_time": datetime.now().strftime("%H:%M:%S"),
+    }
+    page = _modern_body_start(
+        cfg,
+        "graph",
+        force_dark=True,
+        system_payload=status_payload.get("system"),
+        server_time=str(status_payload.get("server_time") or ""),
+    )
     page += """
     <main class="modern-page zec-shell">
       <section class="zec-panel zec-panel-lg">
@@ -4471,6 +5122,7 @@ def build_graph_page(cfg: Dict[str, Any]) -> str:
     const GRAPH_VISIBILITY_KEY = 'zec-graph-visible-series-rc12';
     let chart = null;
     let socMini = null;
+    let graphRequestInFlight = false;
     const SERIES_COLORS = {'Netzleistung':'#2f8cff','Zendure Soll':'#20d6d2','Zendure Ist':'#48c85a','Hausverbrauch':'#fb923c','PV-Leistung':'#facc15','Zendure SOC':'#a78bfa','Netz Rohwert':'#64748b'};
     function fmt(v,u) { if(v===null || v===undefined || Number.isNaN(Number(v))) return '-'; const n=Number(v); if(u==='W') return Math.round(n)+' W'; if(u==='%') return Math.round(n)+' %'; return String(v); }
     function loadVis() { try { return JSON.parse(localStorage.getItem(GRAPH_VISIBILITY_KEY)||'{}'); } catch(e) { return {}; } }
@@ -4765,141 +5417,68 @@ def subgroup_help_text(subgroup: str) -> str:
     return texts.get(subgroup, "")
 
 
-def build_settings_page(cfg: Dict[str, Any], validation_issues: Optional[List[ValidationIssue]] = None, validation_state: str = "", saved: bool = False, restart_required: bool = False, restart_keys: str = "") -> str:
-    error_keys = validation_issue_keys(validation_issues, "ERROR")
-    warning_keys = validation_issue_keys(validation_issues, "WARNING")
-    page = build_base_header("Zendure Settings", cfg=cfg)
-    nav_links = "".join(
-        f"<a href='#settings-section-{index}'>{html.escape(group)}</a>"
-        for index, group in enumerate(GROUP_ORDER)
+def build_settings_page(
+    cfg: Dict[str, Any],
+    validation_issues: Optional[List[ValidationIssue]] = None,
+    validation_state: str = "",
+    saved: bool = False,
+    restart_required: bool = False,
+    restart_keys: str = "",
+    csrf_token: str = "",
+    system_payload: Optional[Dict[str, Any]] = None,
+    server_time: str = "",
+) -> str:
+    """Render the RC20 settings application inside the shared ZEC shell."""
+    token = html.escape(csrf_token, quote=True)
+    topbar = render_global_topbar(
+        active="settings",
+        analysis_available=replay_service_available(cfg),
+        analysis_port=int(cfg.get("REPLAY_WEB_PORT", 8090) or 8090),
+        system=system_payload,
+        server_time=server_time,
     )
-    page += "<form method='post' action='/save-config'>"
-    page += (
-        f"<div class='section' id='settings-top'>{section_title('Zendure Energy Controller Settings', 1, True)}"
-        + build_validation_messages(validation_issues, validation_state)
-        + build_save_result_message(cfg, saved, restart_required, restart_keys)
-        + "<div class='small'>Änderungen werden validiert und atomar in config.json gespeichert. "
-        "Wichtig: Änderungen werden erst übernommen und gespeichert, wenn auf einen "
-        "<b>Speichern</b>-Button geklickt wird. Nach dem Speichern werden Änderungen sofort aktiv. "
-        "Ausnahmen sind z. B. MQTT-/Topic-, Web-Port- oder Startparameter-Änderungen; "
-        "dort ist ein Neustart weiterhin empfehlenswert.</div>"
-        f"<div class='subnav'>{nav_links}</div>"
-        "</div>"
-    )
-
-    for index, group in enumerate(GROUP_ORDER):
-        section_id = f"settings-section-{index}"
-        page += (
-            f"<div class='section' id='{section_id}'>"
-            f"<h2>{html.escape(group)}</h2>"
-            f"<div class='section-tools'><a href='#' onclick=\"expandSectionInfo('{section_id}'); return false;\">Alle Infos auf- und zuklappen</a> &nbsp;|&nbsp; <a href='#page-top'>nach oben</a></div>"
-            + build_section_validation_messages(group, validation_issues)
-        )
-        page += "<div class='grid'>" + section_intro_box(group) + "</div>"
-        if group == "Messdaten / Historie":
-            mode = measurement_log_mode(cfg)
-            retention_h = estimate_retention_hours(cfg)
-            mounts = detected_log_mounts()
-            if mounts:
-                mount_lines = "<br>Erkannte externe Ziele: " + "; ".join(
-                    f"<code>{html.escape(str(m.get('mountpoint')))}</code> ({html.escape(str(m.get('free_mb', '-')))} MB frei, {'schreibbar' if m.get('writable') else 'nicht schreibbar'})"
-                    for m in mounts[:5]
-                )
-            else:
-                mount_lines = "<br>Erkannte externe Ziele: keine beschreibbaren USB-/Mountpoints gefunden."
-            resolved_path, fallback_active, target_reason = resolve_log_path(cfg, allow_fallback=True)
-            storage_target = str(cfg.get("MEASUREMENT_LOG_STORAGE_TARGET", "internal_sd"))
-            configured_subdir = str(cfg.get("MEASUREMENT_LOG_DIR", "logs") or "logs").lstrip("/")
-            mountpoint_info = ""
-            if target_reason.startswith("external_mount:") or target_reason.startswith("external_auto:"):
-                mountpoint_info = target_reason.split(":", 1)[1]
-            elif storage_target == "external_mount":
-                configured = str(cfg.get("MEASUREMENT_LOG_MOUNTPOINT", "") or "").strip()
-                mountpoint_info = configured or "automatische Erkennung"
-            page += (
-                "<div class='info-box' style='margin:12px 0;'>"
-                "<b>Messdaten-Modi:</b><br>"
-                "<b>Aus</b>: keine zyklischen Messdaten, maximale SD-Schonung; spätere Analyse aus neuen Daten ist nicht möglich.<br>"
-                "<b>Standard</b>: vollständige Reglerdiagnose inklusive Roh-/Norm-Kernwerten, Freshness/Validity, MQTT-Stale-Aggregat, Sollwertkaskade, Kommando und Szenario ohne Zendure.<br>"
-                "<b>Erweitert</b>: Standard plus Detaildaten für Simulation, What-if sowie tiefe MQTT-/Freshness-/Packdatenanalyse; erzeugt größere Dateien und sollte gezielt verwendet werden.<br>"
-                f"Aktueller Modus: <b>{html.escape(mode)}</b>. Grob geschätzte Aufbewahrung bei aktuellen Grenzwerten: <b>{html.escape(str(retention_h))} Stunden</b>. "
-                "Diese Schätzung ist bewusst praxisnah, nicht bytegenau. Die Regelung läuft weiter, auch wenn Logging pausiert oder fehlschlägt.<br>"
-                f"Speicherziel: <b>{html.escape(storage_target)}</b><br>"
-                + (f"USB-/Mountpoint: <code>{html.escape(mountpoint_info)}</code><br>" if storage_target == "external_mount" else "")
-                + (f"Unterordner auf dem Ziel: <code>{html.escape(configured_subdir)}</code><br>" if storage_target == "external_mount" else "")
-                + f"Aktive Datei: <code>{html.escape(resolved_path)}</code>"
-                + (" <b>(SD-Fallback aktiv)</b>" if fallback_active else "")
-                + f"<br>Zielstatus: {html.escape(target_reason)}"
-                + mount_lines
-                + "</div>"
-            )
-        page += "<div class='grid'>"
-        if group == "Nachtmodus":
-            if "NIGHT_DISCHARGE_ENABLED" in CONFIG_SCHEMA:
-                meta = CONFIG_SCHEMA["NIGHT_DISCHARGE_ENABLED"]
-                page += build_setting_card("NIGHT_DISCHARGE_ENABLED", meta, cfg.get("NIGHT_DISCHARGE_ENABLED"), "NIGHT_DISCHARGE_ENABLED" in error_keys, "NIGHT_DISCHARGE_ENABLED" in warning_keys)
-            page += build_night_time_card(
-                "NIGHT_START_TIME",
-                "Startzeit",
-                cfg.get("NIGHT_START_HOUR"),
-                cfg.get("NIGHT_START_MINUTE"),
-                "Startzeit des Nachtmodus im Format hh:mm. Eingaben wie 5:30 werden beim Verlassen des Feldes sichtbar zu 05:30 normalisiert.",
-                "NIGHT_START_HOUR" in error_keys or "NIGHT_START_MINUTE" in error_keys,
-                "NIGHT_START_HOUR" in warning_keys or "NIGHT_START_MINUTE" in warning_keys,
-            )
-            page += build_night_time_card(
-                "NIGHT_END_TIME",
-                "Endzeit",
-                cfg.get("NIGHT_END_HOUR"),
-                cfg.get("NIGHT_END_MINUTE"),
-                "Endzeit des Nachtmodus im Format hh:mm. Nachtfenster über Mitternacht werden weiterhin unterstützt.",
-                "NIGHT_END_HOUR" in error_keys or "NIGHT_END_MINUTE" in error_keys,
-                "NIGHT_END_HOUR" in warning_keys or "NIGHT_END_MINUTE" in warning_keys,
-            )
-        current_subgroup = None
-        for key, meta in CONFIG_SCHEMA.items():
-            if meta.get("group") != group:
-                continue
-            if meta.get("hidden"):
-                continue
-            if group == "Nachtmodus" and key in {"NIGHT_DISCHARGE_ENABLED", "NIGHT_START_HOUR", "NIGHT_START_MINUTE", "NIGHT_END_HOUR", "NIGHT_END_MINUTE"}:
-                continue
-            subgroup = str(meta.get("subgroup", "") or "")
-            if subgroup and subgroup != current_subgroup:
-                if current_subgroup is not None:
-                    page += "</div><div class='grid'>"
-                page += f"<div class='card subgroup-card'><h3>{html.escape(subgroup)}</h3>{subgroup_help_text(subgroup)}</div>"
-                current_subgroup = subgroup
-            page += build_setting_card(key, meta, cfg.get(key), key in error_keys, key in warning_keys)
-        page += "</div>"
-        if group == "Manueller Modus":
-            page += "<div class='small' style='margin-top:12px;'>Die Detailfelder werden abhängig vom gewählten manuellen Modus eingeblendet. Ohne JavaScript bleiben sie sichtbar, damit die Seite weiterhin vollständig bedienbar ist.</div>"
-        page += "<button class='save' type='submit'>Speichern</button>"
-        page += "</div>"
-
-    page += "</form>"
-    page += build_footer()
-    return page
-
-def unit_to_label(unit: str) -> str:
-    return {"W": "in Watt", "s": "in Sekunden", "%": "in Prozent", "Bytes": "in Bytes"}.get(unit, unit)
-
-
-def manual_card_attr(key: str) -> str:
-    if key == "MANUAL_MODE":
-        return ' data-manual-card="base"'
-    if key in MANUAL_DISCHARGE_KEYS:
-        return ' data-manual-card="discharge"'
-    if key in MANUAL_CHARGE_KEYS:
-        return ' data-manual-card="charge"'
-    return ""
-
-
-def cross_profile_card_attr(meta: Dict[str, Any]) -> str:
-    profile = str(meta.get("cross_profile", "") or "")
-    if profile in {"evcc", "custom"}:
-        return ' data-cross-profile="{}"'.format(html.escape(profile, quote=True))
-    return ""
+    return f"""<!doctype html>
+<html lang="de" data-theme="{'dark' if bool(cfg.get('UI_DARK_MODE', False)) else 'light'}"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="zec-csrf" content="{token}">
+<meta name="robots" content="noindex,nofollow">
+<title>Einstellungen · Zendure Energy Controller</title>
+<link rel="icon" href="/favicon.svg">
+<link rel="stylesheet" href="/static/status_v2.css?v={html.escape(APP_VERSION_LABEL)}">
+<link rel="stylesheet" href="/static/settings_v2.css?v={html.escape(APP_VERSION_LABEL)}">
+</head><body class="zec-settings-v2">
+{topbar}
+<div class="settings-contextbar">
+  <button id="mobileMenu" class="mobile-menu" type="button" aria-label="Kategorien öffnen">☰</button>
+  <div class="settings-title-block"><div class="settings-title">ZEC Settings</div><div class="settings-subtitle">Konfiguration, Regelung und Diagnose</div></div>
+  <div class="header-statuses">
+    <span id="headerVersion" class="header-pill">{html.escape(APP_VERSION_LABEL)}</span>
+    <span id="headerSource" class="header-pill">Config: …</span>
+    <span id="headerReady" class="header-pill"><span class="health-dot"></span> Ready: …</span>
+  </div>
+  <div class="header-spacer"></div>
+  <button id="openSearch" class="toolbar-button" type="button">⌕ Suche</button>
+  <div class="mode-toggle" role="group" aria-label="Ansicht"><button type="button" data-mode="standard">Standard</button><button type="button" data-mode="expert">Experte</button></div>
+  <div class="config-health"><span id="healthDot" class="health-dot"></span><span id="healthText">Konfiguration wird geprüft</span></div>
+</div>
+<div class="settings-app">
+  <aside class="settings-sidebar" aria-label="Einstellungskategorien">
+    <nav id="settingsNav" class="sidebar-nav"></nav>
+    <div id="sidebarVersion" class="sidebar-version">Controller: {html.escape(APP_VERSION_LABEL)}</div>
+  </aside>
+  <main class="settings-main">
+    <details id="mobileCategories" class="mobile-categories"><summary>Kategorie auswählen</summary><div id="mobileCategoryList"></div></details>
+    <div id="settingsContent" class="loading">Settings-Modell wird geladen …</div>
+  </main>
+</div>
+<div class="save-bar"><div id="dirtyCount" class="dirty-count"><span class="dot"></span><span id="dirtyText">Keine ungespeicherten Änderungen</span></div><div class="save-spacer"></div><button id="pointerRepairAction" class="discard-btn" type="button" hidden>Last-Good-Pointer reparieren</button><button id="restartAction" class="discard-btn" type="button" hidden>Dienst neu starten</button><button id="discardChanges" class="discard-btn" type="button" disabled>Verwerfen</button><button id="reviewChanges" class="review-btn" type="button" disabled>Änderungen prüfen</button></div>
+<aside id="searchDrawer" class="search-drawer" aria-hidden="true" aria-label="Einstellungen durchsuchen"><div class="search-drawer-head"><h2>Settings durchsuchen</h2><button id="closeSearch" class="modal-close" type="button" aria-label="Suche schließen">×</button></div><div class="search-wrap"><span class="search-icon">⌕</span><input id="settingsSearch" type="search" placeholder="Bezeichnung, Beschreibung oder Config-Key" autocomplete="off"><button id="searchClear" class="search-clear" type="button" aria-label="Suche leeren">×</button></div><div id="searchResults" class="search-results"><div class="empty-state">Suchbegriff eingeben.</div></div></aside>
+<div id="drawerBackdrop" class="drawer-backdrop"></div>
+<div id="previewModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="previewTitle"><div class="modal"><div class="modal-head"><h2 id="previewTitle">Änderungen prüfen</h2><button id="previewClose" class="modal-close" type="button">×</button></div><div id="previewBody" class="modal-body"></div><div class="modal-actions"><button id="previewBack" class="back-btn" type="button">Zurück</button><button id="commitChanges" class="commit-btn" type="button">Speichern</button></div></div></div>
+<div id="settingsToast" class="toast" role="status"></div>
+<script>window.ZEC_SETTINGS_BOOTSTRAP={{system:{json.dumps(system_payload or {}, ensure_ascii=False)},server_time:{json.dumps(server_time, ensure_ascii=False)}}};</script>
+<script src="/static/settings_v2.js?v={html.escape(APP_VERSION_LABEL)}" defer></script>
+</body></html>"""
 
 
 def build_night_time_card(name: str, label: str, hour: Any, minute: Any, description: str, has_error: bool = False, has_warning: bool = False) -> str:

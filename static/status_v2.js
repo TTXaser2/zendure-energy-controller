@@ -127,6 +127,12 @@
       button.className = `zec-system-pill ${system.kind || 'ok'}`;
       text('system.label', system.label || 'Systemstatus');
     }
+    const navDot = $('#globalStatusNavDot');
+    if (navDot) {
+      const kind = system.kind || 'unknown';
+      navDot.className = `zec-nav-live-dot ${kind}`;
+      navDot.setAttribute('aria-label', `Aktueller Systemstatus: ${kind}`);
+    }
     const list = $('#systemWarningList');
     if (list) {
       const warnings = Array.isArray(system.warnings) ? system.warnings : [];

@@ -1,6 +1,7 @@
 import sys
 import types
 import unittest
+from pathlib import Path
 
 if "paho" not in sys.modules:
     paho = types.ModuleType("paho")
@@ -59,14 +60,14 @@ class Rc11PhaseAValidationAnalysisUiTests(unittest.TestCase):
         self.assertIn("Zendure-MQTT-Werte", text)
         self.assertIn("nicht aktuell", text)
 
-    def test_settings_page_hides_legacy_cross_charge_key_and_orders_night_enable_first(self):
+    def test_settings_page_has_no_hidden_legacy_contract_and_uses_live_model(self):
         cfg = dict(DEFAULT_CONFIG)
         html = build_settings_page(cfg)
+        script = (Path(__file__).resolve().parents[1] / "static" / "settings_v2.js").read_text(encoding="utf-8")
         self.assertNotIn("Entlade-Blockgrenze (Legacy)", html)
-        self.assertIn("Zweitbatterie – Überblick", html)
-        idx_enabled = html.index("Nachtmodus aktiv")
-        idx_start = html.index("Startzeit")
-        self.assertLess(idx_enabled, idx_start)
+        self.assertNotIn("legacy-settings-contract", html)
+        self.assertIn("app.model.categories", script)
+        self.assertIn("dependencyVisible", script)
 
     def test_harvest_analysis_separates_measured_and_modelled_effect(self):
         rows = []

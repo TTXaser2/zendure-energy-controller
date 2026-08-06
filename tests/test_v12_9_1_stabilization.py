@@ -23,6 +23,7 @@ class V1291StabilizationTests(unittest.TestCase):
                 "MEASUREMENT_LOG_MIN_FREE_DISK_MB": 0,
             }
             logger = CsvRotatingLogger()
+            self.addCleanup(logger.close)
             status = logger.log(cfg, {"schema": CSV_SCHEMA})
             self.assertEqual(status["measurement_log_status"], "paused_invalid_schema")
             self.assertIn("ZEC-MEASUREMENT-V3-Header", status["measurement_log_status_reason"])
@@ -111,12 +112,12 @@ class V1291StabilizationTests(unittest.TestCase):
         self.assertIn("Einspeisung kWh", html)
         self.assertIn("öffentlichen Netz", html)
 
-    def test_settings_measurement_explanation_is_before_first_input_card(self):
+    def test_settings_shell_loads_measurement_explanations_from_current_model(self):
         html = build_settings_page({}, saved=False)
-        section_start = html.index("Messdaten / Historie")
-        box = html.index("Messdaten-Modi", section_start)
-        first_input = html.index("Graph-Historie", section_start)
-        self.assertLess(box, first_input)
+        script = (Path(__file__).resolve().parents[1] / "static" / "settings_v2.js").read_text(encoding="utf-8")
+        self.assertIn('id="settingsContent"', html)
+        self.assertIn("c.description", script)
+        self.assertNotIn("legacy-settings-contract", html)
 
     def test_status_page_shows_zendure_mqtt_recovery_hint(self):
         s = ControllerState().snapshot()

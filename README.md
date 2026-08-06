@@ -1,109 +1,128 @@
-# Zendure Energy Controller V12.11.2-RC19
+# Zendure Energy Controller V12.11.2-RC20
 
-V12.11.2-RC19 ist ein eng abgegrenzter **Status- und Diagnose-Stabilisierungsrelease** auf Basis des finalen RC18-Stands.
+**Freigegebene Build-ID:** `rc20-audit-fix6-20260806`
 
-## 1. RC19-Korrekturen
+V12.11.2-RC20 ist der **Settings-Release** auf Basis von RC19. Dieser Quellstand ist der korrigierte Rebuild des zuvor auditierten und nicht freigegebenen RC20-Pakets. Er ersetzt die bisherige technisch gruppierte Einstellungsseite durch eine fachlich strukturierte, sichere und responsive Oberfläche und führt den dazu notwendigen Config-Runtime-Vertrag ein.
 
-### Exakte Modus- und Pfadsemantik
+## 1. Neue Settings-Seite
 
-Unsichere Teilstringprüfungen wurden durch exakte Tokens ersetzt:
+Die neue Oberfläche unter `/settings` bietet:
 
-```text
-CHARGE     → Einspeisung wird reduziert
-DISCHARGE  → Netzbezug wird reduziert
-STOP_HOLD  → Manueller Stopp – Zendure bleibt neutral
-```
+- zwölf fachliche Kategorien statt historischer Python-/Schema-Gruppen;
+- Standard- und Expertenansicht derselben Konfiguration;
+- Suche über Bezeichnung, Beschreibung und Config-Key;
+- abhängige Felder und klare Aktiv-/Inaktiv-Semantik;
+- konfigurierten, tatsächlich wirksamen und Default-Wert getrennt;
+- Wertebereich, Einheit, Wirkung, Risiko und Apply-Klasse;
+- sichtbare Änderungsmarkierung;
+- serverseitige Vorschau vor dem Speichern;
+- alte/neue Werte, Validierungsissues, Bestätigungen und Restartbedarf;
+- sichere Secret-Operationen `beibehalten`, `ersetzen`, `löschen`;
+- mobile Navigation und responsive Karten.
 
-Damit kann `DISCHARGE` nicht mehr wegen des enthaltenen Wortteils `CHARGE` als Ladepfad erscheinen und `STOP_HOLD` nicht mehr als normaler Deadband-HOLD.
+## 2. Config-Runtime-Vertrag
 
-### Kapazitätsdiagnose in allen Modi
-
-Die Restkapazität bis Max-SOC wird in einer zentralen Housekeeping-Phase auf jedem Zykluspfad aktualisiert. Das gilt auch für SAFE_STATE, STOP_HOLD, NIGHT und feste Modi.
-
-### Requested vs. Applied in festen Modi
-
-Die Statusseite trennt bei `MANUAL_FIXED_CHARGE` und `MANUAL_FIXED_DISCHARGE`:
-
-```text
-Angefordert
-Wirksames Ziel
-Config-/Gerätebegrenzung
-```
-
-Die ETA verwendet das wirksame, bereits gecappte Ziel. Read-only Zendure-Gerätecaps werden weiterhin nicht verändert.
-
-### Local-API-Worker sichtbar
-
-„Controller & Schnittstellen“ zeigt nun:
-
-- API-Nutzungsart und aktive Quelle;
-- Workerzustand und letzten Erfolg;
-- asynchrone HTTP-Dauer;
-- synchrone Snapshotübernahme;
-- Details zu Versuch, Snapshot, Fehlerfolge, Backoff und Fehlercode im Info-Popover.
-
-### Installer-Ready-Check
-
-Der Installer wartet bis zu 90 Sekunden auf valides JSON mit `ready=true`. Ein lediglich erreichbarer Endpoint mit `ready=false` gilt nicht mehr als erfolgreicher Abschluss.
-
-## 2. RC18-Basis: asynchrone lokale Zendure-API
-
-Der HTTP-Aufruf `/properties/report` läuft weiterhin in genau einem Hintergrundworker. Der Regelzyklus liest nur einen immutable Latest-Snapshot und wartet nicht auf Netzwerk-I/O.
-
-Quellenpriorität:
+RC20 trennt:
 
 ```text
-MQTT frisch
-→ MQTT bleibt primäre SOC-/Leistungsquelle
-
-MQTT stale/fehlend + API-Fallback aktiv + API-Snapshot frisch
-→ lokale API darf als Fallback übernehmen
-
-beide Quellen stale/fehlend
-→ bestehende Freshness-/Safe-State-Logik
+configured = exakte Primär-/Nutzerwerte; bei Fehlern sichtbar, aber nicht wirksam
+effective  = vollständig validierte, im laufenden Prozess tatsächlich wirksame Werte
+pending    = gültige, aber neustartpflichtige Änderungen
 ```
 
-## 3. Measurement V4
+Die Python-`SettingsRegistry` ist die einzige Schemaautorität. `config.json` bleibt die persistierte, manuell per SSH editierbare Nutzerkonfiguration.
 
-RC19 erweitert das Schema nicht:
+Externe Änderungen werden als vollständige Whole-File-Transaktion verarbeitet:
 
 ```text
-Standard: 246 Felder · Hash 7842bfef39d47f93
-Extended: 249 Felder · Hash 8f61d07e66428a6e
+stat vorher
+→ vollständige Datei lesen
+→ stat nachher
+→ strikt parsen und vollständig validieren
+→ atomar übernehmen oder vollständig verwerfen
 ```
 
-Die RC18-Zielpipeline-Diagnose bleibt erhalten:
+Es gibt kein Partial Apply, kein Clamp, keine stille Reparatur und keinen Default-Fallback für invalide vorhandene Werte.
+
+## 3. Manuelle Recovery und Headless Mode
+
+Die `config.json` bleibt bewusst manuell editierbar. Eine versehentliche Headless-Aktivierung kann durch:
+
+```json
+"HEADLESS_MODE": false
+```
+
+ohne Dienstneustart rückgängig gemacht werden, sofern die gesamte Datei valide ist.
+
+Wird die Datei erst im laufenden Betrieb invalid, arbeitet der Controller mit dem letzten gültigen `effective` Snapshot weiter. Die fehlerhafte Datei bleibt unverändert zur Diagnose erhalten.
+
+## 4. Sicheres Speichern
+
+- exakte SHA256-Dateirevision als CAS;
+- jede zwischenzeitliche Byteänderung verwirft offene Previews mit `409 Conflict`;
+- atomisches Tempfile/`fsync`/`replace`/Verzeichnis-`fsync`;
+- Dateimodus `0600`;
+- unbekannte Erweiterungskeys bleiben erhalten;
+- Secrets erscheinen weder in Modellen, Diffs noch Logs im Klartext;
+- alte Schreibendpunkte sind deaktiviert und antworten mit `410 Gone`.
+
+## 5. Last-Good und Startup-Recovery
+
+Nach 300 Sekunden durchgehendem vollständigem Stable-Ready im normalen Betrieb kann die aktive Config asynchron und Single-Flight als Last-Good gefördert werden. Der Store nutzt zwei feste A/B-Slots und einen atomaren Current-Pointer.
+
+Bei invalider oder fehlender Primärconfig:
 
 ```text
-target_raw_w
-→ target_limited_w
-→ target_filtered_w
-→ target_step_limited_w
-→ target_final_w
+Recoverycandidate bestimmen
+→ passive Quellen-/Freshness-Prüfung
+→ bis zum vollständigen Preflight keine Gerätekommandos
+→ danach Recovery Active
 ```
 
-## 4. Unverändert
+Es gibt keine automatischen Probecommands und keine automatische Pointerreparatur.
 
-RC19 verändert nicht:
+## 6. Neustartvertrag
 
-- AUTO-, HOLD-, NIGHT-, STOP- oder feste Command-Algorithmen;
-- RC17-Harvest-Formeln und 0-W-Netzziel;
+Der freie Config-Key `SERVICE_RESTART_COMMAND` ist entfernt. Ein Neustart erfolgt ausschließlich über den root-eigenen Helper:
+
+```text
+/usr/local/sbin/zendure-controller-restart
+```
+
+Die Webaktion ist Session-, CSRF-, Origin-, expliziter Bestätigungs-, Single-Flight- und Cooldown-geschützt. Erfolg gilt erst nach `ready=true`, erwarteter Version und Build-ID.
+
+## 7. Migration und Installation
+
+RC20 unterstützt bewusst nur den exakten sequenziellen Übergang:
+
+```text
+V12.11.2-RC19 → V12.11.2-RC20
+```
+
+Das Update-Skript führt vor dem Stoppen des Produktivdienstes Syntax-, Test- und Migrationspreflight durch, erstellt ein vollständiges Rollback-Backup, migriert die Config eng begrenzt und wartet anschließend bis zu 90 Sekunden auf valides `/ready` mit `ready=true`.
+
+## 8. Unverändert
+
+RC20 verändert keine energetische Zielwertformel und keine bestehende Regelstrategie:
+
+- AUTO, HOLD, NIGHT und feste Modi;
+- RC17-Harvest und 0-W-Netzziel;
 - Cross-Charge;
 - Command-Lifecycle, Resync und Late-Effect-Guard;
-- Neutralisierung und Publish-Deduplizierung;
 - Smart-Mode-/Flash-Schutz;
 - Offgrid-Semantik und read-only Gerätecaps;
-- produktive Configwerte oder Defaults;
-- Storage-Retention/Kompression;
+- Measurement-V4-Header;
+- lokale Zendure-API-Architektur;
 - Excel-Lernsimulation.
 
-## 5. Dokumentation
+Installation und Verifikation: `README_INSTALLATION.md`.
 
-```text
-RELEASE_INFO_V12_11_2_RC19.md
-TECHNICAL_NOTES_V12_11_2_RC19.md
-UEBERGABE_ZEC_V12_11_2_RC19_STATUS_DIAGNOSE_STABILISIERUNG.md
-BUILD_VALIDATION_V12_11_2_RC19.md
-```
 
-Die RC18-Spezifikationen und Errata bleiben als normative Vorgeschichte im Paket erhalten. Installation und unmittelbare Verifikation: `README_INSTALLATION.md`.
+## 8. Fix 6 – gemeinsame Navigation, SOC-Grenzen und Ereignis-Reconciliation
+
+- Status, Graph und Settings verwenden dieselbe globale Navigation mit live aktualisierter Statusampel.
+- Erwartete MIN_SOC-/MAX_SOC-Grenzen werden als neutraler `HOLD` statt als Fehler-`SAFE_STATE` dargestellt.
+- Alte offene MQTT-/Telemetrieereignisse werden bei stabil gesundem Livezustand vollständig auf `resolved` gesetzt; die Historie bleibt erhalten.
+- Settings nutzt die verfügbare Breite, koppelt Label/Hilfe/Input/Metadaten vertikal, verwendet fachliche Icons und repariert den Preview-Abbruch.
+- Das Storage-Inventar arbeitet persistent und inkrementell.
+- Der Installer akzeptiert RC19 oder exakt RC20 Fix 5 als Quelle.

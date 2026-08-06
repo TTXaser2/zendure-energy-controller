@@ -163,3 +163,11 @@ html[data-theme="dark"] .zec-wordmark{color:#f4f7fb}
 @media(max-width:1450px){.zec-main-grid.is-no-primary{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:1120px){.zec-main-grid.is-no-primary{grid-template-columns:repeat(2,minmax(0,1fr))}.zec-main-grid.is-no-primary .zec-source-card{grid-column:auto}.zec-preview-banner{padding:9px 18px}}
 @media(max-width:760px){.zec-main-grid.is-no-primary{grid-template-columns:1fr}.zec-preview-banner{align-items:flex-start;flex-direction:column;padding:9px 12px;gap:7px}.zec-preview-banner>div{align-items:flex-start;flex-direction:column;gap:2px}.zec-preview-banner nav{width:100%}.zec-preview-scenario{flex:1;text-align:center}}
+/* RC20 Fix 6: shared-shell live status indicators and dense primary card text. */
+.zec-nav-live-dot.ok{background:var(--zec-green);box-shadow:0 0 0 3px color-mix(in srgb,var(--zec-green) 18%,transparent)}
+.zec-nav-live-dot.warn{background:var(--zec-amber);box-shadow:0 0 0 3px color-mix(in srgb,var(--zec-amber) 18%,transparent)}
+.zec-nav-live-dot.bad{background:var(--zec-red);box-shadow:0 0 0 3px color-mix(in srgb,var(--zec-red) 17%,transparent)}
+.zec-nav-live-dot.unknown{background:var(--zec-gray);box-shadow:0 0 0 3px color-mix(in srgb,var(--zec-gray) 15%,transparent)}
+.zec-detail-row-stacked{display:block!important;padding-top:2px}
+.zec-detail-row-stacked>span,.zec-detail-row-stacked>strong{display:block;text-align:left!important;max-width:none!important}
+.zec-detail-row-stacked>strong{margin-top:3px;line-height:1.25;overflow-wrap:anywhere}

@@ -42,13 +42,21 @@ class V1287ReplayUiTests(unittest.TestCase):
             finally:
                 replay_web.PROJECT_ROOT = old_project
 
+    def test_replay_confirmation_uses_server_gate_and_explicit_second_request(self):
+        source = Path(__file__).resolve().parents[1] / "tools" / "replay_web.py"
+        text = source.read_text(encoding="utf-8")
+
+        # Current contract: the server rejects an extended analysis until the
+        # browser sends a second, explicit request carrying extended_confirm=1.
+        self.assertIn("if(js.requires_confirmation)", text)
+        self.assertIn("startAnalysis(true)", text)
+        self.assertIn("data.append('extended_confirm','1')", text)
+        self.assertIn('if profile["needs_confirmation"] and not extended_confirm:', text)
+        self.assertIn('status_code=409', text)
+
+        # The obsolete browser confirm-string contract must not return.
+        self.assertNotIn("\\n\\nWeiter?", text)
+
 
 if __name__ == "__main__":
     unittest.main()
-
-
-def test_replay_page_javascript_contains_escaped_confirm_newlines():
-    source = Path(__file__).resolve().parents[1] / "tools" / "replay_web.py"
-    text = source.read_text(encoding="utf-8")
-    assert "\\n\\nWeiter?" in text
-    assert "+\'\n\nWeiter?\'" not in text

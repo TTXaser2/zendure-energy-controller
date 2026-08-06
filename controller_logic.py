@@ -699,7 +699,10 @@ class ZendureController:
                     self.state.consecutive_errors += 1
                 self.state.set_error(str(exc))
                 self.log(f"[ERROR] {exc}")
-                if self.state.consecutive_errors >= cfg.get("MAX_CONSECUTIVE_ERRORS", 5):
+                if (
+                    self._config_control_allowed()
+                    and self.state.consecutive_errors >= cfg.get("MAX_CONSECUTIVE_ERRORS", 5)
+                ):
                     self.safe_state("Zu viele Fehler in Folge")
             finally:
                 self._cycle_timing_parts["run_once_ms"] = (time.perf_counter_ns() - run_once_started) / 1_000_000.0
@@ -707,6 +710,7 @@ class ZendureController:
             finish_started = time.perf_counter_ns()
             self.finish_cycle(cfg, loop_start)
             self._cycle_timing_parts["finish_cycle_ms"] = (time.perf_counter_ns() - finish_started) / 1_000_000.0
+            self._observe_settings_ready(cfg)
             total_ms = (time.perf_counter_ns() - loop_perf_start) / 1_000_000.0
             self._cycle_timing_parts["cycle_total_without_sleep_ms"] = total_ms
             leaf_keys = (
@@ -738,6 +742,66 @@ class ZendureController:
                 self.log(f"[TIMING] cycle_detail total_ms={total_ms} slowest={slowest[0]}:{slowest[1]}ms details={self._cycle_timing_parts}")
             time.sleep(float(cfg.get("INTERVAL_SECONDS", 2)))
 
+    def _config_control_allowed(self) -> bool:
+        checker = getattr(self.config_manager, "control_allowed", None)
+        return bool(checker()) if callable(checker) else True
+
+    def _config_startup_mode(self) -> str:
+        getter = getattr(self.config_manager, "startup_mode", None)
+        return str(getter()) if callable(getter) else "NORMAL"
+
+    def _run_config_recovery_preflight(self, cfg: Dict[str, Any]) -> None:
+        """Refresh passive observations while configuration recovery is waiting.
+
+        Startup recovery must never manufacture a device command merely to prove
+        readiness.  This path therefore performs only the same bounded telemetry
+        and display refreshes used by normal cycles, and leaves the MQTT command
+        path completely untouched.
+        """
+        startup_mode = self._config_startup_mode()
+        self._reset_rest_surplus_harvest("CONFIG_RECOVERY_PREFLIGHT")
+        self._timed_local_api_snapshot_apply_phase(cfg)
+        self._timed_phase("sma_energy_meter_ms", self.update_sma_energy_meter_status, cfg)
+        self._timed_phase("cycle_display_metrics_ms", self.update_cycle_display_metrics, cfg)
+        self._timed_phase("grid_display_read_ms", self.refresh_grid_power_for_display, cfg)
+        with self.state.lock:
+            self.state.current_target_power = 0
+            self.state.last_target_before_smoothing = 0
+            self.state.last_target_after_power_limit = 0
+            self.state.target_power_limit_reason = "NONE"
+            self.state.last_target_after_smoothing = 0
+            self.state.last_target_after_ramp = 0
+            self.state.control_reason = startup_mode
+            self.state.technical_control_path = "CONFIG_RECOVERY_PREFLIGHT"
+            self.state.last_control_action = "Konfigurations-Recovery: nur passive Prüfung, keine Gerätekommandos"
+        self.state.set_mode(startup_mode)
+
+    def _observe_settings_ready(self, cfg: Dict[str, Any]) -> None:
+        """Feed the configuration state machine from the existing readiness model."""
+        try:
+            # Local import avoids a module cycle and reuses the exact machine
+            # readiness semantics exposed by /ready.
+            from web_ui import build_ready_payload
+
+            ready_payload = build_ready_payload(cfg, self.state.readiness_snapshot(cfg.get("ZENDURE_COMMAND_STATE_FRESH_SECONDS", 30)))
+            observer = getattr(self.config_manager, "observe_ready", None)
+            if not callable(observer):
+                return
+            try:
+                result = observer(bool(ready_payload.get("ready")), proof_revision=str(ready_payload.get("proof_revision") or ""))
+            except TypeError:
+                # Compatibility for deliberately small test doubles and older
+                # external ConfigManager adapters.
+                result = observer(bool(ready_payload.get("ready")))
+            if result.get("promotion_scheduled"):
+                self.log("[CONFIG] Last-Good-Promotion asynchron eingeplant")
+            if result.get("promoted"):
+                self.log("[CONFIG] Last-Good nach stabilem Ready atomar gefördert")
+        except Exception as exc:
+            # Last-Good observation is diagnostic/recovery infrastructure and
+            # must never make an otherwise healthy control cycle fail.
+            self.log(f"[CONFIG] Ready-/Last-Good-Beobachtung fehlgeschlagen: {type(exc).__name__}")
+
     def run_once(self, cfg: Dict[str, Any]) -> None:
         now = time.time()
         with self.state.lock:
@@ -758,6 +822,10 @@ class ZendureController:
             self.state.zendure_local_api_new_success_applied = False
             self.state.zendure_local_api_request_duration_ms = None
             self.state.zendure_local_api_snapshot_apply_ms = None
+
+        if not self._config_control_allowed():
+            self._run_config_recovery_preflight(cfg)
+            return
 
         if cfg.get("MQTT_DISCONNECTED_SAFE_STATE", False) and not self.state.mqtt_connected:
             self._reset_rest_surplus_harvest("MQTT_DISCONNECTED")
@@ -1418,7 +1486,7 @@ class ZendureController:
 
     def _cross_charge_thresholds(self, cfg: Dict[str, Any]) -> tuple:
         try:
-            engage = int(float(cfg.get("CROSS_CHARGE_SIGNIFICANT_W", cfg.get("SMA_DISCHARGE_BLOCK_W", 80))))
+            engage = int(float(cfg.get("CROSS_CHARGE_SIGNIFICANT_W", 80)))
         except Exception:
             engage = 80
         engage = max(0, engage)
@@ -2910,14 +2978,13 @@ class ZendureController:
             primary_soc = self.state.sma_battery_soc
             primary_capacity = self.state.sma_battery_capacity_kwh
             zendure_soc = self.state.battery_soc
-        zendure_capacity = self._cfg_float(cfg, "ZENDURE_BATTERY_CAPACITY_KWH", 0.0)
-        if zendure_capacity <= 0:
-            try:
-                zendure_capacity_wh = cfg.get("ZENDURE_BATTERY_CAPACITY_WH")
-                if zendure_capacity_wh not in (None, ""):
-                    zendure_capacity = max(0.0, float(zendure_capacity_wh) / 1000.0)
-            except Exception:
-                zendure_capacity = 0.0
+        zendure_capacity = 0.0
+        try:
+            zendure_capacity_wh = cfg.get("ZENDURE_BATTERY_CAPACITY_WH")
+            if zendure_capacity_wh not in (None, ""):
+                zendure_capacity = max(0.0, float(zendure_capacity_wh) / 1000.0)
+        except Exception:
+            zendure_capacity = 0.0
         max_soc = self._cfg_float(cfg, "MAX_SOC_PERCENT", 100.0)
         primary_remaining = None
         zendure_remaining = None
@@ -3357,6 +3424,34 @@ class ZendureController:
         self.state.set_mode("SAFE_STATE")
         self.state.add_event(f"Safe-State: {reason}")
 
+    def soc_limit_hold(self, reason: str, limiter: str, *, technical_path: str) -> None:
+        """Neutralize at a configured SOC boundary without declaring a fault.
+
+        Reaching MIN_SOC/MAX_SOC is an expected protective operating outcome.  It
+        must remain visible through limiter/reason diagnostics, but must not make
+        the controller globally unready or inflate the true SAFE_STATE counter.
+        """
+        self._reset_rest_surplus_harvest(str(limiter or "SOC_LIMIT"))
+        with self.state.lock:
+            neutral_mode = (
+                "Output mode" if self.state.last_output_power > 0
+                else ("Input mode" if self.state.last_input_power > 0 else self._last_non_neutral_ac_mode)
+            )
+        self._publish_neutralization(f"SOC_LIMIT_HOLD:{limiter}:{reason}", ac_mode=neutral_mode)
+        with self.state.lock:
+            self.state.last_output_power = 0
+            self.state.last_input_power = 0
+            self.state.current_target_power = 0
+            self.state.last_target_before_smoothing = 0
+            self.state.last_target_after_power_limit = 0
+            self.state.target_power_limit_reason = str(limiter or "SOC_LIMIT")
+            self.state.last_target_after_smoothing = 0
+            self.state.last_target_after_ramp = 0
+            self.state.control_reason = reason
+            self.state.technical_control_path = technical_path
+            self.state.last_control_action = f"{limiter} -> HOLD 0 W"
+        self.state.set_mode("HOLD")
+
     def handle_manual_mode(self, cfg: Dict[str, Any], manual_mode: str) -> None:
         if manual_mode == "STOP_HOLD":
             self.stop_hold("Manueller Modus Stop/Hold aktiv")
@@ -3490,15 +3585,34 @@ class ZendureController:
             self.log(f"[MANUAL] Feste Beladung: {target} W bis {target_soc} %")
 
     def complete_manual_mode(self, cfg: Dict[str, Any], after_target: str, reason: str) -> None:
-        new_cfg = dict(cfg)
-        new_cfg["MANUAL_MODE"] = "STOP_HOLD" if after_target == "STOP_HOLD" else "AUTO"
-        self.config_manager.save(new_cfg)
-        self.state.add_event(reason)
+        next_mode = "STOP_HOLD" if after_target == "STOP_HOLD" else "AUTO"
+        persisted = False
+        try:
+            updater = getattr(self.config_manager, "update_internal_live_setting", None)
+            if callable(updater):
+                updater("MANUAL_MODE", next_mode)
+            else:
+                # Compatibility for isolated legacy test doubles.
+                new_cfg = dict(cfg)
+                new_cfg["MANUAL_MODE"] = next_mode
+                self.config_manager.save(new_cfg)
+            persisted = True
+        except Exception as exc:
+            # Never overwrite or repair an externally invalid config file.  The
+            # physical target is still neutralised below; persistence can be
+            # retried only after the primary config is valid again.
+            self.log(f"[CONFIG] Manueller Abschlussmodus nicht persistiert: {type(exc).__name__}")
+            self.state.add_event(
+                reason + "; Folgemodus konnte wegen des Configzustands nicht gespeichert werden"
+            )
+        if persisted:
+            self.state.add_event(reason)
 
         if cfg.get("LOG_MANUAL", False):
-            self.log(f"[MANUAL] {reason}; nächster Modus: {new_cfg['MANUAL_MODE']}")
+            suffix = "" if persisted else " (nicht persistiert)"
+            self.log(f"[MANUAL] {reason}; nächster Modus: {next_mode}{suffix}")
 
-        if new_cfg["MANUAL_MODE"] == "STOP_HOLD":
+        if next_mode == "STOP_HOLD":
             self.stop_hold(reason + " -> Stop/Hold")
         else:
             self.stop_hold(reason + " -> Automatik ab nächstem Zyklus")
@@ -3615,9 +3729,17 @@ class ZendureController:
         with self.state.lock:
             self.state.night_discharge_stop_soc_percent = effective_stop_soc
 
-        if soc is None or soc <= min_soc:
+        if soc is None:
+            self.state.add_limiter("SOC_STALE")
+            self.safe_state("Nachtmodus blockiert: Zendure SOC fehlt")
+            return False
+        if soc <= min_soc:
             self.state.add_limiter("MIN_SOC")
-            self.safe_state("Nachtmodus blockiert: Zendure SOC zu niedrig")
+            self.soc_limit_hold(
+                "Nachtmodus pausiert: globaler Mindest-SOC erreicht",
+                "MIN_SOC",
+                technical_path="NIGHT_MODE -> MIN_SOC -> HOLD",
+            )
             return False
 
         self.state.add_limiter("NIGHT_RESERVE_SOC")
@@ -3654,9 +3776,17 @@ class ZendureController:
         with self.state.lock:
             self.state.night_discharge_stop_soc_percent = effective_stop_soc
 
-        if soc is None or soc <= min_soc:
+        if soc is None:
+            self.state.add_limiter("SOC_STALE")
+            self.safe_state("Nachtmodus blockiert: Zendure SOC fehlt")
+            return
+        if soc <= min_soc:
             self.state.add_limiter("MIN_SOC")
-            self.safe_state("Nachtmodus blockiert: Zendure SOC zu niedrig")
+            self.soc_limit_hold(
+                "Nachtmodus pausiert: globaler Mindest-SOC erreicht",
+                "MIN_SOC",
+                technical_path="NIGHT_MODE -> MIN_SOC -> HOLD",
+            )
             return
 
         target = int(cfg["NIGHT_DISCHARGE_POWER_W"])
@@ -3685,9 +3815,17 @@ class ZendureController:
             mode = self.state.current_mode
             mode_duration = self.state.last_mode_duration_seconds
 
-        if soc is None or soc <= cfg["MIN_SOC_PERCENT"]:
+        if soc is None:
+            self.state.add_limiter("SOC_STALE")
+            self.safe_state("Entladung blockiert: Zendure SOC fehlt")
+            return
+        if soc <= cfg["MIN_SOC_PERCENT"]:
             self.state.add_limiter("MIN_SOC")
-            self.safe_state("Entladung blockiert: Zendure SOC zu niedrig")
+            self.soc_limit_hold(
+                "Entladung beendet: Mindest-SOC erreicht",
+                "MIN_SOC",
+                technical_path="AUTO -> MIN_SOC -> HOLD",
+            )
             return
 
         if last_input > 0:
@@ -3740,9 +3878,17 @@ class ZendureController:
             effective = self.state.effective_export_power
             sma_discharge = self.state.sma_battery_discharge_power
 
-        if soc is None or soc >= cfg["MAX_SOC_PERCENT"]:
+        if soc is None:
+            self.state.add_limiter("SOC_STALE")
+            self.safe_state("Ladung blockiert: Zendure SOC fehlt")
+            return
+        if soc >= cfg["MAX_SOC_PERCENT"]:
             self.state.add_limiter("MAX_SOC")
-            self.safe_state("Ladung blockiert: Zendure SOC zu hoch")
+            self.soc_limit_hold(
+                "Ladung beendet: Maximal-SOC erreicht",
+                "MAX_SOC",
+                technical_path="AUTO -> MAX_SOC -> HOLD",
+            )
             return
 
         if last_output > 0:
@@ -4047,9 +4193,11 @@ class ZendureController:
         self.state.set_control_source_requirements(required_sources)
         self.state.update_data_validity_model(cfg)
         self._update_command_readback_diagnostics(cfg)
-        self._update_late_effect_guard_state()
+        if self._config_control_allowed():
+            self._update_late_effect_guard_state()
         self._timed_phase("charge_acceptance_diag_ms", self.update_charge_acceptance_diagnostic, cfg)
-        self._timed_command_effect_phase(self.update_command_effect_monitor, cfg)
+        if self._config_control_allowed():
+            self._timed_command_effect_phase(self.update_command_effect_monitor, cfg)
         self._timed_phase("graph_snapshot_ms", self.state.record_graph_point, int(cfg.get("GRAPH_HISTORY_LIMIT", 300)))
         try:
             last_row = self.state.snapshot()["graph_history"][-1]

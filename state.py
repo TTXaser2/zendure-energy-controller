@@ -1853,6 +1853,75 @@ class ControllerState:
             }
             self.graph_history.append(row)
 
+    def readiness_snapshot(self, command_state_max_age_s: float = 30.0) -> Dict[str, Any]:
+        """Return the bounded subset required by /ready and config recovery.
+
+        The control loop calls this every cycle for Stable-Ready observation;
+        unlike ``snapshot()`` it never copies graph/event histories or builds
+        large diagnostic JSON structures.
+        """
+        with self.lock:
+            now_epoch = time.time()
+
+            def age_seconds(epoch_value: Optional[float]) -> Optional[int]:
+                if epoch_value is None:
+                    return None
+                return max(0, int(now_epoch - epoch_value))
+
+            # Refresh the command-state freshness against the same wall clock
+            # used for all other bounded readiness ages. No history or I/O is
+            # touched here.
+            self._refresh_zendure_command_state_locked(now_epoch, max_age_s=command_state_max_age_s)
+            return {
+                "uptime_seconds": int(now_epoch - self.startup_epoch),
+                "mqtt_connected": self.mqtt_connected,
+                "last_shelly_update_age_seconds": age_seconds(self.last_shelly_update_epoch),
+                "grid_power_valid": self.grid_power_valid,
+                "grid_power_validity_reason": self.grid_power_validity_reason,
+                "battery_soc": self.battery_soc,
+                "last_soc_update_age_seconds": age_seconds(self.last_soc_update_epoch),
+                "soc_valid": self.soc_valid,
+                "soc_validity_reason": self.soc_validity_reason,
+                "zendure_telemetry_source": self.zendure_telemetry_source,
+                "zendure_local_api_fallback_active": self.zendure_local_api_fallback_active,
+                "last_sma_battery_update_age_seconds": age_seconds(self.last_sma_battery_update_epoch),
+                "second_battery_valid": self.second_battery_data_valid,
+                "second_battery_validity_reason": self.second_battery_validity_reason,
+                "mqtt_command_path_available": self.mqtt_command_path_available,
+                "mqtt_command_path_fresh": self.mqtt_command_path_fresh,
+                "mqtt_command_path_valid": self.mqtt_command_path_valid,
+                "mqtt_command_path_age_seconds": self.mqtt_command_path_age_seconds,
+                "mqtt_command_path_validity_reason": self.mqtt_command_path_validity_reason,
+                "actual_zendure_power_valid": self.actual_zendure_power_valid,
+                "actual_zendure_power_age_s": self.actual_zendure_power_age_s,
+                "actual_zendure_power_validity_reason": self.actual_zendure_power_validity_reason,
+                "zendure_command_state_complete": self.zendure_command_state_complete,
+                "zendure_command_state_reason": self.zendure_command_state_reason,
+                "zendure_command_state_source": self.zendure_command_state_source,
+                "zendure_command_smart_mode": self.zendure_command_smart_mode,
+                "zendure_command_ac_mode": self.zendure_command_ac_mode,
+                "zendure_command_input_limit_w": self.zendure_command_input_limit_w,
+                "zendure_command_output_limit_w": self.zendure_command_output_limit_w,
+                "command_desired_sequence_id": self.command_desired_sequence_id,
+                "command_desired_ac_mode": self.command_desired_ac_mode,
+                "command_desired_input_limit_w": self.command_desired_input_limit_w,
+                "command_desired_output_limit_w": self.command_desired_output_limit_w,
+                "command_readback_matches_desired": self.command_readback_matches_desired,
+                "command_readback_mismatch_fields": self.command_readback_mismatch_fields,
+                "command_uncertain_mqtt_active": self.command_uncertain_mqtt_active,
+                "command_not_effective_active": self.command_not_effective_active,
+                "command_late_effect_guard_active": self.command_late_effect_guard_active,
+                "command_lifecycle_state": self.command_lifecycle_state,
+                "command_effect_category": self.command_effect_category,
+                "command_resync_count": self.command_resync_count,
+                "command_late_effect_guard_activation_count": self.command_late_effect_guard_activation_count,
+                "safe_state_counter": self.safe_state_counter,
+                "current_mode": self.current_mode,
+                "consecutive_errors": self.consecutive_errors,
+                "last_error": self.last_error,
+                "last_error_time": self.last_error_time,
+            }
+
     def snapshot(self) -> Dict[str, Any]:
         with self.lock:
             now_epoch = time.time()

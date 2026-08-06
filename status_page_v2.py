@@ -84,21 +84,79 @@ def _unit_rows(units: Iterable[Dict[str, Any]]) -> str:
     return "".join(rows)
 
 
-def _nav(analysis_available: bool, analysis_port: int, *, preview_mode: bool = False) -> str:
+def _nav(
+    analysis_available: bool,
+    analysis_port: int,
+    *,
+    active: str = "status",
+    preview_mode: bool = False,
+    system_kind: str = "unknown",
+) -> str:
     if preview_mode:
         return f'<a class="is-active" href="/">{_icon("home")}<span>Status-Vorschau</span></a>'
+
+    def link(key: str, href: str, icon: str, label: str, *, extra: str = "") -> str:
+        active_class = " is-active" if active == key else ""
+        return f'<a class="{active_class.strip()}" href="{href}">{_icon(icon)}<span>{label}</span>{extra}</a>'
+
+    status_dot = (
+        f'<i id="globalStatusNavDot" class="zec-nav-live-dot {_e(system_kind or "unknown")}" '
+        f'aria-label="Aktueller Systemstatus: {_e(system_kind or "unknown")}"></i>'
+    )
     links = [
-        f'<a class="is-active" href="/">{_icon("home")}<span>Status</span></a>',
-        f'<a href="/graph">{_icon("graph")}<span>Graph</span></a>',
-        f'<a href="/settings">{_icon("settings")}<span>Settings</span></a>',
+        link("status", "/", "home", "Status", extra=status_dot),
+        link("graph", "/graph", "graph", "Graph"),
+        link("settings", "/settings", "settings", "Settings"),
     ]
     if analysis_available:
         links.append(
             f'<a class="analysis-service-link" href="#" data-replay-port="{int(analysis_port)}">'
-            f'{_icon("analysis")}<span>Analyse-Service</span><i class="zec-nav-live-dot"></i></a>'
+            f'{_icon("analysis")}<span>Analyse-Service</span><i class="zec-nav-live-dot ok"></i></a>'
         )
-    links.append(f'<a href="/manual.pdf">{_icon("manual")}<span>Handbuch</span></a>')
+    links.append(link("manual", "/manual.pdf", "manual", "Handbuch"))
     return "".join(links)
+
+
+def render_global_topbar(
+    *,
+    active: str,
+    analysis_available: bool,
+    analysis_port: int,
+    system: Dict[str, Any] | None = None,
+    server_time: str = "",
+    preview_mode: bool = False,
+) -> str:
+    system = dict(system or {})
+    kind = str(system.get("kind") or "unknown")
+    label = str(system.get("label") or "Status wird geladen")
+    warnings = list(system.get("warnings") or [])
+    warnings_html = "".join(f"<li>{_e(w)}</li>" for w in warnings) or "<li>Keine aktiven Warnungen oder Fehler.</li>"
+    expert = "" if preview_mode else (
+        '<details id="expertMenuDetails" class="zec-expert-menu-wrap">'
+        '<summary id="expertMenuButton" class="zec-expert-button" aria-label="Expertenmenü öffnen">Experte <span aria-hidden="true">▾</span></summary>'
+        '<div id="expertMenu" class="zec-expert-menu"><a href="/mqtt-diagnostics">MQTT Diagnose</a>'
+        '<a href="/measurements">Messdaten-CSV</a><a href="/status_old">Alte Statusseite</a>'
+        '<a href="/graph_old">Alter Graph</a></div></details>'
+    )
+    return f'''<header class="zec-topbar">
+    <a class="zec-brand" href="/" aria-label="Zur Statusseite"><span class="zec-wordmark">ZENDURE</span><span class="zec-product">Energy Controller</span><span class="zec-brand-divider" aria-hidden="true"></span></a>
+    <nav class="zec-main-nav" aria-label="Hauptnavigation">{_nav(analysis_available, analysis_port, active=active, preview_mode=preview_mode, system_kind=kind)}</nav>
+    <div class="zec-topbar-right">
+      <div class="zec-system-menu-wrap">
+        <button id="systemStatusButton" class="zec-system-pill {_e(kind)}" type="button" aria-expanded="false">
+          <span class="zec-status-dot"></span><span data-zec="system.label">{_e(label)}</span>
+        </button>
+        <div id="systemStatusMenu" class="zec-system-menu" hidden>
+          <div class="zec-system-menu-title">Systemstatus</div>
+          <ul id="systemWarningList">{warnings_html}</ul>
+          <div class="zec-system-menu-stand">Stand: <span data-zec="server_time">{_e(server_time)}</span></div>
+        </div>
+      </div>
+      <span class="zec-version-pill">{_e(APP_VERSION_LABEL)}</span>
+      <span class="zec-clock">{_icon('clock')}<b id="localClock">{_e(server_time)}</b></span>
+      {expert}
+    </div>
+  </header>'''
 
 
 def render_status_page_v2(
@@ -161,8 +219,8 @@ def render_status_page_v2(
           <div class="zec-storage-details">
             <div class="zec-detail-row"><span>Istleistung</span><strong data-zec="primary.actual">{_e(payload['primary'].get('actual'))}</strong></div>
             <div class="zec-detail-row"><span>Status</span><strong data-zec="primary.status">{_e(payload['primary'].get('status'))}</strong></div>
-            <div class="zec-detail-row zec-harmony-row"><span>Harmonisierung</span><strong data-zec="primary.line">{_e(payload['primary'].get('line'))}</strong></div>
-            <div class="zec-detail-row"><span>Harvest-Rechnung</span><strong data-zec="primary.harvest_calculation">{_e(payload['primary'].get('harvest_calculation'))}</strong></div>
+            <div class="zec-detail-row zec-harmony-row zec-detail-row-stacked"><span>Harmonisierung</span><strong data-zec="primary.line">{_e(payload['primary'].get('line'))}</strong></div>
+            <div class="zec-detail-row zec-detail-row-stacked"><span>Harvest-Rechnung</span><strong data-zec="primary.harvest_calculation">{_e(payload['primary'].get('harvest_calculation'))}</strong></div>
           </div>
         </div>
         <footer class="zec-card-footer"><span class="zec-status-dot { _e(payload['primary'].get('tone','ok')) }"></span><span><b data-zec="primary.source">{_e(payload['primary'].get('source'))}</b> · <span data-zec="primary.freshness_text">{_e(payload['primary'].get('freshness_text'))}</span></span></footer>
@@ -202,25 +260,7 @@ def render_status_page_v2(
   <link rel="stylesheet" href="/static/status_v2.css?v={_e(APP_VERSION_LABEL)}">
 </head>
 <body class="{body_class}">
-  <header class="zec-topbar">
-    <div class="zec-brand"><span class="zec-wordmark">ZENDURE</span><span class="zec-product">Energy Controller</span><span class="zec-brand-divider" aria-hidden="true"></span></div>
-    <nav class="zec-main-nav" aria-label="Hauptnavigation">{_nav(analysis_available, analysis_port, preview_mode=preview_mode)}</nav>
-    <div class="zec-topbar-right">
-      <div class="zec-system-menu-wrap">
-        <button id="systemStatusButton" class="zec-system-pill { _e(payload['system'].get('kind','ok')) }" type="button" aria-expanded="false">
-          <span class="zec-status-dot"></span><span data-zec="system.label">{_e(payload['system'].get('label'))}</span>
-        </button>
-        <div id="systemStatusMenu" class="zec-system-menu" hidden>
-          <div class="zec-system-menu-title">Systemstatus</div>
-          <ul id="systemWarningList">{warnings_html}</ul>
-          <div class="zec-system-menu-stand">Stand: <span data-zec="server_time">{_e(payload.get('server_time'))}</span></div>
-        </div>
-      </div>
-      <span class="zec-version-pill">{_e(APP_VERSION_LABEL)}</span>
-      <span class="zec-clock">{_icon('clock')}<b id="localClock">{_e(payload.get('server_time'))}</b></span>
-      {'' if preview_mode else f'<details id="expertMenuDetails" class="zec-expert-menu-wrap"><summary id="expertMenuButton" class="zec-expert-button" aria-label="Expertenmenü öffnen">Experte <span aria-hidden="true">▾</span></summary><div id="expertMenu" class="zec-expert-menu"><a href="/mqtt-diagnostics">MQTT Diagnose</a><a href="/measurements">Messdaten-CSV</a><a href="/status_old">Alte Statusseite</a><a href="/graph_old">Alter Graph</a></div></details>'}
-    </div>
-  </header>
+  {render_global_topbar(active='status', analysis_available=analysis_available, analysis_port=analysis_port, system=payload.get('system'), server_time=str(payload.get('server_time') or ''), preview_mode=preview_mode)}
   {preview_banner}
 
   <div id="criticalBanner" class="zec-critical-banner" {'hidden' if payload['system'].get('kind') != 'bad' else ''}>

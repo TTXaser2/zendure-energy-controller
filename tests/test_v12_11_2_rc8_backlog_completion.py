@@ -43,8 +43,8 @@ class V12112Rc8BacklogCompletionTests(unittest.TestCase):
         return controller
 
     def test_version(self):
-        self.assertEqual("12.11.2-rc19", version.APP_VERSION)
-        self.assertEqual("V12.11.2-RC19", version.APP_VERSION_LABEL)
+        self.assertEqual("12.11.2-rc20", version.APP_VERSION)
+        self.assertEqual("V12.11.2-RC20", version.APP_VERSION_LABEL)
 
     def test_neutral_fresh_actual_clears_only_stale_diagnostic_uncertainty(self):
         controller = self._controller_for_effect_monitor(actual=0, age=1.0)

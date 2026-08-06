@@ -148,22 +148,26 @@ def resolve_measurement_db_path(config: Dict[str, Any]) -> str:
 def _connect(path: str) -> sqlite3.Connection:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     conn = sqlite3.connect(path, timeout=1.0)
-    # WAL is fast on ext4/SSD. On vfat/fuse it may fail; fall back silently to DELETE.
     try:
-        conn.execute("PRAGMA journal_mode=WAL")
-    except Exception:
+        # WAL is fast on ext4/SSD. On vfat/fuse it may fail; fall back silently to DELETE.
         try:
-            conn.execute("PRAGMA journal_mode=DELETE")
+            conn.execute("PRAGMA journal_mode=WAL")
+        except Exception:
+            try:
+                conn.execute("PRAGMA journal_mode=DELETE")
+            except Exception:
+                pass
+        try:
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("PRAGMA temp_store=MEMORY")
+            conn.execute("PRAGMA busy_timeout=1000")
         except Exception:
             pass
-    try:
-        conn.execute("PRAGMA synchronous=NORMAL")
-        conn.execute("PRAGMA temp_store=MEMORY")
-        conn.execute("PRAGMA busy_timeout=1000")
+        ensure_schema(conn)
+        return conn
     except Exception:
-        pass
-    ensure_schema(conn)
-    return conn
+        conn.close()
+        raise
 
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
@@ -367,6 +371,7 @@ class MeasurementDbWriter:
         self._stop = threading.Event()
         self._lock = threading.Lock()
         self._conn: Optional[sqlite3.Connection] = None
+        self._conn_thread_id: Optional[int] = None
         self._path = ""
         self._last_status: Dict[str, Any] = {
             "measurement_db_status": "idle",
@@ -410,25 +415,38 @@ class MeasurementDbWriter:
     def _worker(self) -> None:
         batch: List[Dict[str, Any]] = []
         current_path = ""
-        while not self._stop.is_set() or not self._queue.empty():
-            try:
-                path, point = self._queue.get(timeout=0.5)
-            except queue.Empty:
-                if batch and current_path:
+        try:
+            while not self._stop.is_set() or not self._queue.empty():
+                try:
+                    path, point = self._queue.get(timeout=0.5)
+                except queue.Empty:
+                    if batch and current_path:
+                        self._flush(current_path, batch)
+                        batch = []
+                    continue
+                if current_path and path != current_path and batch:
                     self._flush(current_path, batch)
                     batch = []
-                continue
-            if current_path and path != current_path and batch:
+                current_path = path
+                batch.append(point)
+                self._queue.task_done()
+                if len(batch) >= 50:
+                    self._flush(current_path, batch)
+                    batch = []
+            if batch and current_path:
                 self._flush(current_path, batch)
-                batch = []
-            current_path = path
-            batch.append(point)
-            self._queue.task_done()
-            if len(batch) >= 50:
-                self._flush(current_path, batch)
-                batch = []
-        if batch and current_path:
-            self._flush(current_path, batch)
+        finally:
+            # sqlite3 connections are thread-affine by default. The worker that
+            # created the connection must also close it.
+            conn = self._conn
+            self._conn = None
+            self._conn_thread_id = None
+            self._path = ""
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     def _flush(self, path: str, batch: List[Dict[str, Any]]) -> None:
         if not batch:
@@ -441,7 +459,10 @@ class MeasurementDbWriter:
                         self._conn.close()
                     except Exception:
                         pass
+                    self._conn = None
+                    self._conn_thread_id = None
                 self._conn = _connect(path)
+                self._conn_thread_id = threading.get_ident()
                 self._path = path
             count = write_points(self._conn, batch)
             with self._lock:
@@ -502,17 +523,25 @@ class MeasurementDbWriter:
 
     def close(self) -> None:
         self._stop.set()
-        if self._thread is not None:
+        thread = self._thread
+        if thread is not None and thread is not threading.current_thread():
             try:
-                self._thread.join(timeout=2.0)
+                thread.join(timeout=2.0)
             except Exception:
                 pass
-        if self._conn is not None:
+            if not thread.is_alive():
+                self._thread = None
+        # The worker owns and closes its thread-affine sqlite3 connection.
+        # Direct synchronous test/tool use of _flush() creates the connection in
+        # the caller thread, so that owner may close it here safely.
+        if self._conn is not None and self._conn_thread_id in (None, threading.get_ident()):
             try:
                 self._conn.close()
             except Exception:
                 pass
-        self._conn = None
+            self._conn = None
+            self._conn_thread_id = None
+            self._path = ""
 
 
 def db_status_for_config(config: Dict[str, Any]) -> Dict[str, Any]:
@@ -532,12 +561,12 @@ def query_measurement_date_range(config: Dict[str, Any]) -> Dict[str, Any]:
     path = resolve_measurement_db_path(config)
     if not os.path.exists(path):
         return {"available_from": "", "available_to": "", "db_status": "missing"}
+    conn: Optional[sqlite3.Connection] = None
     try:
         conn = sqlite3.connect(path, timeout=1.0)
         row = conn.execute(
             "SELECT MIN(bucket_start_ms), MAX(bucket_start_ms) FROM measurement_1min"
         ).fetchone()
-        conn.close()
         first_ms, last_ms = row if row else (None, None)
         return {
             "available_from": datetime.fromtimestamp(first_ms / 1000.0).date().isoformat() if first_ms is not None else "",
@@ -546,6 +575,9 @@ def query_measurement_date_range(config: Dict[str, Any]) -> Dict[str, Any]:
         }
     except Exception as exc:
         return {"available_from": "", "available_to": "", "db_status": "error", "db_error": str(exc)}
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 def query_graph_points(config: Dict[str, Any], start_dt: datetime, end_dt: datetime, *, limit: int = 5000) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
@@ -556,6 +588,7 @@ def query_graph_points(config: Dict[str, Any], start_dt: datetime, end_dt: datet
         return [], {"db_status": "missing", "db_path": path}
     start_ms = int(start_dt.timestamp() * 1000)
     end_ms = int(end_dt.timestamp() * 1000)
+    conn: Optional[sqlite3.Connection] = None
     try:
         conn = sqlite3.connect(path, timeout=1.0)
         conn.row_factory = sqlite3.Row
@@ -568,9 +601,11 @@ def query_graph_points(config: Dict[str, Any], start_dt: datetime, end_dt: datet
             """,
             (start_ms, end_ms, int(limit)),
         ).fetchall()
-        conn.close()
     except Exception as exc:
         return [], {"db_status": "error", "db_path": path, "db_error": str(exc)}
+    finally:
+        if conn is not None:
+            conn.close()
     points: List[Dict[str, Any]] = []
     for row in rows:
         ts_ms = int(row["last_ts_ms"] or row["bucket_start_ms"])

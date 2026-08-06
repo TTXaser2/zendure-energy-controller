@@ -38,6 +38,11 @@ class OperationalEventJournal:
         explicit = str(cfg.get("OPERATIONAL_EVENTS_DB_PATH", "") or "").strip()
         if explicit:
             return os.path.abspath(explicit)
+        if os.environ.get("ZEC_INSTALLER_PREFLIGHT") == "1":
+            return os.path.join(
+                "/tmp", f"zec-installer-preflight-{os.getpid()}",
+                "zec_operational_events.sqlite3",
+            )
         base = resolve_measurement_db_path(cfg)
         return os.path.join(os.path.dirname(base), "zec_operational_events.sqlite3")
 
@@ -45,28 +50,32 @@ class OperationalEventJournal:
         path = self.path()
         os.makedirs(os.path.dirname(path), exist_ok=True)
         conn = sqlite3.connect(path, timeout=1.0)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA synchronous=NORMAL")
-        conn.execute(
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute(
+                """
+              CREATE TABLE IF NOT EXISTS operational_events(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type TEXT NOT NULL,
+                severity TEXT NOT NULL,
+                title TEXT NOT NULL,
+                detail TEXT NOT NULL,
+                started_at REAL NOT NULL,
+                ended_at REAL,
+                status TEXT NOT NULL,
+                dedupe_key TEXT,
+                detail_json TEXT,
+                occurrence_count INTEGER NOT NULL DEFAULT 1
+              )
             """
-          CREATE TABLE IF NOT EXISTS operational_events(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            event_type TEXT NOT NULL,
-            severity TEXT NOT NULL,
-            title TEXT NOT NULL,
-            detail TEXT NOT NULL,
-            started_at REAL NOT NULL,
-            ended_at REAL,
-            status TEXT NOT NULL,
-            dedupe_key TEXT,
-            detail_json TEXT,
-            occurrence_count INTEGER NOT NULL DEFAULT 1
-          )
-        """
-        )
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_operational_events_started ON operational_events(started_at DESC)")
-        conn.commit()
-        return conn
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_operational_events_started ON operational_events(started_at DESC)")
+            conn.commit()
+            return conn
+        except Exception:
+            conn.close()
+            raise
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -77,6 +86,37 @@ class OperationalEventJournal:
 
     def stop(self) -> None:
         self._stop.set()
+        thread = self._thread
+        if thread is not None and thread is not threading.current_thread():
+            try:
+                thread.join(timeout=3.0)
+            except Exception:
+                pass
+            if not thread.is_alive():
+                self._thread = None
+
+    def record_admin_action(self, action: str, detail: str, values: Optional[Dict[str, Any]] = None) -> None:
+        """Persist one explicit administrative action outside the control loop."""
+        try:
+            conn = self._connect()
+            try:
+                self._add(
+                    conn,
+                    "admin_action",
+                    "info",
+                    str(action),
+                    str(detail),
+                    dedupe_key="",
+                    open_event=False,
+                    values=values or {},
+                    dedupe_window_s=0.0,
+                )
+            finally:
+                conn.close()
+        except Exception:
+            # The audit journal is diagnostic. An unavailable journal must not
+            # make an otherwise authorized admin action unsafe or half-applied.
+            return
 
     def _add(
         self,
@@ -188,26 +228,22 @@ class OperationalEventJournal:
         conn.commit()
 
     def _resolve(self, conn: sqlite3.Connection, dedupe_key: str, title: str, detail: str) -> None:
-        row = conn.execute(
-            """
-            SELECT id,started_at
-            FROM operational_events
-            WHERE dedupe_key=? AND status='open'
-            ORDER BY id DESC
-            LIMIT 1
-            """,
-            (dedupe_key,),
-        ).fetchone()
+        """Resolve every stale open row for one live incident key.
+
+        Older releases could leave more than one row open across restarts.  A
+        verified healthy live state closes the complete incident set so history
+        cannot masquerade as an active fault.
+        """
         now = time.time()
-        if row:
-            conn.execute(
-                """
-                UPDATE operational_events
-                SET ended_at=?,status='resolved',title=?,detail=?
-                WHERE id=?
-                """,
-                (now, title, detail, row[0]),
-            )
+        cursor = conn.execute(
+            """
+            UPDATE operational_events
+            SET ended_at=?,status='resolved',title=?,detail=?
+            WHERE dedupe_key=? AND status='open'
+            """,
+            (now, title, detail, dedupe_key),
+        )
+        if cursor.rowcount:
             conn.commit()
 
     def _transition(
@@ -226,7 +262,16 @@ class OperationalEventJournal:
     ) -> None:
         old = self._previous.get(key, _SENTINEL)
         self._previous[key] = value
-        if old is _SENTINEL or old == value:
+        if old is _SENTINEL:
+            if value in bad_values:
+                self._add(
+                    conn, key, severity, title_bad, detail_bad(value),
+                    dedupe_key=key, open_event=True, dedupe_window_s=dedupe_window_s,
+                )
+            else:
+                self._resolve(conn, key, title_ok, detail_ok)
+            return
+        if old == value:
             return
         was_bad = old in bad_values
         is_bad = value in bad_values
@@ -293,7 +338,15 @@ class OperationalEventJournal:
                     "detail": detail_bad,
                 }
             else:
-                self._previous[stable_key] = False
+                # Start from an assumed prior incident so a continuously healthy
+                # live state can reconcile stale open rows after the same bounded
+                # recovery window used during normal operation.
+                self._previous[stable_key] = True
+                self._stable_candidates[key] = {
+                    "value": False,
+                    "since": now,
+                    "detail": detail_bad,
+                }
             return
         if bool(old) == bool(is_bad):
             self._stable_candidates.pop(key, None)
@@ -339,7 +392,19 @@ class OperationalEventJournal:
         mqtt = bool(s.get("mqtt_connected"))
         old_mqtt = self._previous.get("mqtt_connected")
         self._previous["mqtt_connected"] = mqtt
-        if old_mqtt is not None and old_mqtt != mqtt:
+        if old_mqtt is None:
+            if mqtt:
+                self._resolve(
+                    conn, "mqtt", "MQTT-Verbindung wiederhergestellt",
+                    "Brokerverbindung ist wieder aktiv.",
+                )
+            else:
+                self._add(
+                    conn, "mqtt", "error", "MQTT-Verbindung getrennt",
+                    "Keine Verbindung zum MQTT-Broker.", dedupe_key="mqtt",
+                    open_event=True, dedupe_window_s=_FLAP_COMPACT_WINDOW_S,
+                )
+        elif old_mqtt != mqtt:
             if not mqtt:
                 self._add(
                     conn,
@@ -488,6 +553,7 @@ class OperationalEventJournal:
         return compacted
 
     def _run(self) -> None:
+        conn: Optional[sqlite3.Connection] = None
         try:
             conn = self._connect()
             self._add(
@@ -498,21 +564,24 @@ class OperationalEventJournal:
                 datetime.now().strftime("Start am %d.%m.%Y um %H:%M:%S"),
                 dedupe_key="controller_start",
             )
+            while not self._stop.wait(2.0):
+                try:
+                    self._observe(conn, self.state.snapshot())
+                except Exception:
+                    # The journal is deliberately best-effort and must never affect
+                    # the controller or the web status route.
+                    pass
         except Exception:
             return
-        while not self._stop.wait(2.0):
-            try:
-                self._observe(conn, self.state.snapshot())
-            except Exception:
-                # The journal is deliberately best-effort and must never affect
-                # the controller or the web status route.
-                pass
-        try:
-            conn.close()
-        except Exception:
-            pass
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     def list_recent(self, days: int = 2, limit: int = 250) -> List[Dict[str, Any]]:
+        conn: Optional[sqlite3.Connection] = None
         try:
             conn = self._connect()
             since = time.time() - max(1, days) * 86400
@@ -526,7 +595,6 @@ class OperationalEventJournal:
                 """,
                 (since, limit),
             ).fetchall()
-            conn.close()
             keys = [
                 "id",
                 "event_type",
@@ -542,6 +610,12 @@ class OperationalEventJournal:
             return self._compact_for_display(items)
         except Exception:
             return []
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
 
 def read_recent_events(config: Dict[str, Any], days: int = 2, limit: int = 250) -> List[Dict[str, Any]]:

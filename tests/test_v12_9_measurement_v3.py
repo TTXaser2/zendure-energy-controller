@@ -41,6 +41,7 @@ class V129MeasurementV3Tests(unittest.TestCase):
 
     def test_standard_and_extended_use_same_header_but_standard_blanks_extended_json(self):
         logger = CsvRotatingLogger()
+        self.addCleanup(logger.close)
         base_row = {
             "schema": CSV_SCHEMA,
             "zendure_mqtt_topic_groups_json": '{"soc":{"fresh":true}}',
@@ -92,6 +93,7 @@ class V129MeasurementV3Tests(unittest.TestCase):
                 "MEASUREMENT_LOG_MIN_FREE_DISK_MB": 500,
             }
             logger = CsvRotatingLogger()
+            self.addCleanup(logger.close)
             logger._free_disk_mb = lambda directory: 1
             status = logger.log(cfg, {"schema": CSV_SCHEMA})
             self.assertEqual(status["measurement_log_status"], "paused_disk_low")

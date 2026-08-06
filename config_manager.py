@@ -13,6 +13,9 @@ import time
 from copy import deepcopy
 from typing import Any, Dict, Tuple
 
+from settings_runtime import SettingsRuntimeManager
+from version import APP_VERSION
+
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     # Netzwerk / Infrastruktur
@@ -50,7 +53,6 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "SOC_DAY_GRAPH_BOOTSTRAP_FROM_MEASUREMENTS": True,
     "SOC_DAY_GRAPH_BOOTSTRAP_CACHE_SECONDS": 300,
     "WEB_SERVICE_RESTART_ENABLED": False,
-    "SERVICE_RESTART_COMMAND": "sudo /usr/local/sbin/zendure-controller-restart",
 
     # Diagnose / Zendure lokal / MQTT Topic-Mitschnitt
     "ZENDURE_LOCAL_API_ENABLED": False,
@@ -122,9 +124,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "SECOND_BATTERY_POWER_UNIT": "W",
     "SECOND_BATTERY_CAPACITY_UNIT": "kWh",
     "SECOND_BATTERY_DISCHARGE_SIGN": 1,
-    "SMA_DISCHARGE_BLOCK_W": 80,
     "CROSS_CHARGE_SIGNIFICANT_W": 80,
-    "CROSS_CHARGE_RESERVE_W": 100,
     "MIN_EFFECTIVE_SURPLUS_FOR_CHARGE_W": 150,
     "SMA_GUARD_RAMP_DOWN_W": 250,
     "SECOND_BATTERY_STALE_TIMEOUT_SECONDS": 30,
@@ -147,16 +147,11 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "HARVEST_PRIMARY_CHARGE_RESTART_W": None,
     "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_RATIO": 0.95,
     "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_W": None,
-    "HARVEST_PRIMARY_BELOW_FLOOR_CONFIRM_SECONDS": 6,
-    "HARVEST_PRIMARY_RESTART_CONFIRM_SECONDS": 30,
-    "HARVEST_IMPORT_REDUCE_CONFIRM_SECONDS": 6,
-    "HARVEST_IMPORT_EXIT_CONFIRM_SECONDS": 30,
     "HARVEST_HIGH_SMA_SOC_TIME_PROFILE_ENABLED": True,
     "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MORNING": 0.60,
     "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY": 0.50,
     "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_AFTERNOON": 0.35,
     "HARVEST_CAPACITY_WEIGHTING_MODE": "diagnostic",
-    "ZENDURE_BATTERY_CAPACITY_KWH": None,
 
 
     # Nachtmodus
@@ -187,7 +182,6 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "MEASUREMENT_DB_ENABLED": True,
     "MEASUREMENT_DB_FILE": "zec_measurements.sqlite3",
     "MEASUREMENT_DB_PATH": "",
-    "MEASUREMENT_DB_MAX_QUEUE_ROWS": 5000,
     "MEASUREMENT_LOG_STORAGE_TARGET": "internal_sd",
     "MEASUREMENT_LOG_MOUNTPOINT": "",
     "MEASUREMENT_LOG_DIR": "logs",
@@ -264,7 +258,6 @@ CONFIG_SCHEMA: Dict[str, Dict[str, Any]] = {
     "SOC_DAY_GRAPH_BOOTSTRAP_FROM_MEASUREMENTS": {"group": "Weboberfläche", "label": "SOC-Tageskurve aus Messdaten starten", "type": "bool", "description": "Versucht beim Abruf der SOC-Tageskurve, heutige Measurement-V4-Logs best-effort einzulesen. Fehler sind nicht kritisch; die Kurve startet dann ab jetzt."},
     "UI_MODE": {"group": "Weboberfläche", "label": "Oberflächenmodus", "type": "select", "options": {"standard": "Standard", "expert": "Experte"}, "description": "Vorbereitung für eine reduzierte Standardansicht und eine vollständige Expertenansicht. Expertenmodus ist fachlich ein Superset des Standardmodus: Kernstatus und Warnungen bleiben immer sichtbar, Expert-only-Details kommen zusätzlich hinzu."},
     "WEB_SERVICE_RESTART_ENABLED": {"group": "Weboberfläche", "label": "Service-Neustart aus Weboberfläche erlauben", "type": "bool", "description": "Erlaubt der Weboberfläche, nach dem Speichern neustartrelevanter Einstellungen den systemd-Dienst kontrolliert neu zu starten. Aus Sicherheitsgründen ist diese Funktion standardmäßig deaktiviert und benötigt zusätzlich ein freigegebenes Restart-Hilfsscript mit sudoers-Regel."},
-    "SERVICE_RESTART_COMMAND": {"group": "Weboberfläche", "label": "Service-Neustart Befehl", "type": "str", "description": "Befehl, den die Weboberfläche für einen kontrollierten Dienstneustart ausführen darf, z. B. sudo /usr/local/sbin/zendure-controller-restart. Dieser Befehl sollte auf ein root-geschütztes Hilfsscript zeigen und nicht frei editierbar für untrusted Benutzer sein."},
     "ZENDURE_LOCAL_API_ENABLED": {"group": "Netzwerk", "label": "Zendure lokale API Diagnose aktiv", "type": "bool", "description": "Aktiviert den Diagnose-Endpunkt /zendure-properties. Diese Option steuert die Web-Diagnoseseite; die Telemetrie-Fallback-Nutzung wird separat über die folgenden Optionen gesteuert."},
     "ZENDURE_LOCAL_IP": {"group": "Netzwerk", "label": "Zendure lokale IP", "type": "str", "description": "IP-Adresse der Zendure-Headunit für lokale Abfragen wie /properties/report. Wird sowohl für die Diagnose-Webseite als auch für den optionalen Telemetrie-Fallback verwendet."},
     "ZENDURE_LOCAL_API_TIMEOUT_SECONDS": {"group": "Netzwerk", "label": "Zendure lokale API Timeout", "type": "int", "min": 1, "max": 30, "unit": "s", "description": "Maximale Wartezeit eines asynchronen lokalen Zendure-API-Requests. Der Regelzyklus wartet nicht auf diesen Request."},
@@ -331,9 +324,7 @@ CONFIG_SCHEMA: Dict[str, Dict[str, Any]] = {
     "SECOND_BATTERY_POWER_UNIT": {"group": "Zweitbatterie", "subgroup": "Zweitbatterie-Messwerte", "label": "Leistungseinheit", "type": "select", "options": {"W": "W", "kW": "kW"}, "description": "Einheit des Leistungswerts der Zusatzbatterie. Intern wird immer auf Watt normalisiert."},
     "SECOND_BATTERY_CAPACITY_UNIT": {"group": "Zweitbatterie", "subgroup": "Zweitbatterie-Messwerte", "label": "Kapazitätseinheit", "type": "select", "options": {"kWh": "kWh", "Wh": "Wh"}, "description": "Einheit des Kapazitätswerts der Zusatzbatterie. Die Statusseite zeigt den Wert in kWh an."},
     "SECOND_BATTERY_DISCHARGE_SIGN": {"group": "Zweitbatterie", "subgroup": "Zweitbatterie-Messwerte", "label": "Zusatzbatterie Entlade-Vorzeichen", "type": "int", "min": -1, "max": 1, "description": "+1 bedeutet: positive MQTT-Leistung = Zusatzbatterie entlädt. -1 bedeutet: negative MQTT-Leistung = Zusatzbatterie entlädt. Die Statusanzeige normiert danach auf positiv = Ladung, negativ = Entladung."},
-    "SMA_DISCHARGE_BLOCK_W": {"group": "Zweitbatterie", "subgroup": "Cross-Charge-Schutz", "label": "Entlade-Blockgrenze (Legacy)", "type": "int", "min": 0, "max": 5000, "unit": "W", "hidden": True, "description": "Legacy-Wert nur für Migration/Kompatibilität. Neue Installationen verwenden Cross-Charge-Signifikanzschwelle; dieses Feld wird nicht mehr in der normalen Settings-UI angezeigt."},
     "CROSS_CHARGE_SIGNIFICANT_W": {"group": "Zweitbatterie", "subgroup": "Cross-Charge-Schutz", "label": "Cross-Charge-Signifikanzschwelle", "type": "int", "min": 0, "max": 5000, "unit": "W", "description": "Ab diesem gegenläufigen Leistungsfluss zwischen Zusatzbatterie und Zendure wird der Cross-Charge-Schutz aktiv. Eine interne niedrigere Freigabeschwelle verhindert hektisches Ein-/Ausschalten."},
-    "CROSS_CHARGE_RESERVE_W": {"group": "Zweitbatterie", "subgroup": "Cross-Charge-Schutz", "label": "Cross-Charge Reserve", "type": "int", "min": 0, "max": 1000, "unit": "W", "description": "Sicherheitsreserve, die vom sichtbaren Überschuss abgezogen wird, bevor Zendure lädt."},
     "MIN_EFFECTIVE_SURPLUS_FOR_CHARGE_W": {"group": "Zweitbatterie", "subgroup": "Cross-Charge-Schutz", "label": "Mindest-Überschuss für Ladung", "type": "int", "min": 0, "max": 2000, "unit": "W", "description": "Zendure lädt nur, wenn nach Zusatzbatterie-Abzug und Reserve mindestens dieser Überschuss übrig bleibt."},
     "SMA_GUARD_RAMP_DOWN_W": {"group": "Zweitbatterie", "subgroup": "Cross-Charge-Schutz", "label": "Cross-Charge Ramp-Down", "type": "int", "min": 1, "max": 2400, "unit": "W", "description": "Schrittweite, mit der Zendure-Ladung reduziert wird, wenn der Cross-Charge-Schutz blockiert."},
     "SECOND_BATTERY_STALE_TIMEOUT_SECONDS": {"group": "Zweitbatterie", "subgroup": "Cross-Charge-Schutz", "label": "Daten-Timeout", "type": "int", "min": 5, "max": 600, "unit": "s", "description": "Nach dieser Zeit ohne Update auf einem konfigurierten Zusatzbatterie-MQTT-Topic gelten die Daten als veraltet. Je kleiner der Wert, desto schneller reagiert der Schutz auf fehlende Daten; je größer der Wert, desto toleranter ist das System gegenüber kurzen MQTT-Aussetzern."},
@@ -366,7 +357,6 @@ CONFIG_SCHEMA: Dict[str, Dict[str, Any]] = {
     "MEASUREMENT_DB_ENABLED": {"group": "Messdaten / Historie", "label": "SQLite-Graphspeicher", "type": "bool", "description": "Schreibt parallel zu CSV/V4 einen leichten SQLite-Store für schnelle Status- und Graphdaten. Läuft auch, wenn Messdaten-CSV deaktiviert ist; die Regelung wird bei DB-Fehlern nicht blockiert."},
     "MEASUREMENT_DB_FILE": {"group": "Messdaten / Historie", "label": "SQLite-Datei", "type": "str", "description": "Dateiname des SQLite-Graphspeichers im aktiven Messdatenverzeichnis, sofern kein absoluter SQLite-Pfad gesetzt ist."},
     "MEASUREMENT_DB_PATH": {"group": "Messdaten / Historie", "label": "SQLite-Pfad optional", "type": "str", "description": "Optionaler absoluter Pfad zur SQLite-Datei. Leer bedeutet: automatisch neben den Messdaten im aktiven Speicherziel."},
-    "MEASUREMENT_DB_MAX_QUEUE_ROWS": {"group": "Messdaten / Historie", "label": "SQLite Queue-Größe", "type": "int", "min": 100, "max": 50000, "description": "Maximale Anzahl gepufferter DB-Messpunkte. Bei voller Queue wird verworfen statt die Regelung zu blockieren."},
     "MEASUREMENT_LOG_STORAGE_TARGET": {"group": "Messdaten / Historie", "label": "Speicherziel", "type": "select", "options": {"internal_sd": "Interne SD-Karte", "external_mount": "erkannter USB-/Mountpoint", "custom_path": "benutzerdefinierter Pfad"}, "description": "Legt fest, wo Messdaten primär geschrieben werden. Bei erkanntem USB-/Mountpoint wird ein schreibbarer externer Mount automatisch verwendet; das Feld USB-/Mountpoint kann optional einen bestimmten Mountpoint festlegen."},
     "MEASUREMENT_LOG_MOUNTPOINT": {"group": "Messdaten / Historie", "label": "USB-/Mountpoint", "type": "str", "description": "Optionaler Mountpoint für externes Messdaten-Logging, z. B. /media/pi/USBSTICK oder /mnt/zec-logs. Wenn leer, wird bei Speicherziel external_mount ein erkannter schreibbarer USB-/Mountpoint automatisch verwendet."},
     "MEASUREMENT_LOG_DIR": {"group": "Messdaten / Historie", "label": "Messdaten-Verzeichnis / Custom-Pfad", "type": "str", "description": "Verzeichnis für ZEC-MEASUREMENT-Messdaten. Bei internal_sd/custom_path wird dieses Feld direkt verwendet. Bei external_mount wird es als Unterordner auf dem USB-/Mountpoint verwendet, z. B. USB + ZEC/logs."},
@@ -410,121 +400,75 @@ CONFIG_SCHEMA: Dict[str, Dict[str, Any]] = {
 }
 
 
-class ConfigManager:
+class ConfigManager(SettingsRuntimeManager):
+    """RC20 compatibility facade over the strict SettingsRuntimeManager.
+
+    ``get()`` remains the effective runtime view expected by the unchanged
+    controller.  ``get_configured()`` and ``status()`` expose the new three-layer
+    contract to the settings API.
+    """
+
     def __init__(self, path: str = "config.json"):
-        self.path = path
-        self.last_good_path = f"{path}.last-good"
-        self._config: Dict[str, Any] = deepcopy(DEFAULT_CONFIG)
-        self._mtime: float = 0.0
-        self._lock = threading.RLock()
-        self.cleanup_stale_temp_files(max_age_seconds=0)
+        super().__init__(path=path, app_version=APP_VERSION)
+        self.cleanup_stale_temp_files(max_age_seconds=300)
 
     def cleanup_stale_temp_files(self, max_age_seconds: int = 300) -> None:
-        """Remove orphaned temporary config files from interrupted atomic saves.
-
-        Atomic saving still creates a short-lived temporary file. If the process is
-        interrupted exactly during a save, that temp file can remain in the working
-        directory. This cleanup is intentionally best-effort; permission problems are
-        ignored so the controller can continue running.
-        """
         directory = os.path.dirname(os.path.abspath(self.path)) or "."
         if not os.path.isdir(directory):
             return
         base_name = os.path.basename(self.path)
         now = time.time()
-
         for file_name in os.listdir(directory):
-            looks_like_old_temp = (
-                file_name.startswith("config.") and file_name.endswith(".tmp")
-            )
-            looks_like_new_temp = (
-                file_name.startswith(base_name + ".") and file_name.endswith(".tmp")
-            )
-            if not (looks_like_old_temp or looks_like_new_temp):
+            if not (file_name.startswith(base_name + ".") and file_name.endswith(".tmp")):
                 continue
-
             tmp_path = os.path.join(directory, file_name)
             try:
                 age = now - os.path.getmtime(tmp_path)
                 if max_age_seconds <= 0 or age >= max_age_seconds or os.path.getsize(tmp_path) == 0:
                     os.remove(tmp_path)
-            except Exception:
+            except OSError:
                 pass
 
-    def get(self) -> Dict[str, Any]:
-        with self._lock:
-            return deepcopy(self._config)
+    def update_internal_live_setting(self, key: str, value: Any) -> Dict[str, Any]:
+        """Persist one controller-owned live setting without losing user state.
 
-    def get_value(self, key: str, default: Any = None) -> Any:
-        with self._lock:
-            return self._config.get(key, default)
+        This is used for the existing automatic completion of a fixed manual
+        mode.  It patches the persisted configured object, not the effective
+        runtime view, so inherited defaults remain absent and pending restart
+        values cannot be overwritten by their old effective values.
+        """
+        from settings_registry import SETTINGS_BY_KEY, ApplyClass, Editability
 
-    def load(self) -> Dict[str, Any]:
-        with self._lock:
-            self.cleanup_stale_temp_files(max_age_seconds=0)
-            if not os.path.exists(self.path):
-                self._config = deepcopy(DEFAULT_CONFIG)
-                self.save(self._config, create_last_good=False)
-                self._mtime = os.path.getmtime(self.path)
-                return self.get()
-
-            try:
-                with open(self.path, "r", encoding="utf-8") as f:
-                    loaded = json.load(f)
-            except Exception:
-                if os.path.exists(self.last_good_path):
-                    shutil.copy2(self.last_good_path, self.path)
-                    with open(self.path, "r", encoding="utf-8") as f:
-                        loaded = json.load(f)
-                else:
-                    raise
-
-            validated, changed = validate_config(loaded)
-            self._config = validated
-
-            if changed:
-                self.save(self._config)
-
-            self._mtime = os.path.getmtime(self.path)
-            return self.get()
-
-    def reload_if_needed(self) -> Tuple[Dict[str, Any], bool]:
-        with self._lock:
-            if not os.path.exists(self.path):
-                return self.load(), True
-
-            current_mtime = os.path.getmtime(self.path)
-            if current_mtime != self._mtime:
-                return self.load(), True
-
-            return self.get(), False
+        spec = SETTINGS_BY_KEY.get(key)
+        if spec is None or spec.editability is not Editability.EDITABLE or spec.apply_class is not ApplyClass.LIVE_NEXT_CYCLE:
+            raise ValueError("INTERNAL_SETTING_NOT_LIVE_EDITABLE")
+        status = self.status()
+        if status.get("config_health") != "valid" or status.get("primary_config_valid") is not True:
+            raise RuntimeError("PRIMARY_CONFIG_NOT_WRITABLE")
+        candidate = self.candidate_base_config()
+        candidate[key] = value
+        return self.commit_candidate(candidate, self.cas_revision())
 
     def save(self, new_config: Dict[str, Any], create_last_good: bool = True) -> Dict[str, Any]:
+        """Compatibility method for non-HTTP callers.
+
+        New UI writes use preview/commit with CAS.  This method remains for
+        fixtures and explicit internal migrations; it is strict and atomic and
+        does not create the legacy unproven single-file Last-Good backup.
+        """
+        from settings_runtime import atomic_write, pretty_json_bytes, stable_read
+
+        result = self.validate_candidate(new_config, previous=self.get_configured())
+        if not result.valid:
+            raise ValueError("CONFIG_CANDIDATE_INVALID")
+        atomic_write(self.path, pretty_json_bytes(result.persisted), mode=0o600)
+        reread = stable_read(self.path)
+        if reread.status != "ok":
+            raise RuntimeError("CONFIG_POST_WRITE_VERIFY_FAILED")
         with self._lock:
-            validated, _ = validate_config(new_config)
-            directory = os.path.dirname(os.path.abspath(self.path)) or "."
-            os.makedirs(directory, exist_ok=True)
-            self.cleanup_stale_temp_files(max_age_seconds=0)
-
-            if create_last_good and os.path.exists(self.path):
-                try:
-                    shutil.copy2(self.path, self.last_good_path)
-                except Exception:
-                    pass
-
-            fd, tmp_path = tempfile.mkstemp(prefix=os.path.basename(self.path) + ".", suffix=".tmp", dir=directory)
-            try:
-                with os.fdopen(fd, "w", encoding="utf-8") as f:
-                    json.dump(validated, f, indent=4, ensure_ascii=False)
-                    f.write("\n")
-                os.replace(tmp_path, self.path)
-            finally:
-                if os.path.exists(tmp_path):
-                    os.remove(tmp_path)
-
-            self._config = validated
-            self._mtime = os.path.getmtime(self.path)
-            return self.get()
+            self._set_valid_primary(result, reread, startup=False, source="compatibility_save")
+            self._runtime_change_pending = True
+        return self.get_configured()
 
 
 def validate_config(candidate: Dict[str, Any]) -> Tuple[Dict[str, Any], bool]:
@@ -575,12 +519,6 @@ def validate_config(candidate: Dict[str, Any]) -> Tuple[Dict[str, Any], bool]:
             changed = True
         if "SECOND_BATTERY_STALE_BLOCK_CHARGE" not in candidate and "EVCC_STALE_BLOCK_CHARGE" in result:
             result["SECOND_BATTERY_STALE_BLOCK_CHARGE"] = bool(result.get("EVCC_STALE_BLOCK_CHARGE", True))
-            changed = True
-        if "CROSS_CHARGE_SIGNIFICANT_W" not in candidate:
-            try:
-                result["CROSS_CHARGE_SIGNIFICANT_W"] = int(float(result.get("SMA_DISCHARGE_BLOCK_W", 80)))
-            except Exception:
-                result["CROSS_CHARGE_SIGNIFICANT_W"] = 80
             changed = True
 
     # V12.10: neue/normalisierte Installationen schreiben standardmäßig V4.

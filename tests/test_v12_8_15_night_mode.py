@@ -114,8 +114,9 @@ class V12815NightModeReserveSocTests(unittest.TestCase):
 
         self._run_full_cycle(controller, cfg)
 
-        self.assertEqual(state.current_mode, "SAFE_STATE")
+        self.assertEqual(state.current_mode, "HOLD")
         self.assertIn("MIN_SOC", state.active_limiters)
+        self.assertEqual(state.safe_state_counter, 0)
         self.assertEqual(state.night_discharge_stop_reason, "none")
 
     def test_night_stop_soc_validation_rejects_below_global_min_soc(self):
@@ -144,17 +145,13 @@ class V12815NightTimeSettingsTests(unittest.TestCase):
         self.assertIsNone(parse_hhmm("12:75"))
         self.assertIsNone(parse_hhmm("abc"))
 
-    def test_settings_page_uses_two_hhmm_fields_and_hides_four_internal_fields(self):
+    def test_settings_page_no_longer_embeds_legacy_night_inputs(self):
         cfg = dict(DEFAULT_CONFIG)
         html = build_settings_page(cfg)
-        self.assertIn('name="NIGHT_START_TIME"', html)
-        self.assertIn('name="NIGHT_END_TIME"', html)
-        self.assertIn('value="20:30"', html)
-        self.assertIn('value="05:00"', html)
-        self.assertNotIn('name="NIGHT_START_HOUR"', html)
-        self.assertNotIn('name="NIGHT_START_MINUTE"', html)
-        self.assertIn('data-night-time="1"', html)
-        self.assertIn('normalizeNightTimeInput', html)
+        self.assertNotIn('name="NIGHT_START_TIME"', html)
+        self.assertNotIn('name="NIGHT_END_TIME"', html)
+        self.assertNotIn('legacy-settings-contract', html)
+        self.assertIn('settings_v2.js', html)
 
     def test_time_form_fields_are_mapped_to_existing_config_keys(self):
         cfg = dict(DEFAULT_CONFIG)

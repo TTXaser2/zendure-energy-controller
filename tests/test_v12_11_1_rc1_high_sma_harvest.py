@@ -128,7 +128,7 @@ class HighSmaSocHarvestRc1Tests(unittest.TestCase):
         self.assertIn("CROSS_CHARGE", state.active_limiters)
 
     def test_capacity_is_diagnostic_only(self):
-        cfg = cfg_high(ZENDURE_BATTERY_CAPACITY_KWH=5.28)
+        cfg = cfg_high(ZENDURE_BATTERY_CAPACITY_WH=5280)
         state = state_with_second_battery(+2000, soc=80)
         with state.lock:
             state.sma_battery_capacity_kwh = 13.0

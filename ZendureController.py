@@ -77,7 +77,6 @@ def main() -> None:
     app = create_app(
         config_manager=config_manager,
         state=state,
-        on_config_saved=mqtt_bridge.refresh_subscriptions,
     )
 
     def request_shutdown(signum, frame) -> None:  # type: ignore[no-untyped-def]

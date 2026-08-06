@@ -50,7 +50,7 @@ def main() -> int:
         limits=limits,
         target_band_w=float(cfg.get("DEADBAND_W", 100) or 100),
         significant_grid_w=200.0,
-        cross_discharge_threshold_w=float(cfg.get("SMA_DISCHARGE_BLOCK_W", 80) or 80),
+        cross_discharge_threshold_w=float(cfg.get("CROSS_CHARGE_SIGNIFICANT_W", 80) or 80),
         zendure_charge_threshold_w=float(cfg.get("MIN_EFFECTIVE_SURPLUS_FOR_CHARGE_W", 150) or 100),
         max_charge_power_w=float(cfg.get("MAX_CHARGE_POWER_W", 2100) or 2100),
         max_discharge_power_w=float(cfg.get("MAX_DISCHARGE_POWER_W", 2100) or 2100),
