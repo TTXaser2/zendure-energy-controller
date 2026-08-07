@@ -4,8 +4,8 @@
 # This file is part of Zendure Energy Controller.
 # See LICENSE, NOTICE and DISCLAIMER.md for license, attribution and warranty information.
 
-APP_VERSION = "12.11.5"
-APP_VERSION_LABEL = "V12.11.5"
-APP_BUILD_ID = "v12.11.5-20260807"
+APP_VERSION = "12.11.6"
+APP_VERSION_LABEL = "V12.11.6"
+APP_BUILD_ID = "v12.11.6-20260808"
 __version__ = APP_VERSION
 CSV_SCHEMA = "ZEC-MEASUREMENT-V3"

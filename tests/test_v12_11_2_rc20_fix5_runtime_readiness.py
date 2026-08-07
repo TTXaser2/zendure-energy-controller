@@ -49,7 +49,7 @@ class Rc20Fix5RuntimeReadinessTests(unittest.TestCase):
             health = endpoint(app, "/health")()
             ready = endpoint(app, "/ready")()
             self.assertTrue(health["alive"])
-            self.assertEqual("12.11.5", health["version"])
+            self.assertEqual("12.11.6", health["version"])
             self.assertIsInstance(ready, dict)
             self.assertFalse(ready["ready"])
             self.assertIn("settings_runtime", ready)

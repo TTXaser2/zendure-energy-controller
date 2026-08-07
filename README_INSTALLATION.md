@@ -1,69 +1,61 @@
-# Installation – Zendure Energy Controller V12.11.5
+# Installation – Zendure Energy Controller V12.11.6
 
-**Ziel-Build-ID:** `v12.11.5-20260807`
+**Ziel-Build-ID:** `v12.11.6-20260808`
 
-## 1. Unterstützte Ausgangsstände
+## 1. Normaler Ausgangsstand
 
-Der Installer akzeptiert ausschließlich die ausdrücklich freigegebenen Quellidentitäten:
+Der reguläre Updatepfad ist:
 
 ```text
-V12.11.4 mit APP_BUILD_ID=v12.11.4-20260807
-oder
-V12.11.3 mit APP_BUILD_ID=v12.11.3-20260806
-oder
-V12.11.2-RC20 mit APP_BUILD_ID=rc20-audit-fix6-20260806
-oder
-V12.11.2-RC20 mit APP_BUILD_ID=rc20-audit-fix5-20260806
-oder
-V12.11.2-RC19
+V12.11.5
+APP_VERSION  = 12.11.5
+APP_BUILD_ID = v12.11.5-20260807
 ```
 
-Für den normalen V12.11.4→V12.11.5-Pfad ist ausschließlich die erste Zeile relevant. Ein unbekannter Ausgangsstand wird **vor jeder Produktivänderung** abgelehnt. Die bestehende RC19→RC20-Configmigration bleibt idempotent und darf bei bereits migrierten Installationen `no_op` ergeben.
+Der Installer akzeptiert zusätzlich die bereits dokumentierten älteren Recovery-Quellen. Ein unbekannter Ausgangsstand wird vor jeder Produktivänderung abgelehnt.
+
+Die bestehende Configmigration bleibt idempotent. Eine vorhandene produktive `config.json` wird nicht durch neue Defaultwerte ersetzt; insbesondere bleibt eine bereits konfigurierte Nachtleistung unverändert.
 
 ## 2. Paket prüfen
 
 ```bash
 cd /home/pi/Downloads
-sha256sum zendure_controller_v12_11_5.zip
-unzip -t zendure_controller_v12_11_5.zip
+sha256sum zendure_controller_v12_11_6.zip
+unzip -t zendure_controller_v12_11_6.zip
 ```
 
 Der SHA256 muss exakt dem Wert der Releaseübergabe entsprechen.
 
 ## 3. Installieren
 
-Das Update-Skript muss aus dem neu entpackten V12.11.5-Paket gestartet werden:
-
 ```bash
 cd /home/pi/Downloads
-rm -rf zendure_controller_v12_11_5
-unzip -q zendure_controller_v12_11_5.zip
-chmod +x zendure_controller_v12_11_5/tools/update_zendure_controller.sh
-bash zendure_controller_v12_11_5/tools/update_zendure_controller.sh v12_11_5
+rm -rf zendure_controller_v12_11_6
+unzip -q zendure_controller_v12_11_6.zip
+chmod +x zendure_controller_v12_11_6/tools/update_zendure_controller.sh
+bash zendure_controller_v12_11_6/tools/update_zendure_controller.sh v12_11_6
 ```
 
-Node.js ist keine Produktivvoraussetzung. Ohne Node.js werden die buildseitig geprüften JavaScript-Dateien über das SHA256-Source-Manifest abgesichert.
+Node.js ist keine Produktivvoraussetzung. Ohne Node.js werden die buildseitig geprüften JavaScript-Dateien durch das SHA256-Source-Manifest abgesichert.
 
 ## 4. Erwarteter Ablauf
 
 ```text
-Ausgangsstand erkannt: V12_11_4 ...
-V12.11.5-Paket vor dem Stoppen des Produktivdienstes entpacken und prüfen...
+Ausgangsstand erkannt: V12_11_5 ...
+V12.11.6-Paket vor dem Stoppen des Produktivdienstes entpacken und prüfen...
 Runtime-Readiness-Smoke-Test bestanden.
 Paketpreflight und Config-Migrationspreflight bestanden.
 Stoppe Dienste...
 Erstelle vollständiges Rollback-Backup...
-Kopiere V12.11.5-Dateien...
+Kopiere V12.11.6-Dateien; config.json, Last-Good und Laufzeitdaten bleiben erhalten...
 Führe idempotente bestehende Configmigration aus...
 Finale lokale Prüfung im Installationsverzeichnis...
 Runtime-Readiness-Smoke-Test bestanden.
 Starte Controller...
 Installations-Abnahme ...
 Update abgeschlossen und Installations-Abnahme erfolgreich.
-V12.11.5 erfolgreich installiert.
+V12.11.6 erfolgreich installiert.
 ```
-
-Der Installer bevorzugt `ready=true`. Ein ausschließlich stabiler, sicherer Limit-Readback-Übergang darf nach dem bestehenden Abnahmevertrag ebenfalls ohne Rollback akzeptiert werden. Echte Daten-, Command-, Guard- oder Controllerfehler bleiben harte Rollbackgründe.
 
 ## 5. Unmittelbare Verifikation
 
@@ -77,75 +69,80 @@ curl -fsS http://127.0.0.1:8080/health | python3 -m json.tool
 curl -fsS http://127.0.0.1:8080/ready  | python3 -m json.tool
 ```
 
-Erwartete Paketidentität:
+Erwartet:
 
 ```text
-APP_VERSION = "12.11.5"
-APP_VERSION_LABEL = "V12.11.5"
-APP_BUILD_ID = "v12.11.5-20260807"
+APP_VERSION = "12.11.6"
+APP_VERSION_LABEL = "V12.11.6"
+APP_BUILD_ID = "v12.11.6-20260808"
 Dienst = active
 /health alive = true
+/ready ready = true   (bevorzugter Normalfall)
 ```
 
-## 6. V12.11.5 Feldabnahme – Settings
+## 6. V12.11.6 Feldabnahme
 
-Browserseite:
+Settings:
 
 ```text
 http://<PI-IP>:8080/settings
 ```
 
-### Desktop
+Prüfen:
 
-1. Globale Navigation, Settings-Kontextkopf und Change-Set-Leiste bleiben beim Scrollen stationär.
-2. Primär scrollt nur die rechte Settings-Inhaltsfläche; die Kategorienleiste bei eigenem Überlauf separat.
-3. Normaler Kategoriewechsel beginnt am Kategorienanfang.
-4. Suche darf weiterhin gezielt zu einem Treffer springen.
-5. Es gibt kein unbeabsichtigtes horizontales Dokumentscrollen.
-6. Im Nachtbetrieb erscheinen genau zwei logische Zeitfelder `Startzeit` und `Endzeit` im Format `HH:MM`.
-7. Ein absichtlich ungültiger Mehrfeldfall – beispielsweise `MIN_SOC_PERCENT > MAX_SOC_PERCENT` – erscheint als fachlich blockierter Preview mit Issues und Sprung zum Feld, nicht als HTTP-/Netzwerkfehler.
-8. Nach Korrektur kann **Änderungen prüfen** ohne künstliche Zwischenänderung erneut ausgeführt werden.
-9. Im Standardmodus zeigt `Kommandowirkung & Resync` bei ausschließlich ausgeblendeten Expertenparametern den Empty-State und sichtbaren Count `0`.
-10. Im Expertenmodus sind dort die Expertenparameter sichtbar.
+1. Nachtbetrieb zeigt **Startzeit** vor **Endzeit**.
+2. `25:30` eingeben und das Feld verlassen: sofortige rote Feldmeldung, ohne vorher **Änderungen prüfen** zu klicken.
+3. Nach Korrektur kann unmittelbar weitergearbeitet werden.
+4. Einen serverseitig ungültigen Mehrfeldfall prüfen: im blockierten Modal ist **Speichern nicht möglich** sichtbar deaktiviert und nicht anklickbar.
+5. `Reserve-SOC für feste Nachtentladung`: bei gesetztem Wert lautet die semantische Rücksetzaktion **Reserve-SOC entfernen**, nicht generisch „Auf Default“.
+6. Installationsabhängige Werte wie MQTT-Broker besitzen keinen generischen Default-Reset.
+7. Feldfolgen in manuellen Profilen, SOC, Harvest, MQTT, Local API und Logging folgen der fachlichen Reihenfolge.
+8. Expertenmodus → `System & Diagnose` → `Administrative Aktionen`: Controller-Neustart und Last-Good-Pointer verwenden ZEC-Modals, keine Browser-Systemprompts.
+9. Ohne offenen Draft darf der Neustartdialog keine falsche Warnung vor ungespeicherten Änderungen anzeigen.
+10. Statusseite → Info-Icon `Controller & Schnittstellen`: vier strukturierte Abschnitte, gut lesbare Kennzahlen und Erläuterungen.
 
-### Administrative Aktion
+Mobil zusätzlich auf mindestens einer Smartphonebreite:
 
-Nur im Expertenmodus prüfen:
+- Kategorien-Drawer bleibt scrollbar und positionsstabil;
+- keine horizontale Dokumentüberbreite;
+- Modals bleiben vollständig bedienbar.
 
-```text
-System & Diagnose
-→ Administrative Aktionen
-→ Last-Good-Konfigurationsspeicher
+## 7. Measurement-V4-Kontrolle
+
+Der Release ändert den Measurement-Vertrag nicht. Optionaler Check:
+
+```bash
+cd /opt/zendure-controller
+python3 - <<'PY'
+import json
+from csv_logger import measurement_schema_version
+with open('config.json', 'r', encoding='utf-8') as f:
+    cfg = json.load(f)
+print('MEASUREMENT_SCHEMA_VERSION =', cfg.get('MEASUREMENT_SCHEMA_VERSION'))
+print('effective schema           =', measurement_schema_version(cfg))
+PY
 ```
 
-Die Last-Good-Aktion darf **nicht** in der globalen Change-Set-Leiste erscheinen. Sie nur ausführen, wenn tatsächlich eine Pointer-Reparatur erforderlich und beabsichtigt ist.
-
-### Mobil
-
-Auf mindestens einem Smartphone beziehungsweise einer vergleichbaren Browserbreite prüfen:
-
-1. Burger öffnet den Kategorien-Drawer.
-2. Der Hintergrund bleibt positionsstabil gesperrt.
-3. Der Drawer selbst lässt sich vertikal scrollen.
-4. Backdrop, `Escape` oder Kategorieauswahl schließen den Drawer.
-5. Nach dem Schließen wird die vorherige Hintergrundposition wiederhergestellt.
-6. Die globale Hauptnavigation bleibt separat horizontal scrollbar.
-
-## 7. Backups und Rollback
-
-Nach Beginn der Produktivtransaktion gibt der Installer konkrete Pfade aus für:
+Erwartet:
 
 ```text
-/opt-Gesamtbackup
-/home/pi/config.pre-v12.11.5.<Zeitstempel>.json
-/var/backups/zec-v12.11.5-root-artifacts-<Zeitstempel>
+MEASUREMENT_SCHEMA_VERSION = 4
+effective schema           = 4
 ```
 
-Diese Sicherungen bis zum Abschluss der Feldabnahme nicht löschen. Tritt während der Installation nach dem Stoppen der Dienste ein Fehler auf, führt das Skript den vorgesehenen **automatischen Rollback** von Installationsverzeichnis, Root-/systemd-Artefakten und Dienstzustand durch.
+## 8. Backups und Rollback
 
-Für einen später bewusst ausgelösten manuellen Rückbau nicht lediglich einzelne Dateien überschreiben, sondern das vom Installer erzeugte vollständige Rollback-Backup verwenden.
+Nach Beginn der Produktivtransaktion legt der Installer unter anderem an:
 
-## 8. GitHub-Übernahme
+```text
+/home/pi/zendure-controller-backup-<Zeitstempel>.tar.gz
+/home/pi/config.pre-v12.11.6.<Zeitstempel>.json
+/var/backups/zec-v12.11.6-root-artifacts-<Zeitstempel>
+```
+
+Diese Sicherungen bis zum Abschluss der Feldabnahme nicht löschen. Bei einem Installationsfehler nach dem Stoppen der Dienste verwendet das Skript den vorhandenen automatischen Rollbackpfad.
+
+## 9. GitHub-Übernahme
 
 Lokales Repository:
 
@@ -153,17 +150,11 @@ Lokales Repository:
 C:\github\zendure-energy-controller
 ```
 
-Das entpackte Paket in das Repository spiegeln, ohne `.git` und ohne produktive `config.json`:
+Das entpackte Release in das Repository spiegeln, `.git` und produktive `config.json` ausnehmen, anschließend `git status` und den Diff prüfen.
 
-```powershell
-robocopy "C:\Temp\zendure_controller_v12_11_5" "C:\github\zendure-energy-controller" /MIR /XD .git /XF config.json
-```
-
-Danach:
+Vorschlag:
 
 ```text
-git status prüfen
-Commit: Release V12.11.5
-Tag: v12.11.5
-Push origin
+Commit: Release V12.11.6
+Tag:    v12.11.6
 ```

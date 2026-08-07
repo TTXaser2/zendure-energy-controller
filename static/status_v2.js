@@ -269,7 +269,38 @@
       distribution.setAttribute('aria-label',p.diag?.cycle_slow_warning?'Zeitverteilung; Slow-Cycle-Warnschwelle überschritten':'Zeitverteilung des letzten aktiven Controller-Durchlaufs');
     }
     const diagInfo=$('[data-lower="diagnostics"] .zec-info-button');
-    if(diagInfo){const labels={cycle_total_without_sleep_ms:'Aktiver Gesamtdurchlauf',control_decision_ms:'Regelentscheidung',mqtt_command_path_ms:'MQTT-Kommandopfad',measurement_logging_ms:'Logging im Hauptthread',other_cycle_work_ms:'Sonstige, nicht einzeln erfasste Verarbeitung'};const lines=[`Letzter Durchlauf: ${fmtMs(p.diag?.loop_ms)}. ${p.diag?.cycle_meta_text||''}`,`Slow-Cycle-Warnschwelle: ${fmtMs(p.diag?.slow_cycle_warn_ms)}. Sie ist eine Diagnosegrenze, keine harte Deadline.`];if(p.diag?.timing_stats){lines.push('Statistik der jüngsten, begrenzt gespeicherten Durchläufe:');Object.entries(labels).forEach(([key,label])=>{const st=p.diag.timing_stats[key];if(st)lines.push(`${label}: Mittel ${fmtMs(st.mean_ms)}, P95 ${fmtMs(st.p95_ms)}, Maximum ${fmtMs(st.max_ms)} (${st.samples} Werte)`);});}lines.push('Lokale Zendure-API:');lines.push(`Nutzung: ${p.diag?.api_mode||'—'}.`);lines.push(`Worker: ${p.diag?.api_worker_state||'—'}; letzter Versuch ${p.diag?.api_latest_attempt_ok===true?'erfolgreich':(p.diag?.api_latest_attempt_ok===false?'fehlgeschlagen':'noch nicht abgeschlossen')}${number(p.diag?.api_last_attempt_age_s)===null?'':` vor ${number(p.diag?.api_last_attempt_age_s).toLocaleString('de-DE',{maximumFractionDigits:1})} s`}.`);lines.push(`Letzter Erfolg: ${number(p.diag?.api_last_success_age_s)===null?'noch keiner':`vor ${number(p.diag?.api_last_success_age_s).toLocaleString('de-DE',{maximumFractionDigits:1})} s`}; Snapshot ${p.diag?.api_snapshot_valid?'gültig':'ungültig'} und ${p.diag?.api_snapshot_stale?'veraltet':'frisch'}.`);lines.push(`HTTP-Request asynchron: ${fmtMs(p.diag?.api_last_request_duration_ms)}; Snapshotübernahme synchron: ${fmtMs(p.diag?.api_snapshot_apply_ms)}.`);lines.push(`Fehlerfolge: ${Number(p.diag?.api_consecutive_errors||0)}; Backoff: ${Number(p.diag?.api_backoff_remaining_s||0).toLocaleString('de-DE',{maximumFractionDigits:1})} s; Fehlercode: ${p.diag?.api_error_code||'NONE'}.`);lines.push(`Aktive Zendure-Telemetriequelle: ${p.diag?.api_telemetry_source||'—'}${p.diag?.api_fallback_active?' (API-Fallback aktiv)':''}.`);lines.push('Der farbige Balken zeigt ausschließlich die Verteilung der synchronen Teilphasen im letzten aktiven Durchlauf. SQLite und der HTTP-Request der lokalen API laufen asynchron und sind nicht enthalten.');lines.push('Beim Zendure-Kommandoabgleich sendet ZEC den aktuell gültigen AC-Modus sowie Lade- und Entladelimits erneut. Der Versand wird getrennt von der anschließend physisch bestätigten Wirkung ausgewiesen. Ein unterdrückter Versuch bedeutet ausdrücklich, dass nichts erneut gesendet wurde.');diagInfo.dataset.infoText=lines.join('\n');}
+    if(diagInfo){
+      const labels={cycle_total_without_sleep_ms:'Aktiver Gesamtdurchlauf',control_decision_ms:'Regelentscheidung',mqtt_command_path_ms:'MQTT-Kommandopfad',measurement_logging_ms:'Logging im Hauptthread',other_cycle_work_ms:'Sonstige Verarbeitung'};
+      const stats=[];
+      if(p.diag?.timing_stats) Object.entries(labels).forEach(([key,label])=>{const st=p.diag.timing_stats[key];if(st)stats.push({label,value:`Mittel ${fmtMs(st.mean_ms)} · P95 ${fmtMs(st.p95_ms)} · Max ${fmtMs(st.max_ms)} · ${st.samples} Werte`});});
+      const lastAttempt=number(p.diag?.api_last_attempt_age_s)===null?'—':`${p.diag?.api_latest_attempt_ok===true?'erfolgreich':(p.diag?.api_latest_attempt_ok===false?'fehlgeschlagen':'offen')} vor ${number(p.diag?.api_last_attempt_age_s).toLocaleString('de-DE',{maximumFractionDigits:1})} s`;
+      const lastSuccess=number(p.diag?.api_last_success_age_s)===null?'noch keiner':`vor ${number(p.diag?.api_last_success_age_s).toLocaleString('de-DE',{maximumFractionDigits:1})} s`;
+      const sections=[
+        {title:'Aktueller Regelzyklus',rows:[
+          {label:'Aktiver Durchlauf',value:fmtMs(p.diag?.loop_ms)},
+          {label:'Zyklus',value:p.diag?.cycle_meta_text||'—'},
+          {label:'Slow-Cycle-Warnung',value:`${fmtMs(p.diag?.slow_cycle_warn_ms)} · Diagnosegrenze, keine Deadline`}
+        ]},
+        ...(stats.length?[{title:'Statistik · jüngste Durchläufe',rows:stats}]:[]),
+        {title:'Lokale Zendure-API',rows:[
+          {label:'Nutzung',value:p.diag?.api_mode||'—'},
+          {label:'Worker',value:p.diag?.api_worker_state||'—'},
+          {label:'Letzter Versuch',value:lastAttempt},
+          {label:'Letzter Erfolg',value:lastSuccess},
+          {label:'Snapshot',value:`${p.diag?.api_snapshot_valid?'gültig':'ungültig'} · ${p.diag?.api_snapshot_stale?'veraltet':'frisch'}`},
+          {label:'HTTP-Request',value:`${fmtMs(p.diag?.api_last_request_duration_ms)} · asynchron`},
+          {label:'Snapshotübernahme',value:`${fmtMs(p.diag?.api_snapshot_apply_ms)} · synchron`},
+          {label:'Fehler / Backoff',value:`${Number(p.diag?.api_consecutive_errors||0)} · ${Number(p.diag?.api_backoff_remaining_s||0).toLocaleString('de-DE',{maximumFractionDigits:1})} s · ${p.diag?.api_error_code||'NONE'}`},
+          {label:'Telemetriequelle',value:`${p.diag?.api_telemetry_source||'—'}${p.diag?.api_fallback_active?' · API-Fallback aktiv':''}`}
+        ]},
+        {title:'Einordnung',notes:[
+          'Der farbige Balken zeigt ausschließlich synchrone Teilphasen des letzten aktiven Durchlaufs. SQLite und HTTP-Requests der lokalen API laufen asynchron und sind nicht enthalten.',
+          'Beim Zendure-Kommandoabgleich sendet ZEC den aktuell gültigen AC-Modus sowie Lade- und Entladelimits erneut. Der Versand wird getrennt von der anschließend physisch bestätigten Wirkung ausgewiesen. Ein unterdrückter Versuch bedeutet ausdrücklich, dass nichts erneut gesendet wurde.'
+        ]}
+      ];
+      diagInfo.dataset.infoStructured=JSON.stringify({sections});
+      diagInfo.dataset.infoText='';
+    }
     const chain={rule:p.diag?.rule_tone||'unknown',mqtt:p.diag?.broker_tone||p.diag?.mqtt_tone||'unknown',api:p.diag?.api_tone||'unknown',effect:p.diag?.effect_tone||'unknown'};Object.entries(chain).forEach(([k,v])=>{const el=$(`[data-chain="${k}"]`);if(el)el.className=v;});
     const diagTone=p.diag?.cycle_slow_warning?'bad':(Object.values(chain).includes('bad')?'bad':(Object.values(chain).includes('warn')?'warn':'ok'));const df=$('[data-lower="diagnostics"] .zec-card-footer');if(df)setDot(df,diagTone);text('diag.footer',p.diag?.cycle_slow_warning?'Aktiver Controller-Durchlauf überschreitet die Slow-Cycle-Warnschwelle':(diagTone==='ok'?'Controller und Schnittstellen aktuell':(diagTone==='warn'?'Controller oder Schnittstelle eingeschränkt':'Controller oder Schnittstelle gestört')));
     renderEvents(p.events);
@@ -458,7 +489,25 @@
   function setupInfoPopovers(){
     const pop=$('#zecInfoPopover'), title=$('#zecInfoTitle'), body=$('#zecInfoText');let current=null;
     const close=()=>{pop.hidden=true;current=null;};
-    const open=(button)=>{current=button;title.textContent=button.dataset.infoTitle||'Information';body.textContent=button.dataset.infoText||'';pop.hidden=false;const r=button.getBoundingClientRect();const pr=pop.getBoundingClientRect();let left=r.right-pr.width;let top=r.bottom+8;if(left<12)left=12;if(left+pr.width>innerWidth-12)left=innerWidth-pr.width-12;if(top+pr.height>innerHeight-12)top=r.top-pr.height-8;pop.style.left=`${Math.max(12,left)}px`;pop.style.top=`${Math.max(12,top)}px`;};
+    const renderBody=(button)=>{
+      body.innerHTML='';
+      const raw=button.dataset.infoStructured;
+      if(raw){
+        try{
+          const data=JSON.parse(raw);
+          (data.sections||[]).forEach(section=>{
+            const block=document.createElement('section');block.className='zec-info-section';
+            const h=document.createElement('h4');h.textContent=section.title||'';block.appendChild(h);
+            if(Array.isArray(section.rows)&&section.rows.length){const grid=document.createElement('div');grid.className='zec-info-grid';section.rows.forEach(row=>{const l=document.createElement('span');l.textContent=row.label||'';const v=document.createElement('b');v.textContent=row.value||'—';grid.append(l,v);});block.appendChild(grid);}
+            (section.notes||[]).forEach(note=>{const n=document.createElement('p');n.className='zec-info-note';n.textContent=note;block.appendChild(n);});
+            body.appendChild(block);
+          });
+          return;
+        }catch(_){/* fallback below */}
+      }
+      body.textContent=button.dataset.infoText||'';
+    };
+    const open=(button)=>{current=button;title.textContent=button.dataset.infoTitle||'Information';renderBody(button);pop.hidden=false;const r=button.getBoundingClientRect();const pr=pop.getBoundingClientRect();let left=r.right-pr.width;let top=r.bottom+8;if(left<12)left=12;if(left+pr.width>innerWidth-12)left=innerWidth-pr.width-12;if(top+pr.height>innerHeight-12)top=r.top-pr.height-8;pop.style.left=`${Math.max(12,left)}px`;pop.style.top=`${Math.max(12,top)}px`;};
     $$('.zec-info-button').forEach(btn=>{btn.addEventListener('mouseenter',()=>open(btn));btn.addEventListener('focus',()=>open(btn));btn.addEventListener('click',e=>{e.stopPropagation();current===btn&&!pop.hidden?close():open(btn);});btn.addEventListener('mouseleave',e=>{if(!pop.matches(':hover'))close();});});
     pop.addEventListener('mouseleave',close);document.addEventListener('click',e=>{if(!e.target.closest('.zec-info-button')&&!e.target.closest('#zecInfoPopover'))close();});window.addEventListener('resize',close);window.addEventListener('scroll',close,true);
   }

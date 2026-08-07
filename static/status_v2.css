@@ -171,3 +171,16 @@ html[data-theme="dark"] .zec-wordmark{color:#f4f7fb}
 .zec-detail-row-stacked{display:block!important;padding-top:2px}
 .zec-detail-row-stacked>span,.zec-detail-row-stacked>strong{display:block;text-align:left!important;max-width:none!important}
 .zec-detail-row-stacked>strong{margin-top:3px;line-height:1.25;overflow-wrap:anywhere}
+
+/* V12.11.6 structured information popovers. */
+.zec-info-popover{width:min(560px,calc(100vw - 24px));max-height:min(78vh,720px);overflow:auto;padding:14px 16px;font-size:12px;line-height:1.45}
+.zec-info-popover>strong{font-size:15px;margin-bottom:10px;color:var(--zec-text)}
+.zec-info-popover #zecInfoText{color:var(--zec-text)}
+.zec-info-section{padding:10px 0;border-top:1px solid var(--zec-card-border)}
+.zec-info-section:first-child{border-top:0;padding-top:2px}
+.zec-info-section h4{margin:0 0 8px;font-size:11px;letter-spacing:.045em;text-transform:uppercase;color:var(--zec-muted)}
+.zec-info-grid{display:grid;grid-template-columns:minmax(135px,.75fr) minmax(0,1.6fr);gap:6px 14px;align-items:start}
+.zec-info-grid span{color:var(--zec-muted)}
+.zec-info-grid b{font-weight:700;color:var(--zec-text);text-align:right;overflow-wrap:anywhere}
+.zec-info-note{margin:7px 0 0;padding:8px 10px;border-radius:8px;background:color-mix(in srgb,var(--zec-blue-soft) 68%,transparent);color:var(--zec-muted);line-height:1.5}
+@media(max-width:620px){.zec-info-popover{width:calc(100vw - 16px);max-height:72vh}.zec-info-grid{grid-template-columns:1fr;gap:2px}.zec-info-grid b{text-align:left;margin-bottom:5px}}

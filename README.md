@@ -1,116 +1,109 @@
-# Zendure Energy Controller V12.11.5
+# Zendure Energy Controller V12.11.6
 
-**Build-ID:** `v12.11.5-20260807`
+**Build-ID:** `v12.11.6-20260808`
 
-V12.11.5 ist ein eng begrenzter **Settings-UX-Bugfix** auf Basis der verifizierten V12.11.4-Quelle. Die energetische Regelung, Zielwertbildung, Command-Safety und der Measurement-V4-Vertrag bleiben unverändert.
+V12.11.6 ist ein **Settings-/Status-UX-Qualitätsrelease** auf Basis der vollständig validierten V12.11.5. Die energetische Regellogik, Command-Safety, Cross-Charge- und Measurement-V4-Schicht bleiben unverändert.
 
-## 1. Korrekturen in V12.11.5
+## 1. Hauptänderungen
 
-### 1.1 Desktop-Settings als feste Scroll-Shell
+### 1.1 Sofortige Eingabevalidierung
 
-- Globale Navigation, Settings-Kontextkopf, Kategorienbereich und Change-Set-Leiste bleiben stationär.
-- Die rechte Settings-Inhaltsfläche ist der primäre vertikale Scrollbereich.
-- Die Kategorienleiste scrollt nur bei eigenem Überlauf.
-- Ein normaler Kategoriewechsel beginnt am Anfang der Kategorie; Suchtreffer dürfen weiterhin gezielt zu einem Feld springen.
-- Unbeabsichtigtes horizontales Dokumentscrollen bleibt unterbunden.
+Eindeutig lokal prüfbare Fehler werden bereits beim Verlassen eines geänderten Feldes angezeigt:
 
-### 1.2 Nachtfenster als zwei logische Zeitfelder
+- Zahlenformat;
+- Min-/Max-Grenzen;
+- `HH:MM` mit gültigem Bereich `00:00–23:59`;
+- Enum-Werte;
+- ganzzahlige optionale Overrides und SMA-IDs.
 
-Im Standard- und Expertenmodus erscheinen genau zwei fachliche Eingaben:
+Komplexe Mehrfeld-, Runtime- und Sicherheitsregeln bleiben serverseitig authoritative und werden weiterhin spätestens über **Änderungen prüfen** validiert.
 
-```text
-Startzeit des Nachtmodus  HH:MM
-Endzeit des Nachtmodus    HH:MM
-```
+Ein blockierter Preview stellt **Speichern nicht möglich** optisch und funktional eindeutig deaktiviert dar.
 
-Der bestehende technische Config-Vertrag bleibt unverändert:
+### 1.2 Logische Feldreihenfolge
 
-```text
-NIGHT_START_HOUR
-NIGHT_START_MINUTE
-NIGHT_END_HOUR
-NIGHT_END_MINUTE
-```
-
-Eine geänderte logische Uhrzeit wird im Preview-/Save-Payload paarweise atomar übertragen. Im Änderungsdiff wird das Nachtfenster logisch zusammengefasst. Über-Mitternacht-Zeiträume bleiben zulässig.
-
-### 1.3 Semantische Preview-Validierung
-
-Ein fachlich blockierter Server-Preview mit:
+Die Settings-Seite folgt nun fachlicher statt historischer Registry-Reihenfolge. Beispiele:
 
 ```text
-HTTP 422
-status = blocked
-issues[]
+Nachtfenster:            Start → Ende
+SOC-Schutz:              Min-SOC → Max-SOC
+Feste Profile:           Leistung → Ziel-SOC → Folgeverhalten
+Harvest-Schwellen:       Floor → Restart → Near-Limit
+Harvest-Tagesprofil:     Morgen → Mittag → Nachmittag
+MQTT:                    Broker → Port → Benutzer → Passwort
+Local API:               Aktivierung → IP → Nutzung → Polling/Timeout/Backoff
+Datei-Logging:           Aktivierung → Pfad/Datei → Rotation
 ```
 
-wird nicht mehr als Netzwerk-/Transportfehler dargestellt. Die UI:
+Roh wirkende Harvest-Config-Keys erhalten benutzerverständliche Bezeichnungen; der technische Key bleibt im Expertenmodus sichtbar.
 
-- zeigt die vollständigen Validierungsprobleme;
-- markiert betroffene Settings;
-- bietet den Sprung zum betreffenden Feld;
-- behält den Draft unverändert;
-- sperrt Speichern, solange der Preview blockiert ist;
-- erlaubt nach Korrektur sofort erneut **Änderungen prüfen**.
+### 1.3 Sichere Default-Semantik
 
-409-Konflikte und 403-Sicherheitsfehler erhalten eigene verständliche Meldungen; unerwartete Fehler werden ohne rohe Exceptiontexte gekapselt.
+Die UI unterscheidet nun ausdrücklich:
 
-### 1.4 Mobiler Kategorien-Drawer
+1. **echten Produktdefault** → `Default: …` + **Auf Default setzen**;
+2. **bewusst nicht gesetzt** → semantische Entfernen-Aktion;
+3. **automatisch/abgeleitet** → **Automatische Berechnung verwenden**;
+4. **installations-/hardwareabhängig** → kein generischer Reset;
+5. **Referenz-/schutzrelevanter Ausgangswert** → wird angezeigt, aber nicht als universelle Empfehlung angeboten.
 
-- Der Body wird beim geöffneten Drawer positionsstabil gesperrt.
-- Der Drawer besitzt einen eigenen vertikalen Scrollbereich.
-- Overscroll-Chaining wird begrenzt, ohne eine globale `touchmove`-Sperre einzuführen.
-- Backdrop, `Escape` und Kategorieauswahl schließen den Drawer.
-- Die globale mobile Hauptnavigation bleibt separat horizontal scrollbar.
-
-### 1.5 Last-Good-Reparatur nur im Experten-Adminbereich
-
-Die Aktion befindet sich ausschließlich unter:
+Für neue beziehungsweise unvollständige Installationen sind folgende feste Leistungsprofile nun konservativ `0 W`:
 
 ```text
-Experte
-→ System & Diagnose
-→ Administrative Aktionen
-→ Last-Good-Konfigurationsspeicher
+NIGHT_DISCHARGE_POWER_W           0 W
+MANUAL_FIXED_DISCHARGE_POWER_W    0 W
+MANUAL_FIXED_CHARGE_POWER_W       0 W
 ```
 
-Die serverseitige fail-closed Auswahl- und Revalidierungslogik bleibt unverändert. Das Frontend wählt keinen Slot und verändert durch diese Aktion keine normalen Settings.
+Die zugehörigen Modi bleiben deaktiviert beziehungsweise werden bei Aktivierung ohne bewusst gesetzte positive Leistung durch die bestehende Validation blockiert. Historische Migrationswerte (`400/400/800 W`) bleiben im Registry-Vertrag erhalten; bestehende `config.json`-Werte werden durch das Update nicht überschrieben.
 
-### 1.6 Sichtbarkeitsgerechte Kategorien und Empty-State
+### 1.4 Administrative Aktionen im ZEC-Modal
 
-Kategoriezähler berücksichtigen nur im aktuellen Modus tatsächlich sichtbare logische Settings. Hat eine Kategorie im Standardmodus ausschließlich Expertenparameter, erscheint ein erklärender Empty-State mit Anzahl der ausgeblendeten Expertenparameter und der Aktion **Expertenmodus anzeigen**.
+Native Browser-`confirm()`-Dialoge wurden von der Settings-Seite entfernt.
 
-## 2. Bestehender Settings-Vertrag
+- **Controller-Dienst neu starten** verwendet ein strukturiertes ZEC-Modal und warnt nur dann vor ungespeicherten Änderungen, wenn tatsächlich ein Draft vorhanden ist.
+- **Last-Good-Pointer reparieren** zeigt nach serverseitigem Preview Zielslot, Generation, typed Revision, Config-Hash und Manifest-Hash strukturiert an. Die fail-closed Serverlogik bleibt unverändert.
 
-Unverändert erhalten bleiben unter anderem:
+### 1.5 Strukturierter Info-Popover „Controller & Schnittstellen“
 
-- zwölf fachliche Kategorien;
-- Standardmodus und Expertenmodus als Superset;
-- Suche über Bezeichnung, Beschreibung und Config-Key;
-- typisierte serverseitige ValidationEngine;
-- Preview vor Commit;
-- atomisches Speichern mit Revision/CAS;
-- sichere Secret-Behandlung;
-- `configured` / `effective` / `pending_restart`;
-- Last-Good-A/B-Store und Recovery-Verträge;
-- geschützte administrative Aktionen.
+Der bisherige Fließtext ist in vier lesbare Abschnitte gegliedert:
 
-## 3. Sicherheits- und No-Regression-Abgrenzung
+```text
+Aktueller Regelzyklus
+Statistik · jüngste Durchläufe
+Lokale Zendure-API
+Einordnung
+```
 
-V12.11.5 verändert nicht:
+Kennzahlen werden als Label-/Wert-Raster dargestellt; Erläuterungen bleiben vollständig erhalten. Desktopbreite maximal 560 px, mit internem Scrollen bei Bedarf und responsiver Einspaltigkeit auf kleinen Displays.
 
-- AUTO-, HOLD-, NIGHT- oder feste Modi;
+## 2. Measurement-Vertrag
+
+Produktiv bleibt **ZEC-MEASUREMENT-V4** maßgeblich:
+
+```text
+MEASUREMENT_SCHEMA_VERSION = 4
+V4 Standard                = 246 Felder
+V4 Extended                = 249 Felder
+```
+
+Die historische Konstante `version.CSV_SCHEMA = "ZEC-MEASUREMENT-V3"` gehört weiterhin ausschließlich zum Legacy-V3-Kompatibilitätspfad und ist **nicht** die aktive Measurement-Schemaauswahl. Die separate V3-Legacy-Bereinigung ist bewusst nicht Bestandteil von V12.11.6.
+
+## 3. No-Regression-Abgrenzung
+
+V12.11.6 verändert insbesondere nicht:
+
+- AUTO-, HOLD-, NIGHT- oder feste Regleralgorithmen;
 - Harvest-Formeln und 0-W-Netzziel;
-- MIN-/MAX-SOC-Schutzlogik;
 - Cross-Charge;
 - Smart-Mode-/Flash-Schutz;
-- Command-State-Gate, Readback, Effect, Resync oder Late-Effect-Guard;
-- lokale Zendure-API-Architektur;
-- Measurement-V4-Header und -Semantik;
+- Command-State, Readback, Effect, Resync und Late-Effect-Guard;
+- Zendure Power Observation;
+- Measurement-V4-Writer und -Contract;
 - SQLite-Graphstore;
 - Excel-Lernsimulation.
 
-Die geschützten Regler-/Command-/Measurementdateien werden im Releasegate bytegenau gegen V12.11.4 geprüft.
+Die geschützten Regler-/Command-/Measurementdateien werden im Releasegate bytegenau gegen V12.11.5 geprüft.
 
 ## 4. Installation und Validierung
 
@@ -118,20 +111,19 @@ Siehe:
 
 ```text
 README_INSTALLATION.md
-BUILD_VALIDATION_V12_11_5.md
-RELEASE_INFO_V12_11_5.md
-TECHNICAL_NOTES_V12_11_5.md
+BUILD_VALIDATION_V12_11_6.md
+RELEASE_INFO_V12_11_6.md
+TECHNICAL_NOTES_V12_11_6.md
+ZEC_V12_11_6_RELEASE_REPORT.md
 ```
 
-## 5. Nicht Bestandteil dieses Bugfixes
+## 5. Bewusst spätere Blöcke
 
-Unverändert spätere Entwicklungsblöcke sind insbesondere:
+Nicht Bestandteil von V12.11.6:
 
-1. redaktioneller Ausbau der Settings-Hilfe und Info-Modals;
-2. benannte Konfigurationsstände sowie Import/Export;
-3. Graph-Redesign;
-4. erweiterte Experten-/Diagnoseansicht;
-5. Measurement-Storage-Härtung;
+1. V4-only-Runtime / Entfernung des produktiven V3-Schreibpfads;
+2. Measurement-Storage-Härtung;
+3. benannte Konfigurationsstände sowie Import/Export;
+4. Graph-Redesign;
+5. weitergehende Experten-/Diagnoseansicht;
 6. separater Simulationsdienst.
-
-Diese Punkte benötigen jeweils einen eigenen fachlichen Scope und eine eigene Buildfreigabe.

@@ -100,3 +100,19 @@ body.preview-open .modal,body.preview-open .modal-body{touch-action:pan-y}
   .category-drawer-backdrop{overscroll-behavior:contain;touch-action:none}
   body.category-drawer-open{position:fixed;left:0;right:0;width:100%;overflow:hidden}
 }
+
+/* V12.11.6 Settings/Status UX quality pass. */
+.modal-actions button:disabled{opacity:.46;cursor:not-allowed;filter:saturate(.35);box-shadow:none}
+.modal-actions button:disabled:hover{transform:none}
+.field-issues{display:flex;flex-direction:column;gap:5px}
+.field-issue{font-size:11px;line-height:1.4;border-radius:7px;padding:7px 9px;border:1px solid transparent}
+.field-issue.error{background:var(--zec-red-soft);border-color:color-mix(in srgb,var(--zec-red) 30%,transparent);color:#821c15}
+.field-issue.warning{background:var(--zec-amber-soft);border-color:color-mix(in srgb,var(--zec-amber) 34%,transparent);color:#704d00}
+.setting-control input[aria-invalid="true"],.setting-control select[aria-invalid="true"],.setting-row.has-error .setting-control input,.setting-row.has-error .setting-control select{border-color:color-mix(in srgb,var(--zec-red) 70%,var(--zec-card-border));box-shadow:0 0 0 1px color-mix(in srgb,var(--zec-red) 20%,transparent)}
+.admin-confirm-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}
+.admin-confirm-grid>div{border:1px solid var(--zec-card-border);border-radius:9px;padding:10px 12px;background:color-mix(in srgb,var(--zec-page-bg) 55%,var(--zec-card-bg))}
+.admin-confirm-grid span{display:block;font-size:11px;color:var(--zec-muted);margin-bottom:4px}
+.admin-confirm-grid b{display:block;color:var(--zec-text);overflow-wrap:anywhere}
+.admin-confirm-grid .mono,.admin-confirm-copy code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px}
+.admin-confirm-copy{color:var(--zec-muted);line-height:1.5;margin:12px 0 0}
+@media(max-width:620px){.admin-confirm-grid{grid-template-columns:1fr}}

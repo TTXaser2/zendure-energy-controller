@@ -71,10 +71,10 @@ class V12115SettingsBugfixTests(unittest.TestCase):
         self.state = ControllerState()
         self.app = create_app(self.manager, self.state)
 
-    def test_release_identity_is_v12_11_5_without_measurement_schema_change(self):
-        self.assertEqual("12.11.5", version.APP_VERSION)
-        self.assertEqual("V12.11.5", version.APP_VERSION_LABEL)
-        self.assertEqual("v12.11.5-20260807", version.APP_BUILD_ID)
+    def test_release_identity_is_v12_11_6_without_measurement_schema_change(self):
+        self.assertEqual("12.11.6", version.APP_VERSION)
+        self.assertEqual("V12.11.6", version.APP_VERSION_LABEL)
+        self.assertEqual("v12.11.6-20260808", version.APP_BUILD_ID)
         self.assertEqual("ZEC-MEASUREMENT-V3", version.CSV_SCHEMA)
 
     def test_desktop_scroll_contract_owns_vertical_scroll_in_content_pane(self):
@@ -179,17 +179,17 @@ class V12115SettingsBugfixTests(unittest.TestCase):
         self.assertIn("has-error", js)
         self.assertIn("targetForSettingKey", js)
 
-    def test_updater_directly_accepts_v12_11_4_and_keeps_transitional_readback_gate(self):
+    def test_updater_directly_accepts_v12_11_5_and_keeps_transitional_readback_gate(self):
         script = UPDATER.read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_VERSION="v12_11_5"', script)
-        self.assertIn('EXPECTED_SOURCE_V12114_VERSION="12.11.4"', script)
-        self.assertIn('EXPECTED_SOURCE_V12114_BUILD_ID="v12.11.4-20260807"', script)
-        self.assertIn('SOURCE_MODE="V12_11_4"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v12.11.5-20260807"', script)
+        self.assertIn('EXPECTED_VERSION="v12_11_6"', script)
+        self.assertIn('EXPECTED_SOURCE_V12115_VERSION="12.11.5"', script)
+        self.assertIn('EXPECTED_SOURCE_V12115_BUILD_ID="v12.11.5-20260807"', script)
+        self.assertIn('SOURCE_MODE="V12_11_5"', script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v12.11.6-20260808"', script)
         self.assertIn("TRANSITIONAL_STREAK", script)
         self.assertIn("INPUT_LIMIT/OUTPUT_LIMIT-Readback", script)
         self.assertIn("PYTHONWARNINGS=\"error::ResourceWarning\"", script)
-        self.assertIn("V12_11_5_SOURCE_MANIFEST.sha256", script)
+        self.assertIn("V12_11_6_SOURCE_MANIFEST.sha256", script)
 
 
 if __name__ == "__main__":

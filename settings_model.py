@@ -41,6 +41,115 @@ CATEGORY_DESCRIPTIONS = {
 }
 
 # Client-side visibility conditions. The values remain preserved when hidden.
+
+# UI-only ordering and reset/default semantics. These rules never change runtime
+# defaults or effective values; they only control presentation and safe reset actions.
+SECTION_ORDER_OVERRIDES = {
+    "Betriebsart & manuelle Steuerung": ("Betriebsart", "Profil Feste Entladung", "Profil Feste Ladung"),
+    "Nachtbetrieb": ("Aktivierung", "Zeitfenster", "Feste Basisentladung", "Reserve & Folgeverhalten"),
+    "Harvest / Restüberschuss": ("Master & Zielbild", "High-SOC & Vollspeicher", "Entry & Hysterese", "Near-Limit-Entry", "Primärspeicher-Schwellen", "Tageszeitprofil"),
+    "Messdaten & Speicherung": ("Measurement-V4", "Speicherziel", "CSV-Messdaten & Rotation", "Schreibstrategie", "Speicherschutz", "Fallback", "SQLite-Graphstore", "SQLite-Graphspeicher", "SQLite-Retention", "Tageskurve & RAM-Historie", "V4-Archivpflege", "V4-Manifest & I/O", "Legacy-Kompatibilität"),
+    "Schnittstellen & Datenquellen": ("MQTT-Verbindung", "Netzleistung · aktive Quelle", "Netzleistung · Shelly-kompatibel", "Netzleistung · SMA Direkt", "Netzleistung · SMA Diagnose", "MQTT-Diagnose", "Zendure Local API", "Zendure Local API · Timeouts"),
+    "System & Diagnose": ("Darstellung", "Runtime-Logging", "Runtime-Logging · Detailkanäle", "Safe-State & Datenqualität", "Zendure MQTT-Datenqualität", "Analyse-/Replay-Service", "Webserver & Zugriff", "Administrative Aktionen"),
+}
+
+SETTING_ORDER_OVERRIDES = {
+    "MANUAL_FIXED_DISCHARGE_POWER_W": 10, "MANUAL_FIXED_DISCHARGE_TARGET_SOC": 20, "MANUAL_DISCHARGE_AFTER_TARGET": 30,
+    "MANUAL_FIXED_CHARGE_POWER_W": 10, "MANUAL_FIXED_CHARGE_TARGET_SOC": 20, "MANUAL_CHARGE_AFTER_TARGET": 30,
+    "MIN_SOC_PERCENT": 10, "MAX_SOC_PERCENT": 20,
+    "NIGHT_START_HOUR": 10, "NIGHT_START_MINUTE": 11, "NIGHT_END_HOUR": 20, "NIGHT_END_MINUTE": 21,
+    "REST_SURPLUS_HARVEST_ENABLED": 1,
+    "HARVEST_PRIMARY_CHARGE_FLOOR_RATIO": 10, "HARVEST_PRIMARY_CHARGE_FLOOR_W": 11,
+    "HARVEST_PRIMARY_CHARGE_RESTART_RATIO": 20, "HARVEST_PRIMARY_CHARGE_RESTART_W": 21,
+    "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_RATIO": 30, "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_W": 31,
+    "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MORNING": 10, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY": 20, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_AFTERNOON": 30,
+    "MEASUREMENT_LOG_MODE": 1, "MEASUREMENT_LOG_FILE": 2,
+    "MEASUREMENT_LOG_STORAGE_TARGET": 1, "MEASUREMENT_LOG_DIR": 2, "MEASUREMENT_LOG_MOUNTPOINT": 3,
+    "MQTT_BROKER": 10, "MQTT_PORT": 20, "MQTT_USER": 30, "MQTT_PASSWORD": 40,
+    "GRID_METER_SOURCE": 1,
+    "ZENDURE_LOCAL_API_ENABLED": 10, "ZENDURE_LOCAL_IP": 20, "ZENDURE_LOCAL_API_USE_FOR_TELEMETRY": 30,
+    "ZENDURE_LOCAL_API_TELEMETRY_FALLBACK_ONLY": 40, "ZENDURE_LOCAL_API_POLL_INTERVAL_SECONDS": 50,
+    "ZENDURE_LOCAL_API_TIMEOUT_SECONDS": 60, "ZENDURE_LOCAL_API_CONTROL_TIMEOUT_CAP_SECONDS": 70,
+    "ZENDURE_LOCAL_API_ERROR_BACKOFF_SECONDS": 80, "ZENDURE_LOCAL_API_SOC_PRIORITY": 90,
+    "FILE_LOG_ENABLED": 10, "FILE_LOG_DIR": 20, "FILE_LOG_FILE": 30, "FILE_LOG_MAX_BYTES": 40, "FILE_LOG_BACKUP_COUNT": 50,
+}
+
+LABEL_OVERRIDES = {
+    "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS": "High-SOC Eintritt bestätigen",
+    "HARVEST_HIGH_SMA_SOC_HOLD_SECONDS": "High-SOC Haltezeit",
+    "HARVEST_HIGH_SMA_SOC_ENABLED": "High-SOC Parallel-Harvest aktiv",
+    "HARVEST_HIGH_SMA_SOC_ENTER_PERCENT": "High-SOC Eintritt",
+    "HARVEST_HIGH_SMA_SOC_EXIT_PERCENT": "High-SOC Austritt",
+    "HARVEST_HIGH_SMA_SOC_MIN_EXPORT_W": "Mindestexport für High-SOC Eintritt",
+    "HARVEST_SMA_FULL_SOC_PERCENT": "SMA Voll-SOC Schwelle",
+    "REST_SURPLUS_ENTRY_CONFIRM_SECONDS": "Near-Limit Eintritt bestätigen",
+    "HARVEST_PRIMARY_CHARGE_FLOOR_RATIO": "Primärspeicher Mindestladeanteil",
+    "HARVEST_PRIMARY_CHARGE_FLOOR_W": "Primärspeicher Mindestladeleistung (Override)",
+    "HARVEST_PRIMARY_CHARGE_RESTART_RATIO": "Primärspeicher Wiederanlaufanteil",
+    "HARVEST_PRIMARY_CHARGE_RESTART_W": "Primärspeicher Wiederanlaufleistung (Override)",
+    "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_RATIO": "Primärspeicher Near-Limit Anteil",
+    "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_W": "Primärspeicher Near-Limit Leistung (Override)",
+    "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MORNING": "SMA-Zielanteil morgens",
+    "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY": "SMA-Zielanteil mittags",
+    "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_AFTERNOON": "SMA-Zielanteil nachmittags",
+    "SOC_DAY_GRAPH_BOOTSTRAP_CACHE_SECONDS": "SOC-Tagesgraph Bootstrap-Cache",
+    "WEB_HOST": "Webserver Bind-Adresse",
+}
+
+INSTALLATION_DEPENDENT_DEFAULT_KEYS = {
+    "DEVICE_ID", "MQTT_BROKER", "MQTT_USER", "SHELLY_IP", "GRID_METER_SOURCE",
+    "SECOND_BATTERY_DISPLAY_NAME", "SECOND_BATTERY_SOURCE_PROFILE", "SECOND_BATTERY_POWER_TOPIC",
+    "SECOND_BATTERY_SOC_TOPIC", "SECOND_BATTERY_CAPACITY_TOPIC", "SECOND_BATTERY_EVCC_BASE_TOPIC",
+    "SECOND_BATTERY_MAX_CHARGE_POWER_W", "ZENDURE_BATTERY_CAPACITY_WH", "ZENDURE_LOCAL_IP",
+}
+
+REFERENCE_ONLY_DEFAULT_KEYS = {
+    "NIGHT_DISCHARGE_POWER_W", "MANUAL_FIXED_DISCHARGE_POWER_W", "MANUAL_FIXED_CHARGE_POWER_W",
+    "MANUAL_FIXED_DISCHARGE_TARGET_SOC", "MANUAL_FIXED_CHARGE_TARGET_SOC",
+    "MAX_CHARGE_POWER_W", "MAX_DISCHARGE_POWER_W", "MIN_SOC_PERCENT", "MAX_SOC_PERCENT",
+}
+
+CLEAR_DEFAULT_POLICIES = {
+    "NIGHT_DISCHARGE_STOP_SOC_PERCENT": ("Standard: nicht gesetzt · globale Min-SOC-Grenze gilt", "Reserve-SOC entfernen"),
+    "HARVEST_PRIMARY_CHARGE_FLOOR_W": ("Standard: automatisch aus dem Verhältnis berechnet", "Automatische Berechnung verwenden"),
+    "HARVEST_PRIMARY_CHARGE_RESTART_W": ("Standard: automatisch aus dem Verhältnis berechnet", "Automatische Berechnung verwenden"),
+    "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_W": ("Standard: automatisch aus dem Verhältnis berechnet", "Automatische Berechnung verwenden"),
+    "MEASUREMENT_LOG_MOUNTPOINT": ("Standard: automatische Mountpoint-Ermittlung", "Automatische Ermittlung verwenden"),
+    "SMA_ENERGY_METER_INTERFACE": ("Standard: keine feste Interface-Vorgabe", "Interface-Vorgabe entfernen"),
+    "SMA_ENERGY_METER_SERIAL": ("Standard: kein Seriennummernfilter", "Seriennummernfilter entfernen"),
+    "SMA_ENERGY_METER_SUSY_ID": ("Standard: kein SUSy-ID-Filter", "SUSy-ID-Filter entfernen"),
+}
+
+def _format_default_value(value: Any, unit: Optional[str]) -> str:
+    if isinstance(value, bool):
+        text = "Ein" if value else "Aus"
+    else:
+        text = str(value)
+    return f"{text}{f' {unit}' if unit else ''}"
+
+def _default_ui_policy(spec: Any) -> Dict[str, Any]:
+    if spec.is_secret or spec.editability is not Editability.EDITABLE:
+        return {"kind": "none", "meta": "", "action": None}
+    if spec.key in CLEAR_DEFAULT_POLICIES:
+        meta, action = CLEAR_DEFAULT_POLICIES[spec.key]
+        return {"kind": "clear", "meta": meta, "action": action, "value": spec.default_new_install}
+    if spec.default_new_install is None:
+        return {"kind": "none", "meta": "Kein allgemeiner Standardwert", "action": None}
+    if spec.default_new_install == "":
+        return {"kind": "clear", "meta": "Standard: nicht gesetzt", "action": "Wert entfernen", "value": ""}
+    if spec.key in {"NIGHT_DISCHARGE_POWER_W", "MANUAL_FIXED_DISCHARGE_POWER_W", "MANUAL_FIXED_CHARGE_POWER_W"}:
+        return {"kind": "reference", "meta": "Neue Installation: 0 W · vor Aktivierung bewusst festlegen", "action": None}
+    if spec.key in INSTALLATION_DEPENDENT_DEFAULT_KEYS:
+        return {"kind": "installation", "meta": "Installationsabhängig · kein allgemeiner Standardwert", "action": None}
+    if spec.key in REFERENCE_ONLY_DEFAULT_KEYS or str(spec.risk or "").lower() in {"hoch", "sehr hoch"}:
+        return {"kind": "reference", "meta": f"Ausgangswert dieses Releases: {_format_default_value(spec.default_new_install, spec.unit)}", "action": None}
+    return {
+        "kind": "default",
+        "meta": f"Default: {_format_default_value(spec.default_new_install, spec.unit)}",
+        "action": "Auf Default setzen",
+        "value": spec.default_new_install,
+    }
+
 DEPENDENCY_RULES: Dict[str, Dict[str, Any]] = {
     "MANUAL_FIXED_DISCHARGE_POWER_W": {"key": "MANUAL_MODE", "equals": "FIXED_DISCHARGE"},
     "MANUAL_FIXED_DISCHARGE_TARGET_SOC": {"key": "MANUAL_MODE", "equals": "FIXED_DISCHARGE"},
@@ -138,7 +247,7 @@ def build_settings_model(
         )
         entry = {
             "key": spec.key,
-            "label": spec.label,
+            "label": LABEL_OVERRIDES.get(spec.key, spec.label),
             "description": _description(spec.key, spec),
             "value_type": spec.value_type.value,
             "codec_id": spec.codec_id,
@@ -147,6 +256,7 @@ def build_settings_model(
             "configured_state": "secret_set" if spec.is_secret and bool(configured_value) else ("secret_not_set" if spec.is_secret else "configured"),
             "secret_set": bool(configured_value) if spec.is_secret else False,
             "default": None if spec.is_secret else spec.default_new_install,
+            "default_ui": _default_ui_policy(spec),
             "default_state": "set" if spec.is_secret and bool(spec.default_new_install) else ("not_set" if spec.is_secret else None),
             "minimum": spec.minimum,
             "maximum": spec.maximum,
@@ -169,6 +279,7 @@ def build_settings_model(
             "issues": issue_by_key.get(spec.key, []),
             "config_key_visible": spec.visibility is not Visibility.STANDARD,
             "release_stage": spec.release_stage,
+            "ui_order": SETTING_ORDER_OVERRIDES.get(spec.key, 10000 + spec.order),
             "lifecycle": spec.lifecycle,
         }
         section["settings"].append(entry)
@@ -176,7 +287,15 @@ def build_settings_model(
 
     category_list = []
     for category in categories.values():
-        category["sections"] = list(category["sections"].values())
+        section_order = {name: idx for idx, name in enumerate(SECTION_ORDER_OVERRIDES.get(category["name"], ()), start=1)}
+        sections = list(category["sections"].values())
+        for section in sections:
+            section["settings"].sort(key=lambda item: (item.get("ui_order", 10000), item.get("key", "")))
+        sections.sort(key=lambda section: (section_order.get(section["name"], 10000), section["name"]))
+        for section in sections:
+            for item in section["settings"]:
+                item.pop("ui_order", None)
+        category["sections"] = sections
         category_list.append(category)
 
     return {

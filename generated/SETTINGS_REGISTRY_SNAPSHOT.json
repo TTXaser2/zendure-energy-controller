@@ -118,7 +118,7 @@
       "category": "Betriebsart & manuelle Steuerung",
       "codec_id": "int",
       "decision_status": "Bestätigt",
-      "default_new_install": 400,
+      "default_new_install": 0,
       "default_rc19": 400,
       "dependency_keys": [
         "MANUAL_MODE",
@@ -225,7 +225,7 @@
       "category": "Betriebsart & manuelle Steuerung",
       "codec_id": "int",
       "decision_status": "Bestätigt",
-      "default_new_install": 800,
+      "default_new_install": 0,
       "default_rc19": 800,
       "dependency_keys": [
         "MANUAL_MODE",
@@ -888,7 +888,7 @@
       "category": "Nachtbetrieb",
       "codec_id": "int",
       "decision_status": "Bestätigt",
-      "default_new_install": 400,
+      "default_new_install": 0,
       "default_rc19": 400,
       "dependency_keys": [
         "MAX_DISCHARGE_POWER_W",

@@ -21,6 +21,8 @@
     drawerScrollY: 0,
     compoundDraft: new Map(),
     validationIssues: [],
+    modalMode: 'preview',
+    adminAction: null,
   };
   const $ = (s, root = document) => root.querySelector(s);
   const $$ = (s, root = document) => Array.from(root.querySelectorAll(s));
@@ -226,6 +228,38 @@
     });
     return all;
   }
+  function issueHtml(issues) {
+    const visible = issues.filter(issue => issue.blocking || issue.severity === 'warning');
+    if (!visible.length) return '';
+    return `<div class="field-issues">${visible.map(issue=>`<div class="field-issue ${esc(issue.severity || 'error')}">${esc(issue.message || 'Die Eingabe ist nicht zulässig.')}</div>`).join('')}</div>`;
+  }
+  function clearValidationIssuesForKeys(keys) {
+    app.validationIssues = app.validationIssues.filter(issue => !(issue.keys || []).some(key => keys.includes(key)));
+  }
+  function addValidationIssue(issue) {
+    app.validationIssues.push(issue);
+  }
+  function validateSingleSetting(spec, value, rawValue = null) {
+    const issues = [];
+    const fail = (code, message) => issues.push({code, severity:'error', blocking:true, keys:[spec.key], message});
+    if (['int','optional_int','float'].includes(spec.value_type) && value !== null) {
+      if (typeof value !== 'number' || !Number.isFinite(value)) fail('NUMBER_INVALID', `${spec.label}: Bitte eine gültige Zahl eingeben.`);
+      else {
+        if (spec.minimum !== null && value < spec.minimum) fail('VALUE_BELOW_MIN', `${spec.label}: Der Wert muss mindestens ${spec.minimum}${spec.unit?` ${spec.unit}`:''} betragen.`);
+        if (spec.maximum !== null && value > spec.maximum) fail('VALUE_ABOVE_MAX', `${spec.label}: Der Wert darf höchstens ${spec.maximum}${spec.unit?` ${spec.unit}`:''} betragen.`);
+      }
+    }
+    if (spec.value_type === 'enum' && !spec.options.some(option => same(option.value, value))) fail('ENUM_INVALID', `${spec.label}: Der gewählte Wert ist nicht zulässig.`);
+    if (spec.codec_id === 'optional_int_zero_none') {
+      const raw = String(rawValue ?? value ?? '').trim();
+      if (raw && !/^[+-]?\d+$/.test(raw)) fail('NUMBER_INVALID', `${spec.label}: Bitte eine ganze Zahl oder einen leeren Wert eingeben.`);
+    }
+    if ((spec.key === 'SMA_ENERGY_METER_SERIAL' || spec.key === 'SMA_ENERGY_METER_SUSY_ID')) {
+      const raw = String(rawValue ?? value ?? '').trim();
+      if (raw && !/^\d+$/.test(raw)) fail('NUMBER_INVALID', `${spec.label}: Bitte nur Ziffern eingeben oder das Feld leer lassen.`);
+    }
+    return issues;
+  }
   function nightCompoundHtml(kind) {
     const pair = NIGHT_COMPOUNDS[kind];
     const hourSpec = settingByKey(pair.hour);
@@ -238,7 +272,7 @@
     const defaultText = formatTime(hourSpec.default, minuteSpec.default);
     return `<article class="${classes}" data-compound="night-${kind}" data-setting="${esc(pair.hour)}">
       <div class="setting-copy"><div class="setting-label">${esc(pair.label)}</div>${app.mode==='expert'?`<div class="setting-key">${esc(pair.hour)} + ${esc(pair.minute)}</div>`:''}<div class="setting-help">${esc(pair.description)}</div></div>
-      <div class="setting-editor"><div class="setting-control"><input class="night-time-input" type="text" inputmode="numeric" autocomplete="off" maxlength="5" placeholder="HH:MM" data-night-time="${kind}" value="${esc(nightText(kind))}"${disabled?' disabled':''} aria-invalid="${issues.some(i=>i.blocking)?'true':'false'}"></div><div class="field-meta"><span class="meta-pill">Zulässig: 00:00–23:59</span><span class="meta-pill">Default: ${esc(defaultText)}</span><span class="meta-pill ${hourSpec.apply_class==='restart_required'?'restart':'live'}">${esc(hourSpec.apply_text || hourSpec.apply_class)}</span></div></div>
+      <div class="setting-editor"><div class="setting-control"><input class="night-time-input" type="text" inputmode="numeric" autocomplete="off" maxlength="5" placeholder="HH:MM" data-night-time="${kind}" value="${esc(nightText(kind))}"${disabled?' disabled':''} aria-invalid="${issues.some(i=>i.blocking)?'true':'false'}"></div>${issueHtml(issues)}<div class="field-meta"><span class="meta-pill">Zulässig: 00:00–23:59</span><span class="meta-pill">Ausgangswert dieses Releases: ${esc(defaultText)}</span><span class="meta-pill ${hourSpec.apply_class==='restart_required'?'restart':'live'}">${esc(hourSpec.apply_text || hourSpec.apply_class)}</span></div></div>
     </article>`;
   }
   function inputHtml(s) {
@@ -275,13 +309,14 @@
     if (s.minimum !== null || s.maximum !== null) range = `Zulässig: ${s.minimum ?? '−∞'}–${s.maximum ?? '∞'}${s.unit ? ` ${s.unit}` : ''}`;
     const metas = [
       range,
-      s.default !== null ? `Default: ${String(s.default)}${s.unit ? ` ${s.unit}` : ''}` : '',
+      s.default_ui?.meta || '',
       s.configured_differs_effective ? `Wirksam: ${String(s.effective)}` : '',
-      s.inherited_default ? 'geerbter Default' : '',
+      s.inherited_default ? 'geerbter Ausgangswert' : '',
     ].filter(Boolean);
+    const resetAction = s.editable && !s.secret_set && s.default_ui?.action ? `<button type="button" class="reset-button" data-reset="${esc(s.key)}">${esc(s.default_ui.action)}</button>` : '';
     return `<article class="${classes}" data-setting="${esc(s.key)}">
       <div class="setting-copy"><div class="setting-label">${esc(s.label)}</div>${app.mode==='expert'?`<div class="setting-key">${esc(s.key)}</div>`:''}<div class="setting-help">${esc(s.description || '')}</div></div>
-      <div class="setting-editor">${inputHtml(s)}<div class="field-meta">${metas.map(m=>`<span class="meta-pill">${esc(m)}</span>`).join('')}<span class="meta-pill ${s.apply_class==='restart_required'?'restart':'live'}">${esc(s.apply_text || s.apply_class)}</span>${s.editable&&!s.secret_set?`<button type="button" class="reset-button" data-reset="${esc(s.key)}">Auf Default</button>`:''}</div></div>
+      <div class="setting-editor">${inputHtml(s)}${issueHtml(issues)}<div class="field-meta">${metas.map(m=>`<span class="meta-pill">${esc(m)}</span>`).join('')}<span class="meta-pill ${s.apply_class==='restart_required'?'restart':'live'}">${esc(s.apply_text || s.apply_class)}</span>${resetAction}</div></div>
     </article>`;
   }
   function emptyStateHtml(category) {
@@ -359,11 +394,12 @@
     const pair = NIGHT_COMPOUNDS[kind];
     const parsed = parseTime(raw);
     app.preview = null;
-    clearValidationIssues();
+    clearValidationIssuesForKeys([pair.hour, pair.minute]);
     if (!parsed) {
       app.compoundDraft.set(kind, String(raw));
       app.draft.delete(pair.hour);
       app.draft.delete(pair.minute);
+      addValidationIssue({code:'TIME_FORMAT_INVALID',severity:'error',blocking:true,keys:[pair.hour,pair.minute],message:`${NIGHT_COMPOUNDS[kind].label}: Bitte eine gültige Uhrzeit im Format HH:MM zwischen 00:00 und 23:59 eingeben.`});
       render();
       return;
     }
@@ -389,15 +425,18 @@
         else value = el.value;
         if (same(value, s.configured)) app.draft.delete(s.key); else app.draft.set(s.key, value);
         app.preview = null;
-        clearValidationIssues();
+        clearValidationIssuesForKeys([s.key]);
+        validateSingleSetting(s, value, el.value).forEach(addValidationIssue);
         render();
       };
     });
     $$('[data-reset]').forEach(button => button.onclick = () => {
       const s = settingByKey(button.dataset.reset);
-      if (same(s.default, s.configured)) app.draft.delete(s.key); else app.draft.set(s.key, s.default);
+      if (!s?.default_ui?.action || !(Object.prototype.hasOwnProperty.call(s.default_ui, 'value'))) return;
+      const resetValue = s.default_ui.value;
+      if (same(resetValue, s.configured)) app.draft.delete(s.key); else app.draft.set(s.key, resetValue);
       app.preview = null;
-      clearValidationIssues();
+      clearValidationIssuesForKeys([s.key]);
       render();
     });
     $$('[data-secret]').forEach(button => button.onclick = () => {
@@ -462,17 +501,7 @@
       if (NIGHT_KEYS.has(key)) return;
       const spec = settingByKey(key);
       if (!spec) return;
-      if (['int','optional_int','float'].includes(spec.value_type) && value !== null) {
-        if (typeof value !== 'number' || !Number.isFinite(value)) {
-          issues.push({code:'NUMBER_INVALID',severity:'error',blocking:true,keys:[key],message:`${spec.label}: Bitte eine gültige Zahl eingeben.`});
-          return;
-        }
-        if (spec.minimum !== null && value < spec.minimum) issues.push({code:'VALUE_BELOW_MIN',severity:'error',blocking:true,keys:[key],message:`${spec.label}: Der Wert muss mindestens ${spec.minimum}${spec.unit?` ${spec.unit}`:''} betragen.`});
-        if (spec.maximum !== null && value > spec.maximum) issues.push({code:'VALUE_ABOVE_MAX',severity:'error',blocking:true,keys:[key],message:`${spec.label}: Der Wert darf höchstens ${spec.maximum}${spec.unit?` ${spec.unit}`:''} betragen.`});
-      }
-      if (spec.value_type === 'enum' && !spec.options.some(option => same(option.value, value))) {
-        issues.push({code:'ENUM_INVALID',severity:'error',blocking:true,keys:[key],message:`${spec.label}: Der gewählte Wert ist nicht zulässig.`});
-      }
+      validateSingleSetting(spec, value, value).forEach(issue => issues.push(issue));
     });
     return issues;
   }
@@ -589,6 +618,9 @@
     $('#previewBody').innerHTML = out;
     $$('[data-issue-key]').forEach(button => button.onclick = () => jumpToSetting(button.dataset.issueKey));
     $('#commitChanges').disabled = p.status !== 'ready' || !p.preview_id;
+    $('#commitChanges').textContent = p.status === 'ready' && p.preview_id ? 'Speichern' : 'Speichern nicht möglich';
+    $('#previewBack').textContent = 'Zurück';
+    app.modalMode = 'preview';
     lockPreviewScroll();
     $('#previewModal').classList.add('open');
     $('#previewClose')?.focus({preventScroll:true});
@@ -597,6 +629,8 @@
     $('#previewModal').classList.remove('open');
     $('#previewBody').innerHTML = '';
     app.preview = null;
+    app.modalMode = 'preview';
+    app.adminAction = null;
     unlockPreviewScroll();
     updateBar();
   }
@@ -636,24 +670,67 @@
     }
     toast('Neustart ausgelöst, aber ready=true wurde innerhalb von 90 Sekunden nicht bestätigt.', 10000);
   }
-  async function restart() {
-    if (!confirm('Dienstneustart vorbereiten? Ungespeicherte Änderungen werden nicht übernommen.')) return;
-    if (!confirm('Dienst jetzt wirklich neu starten und anschließend ready=true prüfen?')) return;
-    try {
-      const info = await api('/restart-service', {method:'POST', body:JSON.stringify({confirmation:'RESTART_SERVICE'})});
-      pollReady(info);
-    } catch (error) { toast(`Neustart fehlgeschlagen: ${error.message}`); }
+  function openAdminModal({title, bodyHtml, primaryLabel, mode, action}) {
+    app.modalMode = mode;
+    app.adminAction = action || null;
+    $('#previewTitle').textContent = title;
+    $('#previewBody').innerHTML = bodyHtml;
+    $('#previewBack').textContent = 'Abbrechen';
+    $('#commitChanges').textContent = primaryLabel;
+    $('#commitChanges').disabled = false;
+    lockPreviewScroll();
+    $('#previewModal').classList.add('open');
+    $('#previewClose')?.focus({preventScroll:true});
+  }
+  function restart() {
+    const count = dirtyCount();
+    const unsaved = count > 0 ? `<div class="notice warning"><b>${count} ungespeicherte Änderung${count===1?'':'en'}.</b> Diese Änderungen werden durch den Neustart nicht übernommen und bleiben nur im aktuellen Browserentwurf erhalten.</div>` : '<div class="notice info">Es liegen keine ungespeicherten Änderungen vor.</div>';
+    openAdminModal({
+      title:'Controller-Dienst neu starten',
+      mode:'restart',
+      primaryLabel:'Controller neu starten',
+      bodyHtml:`${unsaved}<div class="admin-confirm-grid"><div><span>Aktion</span><b>Nur Zendure-Controller neu starten</b></div><div><span>Anschließende Prüfung</span><b>Version · Build-ID · Ready-Status</b></div></div><p class="admin-confirm-copy">Der geschützte Restart-Helper startet ausschließlich den Controller-Dienst. MQTT, EVCC und andere Systemdienste werden durch diese Aktion nicht neu gestartet.</p>`,
+      action:{kind:'restart'}
+    });
   }
   async function repairPointer() {
     try {
       const p = await api('/admin/last-good-pointer-repair/preview', {method:'POST',body:'{}'});
-      const summary = `Slot ${p.target_slot}, Generation ${p.generation_id}\nTyped: ${p.typed_revision}\nConfig: ${p.config_hash}\nManifest: ${p.manifest_hash}`;
-      if (!confirm(`Pointer-Reparatur prüfen:\n\n${summary}\n\nEs werden keine Slot- oder Config-Dateien geändert.`)) return;
-      if (!confirm('Current-Pointer jetzt atomar auf den verifizierten Slot setzen?')) return;
-      await api('/admin/last-good-pointer-repair/commit', {method:'POST',body:JSON.stringify({action_token:p.action_token,confirmation:'REPAIR_POINTER'})});
-      toast('Last-Good-Pointer erfolgreich repariert.');
-      await load();
-    } catch (error) { toast(`Pointer-Reparatur fehlgeschlagen: ${error.message}`); }
+      openAdminModal({
+        title:'Last-Good-Pointer reparieren',
+        mode:'pointer',
+        primaryLabel:'Pointer reparieren',
+        bodyHtml:`<div class="notice info">Die serverseitige Prüfung hat genau einen zulässigen Zielslot bestimmt. Es werden keine normalen Einstellungen und keine Slotinhalte geändert.</div><div class="admin-confirm-grid"><div><span>Zielslot</span><b>${esc(p.target_slot)}</b></div><div><span>Generation</span><b>${esc(p.generation_id)}</b></div><div><span>Typed Revision</span><b class="mono">${esc(p.typed_revision)}</b></div><div><span>Config-Hash</span><b class="mono">${esc(p.config_hash)}</b></div><div><span>Manifest-Hash</span><b class="mono">${esc(p.manifest_hash)}</b></div></div><p class="admin-confirm-copy">Beim Commit wird ausschließlich der <code>current</code>-Pointer atomar auf diesen unmittelbar zuvor validierten Slot gesetzt.</p>`,
+        action:{kind:'pointer', preview:p}
+      });
+    } catch (error) { toast(`Pointer-Vorprüfung konnte nicht ausgeführt werden: ${error.message}`); }
+  }
+  async function runAdminAction() {
+    const action = app.adminAction;
+    if (!action) return;
+    $('#commitChanges').disabled = true;
+    try {
+      if (action.kind === 'restart') {
+        const info = await api('/restart-service', {method:'POST', body:JSON.stringify({confirmation:'RESTART_SERVICE'})});
+        closePreview();
+        pollReady(info);
+        return;
+      }
+      if (action.kind === 'pointer') {
+        const p = action.preview;
+        await api('/admin/last-good-pointer-repair/commit', {method:'POST',body:JSON.stringify({action_token:p.action_token,confirmation:'REPAIR_POINTER'})});
+        closePreview();
+        toast('Last-Good-Pointer erfolgreich repariert.');
+        await load();
+      }
+    } catch (error) {
+      $('#commitChanges').disabled = false;
+      toast(`${action.kind === 'restart' ? 'Neustart' : 'Pointer-Reparatur'} fehlgeschlagen: ${error.message}`);
+    }
+  }
+  async function modalPrimaryAction() {
+    if (app.modalMode === 'preview') return commit();
+    return runAdminAction();
   }
   function setTopbarSystem(system, serverTime) {
     if (!system) return;
@@ -742,7 +819,7 @@
     $('#previewClose').onclick = closePreview;
     $('#previewBack').onclick = closePreview;
     $('#previewModal').onclick = event => { if (event.target === $('#previewModal')) closePreview(); };
-    $('#commitChanges').onclick = commit;
+    $('#commitChanges').onclick = modalPrimaryAction;
     $('#mobileMenu').onclick = () => setCategoryDrawerOpen(!$('.settings-sidebar')?.classList.contains('open'));
     $('#categoryDrawerBackdrop').onclick = () => setCategoryDrawerOpen(false);
     setCategoryDrawerOpen(false);
