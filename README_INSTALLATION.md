@@ -1,12 +1,14 @@
-# Installation – Zendure Energy Controller V12.11.4
+# Installation – Zendure Energy Controller V12.11.5
 
-**Ziel-Build-ID:** `v12.11.4-20260807`
+**Ziel-Build-ID:** `v12.11.5-20260807`
 
 ## 1. Unterstützte Ausgangsstände
 
-Der Installer akzeptiert ausschließlich:
+Der Installer akzeptiert ausschließlich die ausdrücklich freigegebenen Quellidentitäten:
 
 ```text
+V12.11.4 mit APP_BUILD_ID=v12.11.4-20260807
+oder
 V12.11.3 mit APP_BUILD_ID=v12.11.3-20260806
 oder
 V12.11.2-RC20 mit APP_BUILD_ID=rc20-audit-fix6-20260806
@@ -16,52 +18,52 @@ oder
 V12.11.2-RC19
 ```
 
-Ein unbekannter Ausgangsstand wird vor jeder Produktivänderung abgelehnt. Die bestehende RC19→RC20-Configmigration läuft idempotent und darf bei bereits migrierten Installationen `no_op` ergeben.
+Für den normalen V12.11.4→V12.11.5-Pfad ist ausschließlich die erste Zeile relevant. Ein unbekannter Ausgangsstand wird **vor jeder Produktivänderung** abgelehnt. Die bestehende RC19→RC20-Configmigration bleibt idempotent und darf bei bereits migrierten Installationen `no_op` ergeben.
 
 ## 2. Paket prüfen
 
 ```bash
 cd /home/pi/Downloads
-sha256sum zendure_controller_v12_11_4.zip
-unzip -t zendure_controller_v12_11_4.zip
+sha256sum zendure_controller_v12_11_5.zip
+unzip -t zendure_controller_v12_11_5.zip
 ```
 
 Der SHA256 muss exakt dem Wert der Releaseübergabe entsprechen.
 
 ## 3. Installieren
 
-Das Update-Skript muss aus dem neu entpackten Paket gestartet werden:
+Das Update-Skript muss aus dem neu entpackten V12.11.5-Paket gestartet werden:
 
 ```bash
 cd /home/pi/Downloads
-rm -rf zendure_controller_v12_11_4
-unzip -q zendure_controller_v12_11_4.zip
-chmod +x zendure_controller_v12_11_4/tools/update_zendure_controller.sh
-bash zendure_controller_v12_11_4/tools/update_zendure_controller.sh v12_11_4
+rm -rf zendure_controller_v12_11_5
+unzip -q zendure_controller_v12_11_5.zip
+chmod +x zendure_controller_v12_11_5/tools/update_zendure_controller.sh
+bash zendure_controller_v12_11_5/tools/update_zendure_controller.sh v12_11_5
 ```
 
-Node.js ist keine Produktivvoraussetzung. Ohne Node.js werden die buildseitig geprüften JavaScript-Dateien über das SHA256-Source-Manifest verifiziert.
+Node.js ist keine Produktivvoraussetzung. Ohne Node.js werden die buildseitig geprüften JavaScript-Dateien über das SHA256-Source-Manifest abgesichert.
 
 ## 4. Erwarteter Ablauf
 
 ```text
-Ausgangsstand erkannt: V12_11_3 ...
-V12.11.4-Paket vor dem Stoppen des Produktivdienstes entpacken und prüfen...
+Ausgangsstand erkannt: V12_11_4 ...
+V12.11.5-Paket vor dem Stoppen des Produktivdienstes entpacken und prüfen...
 Runtime-Readiness-Smoke-Test bestanden.
 Paketpreflight und Config-Migrationspreflight bestanden.
 Stoppe Dienste...
 Erstelle vollständiges Rollback-Backup...
-Kopiere V12.11.4-Dateien...
+Kopiere V12.11.5-Dateien...
 Führe idempotente bestehende Configmigration aus...
 Finale lokale Prüfung im Installationsverzeichnis...
 Runtime-Readiness-Smoke-Test bestanden.
 Starte Controller...
 Installations-Abnahme ...
 Update abgeschlossen und Installations-Abnahme erfolgreich.
-V12.11.4 erfolgreich installiert.
+V12.11.5 erfolgreich installiert.
 ```
 
-Der Installer bevorzugt `ready=true`. Ein ausschließlich stabiler, sicherer Limit-Readback-Übergang darf nach dem bestehenden V12.11.3-Abnahmevertrag ebenfalls ohne Rollback akzeptiert werden. Echte Daten-, Command-, Guard- oder Controllerfehler bleiben harte Rollbackgründe.
+Der Installer bevorzugt `ready=true`. Ein ausschließlich stabiler, sicherer Limit-Readback-Übergang darf nach dem bestehenden Abnahmevertrag ebenfalls ohne Rollback akzeptiert werden. Echte Daten-, Command-, Guard- oder Controllerfehler bleiben harte Rollbackgründe.
 
 ## 5. Unmittelbare Verifikation
 
@@ -78,68 +80,72 @@ curl -fsS http://127.0.0.1:8080/ready  | python3 -m json.tool
 Erwartete Paketidentität:
 
 ```text
-APP_VERSION = "12.11.4"
-APP_VERSION_LABEL = "V12.11.4"
-APP_BUILD_ID = "v12.11.4-20260807"
+APP_VERSION = "12.11.5"
+APP_VERSION_LABEL = "V12.11.5"
+APP_BUILD_ID = "v12.11.5-20260807"
 Dienst = active
 /health alive = true
 ```
 
-## 6. UI-Abnahme
+## 6. V12.11.5 Feldabnahme – Settings
 
-Browserseiten:
+Browserseite:
 
 ```text
-http://<PI-IP>:8080/
-http://<PI-IP>:8080/graph
 http://<PI-IP>:8080/settings
 ```
 
-Auf Mobilgeräten prüfen:
+### Desktop
 
-1. Burger öffnet das Kategorienmenü.
-2. Auswahl einer Kategorie schließt den Drawer und beginnt am Kategorienanfang.
-3. Suche funktioniert weiterhin und springt zum Treffer.
-4. Ein längeres Änderungsmodal lässt sich intern scrollen.
-5. Der Hintergrund bleibt währenddessen fixiert.
-6. Bestätigungsaktionen sind erreichbar.
-7. Nach Abbruch ist „Änderungen prüfen“ erneut möglich.
-8. Kein unbeabsichtigtes horizontales Dokumentscrollen; die globale Navigationszeile bleibt separat horizontal scrollbar.
+1. Globale Navigation, Settings-Kontextkopf und Change-Set-Leiste bleiben beim Scrollen stationär.
+2. Primär scrollt nur die rechte Settings-Inhaltsfläche; die Kategorienleiste bei eigenem Überlauf separat.
+3. Normaler Kategoriewechsel beginnt am Kategorienanfang.
+4. Suche darf weiterhin gezielt zu einem Treffer springen.
+5. Es gibt kein unbeabsichtigtes horizontales Dokumentscrollen.
+6. Im Nachtbetrieb erscheinen genau zwei logische Zeitfelder `Startzeit` und `Endzeit` im Format `HH:MM`.
+7. Ein absichtlich ungültiger Mehrfeldfall – beispielsweise `MIN_SOC_PERCENT > MAX_SOC_PERCENT` – erscheint als fachlich blockierter Preview mit Issues und Sprung zum Feld, nicht als HTTP-/Netzwerkfehler.
+8. Nach Korrektur kann **Änderungen prüfen** ohne künstliche Zwischenänderung erneut ausgeführt werden.
+9. Im Standardmodus zeigt `Kommandowirkung & Resync` bei ausschließlich ausgeblendeten Expertenparametern den Empty-State und sichtbaren Count `0`.
+10. Im Expertenmodus sind dort die Expertenparameter sichtbar.
 
-Auf Desktop im Expertenmodus prüfen:
+### Administrative Aktion
+
+Nur im Expertenmodus prüfen:
 
 ```text
 System & Diagnose
 → Administrative Aktionen
-→ Controller-Dienst neu starten
+→ Last-Good-Konfigurationsspeicher
 ```
 
-Die Aktion nur testweise ausführen, wenn ein kontrollierter Dienstneustart gewünscht ist.
+Die Last-Good-Aktion darf **nicht** in der globalen Change-Set-Leiste erscheinen. Sie nur ausführen, wenn tatsächlich eine Pointer-Reparatur erforderlich und beabsichtigt ist.
 
-## 7. Ereignis-Reconciliation
+### Mobil
 
-Bei aktuell gesunder MQTT- und Zendure-Telemetrie sollten alte Meldungen wie:
+Auf mindestens einem Smartphone beziehungsweise einer vergleichbaren Browserbreite prüfen:
 
-```text
-MQTT-Verbindung getrennt
-Zendure-Telemetrie nicht aktuell
-```
+1. Burger öffnet den Kategorien-Drawer.
+2. Der Hintergrund bleibt positionsstabil gesperrt.
+3. Der Drawer selbst lässt sich vertikal scrollen.
+4. Backdrop, `Escape` oder Kategorieauswahl schließen den Drawer.
+5. Nach dem Schließen wird die vorherige Hintergrundposition wiederhergestellt.
+6. Die globale Hauptnavigation bleibt separat horizontal scrollbar.
 
-nicht mehr als `open` erscheinen. Sie bleiben als `resolved` in der Historie erhalten.
-
-## 8. Backups und Rollback
+## 7. Backups und Rollback
 
 Nach Beginn der Produktivtransaktion gibt der Installer konkrete Pfade aus für:
 
 ```text
 /opt-Gesamtbackup
-Config-Backup
-Root-Artefakt-Backup
+/home/pi/config.pre-v12.11.5.<Zeitstempel>.json
+/var/backups/zec-v12.11.5-root-artifacts-<Zeitstempel>
 ```
 
-Diese Sicherungen bis zum Abschluss der Feldabnahme nicht löschen. Bei einem Installationsfehler stellt das Skript Installationsverzeichnis, systemd-/Helper-Artefakte und vorherigen Dienstzustand automatisch wieder her.
+Diese Sicherungen bis zum Abschluss der Feldabnahme nicht löschen. Tritt während der Installation nach dem Stoppen der Dienste ein Fehler auf, führt das Skript den vorgesehenen **automatischen Rollback** von Installationsverzeichnis, Root-/systemd-Artefakten und Dienstzustand durch.
 
-## 9. GitHub-Übernahme
+Für einen später bewusst ausgelösten manuellen Rückbau nicht lediglich einzelne Dateien überschreiben, sondern das vom Installer erzeugte vollständige Rollback-Backup verwenden.
+
+## 8. GitHub-Übernahme
 
 Lokales Repository:
 
@@ -150,14 +156,14 @@ C:\github\zendure-energy-controller
 Das entpackte Paket in das Repository spiegeln, ohne `.git` und ohne produktive `config.json`:
 
 ```powershell
-robocopy "C:\Temp\zendure_controller_v12_11_4" "C:\github\zendure-energy-controller" /MIR /XD .git /XF config.json
+robocopy "C:\Temp\zendure_controller_v12_11_5" "C:\github\zendure-energy-controller" /MIR /XD .git /XF config.json
 ```
 
 Danach:
 
 ```text
 git status prüfen
-Commit: Release V12.11.4
-Tag: v12.11.4
+Commit: Release V12.11.5
+Tag: v12.11.5
 Push origin
 ```

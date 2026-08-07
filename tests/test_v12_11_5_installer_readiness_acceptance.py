@@ -4,13 +4,13 @@ import unittest
 from tools.evaluate_installation_readiness import classify
 
 
-class V12114InstallerReadinessAcceptanceTests(unittest.TestCase):
+class V12115InstallerReadinessAcceptanceTests(unittest.TestCase):
     def base_payload(self):
         return {
             "status": "degraded",
             "ready": False,
-            "version": "12.11.4",
-            "build_id": "v12.11.4-20260807",
+            "version": "12.11.5",
+            "build_id": "v12.11.5-20260807",
             "checks": {
                 "mqtt": {"ok": True},
                 "grid_measurement": {"ok": True},

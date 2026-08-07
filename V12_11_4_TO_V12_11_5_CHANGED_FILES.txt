@@ -1,0 +1,54 @@
+Zendure Energy Controller V12.11.4 -> V12.11.5
+
+Neue Dateien:
+- BUILD_VALIDATION_V12_11_5.md
+- RELEASE_INFO_V12_11_5.md
+- TECHNICAL_NOTES_V12_11_5.md
+- V12_11_4_TO_V12_11_5_CHANGED_FILES.txt
+- V12_11_5_SOURCE_MANIFEST.sha256
+- ZEC_V12_11_5_RELEASE_REPORT.md
+- tests/test_v12_11_5_settings_bugfix.py
+
+Geänderte produktive/UI-/Installerdateien:
+- README.md
+- README_INSTALLATION.md
+- static/settings_v2.css
+- static/settings_v2.js
+- tools/evaluate_installation_readiness.py
+- tools/update_zendure_controller.sh
+- version.py
+- web_ui.py
+
+Geänderte Tests ausschließlich wegen neuer Releaseidentität beziehungsweise UI-Vertrag:
+- tests/test_v12_11_2_rc10_status_preview.py
+- tests/test_v12_11_2_rc19_status_diagnostics_stabilization.py
+- tests/test_v12_11_2_rc20_audit_fixes.py
+- tests/test_v12_11_2_rc20_fix5_runtime_readiness.py
+- tests/test_v12_11_2_rc20_release_integration.py
+- tests/test_v12_11_2_rc2_ui_polish.py
+- tests/test_v12_11_2_rc4_ui_polish.py
+- tests/test_v12_11_2_rc5_operations_dashboard.py
+- tests/test_v12_11_2_rc6_ui_diagnostics_hotfix.py
+- tests/test_v12_11_2_rc7_backlog_release.py
+- tests/test_v12_11_2_rc8_backlog_completion.py
+- tests/test_v12_11_2_rc9_ui_semantics.py
+- tests/test_v12_11_rc13_support_tools.py
+- tests/test_v12_11_rc14_ui_polish.py
+- tests/test_v12_11_rc15_ui_graph.py
+- tests/test_v12_11_rc16_performance.py
+- tests/test_v12_11_rc17_sqlite_store.py
+- tests/test_v12_11_rc18_import_tool.py
+
+Umbenannt/fortgeführt:
+- tests/test_v12_11_4_installer_readiness_acceptance.py
+  -> tests/test_v12_11_5_installer_readiness_acceptance.py
+
+Entfernt/ersetzt:
+- V12_11_4_SOURCE_MANIFEST.sha256
+  -> V12_11_5_SOURCE_MANIFEST.sha256
+
+Gelöschte fachliche Quelldateien:
+- keine
+
+Geschützte Regler-/Command-/Measurementdateien:
+- keine Änderung; byteidentisch zur V12.11.4-Basis

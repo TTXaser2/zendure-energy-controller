@@ -386,10 +386,12 @@ class Rc20AuditFixTests(unittest.TestCase):
     def test_settings_shell_has_real_drawer_mobile_categories_manual_and_no_legacy_template(self):
         html = build_settings_page(self.config())
         script = (ROOT / "static" / "settings_v2.js").read_text(encoding="utf-8")
-        for marker in ("searchDrawer", "mobileCategories", "/manual.pdf", "pointerRepairAction"):
+        for marker in ("searchDrawer", "mobileCategories", "/manual.pdf"):
             self.assertIn(marker, html)
+        self.assertNotIn('id="pointerRepairAction"', html)
         self.assertNotIn("legacy-settings-contract", html)
         self.assertIn("pollReady", script)
+        self.assertIn("adminPointerRepairAction", script)
         self.assertIn("REPAIR_POINTER", script)
 
 

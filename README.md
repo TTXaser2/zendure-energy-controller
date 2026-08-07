@@ -1,66 +1,103 @@
-# Zendure Energy Controller V12.11.4
+# Zendure Energy Controller V12.11.5
 
-**Build-ID:** `v12.11.4-20260807`
+**Build-ID:** `v12.11.5-20260807`
 
-V12.11.4 ist ein eng begrenzter Bedienungs- und Diagnose-Bugfix auf Basis von V12.11.3. Der Release korrigiert die mobile Settings-Bedienung, die Ereignis-Reconciliation und kleinere Konsistenzprobleme der Settings-Oberfläche. Die energetische Regelung, die Zielwertbildung, der Command-Lifecycle und das Measurement-V4-Schema bleiben unverändert.
+V12.11.5 ist ein eng begrenzter **Settings-UX-Bugfix** auf Basis der verifizierten V12.11.4-Quelle. Die energetische Regelung, Zielwertbildung, Command-Safety und der Measurement-V4-Vertrag bleiben unverändert.
 
-## 1. Korrekturen in V12.11.4
+## 1. Korrekturen in V12.11.5
 
-### 1.1 Mobile Settings-Navigation
+### 1.1 Desktop-Settings als feste Scroll-Shell
 
-- Der Burger-Button öffnet jetzt zuverlässig den Kategorien-Drawer.
-- Der Drawer ist per Schaltfläche, Hintergrund, Kategorieauswahl und `Escape` schließbar.
-- ARIA-Zustände werden korrekt aktualisiert.
-- Die akzeptierte horizontal scrollbare globale Hauptnavigation bleibt unverändert erhalten.
+- Globale Navigation, Settings-Kontextkopf, Kategorienbereich und Change-Set-Leiste bleiben stationär.
+- Die rechte Settings-Inhaltsfläche ist der primäre vertikale Scrollbereich.
+- Die Kategorienleiste scrollt nur bei eigenem Überlauf.
+- Ein normaler Kategoriewechsel beginnt am Anfang der Kategorie; Suchtreffer dürfen weiterhin gezielt zu einem Feld springen.
+- Unbeabsichtigtes horizontales Dokumentscrollen bleibt unterbunden.
 
-### 1.2 Änderungsprüfung auf Mobilgeräten
+### 1.2 Nachtfenster als zwei logische Zeitfelder
 
-- Das Vorschau-Modal besitzt einen eigenen vertikalen Scrollbereich.
-- Der Seitenhintergrund bleibt bei geöffnetem Modal fixiert.
-- Modal-Header und Aktionen bleiben erreichbar.
-- Abbrechen, Schließen und erneutes Prüfen funktionieren ohne künstliche Zwischenänderung.
+Im Standard- und Expertenmodus erscheinen genau zwei fachliche Eingaben:
 
-### 1.3 Kategorieposition
+```text
+Startzeit des Nachtmodus  HH:MM
+Endzeit des Nachtmodus    HH:MM
+```
 
-Ein normaler Klick auf eine Settings-Kategorie zeigt deren Inhalt jetzt immer von oben. Suchtreffer dürfen weiterhin gezielt zum gefundenen Feld springen.
+Der bestehende technische Config-Vertrag bleibt unverändert:
 
-### 1.4 Ereignis-Reconciliation
+```text
+NIGHT_START_HOUR
+NIGHT_START_MINUTE
+NIGHT_END_HOUR
+NIGHT_END_MINUTE
+```
 
-Bei gesundem Livezustand werden auch ältere offene MQTT- und Zendure-Telemetrieereignisse geschlossen, deren historische Dedupe-Schlüssel nicht mehr dem aktuellen Schlüssel entsprechen. Die Ereignisse werden nicht gelöscht, sondern auf `resolved` gesetzt.
+Eine geänderte logische Uhrzeit wird im Preview-/Save-Payload paarweise atomar übertragen. Im Änderungsdiff wird das Nachtfenster logisch zusammengefasst. Über-Mitternacht-Zeiträume bleiben zulässig.
 
-### 1.5 Warnungsanzeige
+### 1.3 Semantische Preview-Validierung
 
-Der Warnungszähler der globalen Kopfzeile berücksichtigt offene Warnungs- und Fehlergruppen konsistent mit der Betriebsereigniskarte.
+Ein fachlich blockierter Server-Preview mit:
 
-### 1.6 Geschützter manueller Dienstneustart
+```text
+HTTP 422
+status = blocked
+issues[]
+```
 
-Im Expertenmodus befindet sich unter **System & Diagnose** wieder eine dauerhaft erreichbare administrative Aktion **„Controller-Dienst neu starten“**. Sie verwendet ausschließlich den bestehenden geschützten Restart-Vertrag; es wird kein frei konfigurierbarer Shellbefehl eingeführt.
+wird nicht mehr als Netzwerk-/Transportfehler dargestellt. Die UI:
 
-### 1.7 Responsive Korrekturen
+- zeigt die vollständigen Validierungsprobleme;
+- markiert betroffene Settings;
+- bietet den Sprung zum betreffenden Feld;
+- behält den Draft unverändert;
+- sperrt Speichern, solange der Preview blockiert ist;
+- erlaubt nach Korrektur sofort erneut **Änderungen prüfen**.
 
-- Der mobile Settings-Kontextkopf ist zweizeilig strukturiert.
-- Unbeabsichtigtes horizontales Dokument-Overflow wird verhindert.
-- Die globale Hauptnavigation bleibt als eigener horizontal scrollbarer Bereich erhalten.
-- Die feste Änderungsleiste bleibt vollständig erreichbar.
+409-Konflikte und 403-Sicherheitsfehler erhalten eigene verständliche Meldungen; unerwartete Fehler werden ohne rohe Exceptiontexte gekapselt.
+
+### 1.4 Mobiler Kategorien-Drawer
+
+- Der Body wird beim geöffneten Drawer positionsstabil gesperrt.
+- Der Drawer besitzt einen eigenen vertikalen Scrollbereich.
+- Overscroll-Chaining wird begrenzt, ohne eine globale `touchmove`-Sperre einzuführen.
+- Backdrop, `Escape` und Kategorieauswahl schließen den Drawer.
+- Die globale mobile Hauptnavigation bleibt separat horizontal scrollbar.
+
+### 1.5 Last-Good-Reparatur nur im Experten-Adminbereich
+
+Die Aktion befindet sich ausschließlich unter:
+
+```text
+Experte
+→ System & Diagnose
+→ Administrative Aktionen
+→ Last-Good-Konfigurationsspeicher
+```
+
+Die serverseitige fail-closed Auswahl- und Revalidierungslogik bleibt unverändert. Das Frontend wählt keinen Slot und verändert durch diese Aktion keine normalen Settings.
+
+### 1.6 Sichtbarkeitsgerechte Kategorien und Empty-State
+
+Kategoriezähler berücksichtigen nur im aktuellen Modus tatsächlich sichtbare logische Settings. Hat eine Kategorie im Standardmodus ausschließlich Expertenparameter, erscheint ein erklärender Empty-State mit Anzahl der ausgeblendeten Expertenparameter und der Aktion **Expertenmodus anzeigen**.
 
 ## 2. Bestehender Settings-Vertrag
 
-Die Settings-Oberfläche bietet weiterhin:
+Unverändert erhalten bleiben unter anderem:
 
 - zwölf fachliche Kategorien;
-- Standard- und Expertenansicht derselben Konfiguration;
+- Standardmodus und Expertenmodus als Superset;
 - Suche über Bezeichnung, Beschreibung und Config-Key;
-- typisierte serverseitige Validierung;
-- Vorschau mit Änderungsdiff vor dem Speichern;
-- atomisches Speichern mit Dateirevisions-CAS;
+- typisierte serverseitige ValidationEngine;
+- Preview vor Commit;
+- atomisches Speichern mit Revision/CAS;
 - sichere Secret-Behandlung;
-- Trennung von `configured`, `effective` und `pending`;
-- Last-Good- und Recovery-Vertrag;
-- gemeinsame globale Navigation mit Statusampel.
+- `configured` / `effective` / `pending_restart`;
+- Last-Good-A/B-Store und Recovery-Verträge;
+- geschützte administrative Aktionen.
 
-## 3. Sicherheitsabgrenzung
+## 3. Sicherheits- und No-Regression-Abgrenzung
 
-V12.11.4 verändert nicht:
+V12.11.5 verändert nicht:
 
 - AUTO-, HOLD-, NIGHT- oder feste Modi;
 - Harvest-Formeln und 0-W-Netzziel;
@@ -69,25 +106,32 @@ V12.11.4 verändert nicht:
 - Smart-Mode-/Flash-Schutz;
 - Command-State-Gate, Readback, Effect, Resync oder Late-Effect-Guard;
 - lokale Zendure-API-Architektur;
-- Measurement-V4-Header;
+- Measurement-V4-Header und -Semantik;
 - SQLite-Graphstore;
 - Excel-Lernsimulation.
 
-Die geschützten Regler- und Commanddateien werden bei der Releasevalidierung bytegenau gegen V12.11.3 verglichen.
+Die geschützten Regler-/Command-/Measurementdateien werden im Releasegate bytegenau gegen V12.11.4 geprüft.
 
-## 4. Installation
+## 4. Installation und Validierung
 
-Siehe `README_INSTALLATION.md`.
+Siehe:
 
-## 5. Nächste geplante Entwicklungsschritte
+```text
+README_INSTALLATION.md
+BUILD_VALIDATION_V12_11_5.md
+RELEASE_INFO_V12_11_5.md
+TECHNICAL_NOTES_V12_11_5.md
+```
 
-Nicht Bestandteil dieses Bugfixes:
+## 5. Nicht Bestandteil dieses Bugfixes
 
-1. Settings-Hilfe, Abschnittserklärungen, Info-Modals und geführte Bedienung;
-2. benannte Konfigurationsstände sowie sicherer Import/Export;
+Unverändert spätere Entwicklungsblöcke sind insbesondere:
+
+1. redaktioneller Ausbau der Settings-Hilfe und Info-Modals;
+2. benannte Konfigurationsstände sowie Import/Export;
 3. Graph-Redesign;
 4. erweiterte Experten-/Diagnoseansicht;
 5. Measurement-Storage-Härtung;
 6. separater Simulationsdienst.
 
-Diese Folgeblöcke werden erst nach eigener fachlicher Freigabe umgesetzt.
+Diese Punkte benötigen jeweils einen eigenen fachlichen Scope und eine eigene Buildfreigabe.

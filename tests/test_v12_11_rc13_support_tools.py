@@ -11,7 +11,7 @@ TOOLS = ROOT / "tools"
 class TestRC13SupportTools(unittest.TestCase):
     def test_version_label_rc13(self):
         import version
-        self.assertEqual(version.APP_VERSION_LABEL, "V12.11.4")
+        self.assertEqual(version.APP_VERSION_LABEL, "V12.11.5")
 
     def test_support_tools_exist_and_are_shell_syntax_valid(self):
         for name in [

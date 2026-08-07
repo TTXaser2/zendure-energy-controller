@@ -18,6 +18,9 @@
     previewInFlight: false,
     statusInFlight: false,
     previewScrollY: 0,
+    drawerScrollY: 0,
+    compoundDraft: new Map(),
+    validationIssues: [],
   };
   const $ = (s, root = document) => root.querySelector(s);
   const $$ = (s, root = document) => Array.from(root.querySelectorAll(s));
@@ -45,6 +48,26 @@
     return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
   function same(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+
+  const NIGHT_COMPOUNDS = {
+    start: {hour:'NIGHT_START_HOUR', minute:'NIGHT_START_MINUTE', label:'Startzeit des Nachtmodus', description:'Beginn des festen Nachtfensters im Format HH:MM.'},
+    end: {hour:'NIGHT_END_HOUR', minute:'NIGHT_END_MINUTE', label:'Endzeit des Nachtmodus', description:'Ende des festen Nachtfensters im Format HH:MM.'},
+  };
+  const NIGHT_KEYS = new Set(Object.values(NIGHT_COMPOUNDS).flatMap(x => [x.hour, x.minute]));
+  function nightCompoundForKey(key) {
+    return Object.entries(NIGHT_COMPOUNDS).find(([, pair]) => pair.hour === key || pair.minute === key)?.[0] || null;
+  }
+  function formatTime(hour, minute) {
+    return `${String(Number(hour)).padStart(2,'0')}:${String(Number(minute)).padStart(2,'0')}`;
+  }
+  function parseTime(value) {
+    const match = /^(\d{2}):(\d{2})$/.exec(String(value || '').trim());
+    if (!match) return null;
+    const hour = Number(match[1]);
+    const minute = Number(match[2]);
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+    return {hour, minute, text:`${match[1]}:${match[2]}`};
+  }
   function csrf() { return $('meta[name="zec-csrf"]')?.content || app.model?.csrf_token || ''; }
   async function api(url, opt = {}) {
     const headers = Object.assign({'Accept':'application/json'}, opt.headers || {});
@@ -69,7 +92,13 @@
   }
   function settingByKey(key) { return settings().find(s => s.key === key); }
   function currentValue(s) { return app.draft.has(s.key) ? app.draft.get(s.key) : s.configured; }
-  function dirtyCount() { return app.draft.size + Array.from(app.secretOps.values()).filter(x => x.op !== 'keep').length; }
+  function dirtyCount() {
+    let count = Array.from(app.draft.keys()).filter(key => !NIGHT_KEYS.has(key)).length;
+    if (compoundDirty('start')) count += 1;
+    if (compoundDirty('end')) count += 1;
+    count += Array.from(app.secretOps.values()).filter(x => x.op !== 'keep').length;
+    return count;
+  }
   function groups() {
     const order = ['A. Betrieb','B. Regelung & Speicherstrategie','C. Geräte & Schnittstellen','D. Daten, System & Diagnose'];
     const grouped = new Map(order.map(g => [g, []]));
@@ -82,22 +111,38 @@
   function categoryDrawerIsMobile() {
     return window.matchMedia('(max-width: 820px)').matches;
   }
+  function lockCategoryDrawerScroll() {
+    if (document.body.classList.contains('category-drawer-open')) return;
+    app.drawerScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    document.body.style.top = `-${app.drawerScrollY}px`;
+    document.body.classList.add('category-drawer-open');
+  }
+  function unlockCategoryDrawerScroll() {
+    if (!document.body.classList.contains('category-drawer-open')) return;
+    document.body.classList.remove('category-drawer-open');
+    document.body.style.top = '';
+    window.scrollTo({top:app.drawerScrollY, left:0, behavior:'auto'});
+  }
   function setCategoryDrawerOpen(open) {
     const sidebar = $('.settings-sidebar');
     const button = $('#mobileMenu');
     const backdrop = $('#categoryDrawerBackdrop');
     const active = categoryDrawerIsMobile() && !!open;
     sidebar?.classList.toggle('open', active);
-    document.body.classList.toggle('category-drawer-open', active);
+    if (active) lockCategoryDrawerScroll(); else unlockCategoryDrawerScroll();
     button?.setAttribute('aria-expanded', String(active));
     sidebar?.setAttribute('aria-hidden', String(categoryDrawerIsMobile() ? !active : false));
     if (backdrop) backdrop.hidden = !active;
   }
   function scrollCategoryToTop() {
     requestAnimationFrame(() => {
-      window.scrollTo({top:0, left:0, behavior:'auto'});
-      document.documentElement.scrollTop = 0;
-      document.body.scrollTop = 0;
+      const main = $('.settings-main');
+      if (main) main.scrollTop = 0;
+      if (categoryDrawerIsMobile()) {
+        window.scrollTo({top:0, left:0, behavior:'auto'});
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      }
     });
   }
   function selectCategory(name) {
@@ -116,7 +161,8 @@
       nav.insertAdjacentHTML('beforeend', `<div class="nav-group">${esc(group)}</div>`);
       mobile.insertAdjacentHTML('beforeend', `<div class="mobile-category-group"><strong>${esc(group)}</strong></div>`);
       cats.forEach(c => {
-        const content = `<span class="category-link-icon">${icon(c.name)}</span><span>${esc(c.name)}</span><span class="count">${c.setting_count}</span>`;
+        const count = categoryVisibleCount(c);
+        const content = `<span class="category-link-icon">${icon(c.name)}</span><span>${esc(c.name)}</span><span class="count">${count}</span>`;
         const button = document.createElement('button');
         button.type = 'button';
         button.className = `category-link${app.category === c.name ? ' active' : ''}`;
@@ -138,6 +184,62 @@
     if (Object.prototype.hasOwnProperty.call(rule, 'equals')) return same(value, rule.equals);
     if (Object.prototype.hasOwnProperty.call(rule, 'not_equals')) return !same(value, rule.not_equals);
     return true;
+  }
+  function settingVisibleInMode(s) {
+    if (s.expert && app.mode !== 'expert') return false;
+    if (!dependencyVisible(s) && app.mode === 'standard') return false;
+    return true;
+  }
+  function categoryVisibleCount(category) {
+    let count = 0;
+    category.sections.forEach(section => section.settings.forEach(s => {
+      if (!settingVisibleInMode(s)) return;
+      if (s.key === NIGHT_COMPOUNDS.start.minute || s.key === NIGHT_COMPOUNDS.end.minute) return;
+      count += 1;
+    }));
+    return count;
+  }
+  function expertHiddenCount(category) {
+    return category.sections.reduce((total, section) => total + section.settings.filter(s => s.expert).length, 0);
+  }
+  function nightText(kind) {
+    const pair = NIGHT_COMPOUNDS[kind];
+    if (app.compoundDraft.has(kind)) return app.compoundDraft.get(kind);
+    return formatTime(currentValue(settingByKey(pair.hour)), currentValue(settingByKey(pair.minute)));
+  }
+  function compoundDirty(kind) {
+    const pair = NIGHT_COMPOUNDS[kind];
+    if (app.compoundDraft.has(kind)) {
+      const configured = formatTime(settingByKey(pair.hour).configured, settingByKey(pair.minute).configured);
+      return app.compoundDraft.get(kind) !== configured;
+    }
+    return app.draft.has(pair.hour) || app.draft.has(pair.minute);
+  }
+  function issueForKeys(keys) {
+    const all = [];
+    keys.forEach(key => {
+      const spec = settingByKey(key);
+      (spec?.issues || []).forEach(issue => all.push(issue));
+    });
+    app.validationIssues.forEach(issue => {
+      if ((issue.keys || []).some(key => keys.includes(key))) all.push(issue);
+    });
+    return all;
+  }
+  function nightCompoundHtml(kind) {
+    const pair = NIGHT_COMPOUNDS[kind];
+    const hourSpec = settingByKey(pair.hour);
+    const minuteSpec = settingByKey(pair.minute);
+    if (!hourSpec || !minuteSpec || !settingVisibleInMode(hourSpec)) return '';
+    const dependencyOk = dependencyVisible(hourSpec);
+    const disabled = !hourSpec.editable || (!dependencyOk && app.mode === 'expert');
+    const issues = issueForKeys([pair.hour, pair.minute]);
+    const classes = ['setting-row', compoundDirty(kind)?'dirty':'', issues.some(i=>i.blocking)?'has-error':'', !dependencyOk?'hidden-by-dependency':''].filter(Boolean).join(' ');
+    const defaultText = formatTime(hourSpec.default, minuteSpec.default);
+    return `<article class="${classes}" data-compound="night-${kind}" data-setting="${esc(pair.hour)}">
+      <div class="setting-copy"><div class="setting-label">${esc(pair.label)}</div>${app.mode==='expert'?`<div class="setting-key">${esc(pair.hour)} + ${esc(pair.minute)}</div>`:''}<div class="setting-help">${esc(pair.description)}</div></div>
+      <div class="setting-editor"><div class="setting-control"><input class="night-time-input" type="text" inputmode="numeric" autocomplete="off" maxlength="5" placeholder="HH:MM" data-night-time="${kind}" value="${esc(nightText(kind))}"${disabled?' disabled':''} aria-invalid="${issues.some(i=>i.blocking)?'true':'false'}"></div><div class="field-meta"><span class="meta-pill">Zulässig: 00:00–23:59</span><span class="meta-pill">Default: ${esc(defaultText)}</span><span class="meta-pill ${hourSpec.apply_class==='restart_required'?'restart':'live'}">${esc(hourSpec.apply_text || hourSpec.apply_class)}</span></div></div>
+    </article>`;
   }
   function inputHtml(s) {
     const value = currentValue(s);
@@ -161,8 +263,14 @@
   function settingHtml(s) {
     const visible = dependencyVisible(s);
     if ((!visible && app.mode === 'standard') || (s.expert && app.mode !== 'expert')) return '';
+    if (NIGHT_KEYS.has(s.key)) {
+      if (s.key === NIGHT_COMPOUNDS.start.hour) return nightCompoundHtml('start');
+      if (s.key === NIGHT_COMPOUNDS.end.hour) return nightCompoundHtml('end');
+      return '';
+    }
+    const issues = issueForKeys([s.key]);
     const dirty = app.draft.has(s.key) || (app.secretOps.get(s.key)?.op && app.secretOps.get(s.key).op !== 'keep');
-    const classes = ['setting-row', dirty?'dirty':'', s.pending_restart?'pending':'', s.issues?.some(i=>i.blocking)?'has-error':'', !visible?'hidden-by-dependency':''].filter(Boolean).join(' ');
+    const classes = ['setting-row', dirty?'dirty':'', s.pending_restart?'pending':'', issues.some(i=>i.blocking)?'has-error':'', !visible?'hidden-by-dependency':''].filter(Boolean).join(' ');
     let range = '';
     if (s.minimum !== null || s.maximum !== null) range = `Zulässig: ${s.minimum ?? '−∞'}–${s.maximum ?? '∞'}${s.unit ? ` ${s.unit}` : ''}`;
     const metas = [
@@ -176,6 +284,14 @@
       <div class="setting-editor">${inputHtml(s)}<div class="field-meta">${metas.map(m=>`<span class="meta-pill">${esc(m)}</span>`).join('')}<span class="meta-pill ${s.apply_class==='restart_required'?'restart':'live'}">${esc(s.apply_text || s.apply_class)}</span>${s.editable&&!s.secret_set?`<button type="button" class="reset-button" data-reset="${esc(s.key)}">Auf Default</button>`:''}</div></div>
     </article>`;
   }
+  function emptyStateHtml(category) {
+    const expertCount = expertHiddenCount(category);
+    if (app.mode === 'standard' && expertCount > 0) {
+      return `<section class="empty-state category-empty-state"><strong>Keine Einstellungen im Standardmodus</strong><p>Die Parameter dieser Kategorie sind technische Schutz- und Diagnoseeinstellungen und werden nur im Expertenmodus angezeigt. Die Schutzfunktionen selbst bleiben auch im Standardmodus aktiv.</p><div class="empty-state-count">${expertCount} Experteneinstellung${expertCount===1?'':'en'} ausgeblendet</div><button id="showExpertMode" class="admin-action-button" type="button">Expertenmodus anzeigen</button></section>`;
+    }
+    const total = category.sections.reduce((n, section) => n + section.settings.length, 0);
+    return `<section class="empty-state category-empty-state"><strong>Derzeit keine sichtbaren Einstellungen</strong><p>${total ? 'Die Einstellungen dieser Kategorie sind aufgrund der aktuellen Konfiguration oder Abhängigkeiten momentan nicht editierbar.' : 'Für diese Kategorie sind keine editierbaren Parameter registriert.'}</p></section>`;
+  }
   function renderCategory() {
     const content = $('#settingsContent');
     content.classList.remove('loading');
@@ -187,18 +303,31 @@
     let body = `<div class="category-panel"><div class="category-head"><div class="category-icon">${icon(c.name)}</div><div><h1>${esc(c.name)}</h1><p>${esc(c.description)}</p></div></div>`;
     if (app.model.status.config_health !== 'valid') body += `<div class="status-banner"><b>Konfigurationsstatus:</b> ${esc(app.model.status.config_health)}. Configured bleibt reparierbar; effective nutzt den letzten gültigen Snapshot.</div>`;
     if (app.model.status.pending_restart) body += `<div class="status-banner"><b>Dienstneustart ausstehend.</b> ${app.model.status.pending_restart_keys.map(esc).join(', ')}</div>`;
+    let renderedSettings = 0;
     c.sections.forEach(section => {
-      const rows = section.settings.map(settingHtml).join('');
-      if (rows) body += `<section class="section-block"><h2>${esc(section.name)}</h2><div class="settings-grid">${rows}</div></section>`;
+      const rowParts = section.settings.map(settingHtml).filter(Boolean);
+      renderedSettings += rowParts.length;
+      if (rowParts.length) body += `<section class="section-block"><h2>${esc(section.name)}</h2><div class="settings-grid">${rowParts.join('')}</div></section>`;
     });
-    if (c.name === 'System & Diagnose' && app.mode === 'expert' && app.model.capabilities.restart_action) {
-      body += `<section class="section-block admin-actions-section"><h2>Administrative Aktionen</h2><div class="settings-grid"><article class="setting-row full admin-action-card"><div class="setting-copy"><div class="setting-label">Controller-Dienst neu starten</div><div class="setting-help">Startet ausschließlich den Zendure-Controller über den geschützten, fest hinterlegten Helper neu. Ungespeicherte Änderungen werden nicht übernommen. Anschließend werden Version, Build-ID und Ready-Status geprüft.</div></div><div class="setting-editor"><button id="adminRestartAction" class="admin-action-button" type="button">Controller-Dienst neu starten</button></div></article></div></section>`;
+    const showAdmin = c.name === 'System & Diagnose' && app.mode === 'expert';
+    if (renderedSettings === 0 && !showAdmin) body += emptyStateHtml(c);
+    if (showAdmin) {
+      const restartDisabled = !app.model.capabilities.restart_action;
+      const pointerEnabled = !!app.model.capabilities.last_good_pointer_repair;
+      body += `<section class="section-block admin-actions-section"><h2>Administrative Aktionen</h2><div class="settings-grid">`;
+      body += `<article class="setting-row full admin-action-card"><div class="setting-copy"><div class="setting-label">Controller-Dienst neu starten</div><div class="setting-help">Startet ausschließlich den Zendure-Controller über den geschützten, fest hinterlegten Helper neu. Ungespeicherte Änderungen werden nicht übernommen. Anschließend werden Version, Build-ID und Ready-Status geprüft.</div></div><div class="setting-editor"><button id="adminRestartAction" class="admin-action-button" type="button"${restartDisabled?' disabled':''}>Controller-Dienst neu starten</button></div></article>`;
+      body += `<article class="setting-row full admin-action-card"><div class="setting-copy"><div class="setting-label">Last-Good-Konfigurationsspeicher</div><div class="setting-help">Repariert ausschließlich den internen Verweis auf einen zuvor vollständig validierten Last-Good-Konfigurationsslot. Es werden keine normalen Einstellungen geladen, geändert oder auf Default gesetzt. Die serverseitige Prüfung bestimmt den Zielslot fail-closed; das Frontend trifft keine Slotwahl.</div><div class="admin-action-status">Status: ${pointerEnabled?'Reparatur erforderlich':'kein Reparaturbedarf erkannt'}</div></div><div class="setting-editor"><button id="adminPointerRepairAction" class="admin-action-button" type="button"${pointerEnabled?'':' disabled'}>Last-Good-Pointer reparieren</button></div></article>`;
+      body += `</div></section>`;
     }
     body += '</div>';
     content.innerHTML = body;
     bindInputs();
+    const showExpert = $('#showExpertMode');
+    if (showExpert) showExpert.onclick = () => { app.mode='expert'; storageSet('zecSettingsMode', app.mode); render(); };
     const adminRestart = $('#adminRestartAction');
-    if (adminRestart) adminRestart.onclick = restart;
+    if (adminRestart && !adminRestart.disabled) adminRestart.onclick = restart;
+    const adminPointer = $('#adminPointerRepairAction');
+    if (adminPointer && !adminPointer.disabled) adminPointer.onclick = repairPointer;
   }
   function openSearch() {
     document.body.classList.add('search-open');
@@ -220,11 +349,36 @@
       app.category = setting._category;
       closeSearch();
       render();
-      setTimeout(() => document.querySelector(`[data-setting="${CSS.escape(setting.key)}"]`)?.scrollIntoView({behavior:'smooth',block:'center'}), 50);
+      setTimeout(() => targetForSettingKey(setting.key)?.scrollIntoView({behavior:'smooth',block:'center'}), 50);
     });
   }
+  function clearValidationIssues() {
+    app.validationIssues = [];
+  }
+  function setNightCompound(kind, raw) {
+    const pair = NIGHT_COMPOUNDS[kind];
+    const parsed = parseTime(raw);
+    app.preview = null;
+    clearValidationIssues();
+    if (!parsed) {
+      app.compoundDraft.set(kind, String(raw));
+      app.draft.delete(pair.hour);
+      app.draft.delete(pair.minute);
+      render();
+      return;
+    }
+    app.compoundDraft.delete(kind);
+    const hourSpec = settingByKey(pair.hour);
+    const minuteSpec = settingByKey(pair.minute);
+    if (same(parsed.hour, hourSpec.configured)) app.draft.delete(pair.hour); else app.draft.set(pair.hour, parsed.hour);
+    if (same(parsed.minute, minuteSpec.configured)) app.draft.delete(pair.minute); else app.draft.set(pair.minute, parsed.minute);
+    render();
+  }
   function bindInputs() {
-    $$('[data-key]').forEach(el => {
+    $$('[data-night-time]').forEach(el => {
+      el.onchange = () => setNightCompound(el.dataset.nightTime, el.value);
+    });
+    $$('[data-key]:not([data-night-time])').forEach(el => {
       el.onchange = () => {
         const s = settingByKey(el.dataset.key);
         let value;
@@ -235,6 +389,7 @@
         else value = el.value;
         if (same(value, s.configured)) app.draft.delete(s.key); else app.draft.set(s.key, value);
         app.preview = null;
+        clearValidationIssues();
         render();
       };
     });
@@ -242,16 +397,19 @@
       const s = settingByKey(button.dataset.reset);
       if (same(s.default, s.configured)) app.draft.delete(s.key); else app.draft.set(s.key, s.default);
       app.preview = null;
+      clearValidationIssues();
       render();
     });
     $$('[data-secret]').forEach(button => button.onclick = () => {
       app.secretOps.set(button.dataset.key, {op:button.dataset.secret});
       app.preview = null;
+      clearValidationIssues();
       render();
     });
     $$('[data-secret-value]').forEach(el => el.oninput = () => {
       app.secretOps.set(el.dataset.secretValue, {op:'replace',value:el.value});
       app.preview = null;
+      clearValidationIssues();
       updateBar();
     });
   }
@@ -273,7 +431,6 @@
     $('#headerVersion').textContent = app.model.controller_version;
     $('#headerSource').textContent = `Config: ${app.model.status.effective_source || 'unbekannt'}`;
     $('#headerReady').innerHTML = `<span class="health-dot ${ready?'valid':'invalid_runtime'}"></span> Ready: ${ready?'ja':'nein'}`;
-    $('#pointerRepairAction').hidden = !app.model.capabilities.last_good_pointer_repair;
     $('#restartAction').hidden = !app.model.status.pending_restart;
     renderNav();
     renderCategory();
@@ -281,20 +438,76 @@
   }
   function payload() {
     const changes = {};
-    app.draft.forEach((value,key) => changes[key] = {op:'set', value});
+    app.draft.forEach((value,key) => { if (!NIGHT_KEYS.has(key)) changes[key] = {op:'set', value}; });
+    Object.values(NIGHT_COMPOUNDS).forEach(pair => {
+      if (!app.draft.has(pair.hour) && !app.draft.has(pair.minute)) return;
+      changes[pair.hour] = {op:'set', value:currentValue(settingByKey(pair.hour))};
+      changes[pair.minute] = {op:'set', value:currentValue(settingByKey(pair.minute))};
+    });
     const secrets = {};
     app.secretOps.forEach((value,key) => secrets[key] = value);
     return {base_revision:app.model.base_revision, changes, secrets};
   }
+  function validateClientDraft() {
+    const issues = [];
+    Object.entries(NIGHT_COMPOUNDS).forEach(([kind, pair]) => {
+      if (!app.compoundDraft.has(kind)) return;
+      const raw = app.compoundDraft.get(kind);
+      if (!parseTime(raw)) issues.push({
+        code:'TIME_FORMAT_INVALID', severity:'error', blocking:true, keys:[pair.hour,pair.minute],
+        message:`${pair.label}: Bitte eine gültige Uhrzeit im Format HH:MM zwischen 00:00 und 23:59 eingeben.`
+      });
+    });
+    app.draft.forEach((value,key) => {
+      if (NIGHT_KEYS.has(key)) return;
+      const spec = settingByKey(key);
+      if (!spec) return;
+      if (['int','optional_int','float'].includes(spec.value_type) && value !== null) {
+        if (typeof value !== 'number' || !Number.isFinite(value)) {
+          issues.push({code:'NUMBER_INVALID',severity:'error',blocking:true,keys:[key],message:`${spec.label}: Bitte eine gültige Zahl eingeben.`});
+          return;
+        }
+        if (spec.minimum !== null && value < spec.minimum) issues.push({code:'VALUE_BELOW_MIN',severity:'error',blocking:true,keys:[key],message:`${spec.label}: Der Wert muss mindestens ${spec.minimum}${spec.unit?` ${spec.unit}`:''} betragen.`});
+        if (spec.maximum !== null && value > spec.maximum) issues.push({code:'VALUE_ABOVE_MAX',severity:'error',blocking:true,keys:[key],message:`${spec.label}: Der Wert darf höchstens ${spec.maximum}${spec.unit?` ${spec.unit}`:''} betragen.`});
+      }
+      if (spec.value_type === 'enum' && !spec.options.some(option => same(option.value, value))) {
+        issues.push({code:'ENUM_INVALID',severity:'error',blocking:true,keys:[key],message:`${spec.label}: Der gewählte Wert ist nicht zulässig.`});
+      }
+    });
+    return issues;
+  }
+  function friendlyPreviewError(error) {
+    if (error.status === 409) return 'Konfiguration wurde zwischenzeitlich geändert. Aktuellen Stand neu laden und Änderungen erneut prüfen.';
+    if (error.status === 403) return 'Die Änderungsprüfung wurde aus Sicherheitsgründen abgewiesen. Seite neu laden und erneut versuchen.';
+    if (error.status >= 500 || error.status === 422) return 'Die Änderungsprüfung konnte wegen eines internen Fehlers nicht ausgeführt werden.';
+    return 'Die Änderungsprüfung konnte nicht ausgeführt werden.';
+  }
   async function preview() {
     if (app.previewInFlight || dirtyCount() === 0) return;
+    const clientIssues = validateClientDraft();
+    if (clientIssues.length) {
+      app.preview = {status:'blocked', preview_id:null, issues:clientIssues, diff:[], confirmations_required:[]};
+      app.validationIssues = clientIssues;
+      renderCategory();
+      openPreview();
+      return;
+    }
     app.previewInFlight = true;
     updateBar();
     try {
       app.preview = await api('/settings/preview', {method:'POST', body:JSON.stringify(payload())});
+      app.validationIssues = app.preview.issues || [];
+      renderCategory();
       openPreview();
     } catch (error) {
-      toast(`Prüfung fehlgeschlagen: ${error.message}`);
+      if (error.status === 422 && error.data?.status === 'blocked' && Array.isArray(error.data.issues)) {
+        app.preview = error.data;
+        app.validationIssues = error.data.issues;
+        renderCategory();
+        openPreview();
+      } else {
+        toast(friendlyPreviewError(error));
+      }
     } finally {
       app.previewInFlight = false;
       updateBar();
@@ -317,14 +530,64 @@
     document.body.style.top = '';
     window.scrollTo({top:app.previewScrollY, left:0, behavior:'auto'});
   }
+  function normalizedPreviewDiff(diff) {
+    const source = Array.isArray(diff) ? diff : [];
+    const nightChanged = source.some(item => NIGHT_KEYS.has(item.key));
+    const out = source.filter(item => !NIGHT_KEYS.has(item.key));
+    if (nightChanged) {
+      const start = NIGHT_COMPOUNDS.start;
+      const end = NIGHT_COMPOUNDS.end;
+      const relevant = source.filter(item => NIGHT_KEYS.has(item.key));
+      out.unshift({
+        key:'__night_window__',
+        label:'Nachtfenster',
+        old:`${formatTime(settingByKey(start.hour).configured, settingByKey(start.minute).configured)} → ${formatTime(settingByKey(end.hour).configured, settingByKey(end.minute).configured)}`,
+        new:`${formatTime(currentValue(settingByKey(start.hour)), currentValue(settingByKey(start.minute)))} → ${formatTime(currentValue(settingByKey(end.hour)), currentValue(settingByKey(end.minute)))}`,
+        apply_class:relevant.some(item => item.apply_class === 'restart_required') ? 'restart_required' : (relevant[0]?.apply_class || 'live_next_cycle'),
+        apply_text:relevant.find(item => item.apply_text)?.apply_text || 'wird nach dem Speichern wirksam',
+      });
+    }
+    return out;
+  }
+  function targetForSettingKey(key) {
+    const kind = nightCompoundForKey(key);
+    if (kind) return document.querySelector(`[data-compound="night-${kind}"]`);
+    return document.querySelector(`[data-setting="${CSS.escape(key)}"]`);
+  }
+  function jumpToSetting(key) {
+    const setting = settingByKey(key);
+    if (!setting) return;
+    $('#previewModal').classList.remove('open');
+    $('#previewBody').innerHTML = '';
+    app.preview = null;
+    unlockPreviewScroll();
+    app.category = setting._category;
+    setCategoryDrawerOpen(false);
+    render();
+    setTimeout(() => {
+      const target = targetForSettingKey(key);
+      target?.scrollIntoView({behavior:'smooth', block:'center'});
+      target?.querySelector('input,select,button')?.focus({preventScroll:true});
+    }, 50);
+  }
   function openPreview() {
-    const p = app.preview;
+    const p = app.preview || {};
+    const issues = Array.isArray(p.issues) ? p.issues : [];
+    const diff = normalizedPreviewDiff(p.diff);
+    const confirmations = Array.isArray(p.confirmations_required) ? p.confirmations_required : [];
+    $('#previewTitle').textContent = p.status === 'blocked' ? 'Änderungen können noch nicht gespeichert werden' : 'Änderungen prüfen';
     let out = '';
-    if (p.issues.length) out += `<ul class="issue-list">${p.issues.map(i=>`<li class="${esc(i.severity)}"><b>${esc(i.code)}</b>: ${esc(i.message)}</li>`).join('')}</ul>`;
-    if (p.diff.length) out += p.diff.map(d=>`<div class="diff-row"><div><b>${esc(d.label)}</b><div class="diff-values">${esc(fmt(d.old))} <span class="diff-arrow">→</span> ${esc(fmt(d.new))}</div></div><span class="meta-pill ${d.apply_class==='restart_required'?'restart':'live'}">${esc(d.apply_text)}</span></div>`).join('');
-    else out += '<div class="notice info">Keine wirksame Änderung erkannt.</div>';
-    if (p.confirmations_required.length) out += p.confirmations_required.map(c=>`<label class="confirmation"><input type="checkbox" data-confirm="${esc(c)}"><span>Hinweis <b>${esc(c)}</b> wurde geprüft und wird bewusst bestätigt.</span></label>`).join('');
+    if (issues.length) out += `<ul class="issue-list">${issues.map(i=>{
+      const firstKey = (i.keys || []).find(key => settingByKey(key));
+      const code = app.mode === 'expert' && i.code ? `<span class="issue-code">${esc(i.code)}</span>` : '';
+      const jump = firstKey ? `<button type="button" class="issue-jump" data-issue-key="${esc(firstKey)}">Zur Einstellung</button>` : '';
+      return `<li class="${esc(i.severity || 'error')}"><div class="issue-copy"><span>${esc(i.message || 'Die Änderung ist nicht zulässig.')}</span>${code}</div>${jump}</li>`;
+    }).join('')}</ul>`;
+    if (diff.length) out += diff.map(d=>`<div class="diff-row"><div><b>${esc(d.label)}</b><div class="diff-values">${esc(fmt(d.old))} <span class="diff-arrow">→</span> ${esc(fmt(d.new))}</div></div><span class="meta-pill ${d.apply_class==='restart_required'?'restart':'live'}">${esc(d.apply_text)}</span></div>`).join('');
+    else if (!issues.length) out += '<div class="notice info">Keine wirksame Änderung erkannt.</div>';
+    if (confirmations.length) out += confirmations.map(c=>`<label class="confirmation"><input type="checkbox" data-confirm="${esc(c)}"><span>Hinweis <b>${esc(c)}</b> wurde geprüft und wird bewusst bestätigt.</span></label>`).join('');
     $('#previewBody').innerHTML = out;
+    $$('[data-issue-key]').forEach(button => button.onclick = () => jumpToSetting(button.dataset.issueKey));
     $('#commitChanges').disabled = p.status !== 'ready' || !p.preview_id;
     lockPreviewScroll();
     $('#previewModal').classList.add('open');
@@ -343,12 +606,14 @@
       const result = await api('/settings/commit', {method:'POST', body:JSON.stringify({preview_id:app.preview.preview_id, confirmations})});
       closePreview();
       app.draft.clear();
+      app.compoundDraft.clear();
       app.secretOps.clear();
+      clearValidationIssues();
       toast(result.pending_restart ? 'Gespeichert. Dienstneustart erforderlich.' : 'Änderungen gespeichert und live übernommen.');
       await load();
     } catch (error) { toast(`Speichern fehlgeschlagen: ${error.message}`); }
   }
-  function discard() { app.draft.clear(); app.secretOps.clear(); app.preview = null; render(); }
+  function discard() { app.draft.clear(); app.compoundDraft.clear(); app.secretOps.clear(); app.preview = null; clearValidationIssues(); render(); }
   function toast(text, ms = 5000) {
     const el = $('#settingsToast');
     el.textContent = text;
@@ -483,7 +748,6 @@
     setCategoryDrawerOpen(false);
     window.addEventListener('resize', () => setCategoryDrawerOpen(false));
     $('#restartAction').onclick = restart;
-    $('#pointerRepairAction').onclick = repairPointer;
     load();
     refreshGlobalStatus();
     setInterval(refreshGlobalStatus, 3000);
