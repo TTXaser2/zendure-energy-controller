@@ -17,6 +17,7 @@
     preview: null,
     previewInFlight: false,
     statusInFlight: false,
+    previewScrollY: 0,
   };
   const $ = (s, root = document) => root.querySelector(s);
   const $$ = (s, root = document) => Array.from(root.querySelectorAll(s));
@@ -78,11 +79,33 @@
     });
     return new Map(Array.from(grouped.entries()).filter(([, cats]) => cats.length));
   }
+  function categoryDrawerIsMobile() {
+    return window.matchMedia('(max-width: 820px)').matches;
+  }
+  function setCategoryDrawerOpen(open) {
+    const sidebar = $('.settings-sidebar');
+    const button = $('#mobileMenu');
+    const backdrop = $('#categoryDrawerBackdrop');
+    const active = categoryDrawerIsMobile() && !!open;
+    sidebar?.classList.toggle('open', active);
+    document.body.classList.toggle('category-drawer-open', active);
+    button?.setAttribute('aria-expanded', String(active));
+    sidebar?.setAttribute('aria-hidden', String(categoryDrawerIsMobile() ? !active : false));
+    if (backdrop) backdrop.hidden = !active;
+  }
+  function scrollCategoryToTop() {
+    requestAnimationFrame(() => {
+      window.scrollTo({top:0, left:0, behavior:'auto'});
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    });
+  }
   function selectCategory(name) {
     app.category = name;
-    $('.settings-sidebar')?.classList.remove('open');
+    setCategoryDrawerOpen(false);
     $('#mobileCategories')?.removeAttribute('open');
     render();
+    scrollCategoryToTop();
   }
   function renderNav() {
     const nav = $('#settingsNav');
@@ -168,9 +191,14 @@
       const rows = section.settings.map(settingHtml).join('');
       if (rows) body += `<section class="section-block"><h2>${esc(section.name)}</h2><div class="settings-grid">${rows}</div></section>`;
     });
+    if (c.name === 'System & Diagnose' && app.mode === 'expert' && app.model.capabilities.restart_action) {
+      body += `<section class="section-block admin-actions-section"><h2>Administrative Aktionen</h2><div class="settings-grid"><article class="setting-row full admin-action-card"><div class="setting-copy"><div class="setting-label">Controller-Dienst neu starten</div><div class="setting-help">Startet ausschließlich den Zendure-Controller über den geschützten, fest hinterlegten Helper neu. Ungespeicherte Änderungen werden nicht übernommen. Anschließend werden Version, Build-ID und Ready-Status geprüft.</div></div><div class="setting-editor"><button id="adminRestartAction" class="admin-action-button" type="button">Controller-Dienst neu starten</button></div></article></div></section>`;
+    }
     body += '</div>';
     content.innerHTML = body;
     bindInputs();
+    const adminRestart = $('#adminRestartAction');
+    if (adminRestart) adminRestart.onclick = restart;
   }
   function openSearch() {
     document.body.classList.add('search-open');
@@ -277,6 +305,18 @@
     if (v === null || v === undefined || v === '') return 'leer';
     return String(v);
   }
+  function lockPreviewScroll() {
+    if (document.body.classList.contains('preview-open')) return;
+    app.previewScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    document.body.style.top = `-${app.previewScrollY}px`;
+    document.body.classList.add('preview-open');
+  }
+  function unlockPreviewScroll() {
+    if (!document.body.classList.contains('preview-open')) return;
+    document.body.classList.remove('preview-open');
+    document.body.style.top = '';
+    window.scrollTo({top:app.previewScrollY, left:0, behavior:'auto'});
+  }
   function openPreview() {
     const p = app.preview;
     let out = '';
@@ -286,12 +326,15 @@
     if (p.confirmations_required.length) out += p.confirmations_required.map(c=>`<label class="confirmation"><input type="checkbox" data-confirm="${esc(c)}"><span>Hinweis <b>${esc(c)}</b> wurde geprüft und wird bewusst bestätigt.</span></label>`).join('');
     $('#previewBody').innerHTML = out;
     $('#commitChanges').disabled = p.status !== 'ready' || !p.preview_id;
+    lockPreviewScroll();
     $('#previewModal').classList.add('open');
+    $('#previewClose')?.focus({preventScroll:true});
   }
   function closePreview() {
     $('#previewModal').classList.remove('open');
     $('#previewBody').innerHTML = '';
     app.preview = null;
+    unlockPreviewScroll();
     updateBar();
   }
   async function commit() {
@@ -433,13 +476,23 @@
     $('#discardChanges').onclick = discard;
     $('#previewClose').onclick = closePreview;
     $('#previewBack').onclick = closePreview;
+    $('#previewModal').onclick = event => { if (event.target === $('#previewModal')) closePreview(); };
     $('#commitChanges').onclick = commit;
-    $('#mobileMenu').onclick = () => $('.settings-sidebar')?.classList.toggle('open');
+    $('#mobileMenu').onclick = () => setCategoryDrawerOpen(!$('.settings-sidebar')?.classList.contains('open'));
+    $('#categoryDrawerBackdrop').onclick = () => setCategoryDrawerOpen(false);
+    setCategoryDrawerOpen(false);
+    window.addEventListener('resize', () => setCategoryDrawerOpen(false));
     $('#restartAction').onclick = restart;
     $('#pointerRepairAction').onclick = repairPointer;
     load();
     refreshGlobalStatus();
     setInterval(refreshGlobalStatus, 3000);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'hidden') refreshGlobalStatus(); });
+    document.addEventListener('keydown', event => {
+      if (event.key !== 'Escape') return;
+      if ($('#previewModal')?.classList.contains('open')) closePreview();
+      else if ($('.settings-sidebar')?.classList.contains('open')) setCategoryDrawerOpen(false);
+      else if (document.body.classList.contains('search-open')) closeSearch();
+    });
   });
 })();

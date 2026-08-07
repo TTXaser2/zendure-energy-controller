@@ -1,128 +1,93 @@
-# Zendure Energy Controller V12.11.2-RC20
+# Zendure Energy Controller V12.11.4
 
-**Freigegebene Build-ID:** `rc20-audit-fix6-20260806`
+**Build-ID:** `v12.11.4-20260807`
 
-V12.11.2-RC20 ist der **Settings-Release** auf Basis von RC19. Dieser Quellstand ist der korrigierte Rebuild des zuvor auditierten und nicht freigegebenen RC20-Pakets. Er ersetzt die bisherige technisch gruppierte Einstellungsseite durch eine fachlich strukturierte, sichere und responsive Oberfläche und führt den dazu notwendigen Config-Runtime-Vertrag ein.
+V12.11.4 ist ein eng begrenzter Bedienungs- und Diagnose-Bugfix auf Basis von V12.11.3. Der Release korrigiert die mobile Settings-Bedienung, die Ereignis-Reconciliation und kleinere Konsistenzprobleme der Settings-Oberfläche. Die energetische Regelung, die Zielwertbildung, der Command-Lifecycle und das Measurement-V4-Schema bleiben unverändert.
 
-## 1. Neue Settings-Seite
+## 1. Korrekturen in V12.11.4
 
-Die neue Oberfläche unter `/settings` bietet:
+### 1.1 Mobile Settings-Navigation
 
-- zwölf fachliche Kategorien statt historischer Python-/Schema-Gruppen;
+- Der Burger-Button öffnet jetzt zuverlässig den Kategorien-Drawer.
+- Der Drawer ist per Schaltfläche, Hintergrund, Kategorieauswahl und `Escape` schließbar.
+- ARIA-Zustände werden korrekt aktualisiert.
+- Die akzeptierte horizontal scrollbare globale Hauptnavigation bleibt unverändert erhalten.
+
+### 1.2 Änderungsprüfung auf Mobilgeräten
+
+- Das Vorschau-Modal besitzt einen eigenen vertikalen Scrollbereich.
+- Der Seitenhintergrund bleibt bei geöffnetem Modal fixiert.
+- Modal-Header und Aktionen bleiben erreichbar.
+- Abbrechen, Schließen und erneutes Prüfen funktionieren ohne künstliche Zwischenänderung.
+
+### 1.3 Kategorieposition
+
+Ein normaler Klick auf eine Settings-Kategorie zeigt deren Inhalt jetzt immer von oben. Suchtreffer dürfen weiterhin gezielt zum gefundenen Feld springen.
+
+### 1.4 Ereignis-Reconciliation
+
+Bei gesundem Livezustand werden auch ältere offene MQTT- und Zendure-Telemetrieereignisse geschlossen, deren historische Dedupe-Schlüssel nicht mehr dem aktuellen Schlüssel entsprechen. Die Ereignisse werden nicht gelöscht, sondern auf `resolved` gesetzt.
+
+### 1.5 Warnungsanzeige
+
+Der Warnungszähler der globalen Kopfzeile berücksichtigt offene Warnungs- und Fehlergruppen konsistent mit der Betriebsereigniskarte.
+
+### 1.6 Geschützter manueller Dienstneustart
+
+Im Expertenmodus befindet sich unter **System & Diagnose** wieder eine dauerhaft erreichbare administrative Aktion **„Controller-Dienst neu starten“**. Sie verwendet ausschließlich den bestehenden geschützten Restart-Vertrag; es wird kein frei konfigurierbarer Shellbefehl eingeführt.
+
+### 1.7 Responsive Korrekturen
+
+- Der mobile Settings-Kontextkopf ist zweizeilig strukturiert.
+- Unbeabsichtigtes horizontales Dokument-Overflow wird verhindert.
+- Die globale Hauptnavigation bleibt als eigener horizontal scrollbarer Bereich erhalten.
+- Die feste Änderungsleiste bleibt vollständig erreichbar.
+
+## 2. Bestehender Settings-Vertrag
+
+Die Settings-Oberfläche bietet weiterhin:
+
+- zwölf fachliche Kategorien;
 - Standard- und Expertenansicht derselben Konfiguration;
 - Suche über Bezeichnung, Beschreibung und Config-Key;
-- abhängige Felder und klare Aktiv-/Inaktiv-Semantik;
-- konfigurierten, tatsächlich wirksamen und Default-Wert getrennt;
-- Wertebereich, Einheit, Wirkung, Risiko und Apply-Klasse;
-- sichtbare Änderungsmarkierung;
-- serverseitige Vorschau vor dem Speichern;
-- alte/neue Werte, Validierungsissues, Bestätigungen und Restartbedarf;
-- sichere Secret-Operationen `beibehalten`, `ersetzen`, `löschen`;
-- mobile Navigation und responsive Karten.
+- typisierte serverseitige Validierung;
+- Vorschau mit Änderungsdiff vor dem Speichern;
+- atomisches Speichern mit Dateirevisions-CAS;
+- sichere Secret-Behandlung;
+- Trennung von `configured`, `effective` und `pending`;
+- Last-Good- und Recovery-Vertrag;
+- gemeinsame globale Navigation mit Statusampel.
 
-## 2. Config-Runtime-Vertrag
+## 3. Sicherheitsabgrenzung
 
-RC20 trennt:
+V12.11.4 verändert nicht:
 
-```text
-configured = exakte Primär-/Nutzerwerte; bei Fehlern sichtbar, aber nicht wirksam
-effective  = vollständig validierte, im laufenden Prozess tatsächlich wirksame Werte
-pending    = gültige, aber neustartpflichtige Änderungen
-```
-
-Die Python-`SettingsRegistry` ist die einzige Schemaautorität. `config.json` bleibt die persistierte, manuell per SSH editierbare Nutzerkonfiguration.
-
-Externe Änderungen werden als vollständige Whole-File-Transaktion verarbeitet:
-
-```text
-stat vorher
-→ vollständige Datei lesen
-→ stat nachher
-→ strikt parsen und vollständig validieren
-→ atomar übernehmen oder vollständig verwerfen
-```
-
-Es gibt kein Partial Apply, kein Clamp, keine stille Reparatur und keinen Default-Fallback für invalide vorhandene Werte.
-
-## 3. Manuelle Recovery und Headless Mode
-
-Die `config.json` bleibt bewusst manuell editierbar. Eine versehentliche Headless-Aktivierung kann durch:
-
-```json
-"HEADLESS_MODE": false
-```
-
-ohne Dienstneustart rückgängig gemacht werden, sofern die gesamte Datei valide ist.
-
-Wird die Datei erst im laufenden Betrieb invalid, arbeitet der Controller mit dem letzten gültigen `effective` Snapshot weiter. Die fehlerhafte Datei bleibt unverändert zur Diagnose erhalten.
-
-## 4. Sicheres Speichern
-
-- exakte SHA256-Dateirevision als CAS;
-- jede zwischenzeitliche Byteänderung verwirft offene Previews mit `409 Conflict`;
-- atomisches Tempfile/`fsync`/`replace`/Verzeichnis-`fsync`;
-- Dateimodus `0600`;
-- unbekannte Erweiterungskeys bleiben erhalten;
-- Secrets erscheinen weder in Modellen, Diffs noch Logs im Klartext;
-- alte Schreibendpunkte sind deaktiviert und antworten mit `410 Gone`.
-
-## 5. Last-Good und Startup-Recovery
-
-Nach 300 Sekunden durchgehendem vollständigem Stable-Ready im normalen Betrieb kann die aktive Config asynchron und Single-Flight als Last-Good gefördert werden. Der Store nutzt zwei feste A/B-Slots und einen atomaren Current-Pointer.
-
-Bei invalider oder fehlender Primärconfig:
-
-```text
-Recoverycandidate bestimmen
-→ passive Quellen-/Freshness-Prüfung
-→ bis zum vollständigen Preflight keine Gerätekommandos
-→ danach Recovery Active
-```
-
-Es gibt keine automatischen Probecommands und keine automatische Pointerreparatur.
-
-## 6. Neustartvertrag
-
-Der freie Config-Key `SERVICE_RESTART_COMMAND` ist entfernt. Ein Neustart erfolgt ausschließlich über den root-eigenen Helper:
-
-```text
-/usr/local/sbin/zendure-controller-restart
-```
-
-Die Webaktion ist Session-, CSRF-, Origin-, expliziter Bestätigungs-, Single-Flight- und Cooldown-geschützt. Erfolg gilt erst nach `ready=true`, erwarteter Version und Build-ID.
-
-## 7. Migration und Installation
-
-RC20 unterstützt bewusst nur den exakten sequenziellen Übergang:
-
-```text
-V12.11.2-RC19 → V12.11.2-RC20
-```
-
-Das Update-Skript führt vor dem Stoppen des Produktivdienstes Syntax-, Test- und Migrationspreflight durch, erstellt ein vollständiges Rollback-Backup, migriert die Config eng begrenzt und wartet anschließend bis zu 90 Sekunden auf valides `/ready` mit `ready=true`.
-
-## 8. Unverändert
-
-RC20 verändert keine energetische Zielwertformel und keine bestehende Regelstrategie:
-
-- AUTO, HOLD, NIGHT und feste Modi;
-- RC17-Harvest und 0-W-Netzziel;
+- AUTO-, HOLD-, NIGHT- oder feste Modi;
+- Harvest-Formeln und 0-W-Netzziel;
+- MIN-/MAX-SOC-Schutzlogik;
 - Cross-Charge;
-- Command-Lifecycle, Resync und Late-Effect-Guard;
 - Smart-Mode-/Flash-Schutz;
-- Offgrid-Semantik und read-only Gerätecaps;
-- Measurement-V4-Header;
+- Command-State-Gate, Readback, Effect, Resync oder Late-Effect-Guard;
 - lokale Zendure-API-Architektur;
+- Measurement-V4-Header;
+- SQLite-Graphstore;
 - Excel-Lernsimulation.
 
-Installation und Verifikation: `README_INSTALLATION.md`.
+Die geschützten Regler- und Commanddateien werden bei der Releasevalidierung bytegenau gegen V12.11.3 verglichen.
 
+## 4. Installation
 
-## 8. Fix 6 – gemeinsame Navigation, SOC-Grenzen und Ereignis-Reconciliation
+Siehe `README_INSTALLATION.md`.
 
-- Status, Graph und Settings verwenden dieselbe globale Navigation mit live aktualisierter Statusampel.
-- Erwartete MIN_SOC-/MAX_SOC-Grenzen werden als neutraler `HOLD` statt als Fehler-`SAFE_STATE` dargestellt.
-- Alte offene MQTT-/Telemetrieereignisse werden bei stabil gesundem Livezustand vollständig auf `resolved` gesetzt; die Historie bleibt erhalten.
-- Settings nutzt die verfügbare Breite, koppelt Label/Hilfe/Input/Metadaten vertikal, verwendet fachliche Icons und repariert den Preview-Abbruch.
-- Das Storage-Inventar arbeitet persistent und inkrementell.
-- Der Installer akzeptiert RC19 oder exakt RC20 Fix 5 als Quelle.
+## 5. Nächste geplante Entwicklungsschritte
+
+Nicht Bestandteil dieses Bugfixes:
+
+1. Settings-Hilfe, Abschnittserklärungen, Info-Modals und geführte Bedienung;
+2. benannte Konfigurationsstände sowie sicherer Import/Export;
+3. Graph-Redesign;
+4. erweiterte Experten-/Diagnoseansicht;
+5. Measurement-Storage-Härtung;
+6. separater Simulationsdienst.
+
+Diese Folgeblöcke werden erst nach eigener fachlicher Freigabe umgesetzt.

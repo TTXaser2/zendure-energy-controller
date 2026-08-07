@@ -15,8 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class Rc20ReleaseIntegrationTests(unittest.TestCase):
     def test_version_is_rc20_without_measurement_schema_change(self):
-        self.assertEqual("12.11.2-rc20", version.APP_VERSION)
-        self.assertEqual("V12.11.2-RC20", version.APP_VERSION_LABEL)
+        self.assertEqual("12.11.4", version.APP_VERSION)
+        self.assertEqual("V12.11.4", version.APP_VERSION_LABEL)
         self.assertEqual("ZEC-MEASUREMENT-V3", version.CSV_SCHEMA)
 
     def test_migration_cli_check_apply_and_idempotence(self):
@@ -100,17 +100,18 @@ class Rc20ReleaseIntegrationTests(unittest.TestCase):
 
     def test_updater_is_exact_sequential_atomic_and_rollback_capable(self):
         script = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_VERSION="v12_11_2_rc20"', script)
+        self.assertIn('EXPECTED_VERSION="v12_11_4"', script)
         self.assertIn('EXPECTED_SOURCE_RC19="12.11.2-rc19"', script)
         self.assertIn('EXPECTED_SOURCE_FIX5_BUILD_ID="rc20-audit-fix5-20260806"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="rc20-audit-fix6-20260806"', script)
-        self.assertIn('TARGET_PACKAGE_VERSION" = "12.11.2-rc20"', script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v12.11.4-20260807"', script)
+        self.assertIn('TARGET_PACKAGE_VERSION" = "12.11.4"', script)
         self.assertIn("migrate_rc19_to_rc20.py", script)
         self.assertIn("--check-only", script)
         self.assertIn("recover_on_error", script)
         self.assertIn('sudo tar -xzf "$BACKUP" -C /opt', script)
-        self.assertIn("payload.get(\"ready\") is True", script)
-        self.assertIn("innerhalb von 90 Sekunden nicht ready=true", script)
+        self.assertIn("evaluate_installation_readiness.py", script)
+        self.assertIn("weder ready=true noch einen stabilen sicheren Übergangszustand", script)
+        self.assertIn('EXPECTED_SOURCE_FIX6_BUILD_ID="rc20-audit-fix6-20260806"', script)
         self.assertIn("zendure-controller-restart", script)
         self.assertIn("visudo -cf", script)
         self.assertNotIn("SERVICE_RESTART_COMMAND", script)
@@ -151,7 +152,7 @@ class Rc20ReleaseIntegrationTests(unittest.TestCase):
         self.assertIn('os.environ.get("ZEC_INSTALLER_PREFLIGHT") == "1"', web_ui)
 
     def test_release_manifest_must_not_ship_runtime_logs(self):
-        manifest = (ROOT / "RC20_SOURCE_MANIFEST.sha256").read_text(encoding="utf-8")
+        manifest = (ROOT / "V12_11_4_SOURCE_MANIFEST.sha256").read_text(encoding="utf-8")
         self.assertNotIn("./logs/", manifest)
         self.assertNotIn(".sqlite3", manifest)
 

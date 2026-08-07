@@ -1,0 +1,50 @@
+Zendure Energy Controller V12.11.3 -> V12.11.4
+
+Neue Dateien einschließlich Release-Metadaten (8):
+- BACKLOG_AFTER_V12_11_4.md
+- BUILD_VALIDATION_V12_11_4.md
+- RELEASE_INFO_V12_11_4.md
+- TECHNICAL_NOTES_V12_11_4.md
+- V12_11_3_TO_V12_11_4_CHANGED_FILES.txt
+- V12_11_4_SOURCE_MANIFEST.sha256
+- tests/test_v12_11_4_installer_readiness_acceptance.py
+- tests/test_v12_11_4_settings_mobile_events.py
+
+Geänderte Dateien (26):
+- README.md
+- README_INSTALLATION.md
+- operational_events.py
+- static/settings_v2.css
+- static/settings_v2.js
+- tests/test_v12_11_2_rc10_status_preview.py
+- tests/test_v12_11_2_rc19_status_diagnostics_stabilization.py
+- tests/test_v12_11_2_rc20_fix5_runtime_readiness.py
+- tests/test_v12_11_2_rc20_release_integration.py
+- tests/test_v12_11_2_rc2_ui_polish.py
+- tests/test_v12_11_2_rc4_ui_polish.py
+- tests/test_v12_11_2_rc5_operations_dashboard.py
+- tests/test_v12_11_2_rc6_ui_diagnostics_hotfix.py
+- tests/test_v12_11_2_rc7_backlog_release.py
+- tests/test_v12_11_2_rc8_backlog_completion.py
+- tests/test_v12_11_2_rc9_ui_semantics.py
+- tests/test_v12_11_rc13_support_tools.py
+- tests/test_v12_11_rc14_ui_polish.py
+- tests/test_v12_11_rc15_ui_graph.py
+- tests/test_v12_11_rc16_performance.py
+- tests/test_v12_11_rc17_sqlite_store.py
+- tests/test_v12_11_rc18_import_tool.py
+- tools/evaluate_installation_readiness.py
+- tools/update_zendure_controller.sh
+- version.py
+- web_ui.py
+
+Umbenannt (1):
+- tests/test_v12_11_3_installer_readiness_acceptance.py
+  -> tests/test_v12_11_4_installer_readiness_acceptance.py
+
+Gelöschte fachliche Quelldateien:
+- keine
+
+Paketbereinigung gegenüber dem V12.11.3-ZIP:
+- altes V12.11.3-Source-Manifest durch V12.11.4-Manifest ersetzt
+- __pycache__, .pytest_cache, Bytecode und Laufzeit-SQLite nicht ausgeliefert

@@ -4491,6 +4491,7 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
     current_throttle = throttling.get("current") or []
     historic_throttle = throttling.get("historic") or []
     resource_tone = "bad" if current_throttle or ((metrics.get("temperature_c") or 0) >= 75) or ((metrics.get("ram_used_percent") or 0) >= 92) else ("warn" if historic_throttle or ((metrics.get("temperature_c") or 0) >= 65) or ((metrics.get("ram_used_percent") or 0) >= 75) else "ok")
+    base_warning_count = len(warnings)
     event_rows = events if events is not None else read_recent_events(cfg, days=2, limit=250)
     open_events = [e for e in event_rows if e.get("status") == "open"]
     active_event_rows = [
@@ -4508,15 +4509,17 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
         if len(seen_event_titles) >= 5:
             break
     open_error_count = sum(1 for e in active_event_rows if str(e.get("severity") or "").lower() == "error")
+    open_warning_count = sum(1 for e in active_event_rows if str(e.get("severity") or "").lower() == "warning")
+    active_warning_group_count = base_warning_count + open_warning_count
     if mode == "SAFE_STATE":
         status_kind = "bad"
         system_status = "Safe-State"
     elif open_error_count:
         status_kind = "bad"
         system_status = f"Fehler {open_error_count}"
-    elif warnings:
+    elif active_warning_group_count:
         status_kind = "warn"
-        system_status = f"Warnung {len(warnings)}"
+        system_status = f"Warnung {active_warning_group_count}"
     else:
         status_kind = "ok"
         system_status = "System OK"
@@ -5449,7 +5452,7 @@ def build_settings_page(
 </head><body class="zec-settings-v2">
 {topbar}
 <div class="settings-contextbar">
-  <button id="mobileMenu" class="mobile-menu" type="button" aria-label="Kategorien öffnen">☰</button>
+  <button id="mobileMenu" class="mobile-menu" type="button" aria-label="Kategorien öffnen" aria-expanded="false" aria-controls="settingsSidebar">☰</button>
   <div class="settings-title-block"><div class="settings-title">ZEC Settings</div><div class="settings-subtitle">Konfiguration, Regelung und Diagnose</div></div>
   <div class="header-statuses">
     <span id="headerVersion" class="header-pill">{html.escape(APP_VERSION_LABEL)}</span>
@@ -5462,7 +5465,7 @@ def build_settings_page(
   <div class="config-health"><span id="healthDot" class="health-dot"></span><span id="healthText">Konfiguration wird geprüft</span></div>
 </div>
 <div class="settings-app">
-  <aside class="settings-sidebar" aria-label="Einstellungskategorien">
+  <aside id="settingsSidebar" class="settings-sidebar" aria-label="Einstellungskategorien" aria-hidden="true">
     <nav id="settingsNav" class="sidebar-nav"></nav>
     <div id="sidebarVersion" class="sidebar-version">Controller: {html.escape(APP_VERSION_LABEL)}</div>
   </aside>
@@ -5471,6 +5474,7 @@ def build_settings_page(
     <div id="settingsContent" class="loading">Settings-Modell wird geladen …</div>
   </main>
 </div>
+<div id="categoryDrawerBackdrop" class="category-drawer-backdrop" hidden></div>
 <div class="save-bar"><div id="dirtyCount" class="dirty-count"><span class="dot"></span><span id="dirtyText">Keine ungespeicherten Änderungen</span></div><div class="save-spacer"></div><button id="pointerRepairAction" class="discard-btn" type="button" hidden>Last-Good-Pointer reparieren</button><button id="restartAction" class="discard-btn" type="button" hidden>Dienst neu starten</button><button id="discardChanges" class="discard-btn" type="button" disabled>Verwerfen</button><button id="reviewChanges" class="review-btn" type="button" disabled>Änderungen prüfen</button></div>
 <aside id="searchDrawer" class="search-drawer" aria-hidden="true" aria-label="Einstellungen durchsuchen"><div class="search-drawer-head"><h2>Settings durchsuchen</h2><button id="closeSearch" class="modal-close" type="button" aria-label="Suche schließen">×</button></div><div class="search-wrap"><span class="search-icon">⌕</span><input id="settingsSearch" type="search" placeholder="Bezeichnung, Beschreibung oder Config-Key" autocomplete="off"><button id="searchClear" class="search-clear" type="button" aria-label="Suche leeren">×</button></div><div id="searchResults" class="search-results"><div class="empty-state">Suchbegriff eingeben.</div></div></aside>
 <div id="drawerBackdrop" class="drawer-backdrop"></div>

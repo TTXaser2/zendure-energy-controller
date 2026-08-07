@@ -43,8 +43,8 @@ class V12112Rc8BacklogCompletionTests(unittest.TestCase):
         return controller
 
     def test_version(self):
-        self.assertEqual("12.11.2-rc20", version.APP_VERSION)
-        self.assertEqual("V12.11.2-RC20", version.APP_VERSION_LABEL)
+        self.assertEqual("12.11.4", version.APP_VERSION)
+        self.assertEqual("V12.11.4", version.APP_VERSION_LABEL)
 
     def test_neutral_fresh_actual_clears_only_stale_diagnostic_uncertainty(self):
         controller = self._controller_for_effect_monitor(actual=0, age=1.0)
@@ -162,9 +162,10 @@ class V12112Rc8BacklogCompletionTests(unittest.TestCase):
         self.assertIn("READY_DEADLINE=$((SECONDS + 90))", script)
         self.assertIn('while [ "$SECONDS" -lt "$READY_DEADLINE" ]', script)
         self.assertIn("python3 -m json.tool", script)
-        self.assertIn("Update abgeschlossen und Ready-Check erfolgreich", script)
-        self.assertIn("innerhalb von 90 Sekunden nicht ready=true", script)
-        self.assertIn('payload.get("ready") is True', script)
+        self.assertIn("Update abgeschlossen und Installations-Abnahme erfolgreich", script)
+        self.assertIn("weder ready=true noch einen stabilen sicheren Übergangszustand", script)
+        self.assertIn("evaluate_installation_readiness.py", script)
+        self.assertIn("TRANSITIONAL_STREAK", script)
         self.assertNotIn('curl -s "http://127.0.0.1:8080/ready" | python3 -m json.tool || true', script)
 
     def test_fastapi_uses_lifespan_and_ui_test_closes_file(self):

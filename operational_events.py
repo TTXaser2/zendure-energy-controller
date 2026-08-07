@@ -230,18 +230,19 @@ class OperationalEventJournal:
     def _resolve(self, conn: sqlite3.Connection, dedupe_key: str, title: str, detail: str) -> None:
         """Resolve every stale open row for one live incident key.
 
-        Older releases could leave more than one row open across restarts.  A
-        verified healthy live state closes the complete incident set so history
-        cannot masquerade as an active fault.
+        Older releases could leave more than one row open across restarts and
+        used inconsistent or empty dedupe keys. A verified healthy live state
+        therefore closes the complete canonical event-type family as well as
+        the current key, so history cannot masquerade as an active fault.
         """
         now = time.time()
         cursor = conn.execute(
             """
             UPDATE operational_events
             SET ended_at=?,status='resolved',title=?,detail=?
-            WHERE dedupe_key=? AND status='open'
+            WHERE status='open' AND (dedupe_key=? OR event_type=?)
             """,
-            (now, title, detail, dedupe_key),
+            (now, title, detail, dedupe_key, dedupe_key),
         )
         if cursor.rowcount:
             conn.commit()

@@ -5,14 +5,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/root_artifact_transaction.sh"
 
 VERSION="${1:-}"
-EXPECTED_VERSION="v12_11_2_rc20"
+EXPECTED_VERSION="v12_11_4"
 EXPECTED_SOURCE_RC19="12.11.2-rc19"
 EXPECTED_SOURCE_FIX5_VERSION="12.11.2-rc20"
 EXPECTED_SOURCE_FIX5_BUILD_ID="rc20-audit-fix5-20260806"
-EXPECTED_TARGET_BUILD_ID="rc20-audit-fix6-20260806"
+EXPECTED_SOURCE_FIX6_VERSION="12.11.2-rc20"
+EXPECTED_SOURCE_FIX6_BUILD_ID="rc20-audit-fix6-20260806"
+EXPECTED_SOURCE_V12113_VERSION="12.11.3"
+EXPECTED_SOURCE_V12113_BUILD_ID="v12.11.3-20260806"
+EXPECTED_TARGET_BUILD_ID="v12.11.4-20260807"
 
 if [ "$VERSION" != "$EXPECTED_VERSION" ]; then
-    echo "FEHLER: Dieses Update-Skript unterstützt RC19 -> RC20 Fix 6 sowie RC20 Fix 5 -> Fix 6."
+    echo "FEHLER: Dieses Update-Skript unterstützt V12.11.3 sowie die dokumentierten Fix-6-/Recovery-Ausgangsstände als Quelle für V12.11.4."
     echo "Aufruf: $0 ${EXPECTED_VERSION}"
     exit 1
 fi
@@ -22,8 +26,8 @@ DIR="/home/pi/Downloads/zendure_controller_${VERSION}"
 TARGET="/opt/zendure-controller"
 STAMP="$(date +%Y%m%d_%H%M%S)"
 BACKUP="/home/pi/zendure-controller-backup-${STAMP}.tar.gz"
-CONFIG_BACKUP="/home/pi/config.pre-rc20-fix6.${STAMP}.json"
-ROOT_ARTIFACT_BACKUP="/var/backups/zec-rc20-root-artifacts-${STAMP}"
+CONFIG_BACKUP="/home/pi/config.pre-v12.11.4.${STAMP}.json"
+ROOT_ARTIFACT_BACKUP="/var/backups/zec-v12.11.4-root-artifacts-${STAMP}"
 RESTART_HELPER_DEST="/usr/local/sbin/zendure-controller-restart"
 SUDOERS_DEST="/etc/sudoers.d/zendure-controller"
 ROLLBACK_STARTED=0
@@ -88,11 +92,11 @@ recover_on_error() {
     ROLLBACK_STARTED=1
     echo
     if [ "$INSTALLATION_STARTED" -eq 0 ]; then
-        echo "FEHLER: RC20-Paketvorprüfung wurde abgebrochen."
+        echo "FEHLER: V12.11.4-Paketvorprüfung wurde abgebrochen."
         echo "Die Produktivinstallation wurde noch nicht begonnen; Dienste und /opt/zendure-controller blieben unverändert."
         exit "$exit_code"
     fi
-    echo "FEHLER: RC20-Update wurde während der Produktivinstallation abgebrochen. Starte automatischen Rollback."
+    echo "FEHLER: V12.11.4-Update wurde während der Produktivinstallation abgebrochen. Starte automatischen Rollback."
     sudo systemctl stop zendure-controller.service zendure-replay.service zendure-status-preview.service >/dev/null 2>&1 || true
     if [ "$BACKUP_CREATED" -eq 1 ] && [ -f "$BACKUP" ]; then
         sudo rm -rf "$TARGET"
@@ -119,14 +123,14 @@ recover_on_error() {
 trap 'recover_on_error $?' ERR
 
 verify_source_manifest() {
-    [ -f "$DIR/RC20_SOURCE_MANIFEST.sha256" ] || {
-        echo "FEHLER: RC20_SOURCE_MANIFEST.sha256 fehlt im Paket."
+    [ -f "$DIR/V12_11_4_SOURCE_MANIFEST.sha256" ] || {
+        echo "FEHLER: V12_11_4_SOURCE_MANIFEST.sha256 fehlt im Paket."
         return 1
     }
     (
         trap - ERR
         cd "$DIR"
-        sha256sum -c RC20_SOURCE_MANIFEST.sha256 >/dev/null
+        sha256sum -c V12_11_4_SOURCE_MANIFEST.sha256 >/dev/null
     )
 }
 
@@ -180,9 +184,13 @@ if [ "$INSTALLED_VERSION" = "$EXPECTED_SOURCE_RC19" ]; then
     SOURCE_MODE="RC19"
 elif [ "$INSTALLED_VERSION" = "$EXPECTED_SOURCE_FIX5_VERSION" ] && [ "$INSTALLED_BUILD_ID" = "$EXPECTED_SOURCE_FIX5_BUILD_ID" ]; then
     SOURCE_MODE="RC20_FIX5"
+elif [ "$INSTALLED_VERSION" = "$EXPECTED_SOURCE_FIX6_VERSION" ] && [ "$INSTALLED_BUILD_ID" = "$EXPECTED_SOURCE_FIX6_BUILD_ID" ]; then
+    SOURCE_MODE="RC20_FIX6"
+elif [ "$INSTALLED_VERSION" = "$EXPECTED_SOURCE_V12113_VERSION" ] && [ "$INSTALLED_BUILD_ID" = "$EXPECTED_SOURCE_V12113_BUILD_ID" ]; then
+    SOURCE_MODE="V12_11_3"
 else
     echo "FEHLER: Nicht unterstützter Ausgangsstand: Version=${INSTALLED_VERSION}, Build-ID=${INSTALLED_BUILD_ID:-nicht gesetzt}"
-    echo "Erlaubt sind exakt RC19 oder RC20 Fix 5 (${EXPECTED_SOURCE_FIX5_BUILD_ID})."
+    echo "Erlaubt sind exakt V12.11.3, RC20 Fix 6, RC20 Fix 5 oder RC19."
     exit 1
 fi
 echo "Ausgangsstand erkannt: ${SOURCE_MODE} (${INSTALLED_VERSION}${INSTALLED_BUILD_ID:+ / ${INSTALLED_BUILD_ID}})"
@@ -191,7 +199,7 @@ if systemctl is-active --quiet zendure-controller.service; then CONTROLLER_WAS_A
 if systemctl is-active --quiet zendure-replay.service; then REPLAY_WAS_ACTIVE=1; fi
 if systemctl is-active --quiet zendure-status-preview.service; then PREVIEW_WAS_ACTIVE=1; fi
 
-echo "RC20-Paket vor dem Stoppen des Produktivdienstes entpacken und prüfen..."
+echo "V12.11.4-Paket vor dem Stoppen des Produktivdienstes entpacken und prüfen..."
 rm -rf "$DIR"
 unzip -q "$ZIP" -d /home/pi/Downloads
 [ -d "$DIR" ] || { echo "FEHLER: erwarteter ZIP-Root fehlt: $DIR"; exit 1; }
@@ -211,7 +219,7 @@ PY
 mapfile -t PACKAGE_IDENTITY < <(read_package_identity)
 TARGET_PACKAGE_VERSION="${PACKAGE_IDENTITY[0]:-}"
 TARGET_PACKAGE_BUILD_ID="${PACKAGE_IDENTITY[1]:-}"
-[ "$TARGET_PACKAGE_VERSION" = "12.11.2-rc20" ] || { echo "FEHLER: Paket meldet Version ${TARGET_PACKAGE_VERSION}"; exit 1; }
+[ "$TARGET_PACKAGE_VERSION" = "12.11.4" ] || { echo "FEHLER: Paket meldet Version ${TARGET_PACKAGE_VERSION}"; exit 1; }
 [ "$TARGET_PACKAGE_BUILD_ID" = "$EXPECTED_TARGET_BUILD_ID" ] || { echo "FEHLER: Paket meldet Build-ID ${TARGET_PACKAGE_BUILD_ID}"; exit 1; }
 
 verify_source_manifest
@@ -228,6 +236,7 @@ verify_source_manifest
 
 echo "Paketpreflight und Config-Migrationspreflight bestanden."
 INSTALLATION_STARTED=1
+INSTALL_START_EPOCH="$(date +%s)"
 echo "Stoppe Dienste..."
 sudo systemctl stop zendure-controller.service || true
 sudo systemctl stop zendure-replay.service || true
@@ -243,7 +252,7 @@ cp "$TARGET/config.json" "$CONFIG_BACKUP"
 chmod 600 "$CONFIG_BACKUP"
 backup_root_artifacts
 
-echo "Kopiere RC20-Dateien; config.json, Last-Good und Laufzeitdaten bleiben erhalten..."
+echo "Kopiere V12.11.4-Dateien; config.json, Last-Good und Laufzeitdaten bleiben erhalten..."
 rsync -a \
   --exclude 'config.json' \
   --exclude 'config.json.last-good*' \
@@ -262,7 +271,7 @@ if [ -d "$DIR/tests" ]; then
 fi
 
 cd "$TARGET"
-echo "Führe idempotente RC19/RC20-Fix5 -> RC20-Fix6-Configmigration aus..."
+echo "Führe idempotente bestehende Configmigration aus..."
 python3 tools/migrate_rc19_to_rc20.py --config config.json --json | tee /tmp/zec_rc20_migration_result.json
 
 rm -rf "$TARGET/Tools"
@@ -304,34 +313,44 @@ READY_BODY="$(mktemp)"
 READY_JSON="$(mktemp)"
 cleanup_tmp() { rm -f "$READY_BODY" "$READY_JSON"; }
 trap cleanup_tmp EXIT
-echo "Ready-Check (maximal 90 Sekunden, wartet auf ready=true):"
+echo "Installations-Abnahme (maximal 90 Sekunden):"
+echo "Bevorzugt wird ready=true; ein ausschließlich transienter Limit-Readback-Versatz darf die Installation nicht zurückrollen."
 READY_DEADLINE=$((SECONDS + 90))
 READY_OK=0
+TRANSITIONAL_STREAK=0
+TRANSITIONAL_ACCEPTED=0
 while [ "$SECONDS" -lt "$READY_DEADLINE" ]; do
     if curl -fsS --connect-timeout 1 --max-time 2 http://127.0.0.1:8080/ready >"$READY_BODY" 2>/dev/null \
-       && python3 -m json.tool <"$READY_BODY" >"$READY_JSON" 2>/dev/null \
-       && python3 - "$READY_BODY" <<'PY'
-import json, sys
-with open(sys.argv[1], encoding="utf-8") as handle:
-    payload=json.load(handle)
-ok = (
-    payload.get("ready") is True
-    and payload.get("version") == "12.11.2-rc20"
-    and payload.get("build_id") == "rc20-audit-fix6-20260806"
-)
-raise SystemExit(0 if ok else 1)
-PY
-    then
-        READY_OK=1
-        break
+       && python3 -m json.tool <"$READY_BODY" >"$READY_JSON" 2>/dev/null; then
+        RESULT="$(python3 tools/evaluate_installation_readiness.py "$READY_BODY")"
+        case "$RESULT" in
+            READY:*) READY_OK=1; break ;;
+            TRANSITIONAL:*)
+                TRANSITIONAL_STREAK=$((TRANSITIONAL_STREAK + 1))
+                if [ "$TRANSITIONAL_STREAK" -ge 15 ] && [ "$SECONDS" -ge 30 ]; then
+                    TRANSITIONAL_ACCEPTED=1
+                    break
+                fi
+                ;;
+            *) TRANSITIONAL_STREAK=0 ;;
+        esac
+    else
+        TRANSITIONAL_STREAK=0
     fi
     sleep 1
- done
+done
 
-if [ "$READY_OK" -ne 1 ]; then
-    echo "FEHLER: Controller war innerhalb von 90 Sekunden nicht ready=true."
+if [ "$READY_OK" -eq 1 ]; then
+    echo "Controller vollständig ready=true."
+elif [ "$TRANSITIONAL_ACCEPTED" -eq 1 ]; then
+    echo "WARNUNG: Controller ist noch nicht global ready=true, aber der Produktivstart ist sicher bestätigt."
+    echo "Ausschließlich ein transienter INPUT_LIMIT/OUTPUT_LIMIT-Readback beziehungsweise ein ungefährlicher Beobachtungszustand ist noch offen."
+    echo "Kein Rollback: Controller, Datenquellen, Command-State, statische Invarianten und Telemetrie sind gesund."
     [ -s "$READY_JSON" ] && cat "$READY_JSON"
-    journalctl -u zendure-controller.service -n 120 --no-pager || true
+else
+    echo "FEHLER: V12.11.4 erreichte weder ready=true noch einen stabilen sicheren Übergangszustand."
+    [ -s "$READY_JSON" ] && cat "$READY_JSON"
+    journalctl -u zendure-controller.service --since "@$INSTALL_START_EPOCH" --no-pager || true
     false
 fi
 
@@ -339,8 +358,8 @@ trap - ERR
 cleanup_tmp
 trap - EXIT
 
-echo "Update abgeschlossen und Ready-Check erfolgreich."
-echo "RC20 Fix 6 erfolgreich installiert und ready."
+echo "Update abgeschlossen und Installations-Abnahme erfolgreich."
+echo "V12.11.4 erfolgreich installiert."
 echo "Backup: $BACKUP"
 echo "Config-Backup: $CONFIG_BACKUP"
 echo "Root-Artefakt-Backup: $ROOT_ARTIFACT_BACKUP"
