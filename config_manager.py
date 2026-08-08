@@ -17,6 +17,9 @@ from settings_runtime import SettingsRuntimeManager
 from version import APP_VERSION
 
 
+# Compatibility/runtime fixture for legacy callers and migrations.
+# V12.11.7 first-install bootstrap and UI reset semantics are authoritative in
+# SettingsRegistry; productive user values must never be inferred from this map.
 DEFAULT_CONFIG: Dict[str, Any] = {
     # Netzwerk / Infrastruktur
     "SHELLY_IP": "192.168.0.40",

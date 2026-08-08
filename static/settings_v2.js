@@ -188,6 +188,8 @@
     return true;
   }
   function settingVisibleInMode(s) {
+    const firstInstallRequired = app.model?.status?.startup_mode === 'FIRST_INSTALL_SETUP' && s.required_first_install;
+    if (firstInstallRequired) return true;
     if (s.expert && app.mode !== 'expert') return false;
     if (!dependencyVisible(s) && app.mode === 'standard') return false;
     return true;
@@ -202,7 +204,8 @@
     return count;
   }
   function expertHiddenCount(category) {
-    return category.sections.reduce((total, section) => total + section.settings.filter(s => s.expert).length, 0);
+    const firstInstall = app.model?.status?.startup_mode === 'FIRST_INSTALL_SETUP';
+    return category.sections.reduce((total, section) => total + section.settings.filter(s => s.expert && !(firstInstall && s.required_first_install)).length, 0);
   }
   function nightText(kind) {
     const pair = NIGHT_COMPOUNDS[kind];
@@ -283,7 +286,8 @@
     if (s.value_type === 'bool') {
       control = `<label class="switch"><input type="checkbox" data-key="${esc(s.key)}" ${value === true ? 'checked' : ''}${dis}><span class="switch-track"></span><span>${value === true ? 'Ein' : 'Aus'}</span></label>`;
     } else if (s.value_type === 'enum') {
-      control = `<select data-key="${esc(s.key)}"${dis}>${s.options.map(o => `<option value="${esc(o.value)}" ${same(value,o.value)?'selected':''}>${esc(o.label)}</option>`).join('')}</select>`;
+      const placeholder = s.required_first_install && (value === null || value === undefined || value === '') ? '<option value="" selected disabled>Bitte auswählen …</option>' : '';
+      control = `<select data-key="${esc(s.key)}"${dis}>${placeholder}${s.options.map(o => `<option value="${esc(o.value)}" ${same(value,o.value)?'selected':''}>${esc(o.label)}</option>`).join('')}</select>`;
     } else if (s.value_type === 'secret') {
       const op = app.secretOps.get(s.key) || {op:'keep'};
       control = `<div class="secret-actions"><button type="button" data-secret="keep" data-key="${esc(s.key)}" class="${op.op==='keep'?'active':''}">Behalten</button><button type="button" data-secret="replace" data-key="${esc(s.key)}" class="${op.op==='replace'?'active':''}">Ersetzen</button><button type="button" data-secret="clear" data-key="${esc(s.key)}" class="${op.op==='clear'?'active':''}">Löschen</button></div>${op.op==='replace'?`<input class="secret-input" type="password" autocomplete="new-password" data-secret-value="${esc(s.key)}" placeholder="Neues Secret" value="${esc(op.value||'')}">`:`<div class="setting-help">Secret ist ${s.secret_set?'gesetzt':'nicht gesetzt'}; der Wert wird niemals angezeigt.</div>`}`;
@@ -296,7 +300,7 @@
   }
   function settingHtml(s) {
     const visible = dependencyVisible(s);
-    if ((!visible && app.mode === 'standard') || (s.expert && app.mode !== 'expert')) return '';
+    if (!settingVisibleInMode(s)) return '';
     if (NIGHT_KEYS.has(s.key)) {
       if (s.key === NIGHT_COMPOUNDS.start.hour) return nightCompoundHtml('start');
       if (s.key === NIGHT_COMPOUNDS.end.hour) return nightCompoundHtml('end');
@@ -310,6 +314,7 @@
     const metas = [
       range,
       s.default_ui?.meta || '',
+      (app.model?.status?.startup_mode === 'FIRST_INSTALL_SETUP' && s.required_first_install) ? 'Erstinbetriebnahme: erforderlich' : '',
       s.configured_differs_effective ? `Wirksam: ${String(s.effective)}` : '',
       s.inherited_default ? 'geerbter Ausgangswert' : '',
     ].filter(Boolean);
@@ -336,7 +341,8 @@
       return;
     }
     let body = `<div class="category-panel"><div class="category-head"><div class="category-icon">${icon(c.name)}</div><div><h1>${esc(c.name)}</h1><p>${esc(c.description)}</p></div></div>`;
-    if (app.model.status.config_health !== 'valid') body += `<div class="status-banner"><b>Konfigurationsstatus:</b> ${esc(app.model.status.config_health)}. Configured bleibt reparierbar; effective nutzt den letzten gültigen Snapshot.</div>`;
+    if (app.model.status.startup_mode === 'FIRST_INSTALL_SETUP') body += `<div class="status-banner"><b>Erstinbetriebnahme:</b> ZEC bleibt fail-closed und sendet keine Gerätekommandos, bis alle Pflichtwerte ausdrücklich festgelegt, geprüft und gespeichert wurden.</div>`;
+    else if (app.model.status.config_health !== 'valid') body += `<div class="status-banner"><b>Konfigurationsstatus:</b> ${esc(app.model.status.config_health)}. Configured bleibt reparierbar; effective nutzt den letzten gültigen Snapshot.</div>`;
     if (app.model.status.pending_restart) body += `<div class="status-banner"><b>Dienstneustart ausstehend.</b> ${app.model.status.pending_restart_keys.map(esc).join(', ')}</div>`;
     let renderedSettings = 0;
     c.sections.forEach(section => {

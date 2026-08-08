@@ -14,7 +14,7 @@ class TestRC7UiExport(unittest.TestCase):
         cfg = json.loads(Path("config.example.json").read_text())
         self.assertNotIn("TEST_DEVICE_001", json.dumps(cfg))
         self.assertNotEqual("TEST_DEVICE_001", DEFAULT_CONFIG.get("DEVICE_ID"))
-        self.assertEqual("REPLACE_WITH_ZENDURE_DEVICE_ID", cfg.get("DEVICE_ID"))
+        self.assertEqual("", cfg.get("DEVICE_ID"))
 
     def test_navbar_is_compact_and_graph_csv_is_not_direct_nav_link(self):
         html = build_nav_bar(dict(DEFAULT_CONFIG, REPLAY_WEB_PORT=9))

@@ -66,6 +66,8 @@ class ValidationContext:
     restart_ready_after: bool = False
     secret_contract_ok: bool = True
     unknown_keys_preserved: bool = True
+    first_install: bool = False
+    explicit_keys: Tuple[str, ...] = ()
 
 
 def _issue(code: str, severity: ValidationSeverity, keys: Sequence[str], blocking: bool = True, **params: Any) -> ValidationIssue:
@@ -139,6 +141,8 @@ def validate_candidate(values: Mapping[str, Any], context: Optional[ValidationCo
     reserve = get("NIGHT_DISCHARGE_STOP_SOC_PERCENT")
     if reserve is not None and None not in (min_soc, max_soc) and not min_soc <= reserve <= max_soc:
         issues.append(_issue("VAL-005", ValidationSeverity.ERROR, ("MIN_SOC_PERCENT", "NIGHT_DISCHARGE_STOP_SOC_PERCENT", "MAX_SOC_PERCENT")))
+    if bool(get("NIGHT_DISCHARGE_ENABLED")) and not (isinstance(get("NIGHT_DISCHARGE_POWER_W"), int) and not isinstance(get("NIGHT_DISCHARGE_POWER_W"), bool) and get("NIGHT_DISCHARGE_POWER_W") > 0):
+        issues.append(_issue("VAL-025", ValidationSeverity.ERROR, ("NIGHT_DISCHARGE_ENABLED", "NIGHT_DISCHARGE_POWER_W")))
 
     integration = get("SECOND_BATTERY_INTEGRATION_ENABLED")
     cross = bool(get("CROSS_CHARGE_ENABLED"))
@@ -214,6 +218,20 @@ def validate_candidate(values: Mapping[str, Any], context: Optional[ValidationCo
         issues.append(_issue("VAL-023", ValidationSeverity.ERROR, ("MQTT_PASSWORD",)))
     if not context.unknown_keys_preserved:
         issues.append(_issue("VAL-024", ValidationSeverity.ERROR, tuple()))
+
+    if context.first_install:
+        explicit = set(context.explicit_keys)
+        required = tuple(
+            key for key, spec in SETTINGS_BY_KEY.items()
+            if spec.required_first_install and key not in explicit
+        )
+        for key in required:
+            issues.append(_issue("FIRST_INSTALL_REQUIRED", ValidationSeverity.ERROR, (key,)))
+        source = get("GRID_METER_SOURCE")
+        if source == "shelly_http" and not str(get("SHELLY_IP") or "").strip():
+            issues.append(_issue("FIRST_INSTALL_GRID_SOURCE_INCOMPLETE", ValidationSeverity.ERROR, ("GRID_METER_SOURCE", "SHELLY_IP")))
+        if source == "sma_energy_meter_udp" and not (get("SMA_ENERGY_METER_GROUP") and get("SMA_ENERGY_METER_PORT")):
+            issues.append(_issue("FIRST_INSTALL_GRID_SOURCE_INCOMPLETE", ValidationSeverity.ERROR, ("GRID_METER_SOURCE", "SMA_ENERGY_METER_GROUP", "SMA_ENERGY_METER_PORT")))
 
     if get("MQTT_BROKER") == "":
         issues.append(_issue("MQTT_BROKER_MISSING", ValidationSeverity.ERROR, ("MQTT_BROKER",)))

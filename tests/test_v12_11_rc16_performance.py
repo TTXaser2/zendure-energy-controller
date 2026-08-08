@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class TestRC16PerformanceEndpoints(unittest.TestCase):
     def test_version_label_rc16(self):
-        self.assertEqual(version.APP_VERSION_LABEL, "V12.11.6")
+        self.assertEqual(version.APP_VERSION_LABEL, "V12.11.7")
 
     def test_tail_reader_avoids_old_rows_for_recent_window(self):
         now = datetime.now().replace(microsecond=0)

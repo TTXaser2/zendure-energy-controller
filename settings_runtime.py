@@ -20,7 +20,7 @@ import stat
 import tempfile
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from types import MappingProxyType
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Tuple
@@ -209,7 +209,7 @@ def registry_defaults(*, new_install: bool = False) -> Dict[str, Any]:
     result: Dict[str, Any] = {}
     for spec in _active_registry_specs():
         if new_install:
-            value = spec.default_new_install
+            value = spec.bootstrap_value
         else:
             value = spec.default_rc19
             if value is None and spec.origin != "RC19":
@@ -400,11 +400,28 @@ def parse_full_candidate(
 
     configured = dict(known)
     configured.update(unknown)
-    persisted = {
-        key: known[key]
-        for key in raw
-        if key in SETTINGS_BY_KEY and key in known
-    }
+    if new_install:
+        # A first installation is a canonical bootstrap transaction, not a
+        # sparse migration patch. Persist the complete currently operational
+        # Settings surface so a later NORMAL restart cannot fall back to
+        # historical RC19 migration defaults. Target-only future settings stay
+        # absent; the protected fixed SQLite path is persisted explicitly.
+        persisted = {
+            spec.key: known[spec.key]
+            for spec in _active_registry_specs()
+            if spec.key in known
+            and (
+                (spec.lifecycle == "active" and (spec.release_stage == "S1" or spec.origin == "RC19")
+                 and spec.apply_class not in (ApplyClass.MIGRATION_ONLY, ApplyClass.READ_ONLY, ApplyClass.PROTECTED_ACTION))
+                or spec.key == "MEASUREMENT_DB_PATH"
+            )
+        }
+    else:
+        persisted = {
+            key: known[key]
+            for key in raw
+            if key in SETTINGS_BY_KEY and key in known
+        }
     persisted.update(unknown)
     revision = typed_revision(configured) if not any(issue.blocking for issue in issues) else ""
     return CandidateResult(
@@ -1074,6 +1091,10 @@ class SettingsRuntimeManager:
             self._set_valid_primary(candidate, file_result, startup=False, source="external_reload")
             return dict(self._effective), before != self._effective
 
+    def is_first_install(self) -> bool:
+        with self._lock:
+            return self._startup_mode == STARTUP_FIRST_INSTALL and not self._primary_valid
+
     def validate_candidate(
         self,
         candidate: Mapping[str, Any],
@@ -1081,16 +1102,46 @@ class SettingsRuntimeManager:
         previous: Optional[Mapping[str, Any]] = None,
         context: Optional[ValidationContext] = None,
     ) -> CandidateResult:
-        return parse_full_candidate(candidate, previous=previous or self.get_configured(), context=context)
+        first_install = self.is_first_install()
+        if context is None:
+            context = ValidationContext(previous=previous or self.get_configured(), first_install=first_install, explicit_keys=tuple(candidate.keys()))
+        elif first_install and not context.first_install:
+            context = replace(context, first_install=True, explicit_keys=tuple(candidate.keys()))
+        return parse_full_candidate(candidate, previous=previous or self.get_configured(), context=context, new_install=first_install)
 
-    def commit_candidate(self, candidate: Mapping[str, Any], expected_file_revision: str) -> Dict[str, Any]:
+    def commit_candidate(
+        self,
+        candidate: Mapping[str, Any],
+        expected_file_revision: str,
+        *,
+        context: Optional[ValidationContext] = None,
+    ) -> Dict[str, Any]:
         with self._lock:
             # Re-read the exact file bytes directly before persistence.
             current_file = stable_read(self.path)
             current_revision = current_file.revision or ""
             if current_revision != expected_file_revision:
                 raise RuntimeError("CONFIG_REVISION_CONFLICT")
-            result = parse_full_candidate(candidate, previous=self._effective if not self._primary_valid else self._configured)
+            first_install = self._startup_mode == STARTUP_FIRST_INSTALL and not self._primary_valid
+            if context is None:
+                context = ValidationContext(
+                    previous=self._effective if not self._primary_valid else self._configured,
+                    first_install=first_install,
+                    explicit_keys=tuple(candidate.keys()),
+                )
+            elif first_install:
+                # Preserve the exact explicit-key set that was validated during
+                # preview. The persisted first-install candidate is canonical and
+                # therefore contains many bootstrap keys that the user did not
+                # explicitly set; treating those as explicit at commit would
+                # weaken the First-Install contract.
+                context = replace(context, first_install=True)
+            result = parse_full_candidate(
+                candidate,
+                previous=self._effective if not self._primary_valid else self._configured,
+                context=context,
+                new_install=first_install,
+            )
             if not result.valid:
                 raise ValueError("CONFIG_CANDIDATE_INVALID")
             data = pretty_json_bytes(result.persisted)

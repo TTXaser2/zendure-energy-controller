@@ -54,9 +54,9 @@ class V12116SettingsStatusUxTests(unittest.TestCase):
 
     def test_default_ui_policy_distinguishes_default_clear_derived_and_installation_values(self):
         night = self._setting("NIGHT_DISCHARGE_POWER_W")
-        self.assertEqual("reference", night["default_ui"]["kind"])
-        self.assertIn("vor Aktivierung bewusst festlegen", night["default_ui"]["meta"])
-        self.assertIsNone(night["default_ui"]["action"])
+        self.assertEqual("sentinel", night["default_ui"]["kind"])
+        self.assertIn("Sicherer Ausgangszustand", night["default_ui"]["meta"])
+        self.assertEqual("Auf sicheren Ausgangszustand setzen", night["default_ui"]["action"])
 
         reserve = self._setting("NIGHT_DISCHARGE_STOP_SOC_PERCENT")
         self.assertEqual("clear", reserve["default_ui"]["kind"])
@@ -64,12 +64,12 @@ class V12116SettingsStatusUxTests(unittest.TestCase):
         self.assertIsNone(reserve["default_ui"]["value"])
 
         derived = self._setting("HARVEST_PRIMARY_CHARGE_FLOOR_W")
-        self.assertEqual("clear", derived["default_ui"]["kind"])
+        self.assertEqual("auto", derived["default_ui"]["kind"])
         self.assertEqual("Automatische Berechnung verwenden", derived["default_ui"]["action"])
 
         capacity = self._setting("ZENDURE_BATTERY_CAPACITY_WH")
-        self.assertEqual("none", capacity["default_ui"]["kind"])
-        self.assertIn("Kein allgemeiner Standardwert", capacity["default_ui"]["meta"])
+        self.assertEqual("installation", capacity["default_ui"]["kind"])
+        self.assertIn("kein allgemeiner Standardwert", capacity["default_ui"]["meta"])
 
         broker = self._setting("MQTT_BROKER")
         self.assertEqual("installation", broker["default_ui"]["kind"])

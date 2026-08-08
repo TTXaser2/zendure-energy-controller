@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
 from settings_apply_policy import ApplyPlan, build_apply_plan
-from settings_registry import SETTINGS_BY_KEY, ApplyClass, Editability
+from settings_registry import SETTINGS_BY_KEY, ApplyClass, Editability, ResetPolicy
 from settings_runtime import CandidateResult, SettingsRuntimeManager
 from settings_validation import ValidationContext, ValidationIssue, ValidationSeverity
 
@@ -70,6 +70,10 @@ ISSUE_MESSAGES = {
     "SECRET_OPERATION_INVALID": "Die Secretoperation ist nicht zulässig.",
     "SECRET_REPLACE_REQUIRES_VALUE": "Zum Ersetzen des Secrets ist ein neuer Wert erforderlich.",
     "PROTECTED_ACTION_REQUIRED": "Diese Änderung benötigt eine separate geschützte Aktion.",
+    "RESET_NOT_ALLOWED": "Für diese Einstellung existiert bewusst kein allgemeines Reset-Ziel.",
+    "FIRST_INSTALL_REQUIRED": "Diese Einstellung muss bei der Erstinbetriebnahme ausdrücklich festgelegt werden.",
+    "FIRST_INSTALL_GRID_SOURCE_INCOMPLETE": "Die gewählte Netzleistungsquelle ist für die Erstinbetriebnahme noch unvollständig konfiguriert.",
+    "VAL-025": "Bei aktivierter Nachtentladung muss eine feste Nachtleistung größer als 0 W bewusst festgelegt werden.",
 }
 
 
@@ -86,6 +90,7 @@ class PreviewRecord:
     apply_plan: ApplyPlan
     confirmations: Tuple[str, ...]
     session_token: str
+    validation_context: ValidationContext
     consumed: bool = False
 
 
@@ -211,7 +216,10 @@ class SettingsService:
             if op == "set":
                 candidate[spec.key] = operation.get("value")
             elif op == "reset_default":
-                candidate[spec.key] = spec.default_new_install
+                if spec.reset_policy is ResetPolicy.NONE:
+                    patch_issues.append(self._synthetic_issue("RESET_NOT_ALLOWED", spec.key))
+                else:
+                    candidate[spec.key] = spec.reset_value
             else:
                 patch_issues.append(self._synthetic_issue("PATCH_OPERATION_INVALID", spec.key))
 
@@ -257,6 +265,8 @@ class SettingsService:
             sma_multiple_devices_detected=bool((state_snapshot or {}).get("sma_energy_meter_multiple_devices_detected")),
             secret_contract_ok=True,
             unknown_keys_preserved=all(key in candidate for key in current_persisted if key not in SETTINGS_BY_KEY),
+            first_install=self.manager.is_first_install(),
+            explicit_keys=tuple(candidate.keys()),
         )
         result: CandidateResult = self.manager.validate_candidate(candidate, previous=current, context=context)
         issues = list(patch_issues) + [self._issue_dict(issue) for issue in result.issues]
@@ -311,6 +321,7 @@ class SettingsService:
                 apply_plan=apply_plan,
                 confirmations=confirmations,
                 session_token=session_token,
+                validation_context=context,
             )
             self.previews.put(record)
             expires_at_epoch = time.time() + PREVIEW_TTL_SECONDS
@@ -343,7 +354,7 @@ class SettingsService:
         missing = set(record.confirmations) - confirmations
         if missing:
             raise PermissionError("CONFIRMATIONS_MISSING:" + ",".join(sorted(missing)))
-        result = self.manager.commit_candidate(record.candidate, record.base_revision)
+        result = self.manager.commit_candidate(record.candidate, record.base_revision, context=record.validation_context)
         plan: ApplyPlan = result["apply_plan"]
         return {
             "status": "committed",

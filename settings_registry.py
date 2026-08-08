@@ -11,7 +11,7 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple
 
-SCHEMA_VERSION = "1.21-s1.1"
+SCHEMA_VERSION = "1.22-s1.1"
 SOURCE_TARGET_SCHEMA_SHA256 = "f67b8d09ae9a433c4cb0d3a720a0961d5b2a824b120251a63f2b19885356274a"
 
 
@@ -55,6 +55,23 @@ class SecretPolicy(Enum):
     SECRET = "secret"
 
 
+class DefaultClass(Enum):
+    PRODUCT_DEFAULT = "product_default"
+    PROFILE_PRESET = "profile_preset"
+    SAFE_SENTINEL = "safe_sentinel"
+    LEGACY_INTERNAL = "legacy_internal"
+    INSTALLATION = "installation"
+    AUTO_OR_UNSET = "auto_or_unset"
+
+
+class ResetPolicy(Enum):
+    DEFAULT = "default"
+    CLEAR = "clear"
+    AUTO = "auto"
+    PROFILE = "profile"
+    NONE = "none"
+
+
 @dataclass(frozen=True)
 class SettingSpec:
     key: str
@@ -86,6 +103,15 @@ class SettingSpec:
     lifecycle: str
     secret_policy: SecretPolicy
     decision_status: Optional[str]
+    default_class: DefaultClass
+    bootstrap_value: Any
+    product_default: Any
+    reset_policy: ResetPolicy
+    reset_value: Any
+    reset_label: Optional[str]
+    default_help: Optional[str]
+    profile_id: Optional[str]
+    required_first_install: bool
 
     @property
     def option_values(self) -> Tuple[str, ...]:
@@ -6365,6 +6391,184 @@ _ROWS = [{'key': 'MANUAL_MODE',
   'decision_status': 'Bestätigt'}]
 
 
+# V12.11.7 default provenance contract. ``default_rc19`` remains the historical
+# migration/compatibility value. First-install bootstrap, UI reset semantics and
+# actual product defaults are separate authorities and are never inferred from a
+# user's productive installation.
+LEGACY_INTERNAL_DEFAULT_KEYS = frozenset({
+    "ZENDURE_BATTERY_CAPACITY_KWH", "MODE_CHANGE_LOCK_SECONDS", "HARVEST_CAPACITY_WEIGHTING_MODE",
+    "HARVEST_HIGH_SMA_SOC_TIME_PROFILE_ENABLED", "HARVEST_IMPORT_EXIT_CONFIRM_SECONDS",
+    "HARVEST_IMPORT_REDUCE_CONFIRM_SECONDS", "HARVEST_PRIMARY_BELOW_FLOOR_CONFIRM_SECONDS",
+    "HARVEST_PRIMARY_RESTART_CONFIRM_SECONDS", "SECOND_BATTERY_CHARGE_SATURATION_MARGIN_W",
+    "SMA_DISCHARGE_BLOCK_W", "CROSS_CHARGE_RESERVE_W", "COMMAND_RESYNC_STALE_MIN_CYCLES",
+    "MEASUREMENT_LOG_BACKUP_COUNT", "MEASUREMENT_LOG_ESTIMATED_ROW_BYTES",
+    "MEASUREMENT_LOG_FALLBACK_BACKUP_COUNT", "MEASUREMENT_SCHEMA_VERSION",
+    "MEASUREMENT_DB_MAX_QUEUE_ROWS", "MEASUREMENT_DB_FILE", "MEASUREMENT_DB_PATH",
+    "MEASUREMENT_LOG_RETENTION_MAX_AGE_DAYS", "MEASUREMENT_LOG_RETENTION_MAX_TOTAL_BYTES",
+    "MEASUREMENT_LOG_RETENTION_PROTECT_HOURS", "REPLAY_WEB_PORT", "SERVICE_RESTART_COMMAND",
+})
+
+INSTALLATION_DEFAULT_KEYS = frozenset({
+    "DEVICE_ID", "MQTT_BROKER", "MQTT_USER", "GRID_METER_SOURCE", "SHELLY_IP",
+    "MAX_CHARGE_POWER_W", "MAX_DISCHARGE_POWER_W", "MIN_SOC_PERCENT", "MAX_SOC_PERCENT",
+    "ZENDURE_BATTERY_CAPACITY_WH", "SECOND_BATTERY_MAX_CHARGE_POWER_W",
+    "SECOND_BATTERY_DISPLAY_NAME", "ZENDURE_LOCAL_IP",
+})
+
+AUTO_OR_UNSET_DEFAULT_KEYS = frozenset({
+    "NIGHT_DISCHARGE_STOP_SOC_PERCENT", "HARVEST_PRIMARY_CHARGE_FLOOR_W",
+    "HARVEST_PRIMARY_CHARGE_RESTART_W", "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_W",
+    "MEASUREMENT_LOG_MOUNTPOINT", "SMA_ENERGY_METER_INTERFACE", "SMA_ENERGY_METER_SERIAL",
+    "SMA_ENERGY_METER_SUSY_ID", "MQTT_PASSWORD", "HARVEST_SEASON_PARALLEL_START_MM_DD",
+    "HARVEST_SEASON_PARALLEL_END_MM_DD",
+})
+
+PROFILE_PRESET_DEFAULT_KEYS = frozenset({
+    "MANUAL_DISCHARGE_AFTER_TARGET", "MANUAL_FIXED_DISCHARGE_TARGET_SOC",
+    "MANUAL_CHARGE_AFTER_TARGET", "MANUAL_FIXED_CHARGE_TARGET_SOC",
+    "NIGHT_END_HOUR", "NIGHT_END_MINUTE", "NIGHT_START_HOUR", "NIGHT_START_MINUTE",
+    "SECOND_BATTERY_SOURCE_PROFILE", "SECOND_BATTERY_CAPACITY_TOPIC", "SECOND_BATTERY_POWER_TOPIC",
+    "SECOND_BATTERY_SOC_TOPIC", "SECOND_BATTERY_EVCC_BASE_TOPIC", "SECOND_BATTERY_CAPACITY_JSON_PATH",
+    "SECOND_BATTERY_CAPACITY_PAYLOAD_TYPE", "SECOND_BATTERY_POWER_JSON_PATH",
+    "SECOND_BATTERY_POWER_PAYLOAD_TYPE", "SECOND_BATTERY_SOC_JSON_PATH",
+    "SECOND_BATTERY_SOC_PAYLOAD_TYPE", "SECOND_BATTERY_CAPACITY_UNIT",
+    "SECOND_BATTERY_DISCHARGE_SIGN", "SECOND_BATTERY_POWER_UNIT",
+    "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS", "HARVEST_HIGH_SMA_SOC_HOLD_SECONDS",
+    "HARVEST_HIGH_SMA_SOC_ENABLED", "HARVEST_HIGH_SMA_SOC_ENTER_PERCENT",
+    "HARVEST_HIGH_SMA_SOC_EXIT_PERCENT", "HARVEST_HIGH_SMA_SOC_MIN_EXPORT_W",
+    "HARVEST_SMA_FULL_SOC_PERCENT", "REST_SURPLUS_ENTRY_CONFIRM_SECONDS", "REST_SURPLUS_MIN_EXPORT_W",
+    "HARVEST_PRIMARY_CHARGE_FLOOR_RATIO", "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_RATIO",
+    "HARVEST_PRIMARY_CHARGE_RESTART_RATIO", "HARVEST_SEASON_MODE",
+    "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_AFTERNOON_SECONDS",
+    "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_MIDDAY_SECONDS",
+    "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_MORNING_SECONDS",
+    "HARVEST_HIGH_SMA_SOC_PROFILE_AFTERNOON_START_TIME", "HARVEST_HIGH_SMA_SOC_PROFILE_END_TIME",
+    "HARVEST_HIGH_SMA_SOC_PROFILE_MIDDAY_START_TIME", "HARVEST_HIGH_SMA_SOC_PROFILE_START_TIME",
+    "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_AFTERNOON", "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY",
+    "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MORNING",
+})
+
+SAFE_SENTINEL_DEFAULT_KEYS = frozenset({
+    "MANUAL_MODE", "MANUAL_FIXED_DISCHARGE_POWER_W", "MANUAL_FIXED_CHARGE_POWER_W",
+    "NIGHT_DISCHARGE_ENABLED", "NIGHT_DISCHARGE_POWER_W", "SECOND_BATTERY_INTEGRATION_ENABLED",
+    "REST_SURPLUS_HARVEST_ENABLED", "CROSS_CHARGE_ENABLED", "MEASUREMENT_LOG_MODE",
+    "MEASUREMENT_DB_MAINTENANCE_MODE", "MEASUREMENT_DB_RAW_RETENTION_MODE",
+    "MEASUREMENT_DB_1MIN_RETENTION_MODE", "MEASUREMENT_LOG_MAINTENANCE_MODE",
+    "MEASUREMENT_LOG_RETENTION_MODE", "MQTT_TOPIC_DIAGNOSTIC_ENABLED",
+    "SMA_ENERGY_METER_LOG_DIAGNOSTICS", "SMA_ENERGY_METER_PASSIVE_ENABLED",
+    "ZENDURE_LOCAL_API_ENABLED", "ZENDURE_LOCAL_API_USE_FOR_TELEMETRY",
+    "ZENDURE_LOCAL_API_TELEMETRY_FALLBACK_ONLY", "WEB_SERVICE_RESTART_ENABLED",
+    "FILE_LOG_ENABLED", "DEBUG", "LOG_CONTROL", "LOG_MQTT", "LOG_RAW_RESPONSE", "LOG_SOC", "LOG_VALUES",
+})
+
+FIRST_INSTALL_REQUIRED_KEYS = frozenset({
+    "DEVICE_ID", "MQTT_BROKER", "GRID_METER_SOURCE", "MAX_CHARGE_POWER_W",
+    "MAX_DISCHARGE_POWER_W", "MIN_SOC_PERCENT", "MAX_SOC_PERCENT",
+})
+
+BOOTSTRAP_OVERRIDES = {
+    "DEVICE_ID": "",
+    "MQTT_BROKER": "",
+    "MQTT_USER": "",
+    "GRID_METER_SOURCE": None,
+    "SHELLY_IP": "",
+    "MAX_CHARGE_POWER_W": None,
+    "MAX_DISCHARGE_POWER_W": None,
+    "MIN_SOC_PERCENT": None,
+    "MAX_SOC_PERCENT": None,
+    "ZENDURE_BATTERY_CAPACITY_WH": None,
+    "SECOND_BATTERY_MAX_CHARGE_POWER_W": None,
+    "SECOND_BATTERY_DISPLAY_NAME": "",
+    "ZENDURE_LOCAL_IP": "",
+    "MEASUREMENT_LOG_MODE": "off",
+}
+
+AUTO_RESET_KEYS = frozenset({
+    "HARVEST_PRIMARY_CHARGE_FLOOR_W", "HARVEST_PRIMARY_CHARGE_RESTART_W",
+    "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_W", "MEASUREMENT_LOG_MOUNTPOINT",
+})
+
+RESET_LABEL_OVERRIDES = {
+    "NIGHT_DISCHARGE_STOP_SOC_PERCENT": "Reserve-SOC entfernen",
+    "HARVEST_PRIMARY_CHARGE_FLOOR_W": "Automatische Berechnung verwenden",
+    "HARVEST_PRIMARY_CHARGE_RESTART_W": "Automatische Berechnung verwenden",
+    "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_W": "Automatische Berechnung verwenden",
+    "MEASUREMENT_LOG_MOUNTPOINT": "Automatische Ermittlung verwenden",
+    "SMA_ENERGY_METER_INTERFACE": "Interface-Vorgabe entfernen",
+    "SMA_ENERGY_METER_SERIAL": "Seriennummernfilter entfernen",
+    "SMA_ENERGY_METER_SUSY_ID": "SUSy-ID-Filter entfernen",
+}
+
+PROFILE_IDS = {
+    **{key: "MANUAL_PROFILE" for key in (
+        "MANUAL_DISCHARGE_AFTER_TARGET", "MANUAL_FIXED_DISCHARGE_TARGET_SOC",
+        "MANUAL_CHARGE_AFTER_TARGET", "MANUAL_FIXED_CHARGE_TARGET_SOC")},
+    **{key: "NIGHT_PROFILE" for key in ("NIGHT_END_HOUR", "NIGHT_END_MINUTE", "NIGHT_START_HOUR", "NIGHT_START_MINUTE")},
+    **{key: "EVCC_STANDARD" for key in PROFILE_PRESET_DEFAULT_KEYS if key.startswith("SECOND_BATTERY_")},
+    **{key: "HARVEST_ZEC_STANDARD" for key in PROFILE_PRESET_DEFAULT_KEYS if key.startswith("HARVEST_") or key.startswith("REST_SURPLUS_")},
+}
+
+
+def _default_metadata(row: Mapping[str, Any]) -> Dict[str, Any]:
+    key = str(row["key"])
+    bootstrap = BOOTSTRAP_OVERRIDES.get(key, row["default_new_install"])
+    if key in LEGACY_INTERNAL_DEFAULT_KEYS:
+        kind = DefaultClass.LEGACY_INTERNAL
+    elif key in INSTALLATION_DEFAULT_KEYS:
+        kind = DefaultClass.INSTALLATION
+    elif key in AUTO_OR_UNSET_DEFAULT_KEYS:
+        kind = DefaultClass.AUTO_OR_UNSET
+    elif key in PROFILE_PRESET_DEFAULT_KEYS:
+        kind = DefaultClass.PROFILE_PRESET
+    elif key in SAFE_SENTINEL_DEFAULT_KEYS:
+        kind = DefaultClass.SAFE_SENTINEL
+    else:
+        kind = DefaultClass.PRODUCT_DEFAULT
+
+    if kind in (DefaultClass.LEGACY_INTERNAL, DefaultClass.INSTALLATION):
+        policy = ResetPolicy.NONE
+    elif kind is DefaultClass.AUTO_OR_UNSET:
+        policy = ResetPolicy.AUTO if key in AUTO_RESET_KEYS else ResetPolicy.CLEAR
+    elif kind is DefaultClass.PROFILE_PRESET:
+        policy = ResetPolicy.PROFILE
+    else:
+        policy = ResetPolicy.DEFAULT
+
+    product_default = row["default_new_install"] if kind is DefaultClass.PRODUCT_DEFAULT else None
+    reset_value = bootstrap if policy in (ResetPolicy.DEFAULT, ResetPolicy.PROFILE) else (row["default_new_install"] if policy in (ResetPolicy.CLEAR, ResetPolicy.AUTO) else None)
+    if policy is ResetPolicy.DEFAULT:
+        reset_label = "Auf sicheren Ausgangszustand setzen" if kind is DefaultClass.SAFE_SENTINEL else "Auf Default setzen"
+    elif policy is ResetPolicy.PROFILE:
+        reset_label = "Profilwert wiederherstellen"
+    else:
+        reset_label = RESET_LABEL_OVERRIDES.get(key, "Wert entfernen" if policy is ResetPolicy.CLEAR else "Automatik verwenden" if policy is ResetPolicy.AUTO else None)
+
+    if kind is DefaultClass.INSTALLATION:
+        help_text = "Installations-/anlagenabhängig · kein allgemeiner Standardwert"
+    elif kind is DefaultClass.LEGACY_INTERNAL:
+        help_text = "Legacy-/interner Vertragswert · kein Benutzerdefault"
+    elif kind is DefaultClass.AUTO_OR_UNSET:
+        help_text = "Standardsemantik: nicht gesetzt / automatisch"
+    elif kind is DefaultClass.PROFILE_PRESET:
+        help_text = "Profilwert · kein universeller Einzeldefault"
+    elif kind is DefaultClass.SAFE_SENTINEL:
+        help_text = "Sicherer Ausgangszustand · kein empfohlener Betriebswert"
+    else:
+        help_text = "Getesteter Produktdefault"
+
+    return {
+        "default_class": kind,
+        "bootstrap_value": bootstrap,
+        "product_default": product_default,
+        "reset_policy": policy,
+        "reset_value": reset_value,
+        "reset_label": reset_label,
+        "default_help": help_text,
+        "profile_id": PROFILE_IDS.get(key),
+        "required_first_install": key in FIRST_INSTALL_REQUIRED_KEYS,
+    }
+
+
 def _build_spec(row: Mapping[str, Any]) -> SettingSpec:
     return SettingSpec(
         key=row["key"], order=row["order"], origin=row["origin"], category=row["category"],
@@ -6379,6 +6583,7 @@ def _build_spec(row: Mapping[str, Any]) -> SettingSpec:
         migration_text=row["migration_text"], risk=row["risk"], release_stage=row["release_stage"],
         release_text=row["release_text"], lifecycle=row["lifecycle"],
         secret_policy=SecretPolicy[row["secret_policy"]], decision_status=row["decision_status"],
+        **_default_metadata(row),
     )
 
 
@@ -6417,6 +6622,15 @@ def registry_snapshot() -> Dict[str, Any]:
             "release_stage": spec.release_stage, "release_text": spec.release_text,
             "lifecycle": spec.lifecycle, "secret_policy": spec.secret_policy.value,
             "decision_status": spec.decision_status,
+            "default_class": spec.default_class.value,
+            "bootstrap_value": None if spec.is_secret else spec.bootstrap_value,
+            "product_default": None if spec.is_secret else spec.product_default,
+            "reset_policy": spec.reset_policy.value,
+            "reset_value": None if spec.is_secret else spec.reset_value,
+            "reset_label": spec.reset_label,
+            "default_help": spec.default_help,
+            "profile_id": spec.profile_id,
+            "required_first_install": spec.required_first_install,
         }
         if spec.is_secret:
             row["default_new_install_state"] = "empty" if not spec.default_new_install else "set"

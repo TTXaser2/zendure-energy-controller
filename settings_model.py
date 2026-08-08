@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Mapping, Optional
 
 from config_manager import CONFIG_SCHEMA
-from settings_registry import SETTINGS, SETTINGS_BY_KEY, Visibility, ApplyClass, Editability
+from settings_registry import SETTINGS, SETTINGS_BY_KEY, Visibility, ApplyClass, Editability, DefaultClass, ResetPolicy
 from settings_runtime import SettingsRuntimeManager
 from settings_service import ISSUE_MESSAGES
 
@@ -96,59 +96,33 @@ LABEL_OVERRIDES = {
     "WEB_HOST": "Webserver Bind-Adresse",
 }
 
-INSTALLATION_DEPENDENT_DEFAULT_KEYS = {
-    "DEVICE_ID", "MQTT_BROKER", "MQTT_USER", "SHELLY_IP", "GRID_METER_SOURCE",
-    "SECOND_BATTERY_DISPLAY_NAME", "SECOND_BATTERY_SOURCE_PROFILE", "SECOND_BATTERY_POWER_TOPIC",
-    "SECOND_BATTERY_SOC_TOPIC", "SECOND_BATTERY_CAPACITY_TOPIC", "SECOND_BATTERY_EVCC_BASE_TOPIC",
-    "SECOND_BATTERY_MAX_CHARGE_POWER_W", "ZENDURE_BATTERY_CAPACITY_WH", "ZENDURE_LOCAL_IP",
-}
-
-REFERENCE_ONLY_DEFAULT_KEYS = {
-    "NIGHT_DISCHARGE_POWER_W", "MANUAL_FIXED_DISCHARGE_POWER_W", "MANUAL_FIXED_CHARGE_POWER_W",
-    "MANUAL_FIXED_DISCHARGE_TARGET_SOC", "MANUAL_FIXED_CHARGE_TARGET_SOC",
-    "MAX_CHARGE_POWER_W", "MAX_DISCHARGE_POWER_W", "MIN_SOC_PERCENT", "MAX_SOC_PERCENT",
-}
-
-CLEAR_DEFAULT_POLICIES = {
-    "NIGHT_DISCHARGE_STOP_SOC_PERCENT": ("Standard: nicht gesetzt · globale Min-SOC-Grenze gilt", "Reserve-SOC entfernen"),
-    "HARVEST_PRIMARY_CHARGE_FLOOR_W": ("Standard: automatisch aus dem Verhältnis berechnet", "Automatische Berechnung verwenden"),
-    "HARVEST_PRIMARY_CHARGE_RESTART_W": ("Standard: automatisch aus dem Verhältnis berechnet", "Automatische Berechnung verwenden"),
-    "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_W": ("Standard: automatisch aus dem Verhältnis berechnet", "Automatische Berechnung verwenden"),
-    "MEASUREMENT_LOG_MOUNTPOINT": ("Standard: automatische Mountpoint-Ermittlung", "Automatische Ermittlung verwenden"),
-    "SMA_ENERGY_METER_INTERFACE": ("Standard: keine feste Interface-Vorgabe", "Interface-Vorgabe entfernen"),
-    "SMA_ENERGY_METER_SERIAL": ("Standard: kein Seriennummernfilter", "Seriennummernfilter entfernen"),
-    "SMA_ENERGY_METER_SUSY_ID": ("Standard: kein SUSy-ID-Filter", "SUSy-ID-Filter entfernen"),
-}
-
 def _format_default_value(value: Any, unit: Optional[str]) -> str:
+    if value is None:
+        return "nicht gesetzt"
     if isinstance(value, bool):
         text = "Ein" if value else "Aus"
     else:
         text = str(value)
     return f"{text}{f' {unit}' if unit else ''}"
 
+
 def _default_ui_policy(spec: Any) -> Dict[str, Any]:
     if spec.is_secret or spec.editability is not Editability.EDITABLE:
-        return {"kind": "none", "meta": "", "action": None}
-    if spec.key in CLEAR_DEFAULT_POLICIES:
-        meta, action = CLEAR_DEFAULT_POLICIES[spec.key]
-        return {"kind": "clear", "meta": meta, "action": action, "value": spec.default_new_install}
-    if spec.default_new_install is None:
-        return {"kind": "none", "meta": "Kein allgemeiner Standardwert", "action": None}
-    if spec.default_new_install == "":
-        return {"kind": "clear", "meta": "Standard: nicht gesetzt", "action": "Wert entfernen", "value": ""}
-    if spec.key in {"NIGHT_DISCHARGE_POWER_W", "MANUAL_FIXED_DISCHARGE_POWER_W", "MANUAL_FIXED_CHARGE_POWER_W"}:
-        return {"kind": "reference", "meta": "Neue Installation: 0 W · vor Aktivierung bewusst festlegen", "action": None}
-    if spec.key in INSTALLATION_DEPENDENT_DEFAULT_KEYS:
-        return {"kind": "installation", "meta": "Installationsabhängig · kein allgemeiner Standardwert", "action": None}
-    if spec.key in REFERENCE_ONLY_DEFAULT_KEYS or str(spec.risk or "").lower() in {"hoch", "sehr hoch"}:
-        return {"kind": "reference", "meta": f"Ausgangswert dieses Releases: {_format_default_value(spec.default_new_install, spec.unit)}", "action": None}
-    return {
-        "kind": "default",
-        "meta": f"Default: {_format_default_value(spec.default_new_install, spec.unit)}",
-        "action": "Auf Default setzen",
-        "value": spec.default_new_install,
-    }
+        return {"kind": "none", "meta": spec.default_help if not spec.is_secret else "", "action": None}
+    kind = spec.default_class
+    if kind is DefaultClass.INSTALLATION:
+        return {"kind": "installation", "meta": spec.default_help, "action": None}
+    if kind is DefaultClass.LEGACY_INTERNAL:
+        return {"kind": "none", "meta": spec.default_help, "action": None}
+    if kind is DefaultClass.AUTO_OR_UNSET:
+        return {"kind": "auto" if spec.reset_policy is ResetPolicy.AUTO else "clear", "meta": spec.default_help, "action": spec.reset_label, "value": spec.reset_value}
+    if kind is DefaultClass.PROFILE_PRESET:
+        profile = {"EVCC_STANDARD":"EVCC Standard", "HARVEST_ZEC_STANDARD":"ZEC Standardstrategie", "MANUAL_PROFILE":"Manuelles Profil", "NIGHT_PROFILE":"ZEC Nachtprofil"}.get(spec.profile_id, spec.profile_id or "Profil")
+        return {"kind": "profile", "meta": f"Profilwert ({profile}): {_format_default_value(spec.reset_value, spec.unit)} · kein universeller Einzeldefault", "action": spec.reset_label, "value": spec.reset_value}
+    if kind is DefaultClass.SAFE_SENTINEL:
+        return {"kind": "sentinel", "meta": f"Sicherer Ausgangszustand: {_format_default_value(spec.bootstrap_value, spec.unit)} · kein empfohlener Betriebswert", "action": spec.reset_label, "value": spec.reset_value}
+    return {"kind": "default", "meta": f"Produktdefault: {_format_default_value(spec.product_default, spec.unit)}", "action": spec.reset_label, "value": spec.reset_value}
+
 
 DEPENDENCY_RULES: Dict[str, Dict[str, Any]] = {
     "MANUAL_FIXED_DISCHARGE_POWER_W": {"key": "MANUAL_MODE", "equals": "FIXED_DISCHARGE"},
@@ -255,7 +229,13 @@ def build_settings_model(
             "effective": _safe_value(spec.key, effective_value),
             "configured_state": "secret_set" if spec.is_secret and bool(configured_value) else ("secret_not_set" if spec.is_secret else "configured"),
             "secret_set": bool(configured_value) if spec.is_secret else False,
-            "default": None if spec.is_secret else spec.default_new_install,
+            "default": None if spec.is_secret or spec.reset_policy is ResetPolicy.NONE else spec.reset_value,
+            "bootstrap_value": None if spec.is_secret else spec.bootstrap_value,
+            "product_default": None if spec.is_secret else spec.product_default,
+            "default_class": spec.default_class.value,
+            "reset_policy": spec.reset_policy.value,
+            "required_first_install": spec.required_first_install,
+            "profile_id": spec.profile_id,
             "default_ui": _default_ui_policy(spec),
             "default_state": "set" if spec.is_secret and bool(spec.default_new_install) else ("not_set" if spec.is_secret else None),
             "minimum": spec.minimum,
