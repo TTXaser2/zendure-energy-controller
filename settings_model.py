@@ -5,96 +5,24 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Mapping, Optional
 
-from config_manager import CONFIG_SCHEMA
 from settings_registry import SETTINGS, SETTINGS_BY_KEY, Visibility, ApplyClass, Editability, DefaultClass, ResetPolicy
+from settings_help import (CATEGORY_GROUPS, CATEGORY_DESCRIPTIONS, SECTION_ORDER_OVERRIDES, SETTING_ORDER_OVERRIDES, LABEL_OVERRIDES, DEPENDENCY_RULES, build_category_specs, build_section_specs)
 from settings_runtime import SettingsRuntimeManager
 from settings_service import ISSUE_MESSAGES
 
-CATEGORY_GROUPS = {
-    "Betriebsart & manuelle Steuerung": "A. Betrieb",
-    "Nachtbetrieb": "A. Betrieb",
-    "Leistungsgrenzen & SOC-Schutz": "A. Betrieb",
-    "AUTO-Regelung": "B. Regelung & Speicherstrategie",
-    "Harvest / Restüberschuss": "B. Regelung & Speicherstrategie",
-    "Primärspeicher & SMA": "B. Regelung & Speicherstrategie",
-    "Cross-Charge-Schutz": "B. Regelung & Speicherstrategie",
-    "Kommandowirkung & Resync": "B. Regelung & Speicherstrategie",
-    "Zendure-Geräte": "C. Geräte & Schnittstellen",
-    "Schnittstellen & Datenquellen": "C. Geräte & Schnittstellen",
-    "Messdaten & Speicherung": "D. Daten, System & Diagnose",
-    "System & Diagnose": "D. Daten, System & Diagnose",
-}
+CATEGORY_SPECS = build_category_specs()
+def _operational_specs():
+    return tuple(
+        spec for spec in SETTINGS
+        if spec.visibility not in (Visibility.HIDDEN_MIGRATION, Visibility.HIDDEN_TRANSITION)
+        and (spec.release_stage == "S1" or spec.origin == "RC19")
+        and not spec.lifecycle.startswith("remove_")
+        and spec.lifecycle not in ("reserved_inactive", "deployment_constant_not_config")
+    )
 
-CATEGORY_DESCRIPTIONS = {
-    "Betriebsart & manuelle Steuerung": "Grundlegende Betriebsart und zeitweise feste Lade- oder Entladevorgaben.",
-    "Nachtbetrieb": "Feste Nachtentladung, Zeitfenster und Reserve-SOC.",
-    "Leistungsgrenzen & SOC-Schutz": "Globale Lade-, Entlade- und SOC-Schutzgrenzen.",
-    "AUTO-Regelung": "Dynamik, Totzone, Glättung und Schrittweite der Netzregelung.",
-    "Harvest / Restüberschuss": "Parallel-Harvest und Restexportaufnahme unter Erhalt des 0-W-Netzziels.",
-    "Primärspeicher & SMA": "Integration, Datenmodell und Ladeleistungsgrenzen des Primärspeichers.",
-    "Cross-Charge-Schutz": "Verhindert unerwünschtes Umladen zwischen den Speichern.",
-    "Kommandowirkung & Resync": "Command-State, Wirksamkeitsprüfung, Neutralisierung und Recovery.",
-    "Zendure-Geräte": "Zendure-Gerät, lokale API und gerätespezifische Telemetrie.",
-    "Schnittstellen & Datenquellen": "MQTT, Netzleistungsquelle und externe Datenpfade.",
-    "Messdaten & Speicherung": "Measurement V4, SQLite-Graphstore, Export und Speicherstatus.",
-    "System & Diagnose": "Webserver, Darstellung, Logging, Analyse und Sicherheitsfallbacks.",
-}
 
-# Client-side visibility conditions. The values remain preserved when hidden.
+SECTION_SPECS = build_section_specs(tuple(dict.fromkeys((spec.category, spec.section) for spec in _operational_specs())))
 
-# UI-only ordering and reset/default semantics. These rules never change runtime
-# defaults or effective values; they only control presentation and safe reset actions.
-SECTION_ORDER_OVERRIDES = {
-    "Betriebsart & manuelle Steuerung": ("Betriebsart", "Profil Feste Entladung", "Profil Feste Ladung"),
-    "Nachtbetrieb": ("Aktivierung", "Zeitfenster", "Feste Basisentladung", "Reserve & Folgeverhalten"),
-    "Harvest / Restüberschuss": ("Master & Zielbild", "High-SOC & Vollspeicher", "Entry & Hysterese", "Near-Limit-Entry", "Primärspeicher-Schwellen", "Tageszeitprofil"),
-    "Messdaten & Speicherung": ("Measurement-V4", "Speicherziel", "CSV-Messdaten & Rotation", "Schreibstrategie", "Speicherschutz", "Fallback", "SQLite-Graphstore", "SQLite-Graphspeicher", "SQLite-Retention", "Tageskurve & RAM-Historie", "V4-Archivpflege", "V4-Manifest & I/O", "Legacy-Kompatibilität"),
-    "Schnittstellen & Datenquellen": ("MQTT-Verbindung", "Netzleistung · aktive Quelle", "Netzleistung · Shelly-kompatibel", "Netzleistung · SMA Direkt", "Netzleistung · SMA Diagnose", "MQTT-Diagnose", "Zendure Local API", "Zendure Local API · Timeouts"),
-    "System & Diagnose": ("Darstellung", "Runtime-Logging", "Runtime-Logging · Detailkanäle", "Safe-State & Datenqualität", "Zendure MQTT-Datenqualität", "Analyse-/Replay-Service", "Webserver & Zugriff", "Administrative Aktionen"),
-}
-
-SETTING_ORDER_OVERRIDES = {
-    "MANUAL_FIXED_DISCHARGE_POWER_W": 10, "MANUAL_FIXED_DISCHARGE_TARGET_SOC": 20, "MANUAL_DISCHARGE_AFTER_TARGET": 30,
-    "MANUAL_FIXED_CHARGE_POWER_W": 10, "MANUAL_FIXED_CHARGE_TARGET_SOC": 20, "MANUAL_CHARGE_AFTER_TARGET": 30,
-    "MIN_SOC_PERCENT": 10, "MAX_SOC_PERCENT": 20,
-    "NIGHT_START_HOUR": 10, "NIGHT_START_MINUTE": 11, "NIGHT_END_HOUR": 20, "NIGHT_END_MINUTE": 21,
-    "REST_SURPLUS_HARVEST_ENABLED": 1,
-    "HARVEST_PRIMARY_CHARGE_FLOOR_RATIO": 10, "HARVEST_PRIMARY_CHARGE_FLOOR_W": 11,
-    "HARVEST_PRIMARY_CHARGE_RESTART_RATIO": 20, "HARVEST_PRIMARY_CHARGE_RESTART_W": 21,
-    "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_RATIO": 30, "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_W": 31,
-    "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MORNING": 10, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY": 20, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_AFTERNOON": 30,
-    "MEASUREMENT_LOG_MODE": 1, "MEASUREMENT_LOG_FILE": 2,
-    "MEASUREMENT_LOG_STORAGE_TARGET": 1, "MEASUREMENT_LOG_DIR": 2, "MEASUREMENT_LOG_MOUNTPOINT": 3,
-    "MQTT_BROKER": 10, "MQTT_PORT": 20, "MQTT_USER": 30, "MQTT_PASSWORD": 40,
-    "GRID_METER_SOURCE": 1,
-    "ZENDURE_LOCAL_API_ENABLED": 10, "ZENDURE_LOCAL_IP": 20, "ZENDURE_LOCAL_API_USE_FOR_TELEMETRY": 30,
-    "ZENDURE_LOCAL_API_TELEMETRY_FALLBACK_ONLY": 40, "ZENDURE_LOCAL_API_POLL_INTERVAL_SECONDS": 50,
-    "ZENDURE_LOCAL_API_TIMEOUT_SECONDS": 60, "ZENDURE_LOCAL_API_CONTROL_TIMEOUT_CAP_SECONDS": 70,
-    "ZENDURE_LOCAL_API_ERROR_BACKOFF_SECONDS": 80, "ZENDURE_LOCAL_API_SOC_PRIORITY": 90,
-    "FILE_LOG_ENABLED": 10, "FILE_LOG_DIR": 20, "FILE_LOG_FILE": 30, "FILE_LOG_MAX_BYTES": 40, "FILE_LOG_BACKUP_COUNT": 50,
-}
-
-LABEL_OVERRIDES = {
-    "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS": "High-SOC Eintritt bestätigen",
-    "HARVEST_HIGH_SMA_SOC_HOLD_SECONDS": "High-SOC Haltezeit",
-    "HARVEST_HIGH_SMA_SOC_ENABLED": "High-SOC Parallel-Harvest aktiv",
-    "HARVEST_HIGH_SMA_SOC_ENTER_PERCENT": "High-SOC Eintritt",
-    "HARVEST_HIGH_SMA_SOC_EXIT_PERCENT": "High-SOC Austritt",
-    "HARVEST_HIGH_SMA_SOC_MIN_EXPORT_W": "Mindestexport für High-SOC Eintritt",
-    "HARVEST_SMA_FULL_SOC_PERCENT": "SMA Voll-SOC Schwelle",
-    "REST_SURPLUS_ENTRY_CONFIRM_SECONDS": "Near-Limit Eintritt bestätigen",
-    "HARVEST_PRIMARY_CHARGE_FLOOR_RATIO": "Primärspeicher Mindestladeanteil",
-    "HARVEST_PRIMARY_CHARGE_FLOOR_W": "Primärspeicher Mindestladeleistung (Override)",
-    "HARVEST_PRIMARY_CHARGE_RESTART_RATIO": "Primärspeicher Wiederanlaufanteil",
-    "HARVEST_PRIMARY_CHARGE_RESTART_W": "Primärspeicher Wiederanlaufleistung (Override)",
-    "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_RATIO": "Primärspeicher Near-Limit Anteil",
-    "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_W": "Primärspeicher Near-Limit Leistung (Override)",
-    "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MORNING": "SMA-Zielanteil morgens",
-    "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY": "SMA-Zielanteil mittags",
-    "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_AFTERNOON": "SMA-Zielanteil nachmittags",
-    "SOC_DAY_GRAPH_BOOTSTRAP_CACHE_SECONDS": "SOC-Tagesgraph Bootstrap-Cache",
-    "WEB_HOST": "Webserver Bind-Adresse",
-}
 
 def _format_default_value(value: Any, unit: Optional[str]) -> str:
     if value is None:
@@ -124,41 +52,6 @@ def _default_ui_policy(spec: Any) -> Dict[str, Any]:
     return {"kind": "default", "meta": f"Produktdefault: {_format_default_value(spec.product_default, spec.unit)}", "action": spec.reset_label, "value": spec.reset_value}
 
 
-DEPENDENCY_RULES: Dict[str, Dict[str, Any]] = {
-    "MANUAL_FIXED_DISCHARGE_POWER_W": {"key": "MANUAL_MODE", "equals": "FIXED_DISCHARGE"},
-    "MANUAL_FIXED_DISCHARGE_TARGET_SOC": {"key": "MANUAL_MODE", "equals": "FIXED_DISCHARGE"},
-    "MANUAL_DISCHARGE_AFTER_TARGET": {"key": "MANUAL_MODE", "equals": "FIXED_DISCHARGE"},
-    "MANUAL_FIXED_CHARGE_POWER_W": {"key": "MANUAL_MODE", "equals": "FIXED_CHARGE"},
-    "MANUAL_FIXED_CHARGE_TARGET_SOC": {"key": "MANUAL_MODE", "equals": "FIXED_CHARGE"},
-    "MANUAL_CHARGE_AFTER_TARGET": {"key": "MANUAL_MODE", "equals": "FIXED_CHARGE"},
-    "NIGHT_START_HOUR": {"key": "NIGHT_DISCHARGE_ENABLED", "equals": True},
-    "NIGHT_START_MINUTE": {"key": "NIGHT_DISCHARGE_ENABLED", "equals": True},
-    "NIGHT_END_HOUR": {"key": "NIGHT_DISCHARGE_ENABLED", "equals": True},
-    "NIGHT_END_MINUTE": {"key": "NIGHT_DISCHARGE_ENABLED", "equals": True},
-    "NIGHT_DISCHARGE_POWER_W": {"key": "NIGHT_DISCHARGE_ENABLED", "equals": True},
-    "NIGHT_DISCHARGE_STOP_SOC_PERCENT": {"key": "NIGHT_DISCHARGE_ENABLED", "equals": True},
-    "ZENDURE_LOCAL_IP": {"key": "ZENDURE_LOCAL_API_ENABLED", "equals": True},
-    "ZENDURE_LOCAL_API_TIMEOUT_SECONDS": {"key": "ZENDURE_LOCAL_API_ENABLED", "equals": True},
-    "ZENDURE_LOCAL_API_CONTROL_TIMEOUT_CAP_SECONDS": {"key": "ZENDURE_LOCAL_API_ENABLED", "equals": True},
-    "ZENDURE_LOCAL_API_USE_FOR_TELEMETRY": {"key": "ZENDURE_LOCAL_API_ENABLED", "equals": True},
-    "ZENDURE_LOCAL_API_TELEMETRY_FALLBACK_ONLY": {"key": "ZENDURE_LOCAL_API_ENABLED", "equals": True},
-    "ZENDURE_LOCAL_API_POLL_INTERVAL_SECONDS": {"key": "ZENDURE_LOCAL_API_ENABLED", "equals": True},
-    "ZENDURE_LOCAL_API_ERROR_BACKOFF_SECONDS": {"key": "ZENDURE_LOCAL_API_ENABLED", "equals": True},
-    "ZENDURE_LOCAL_API_SOC_PRIORITY": {"key": "ZENDURE_LOCAL_API_ENABLED", "equals": True},
-    "MQTT_TOPIC_DIAGNOSTIC_FILTER": {"key": "MQTT_TOPIC_DIAGNOSTIC_ENABLED", "equals": True},
-    "MQTT_TOPIC_DIAGNOSTIC_VIEW_MODE": {"key": "MQTT_TOPIC_DIAGNOSTIC_ENABLED", "equals": True},
-    "MQTT_TOPIC_DIAGNOSTIC_HISTORY_LIMIT": {"key": "MQTT_TOPIC_DIAGNOSTIC_ENABLED", "equals": True},
-    "MEASUREMENT_LOG_STORAGE_TARGET": {"key": "MEASUREMENT_LOG_MODE", "not_equals": "off"},
-    "MEASUREMENT_LOG_DIR": {"key": "MEASUREMENT_LOG_MODE", "not_equals": "off"},
-    "MEASUREMENT_LOG_MAX_BYTES": {"key": "MEASUREMENT_LOG_MODE", "not_equals": "off"},
-    "MEASUREMENT_LOG_MIN_FREE_DISK_MB": {"key": "MEASUREMENT_LOG_MODE", "not_equals": "off"},
-    "FILE_LOG_DIR": {"key": "FILE_LOG_ENABLED", "equals": True},
-    "FILE_LOG_FILE": {"key": "FILE_LOG_ENABLED", "equals": True},
-    "FILE_LOG_MAX_BYTES": {"key": "FILE_LOG_ENABLED", "equals": True},
-    "FILE_LOG_BACKUP_COUNT": {"key": "FILE_LOG_ENABLED", "equals": True},
-}
-
-
 def _safe_value(key: str, value: Any) -> Any:
     spec = SETTINGS_BY_KEY.get(key)
     if spec is not None and spec.is_secret:
@@ -167,8 +60,46 @@ def _safe_value(key: str, value: Any) -> Any:
 
 
 def _description(key: str, spec: Any) -> str:
-    legacy = CONFIG_SCHEMA.get(key, {})
-    return str(legacy.get("description") or spec.validation_text or spec.apply_text or "")
+    return spec.help.short_help
+
+
+def _handbook_payload(ref: Any) -> Optional[Dict[str, Any]]:
+    if ref is None:
+        return None
+    return {"section_id": ref.section_id, "section_title": ref.section_title, "page": ref.page, "url": f"/manual.pdf#page={ref.page}"}
+
+
+def _help_payload(spec: Any) -> Dict[str, Any]:
+    help_spec = spec.help
+    example = None
+    if help_spec.example is not None:
+        example = {
+            "title": help_spec.example.title,
+            "inputs": list(help_spec.example.inputs),
+            "calculation": help_spec.example.calculation,
+            "result": help_spec.example.result,
+            "interpretation": help_spec.example.interpretation,
+        }
+    return {
+        "level": help_spec.help_level,
+        "short": help_spec.short_help,
+        "extended": help_spec.extended_help,
+        "effect_increase": help_spec.effect_increase,
+        "effect_decrease": help_spec.effect_decrease,
+        "effect_enable": help_spec.effect_enable,
+        "effect_disable": help_spec.effect_disable,
+        "option_help": [{"value": value, "text": text} for value, text in help_spec.option_help],
+        "dependencies": [{"relation": dep.relation, "key": dep.key, "text": dep.text} for dep in help_spec.dependencies],
+        "dependency_help": help_spec.dependency_help,
+        "override": help_spec.override_help,
+        "risk": help_spec.risk_help,
+        "example": example,
+        "formula": help_spec.formula_text,
+        "search_terms": list(help_spec.search_terms),
+        "guidance_rule_ids": list(help_spec.guidance_rule_ids),
+        "evidence_refs": list(help_spec.evidence_refs),
+        "handbook": _handbook_payload(help_spec.handbook_ref),
+    }
 
 
 def build_settings_model(
@@ -203,14 +134,23 @@ def build_settings_model(
         if spec.lifecycle.startswith("remove_") or spec.lifecycle in ("reserved_inactive", "deployment_constant_not_config"):
             continue
 
+        category_spec = CATEGORY_SPECS.get(spec.category)
         category = categories.setdefault(spec.category, {
             "name": spec.category,
             "group": CATEGORY_GROUPS.get(spec.category, "D. Daten, System & Diagnose"),
             "description": CATEGORY_DESCRIPTIONS.get(spec.category, ""),
+            "help": category_spec.help_text if category_spec else CATEGORY_DESCRIPTIONS.get(spec.category, ""),
+            "handbook": _handbook_payload(category_spec.handbook_ref) if category_spec else None,
             "sections": {},
             "setting_count": 0,
         })
-        section = category["sections"].setdefault(spec.section, {"name": spec.section, "settings": []})
+        section_spec = SECTION_SPECS.get((spec.category, spec.section))
+        section = category["sections"].setdefault(spec.section, {
+            "name": spec.section,
+            "help": section_spec.help_text if section_spec else "",
+            "handbook": _handbook_payload(section_spec.handbook_ref) if section_spec else None,
+            "settings": [],
+        })
         configured_value = configured.get(spec.key, spec.default_new_install)
         effective_value = effective.get(spec.key, spec.default_new_install)
         available = spec.release_stage == "S1" or spec.origin == "RC19"
@@ -223,6 +163,7 @@ def build_settings_model(
             "key": spec.key,
             "label": LABEL_OVERRIDES.get(spec.key, spec.label),
             "description": _description(spec.key, spec),
+            "help": _help_payload(spec),
             "value_type": spec.value_type.value,
             "codec_id": spec.codec_id,
             "configured": _safe_value(spec.key, configured_value),
@@ -253,6 +194,7 @@ def build_settings_model(
             "dependency_keys": list(spec.dependency_keys),
             "dependency_rule": DEPENDENCY_RULES.get(spec.key),
             "validation_text": spec.validation_text,
+            "validator_ids": list(spec.validator_ids),
             "inherited_default": spec.key in inherited,
             "pending_restart": spec.key in pending,
             "configured_differs_effective": configured_value != effective_value,

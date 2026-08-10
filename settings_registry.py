@@ -11,7 +11,9 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple
 
-SCHEMA_VERSION = "1.22-s1.1"
+from settings_help import SettingHelpSpec, build_setting_help
+
+SCHEMA_VERSION = "1.23-s1.1"
 SOURCE_TARGET_SCHEMA_SHA256 = "f67b8d09ae9a433c4cb0d3a720a0961d5b2a824b120251a63f2b19885356274a"
 
 
@@ -112,6 +114,7 @@ class SettingSpec:
     default_help: Optional[str]
     profile_id: Optional[str]
     required_first_install: bool
+    help: SettingHelpSpec
 
     @property
     def option_values(self) -> Tuple[str, ...]:
@@ -2801,7 +2804,7 @@ _ROWS = [{'key': 'MANUAL_MODE',
   'dependency_keys': ('SECOND_BATTERY_STALE_TIMEOUT_SECONDS', 'MIN_COMMAND_CHANGE_W'),
   'dependency_text': 'SECOND_BATTERY_STALE_TIMEOUT_SECONDS; MIN_COMMAND_CHANGE_W',
   'validator_ids': (),
-  'validation_text': '0–5000 W; 0 bedeutet Reaktion auf jeden nichtnulligen Gegenfluss und erzeugt erhöhtes Rausch-/Stellrisiko',
+  'validation_text': '1–5000 W bei aktivem Cross-Charge; der Wert muss größer als 0 W sein',
   'migration_text': 'Wert unverändert übernehmen',
   'risk': 'Hoch',
   'release_stage': 'S2',
@@ -6584,6 +6587,7 @@ def _build_spec(row: Mapping[str, Any]) -> SettingSpec:
         release_text=row["release_text"], lifecycle=row["lifecycle"],
         secret_policy=SecretPolicy[row["secret_policy"]], decision_status=row["decision_status"],
         **_default_metadata(row),
+        help=build_setting_help(row),
     )
 
 
@@ -6631,6 +6635,18 @@ def registry_snapshot() -> Dict[str, Any]:
             "default_help": spec.default_help,
             "profile_id": spec.profile_id,
             "required_first_install": spec.required_first_install,
+            "help": {
+                "level": spec.help.help_level,
+                "short": spec.help.short_help,
+                "extended": spec.help.extended_help,
+                "search_terms": list(spec.help.search_terms),
+                "handbook": None if spec.help.handbook_ref is None else {
+                    "section_id": spec.help.handbook_ref.section_id,
+                    "section_title": spec.help.handbook_ref.section_title,
+                    "page": spec.help.handbook_ref.page,
+                },
+                "guidance_rule_ids": list(spec.help.guidance_rule_ids),
+            },
         }
         if spec.is_secret:
             row["default_new_install_state"] = "empty" if not spec.default_new_install else "set"

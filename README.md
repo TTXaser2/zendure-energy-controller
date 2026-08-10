@@ -1,55 +1,88 @@
-# Zendure Energy Controller V12.11.7
+# Zendure Energy Controller V12.12.0
 
-**Build-ID:** `v12.11.7-20260808`
+**Build-ID:** `v12.12.0-20260809`
 
-V12.11.7 ist ein **Settings-/Config-Korrekturrelease** auf Basis der vollständig validierten V12.11.6. Schwerpunkt ist die saubere Trennung von Produktdefaults, Profilwerten, sicheren Sentinels, Installationswerten, Migration und First-Install. Die energetische Regellogik, Command-Safety, Cross-Charge- und Measurement-V4-Schicht bleiben unverändert.
+V12.12.0 ist der Entwicklungsblock **Settings Help & Guided Configuration** auf Basis der vollständig validierten V12.11.7. Schwerpunkt ist eine registry-native, fachlich strukturierte Hilfe für sämtliche operativen Settings sowie deterministische, nicht selbsttätig verändernde Konfigurationshinweise. Regler-, Command-, Cross-Charge- und Measurement-V4-Logik bleiben unverändert.
 
-## 1. Default- und Resetvertrag
+## 1. Registry-native Hilfe
 
-Alle **212 SettingsRegistry-Einträge** besitzen eine explizite Default-Provenienz und Reset-Policy. Die Settings-UI und der Server verwenden denselben Registry-Vertrag.
-
-Semantiken:
+Die SettingsRegistry bleibt Schemaautorität und trägt nun zusätzlich die Hilfedomäne. Für die produktive Settings-Oberfläche gilt:
 
 ```text
-Produktdefault       allgemeiner getesteter Standardwert
-Profilpreset         nur im Kontext des gewählten Profils
-Sicherer Sentinel    fail-safe Ausgangszustand, keine Empfehlung
-Installation         anlagen-/hardware-/nutzerspezifisch
-Nicht gesetzt/Auto   definierte Clear-/Automatiksemantik
-Legacy/Internal      Migration/Deployment, kein Benutzerdefault
+Settings gesamt                       212
+operative Settings                    171
+Settings mit BASE-Hilfe               171 / 171
+priorisierte Settings mit RICH-Hilfe   62 / 62
+Kategorien mit Hilfe                    12 / 12
+Abschnitte mit Hilfe                    69 / 69
 ```
 
-Ein generisches **Auf Default setzen** ist nur erlaubt, wenn die Registry dies ausdrücklich zulässt. Installationswerte wie MQTT-Broker, Geräte-ID, Leistungsgrenzen oder SOC-Grenzen können auch über die Settings-API nicht mehr auf historische Pseudodefaults zurückgesetzt werden.
+Die Hilfe umfasst je nach Setting unter anderem:
 
-## 2. First Install
+- Kurzbeschreibung und Zeitpunkt der Wirkung;
+- Wirkung beim Erhöhen/Verringern bzw. Ein-/Ausschalten;
+- Abhängigkeiten, Gating und Overrides;
+- Wertebereich und serverseitigen Validierungsvertrag;
+- Risiko-/Sicherheitswirkung;
+- Formel und Rechenbeispiel;
+- Default-/Profil-Semantik;
+- Apply-/Restart-Wirkung;
+- Handbuchanker;
+- im Expertenmodus zusätzlich technischen Vertrag, Config-Key und Validatoren.
 
-Fehlt `config.json`, startet ZEC in:
+## 2. Guided Configuration
+
+V12.12.0 kann deterministische Konstellationen direkt einordnen, ändert aber **niemals selbstständig Settings**. Beispiele:
+
+- Setting ist aufgrund einer deaktivierten Funktion aktuell ohne Wirkung;
+- ein positiver absoluter Harvest-W-Wert übersteuert den zugehörigen Ratio-Wert;
+- ein Profil leitet Topics automatisch ab;
+- auffällige Kombinationen aus AUTO-Gain, Totzone, Schrittweite oder Glättung;
+- Nachtmodus aktiviert, aber feste Leistung 0 W;
+- Harvest-Bestätigungszeiten im Verhältnis zum Regelintervall;
+- zu kurze Zweitbatterie-Freshness oder fehlender Resync-Cooldown.
+
+Clientseitige Hinweise ersetzen niemals Preview/Validation. Sicherheits-, Laufzeit-, Netzwerk- und Integritätsentscheidungen bleiben serverseitig authoritative.
+
+## 3. Suche und Navigation
+
+Die Settings-Suche berücksichtigt zusätzlich:
+
+- Hilfetexte;
+- Synonyme;
+- Abschnittsnamen;
+- Abhängigkeiten;
+- Formeln und fachliche Begriffe;
+- technische Config-Keys im zulässigen Sichtbarkeitsmodus.
+
+Standardmodus bleibt Standardmodus: Such- und Hilfenavigation legt keine Expert-Settings unbemerkt offen. Bei einer Beziehung zu einem Expert-Setting wird der Moduswechsel ausdrücklich angeboten.
+
+## 4. Fachlich vertiefte Bereiche
+
+RICH-Hilfe ist insbesondere für folgende Bereiche vollständig hinterlegt:
+
+1. manuelle Betriebsarten;
+2. Leistungs- und SOC-Grenzen;
+3. AUTO-Regelung;
+4. Nachtbetrieb;
+5. Harvest / Restüberschuss;
+6. Cross-Charge-Schutz;
+7. Kommandowirkung & Resync.
+
+Harvest-Hilfe erklärt unter anderem `Floor ≤ Restart ≤ Near-Limit ≤ Pmax`, Ratio-/W-Overrides, Entry-/Hold-Semantik und die Delta-/Absolutziel-Unterscheidung. Command-Hilfe trennt Publish, Richtungsreaktion, Sollwerttracking und Systemziel.
+
+## 5. Aktuelles Handbuch
+
+Die generischen Dateien
 
 ```text
-FIRST_INSTALL_SETUP
-control_allowed = false
+docs/Zendure_Energy_Controller_Handbuch.docx
+docs/Zendure_Energy_Controller_Handbuch.pdf
 ```
 
-Vor dem ersten Commit müssen mindestens Device-ID, MQTT-Broker, Netzleistungsquelle, Lade-/Entladegrenzen sowie Min-/Max-SOC ausdrücklich festgelegt werden. Quellabhängige Verbindungsdaten werden ebenfalls geprüft.
+wurden für V12.12.0 vollständig neu erstellt. Das PDF besitzt 14 Seiten; die Settings-Hilfe verlinkt nur auf tatsächlich verifizierte Seitenanker. Alte anlagenbezogene Pseudodefaults wurden nicht übernommen.
 
-Der First-Install-Preview benutzt ausschließlich den neuen Bootstrapvertrag. Historische RC19-/Legacydefaults werden dabei nicht als Neuinstallationswerte interpretiert.
-
-Sichere Startzustände sind unter anderem:
-
-```text
-NIGHT_DISCHARGE_POWER_W           = 0 W
-MANUAL_FIXED_DISCHARGE_POWER_W    = 0 W
-MANUAL_FIXED_CHARGE_POWER_W       = 0 W
-MEASUREMENT_LOG_MODE              = off
-```
-
-0 W ist dabei ausdrücklich ein **sicherer Sentinel**, keine empfohlene Betriebsleistung.
-
-## 3. Bestehende Installationen
-
-Das Update verändert eine vorhandene gültige `config.json` nicht aufgrund des neuen Defaultvertrags. Individuelle produktive Werte bleiben erhalten. Die bestehende Configmigration bleibt idempotent.
-
-## 4. Measurement-Vertrag
+## 6. Measurement-Vertrag
 
 Produktiv bleibt **ZEC-MEASUREMENT-V4** maßgeblich:
 
@@ -59,41 +92,30 @@ V4 Standard                = 246 Felder
 V4 Extended                = 249 Felder
 ```
 
-Die historische `version.CSV_SCHEMA`-V3-Konstante gehört zum separaten Legacy-Kompatibilitätspfad. Der V3-only-Cleanup ist nicht Bestandteil dieses Releases.
+Der historische V3-Kompatibilitätspfad ist nicht Bestandteil dieses Releases und bleibt ein separater Folgeblock.
 
-## 5. No-Regression
+## 7. No-Regression
 
-V12.11.7 verändert insbesondere nicht:
+V12.12.0 verändert insbesondere nicht:
 
 - AUTO-, HOLD-, NIGHT- oder feste Regleralgorithmen;
-- Harvest-Formeln und 0-W-Netzziel;
-- Cross-Charge;
-- Smart-Mode-/Flash-Schutz;
-- Command-State, Readback, Effect, Resync und Late-Effect-Guard;
+- Harvest-Zielwertbildung und 0-W-Netzziel;
+- Cross-Charge-Logik;
+- SmartMode-/Command-/Readback-/Resync-Logik;
 - Zendure Power Observation;
 - Measurement-V4-Writer und -Contract;
-- SQLite-Graphstore;
 - Excel-Lernsimulation.
 
-## 6. Installation und Releasebelege
+## 8. Releasebelege
 
 Siehe:
 
 ```text
 README_INSTALLATION.md
-BUILD_VALIDATION_V12_11_7.md
-RELEASE_INFO_V12_11_7.md
-TECHNICAL_NOTES_V12_11_7.md
-ZEC_V12_11_7_RELEASE_REPORT.md
+BUILD_VALIDATION_V12_12_0.md
+RELEASE_INFO_V12_12_0.md
+TECHNICAL_NOTES_V12_12_0.md
+ZEC_V12_12_0_RELEASE_REPORT.md
+SPEZIFIKATION_ZEC_V12_12_0_SETTINGS_HELP_GUIDED_CONFIGURATION_V1.0.md
+V12_12_0_SETTINGS_HELP_INVENTORY.csv
 ```
-
-## 7. Bewusst spätere Blöcke
-
-Nicht Bestandteil von V12.11.7:
-
-1. V4-only-Runtime / Entfernung des produktiven V3-Legacypfads;
-2. Measurement-Storage-Härtung;
-3. benannte Konfigurationsstände sowie Import/Export;
-4. Graph-Redesign;
-5. weitergehende Experten-/Diagnoseansicht;
-6. separater Simulationsdienst.

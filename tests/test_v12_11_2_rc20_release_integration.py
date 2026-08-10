@@ -15,8 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class Rc20ReleaseIntegrationTests(unittest.TestCase):
     def test_version_is_rc20_without_measurement_schema_change(self):
-        self.assertEqual("12.11.7", version.APP_VERSION)
-        self.assertEqual("V12.11.7", version.APP_VERSION_LABEL)
+        self.assertEqual("12.12.0", version.APP_VERSION)
+        self.assertEqual("V12.12.0", version.APP_VERSION_LABEL)
         self.assertEqual("ZEC-MEASUREMENT-V3", version.CSV_SCHEMA)
 
     def test_migration_cli_check_apply_and_idempotence(self):
@@ -100,15 +100,15 @@ class Rc20ReleaseIntegrationTests(unittest.TestCase):
 
     def test_updater_is_exact_sequential_atomic_and_rollback_capable(self):
         script = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_VERSION="v12_11_7"', script)
+        self.assertIn('EXPECTED_VERSION="v12_12_0"', script)
         self.assertIn('EXPECTED_SOURCE_RC19="12.11.2-rc19"', script)
         self.assertIn('EXPECTED_SOURCE_V12114_VERSION="12.11.4"', script)
         self.assertIn('EXPECTED_SOURCE_V12114_BUILD_ID="v12.11.4-20260807"', script)
         self.assertIn('EXPECTED_SOURCE_V12116_VERSION="12.11.6"', script)
         self.assertIn('EXPECTED_SOURCE_V12116_BUILD_ID="v12.11.6-20260808"', script)
         self.assertIn('EXPECTED_SOURCE_FIX5_BUILD_ID="rc20-audit-fix5-20260806"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v12.11.7-20260808"', script)
-        self.assertIn('TARGET_PACKAGE_VERSION" = "12.11.7"', script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v12.12.0-20260809"', script)
+        self.assertIn('TARGET_PACKAGE_VERSION" = "12.12.0"', script)
         self.assertIn("migrate_rc19_to_rc20.py", script)
         self.assertIn("--check-only", script)
         self.assertIn("recover_on_error", script)
@@ -156,7 +156,7 @@ class Rc20ReleaseIntegrationTests(unittest.TestCase):
         self.assertIn('os.environ.get("ZEC_INSTALLER_PREFLIGHT") == "1"', web_ui)
 
     def test_release_manifest_must_not_ship_runtime_logs(self):
-        manifest = (ROOT / "V12_11_7_SOURCE_MANIFEST.sha256").read_text(encoding="utf-8")
+        manifest = (ROOT / "V12_12_0_SOURCE_MANIFEST.sha256").read_text(encoding="utf-8")
         self.assertNotIn("./logs/", manifest)
         self.assertNotIn(".sqlite3", manifest)
 

@@ -71,10 +71,10 @@ class V12115SettingsBugfixTests(unittest.TestCase):
         self.state = ControllerState()
         self.app = create_app(self.manager, self.state)
 
-    def test_release_identity_is_v12_11_7_without_measurement_schema_change(self):
-        self.assertEqual("12.11.7", version.APP_VERSION)
-        self.assertEqual("V12.11.7", version.APP_VERSION_LABEL)
-        self.assertEqual("v12.11.7-20260808", version.APP_BUILD_ID)
+    def test_release_identity_is_v12_12_0_without_measurement_schema_change(self):
+        self.assertEqual("12.12.0", version.APP_VERSION)
+        self.assertEqual("V12.12.0", version.APP_VERSION_LABEL)
+        self.assertEqual("v12.12.0-20260809", version.APP_BUILD_ID)
         self.assertEqual("ZEC-MEASUREMENT-V3", version.CSV_SCHEMA)
 
     def test_desktop_scroll_contract_owns_vertical_scroll_in_content_pane(self):
@@ -181,17 +181,17 @@ class V12115SettingsBugfixTests(unittest.TestCase):
 
     def test_updater_directly_accepts_v12_11_6_and_keeps_transitional_readback_gate(self):
         script = UPDATER.read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_VERSION="v12_11_7"', script)
+        self.assertIn('EXPECTED_VERSION="v12_12_0"', script)
         self.assertIn('EXPECTED_SOURCE_V12116_VERSION="12.11.6"', script)
         self.assertIn('EXPECTED_SOURCE_V12116_BUILD_ID="v12.11.6-20260808"', script)
         self.assertIn('SOURCE_MODE="V12_11_6"', script)
         self.assertIn('EXPECTED_SOURCE_V12115_VERSION="12.11.5"', script)
         self.assertIn('EXPECTED_SOURCE_V12115_BUILD_ID="v12.11.5-20260807"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v12.11.7-20260808"', script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v12.12.0-20260809"', script)
         self.assertIn("TRANSITIONAL_STREAK", script)
         self.assertIn("INPUT_LIMIT/OUTPUT_LIMIT-Readback", script)
         self.assertIn("PYTHONWARNINGS=\"error::ResourceWarning\"", script)
-        self.assertIn("V12_11_7_SOURCE_MANIFEST.sha256", script)
+        self.assertIn("V12_12_0_SOURCE_MANIFEST.sha256", script)
 
 
 if __name__ == "__main__":

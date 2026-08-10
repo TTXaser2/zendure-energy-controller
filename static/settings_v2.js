@@ -23,6 +23,10 @@
     validationIssues: [],
     modalMode: 'preview',
     adminAction: null,
+    helpTrigger: null,
+    helpReturnFocus: null,
+    pendingHelpTarget: null,
+    helpScrollY: 0,
   };
   const $ = (s, root = document) => root.querySelector(s);
   const $$ = (s, root = document) => Array.from(root.querySelectorAll(s));
@@ -93,6 +97,90 @@
     return app.model.categories.flatMap(c => c.sections.flatMap(section => section.settings.map(x => Object.assign({_category:c.name, _section:section.name}, x))));
   }
   function settingByKey(key) { return settings().find(s => s.key === key); }
+  function relationLabel(relation) {
+    return ({REQUIRES:'benötigt',ENABLES:'aktiviert',GATES:'gesteuert durch',LIMITS:'begrenzt durch',OVERRIDES:'übersteuert',OVERRIDDEN_BY:'übersteuert durch',PAIRED_WITH:'gehört zusammen mit',SOURCE_FOR:'Quelle/Bezugswert',DIAGNOSTIC_ONLY:'nur Diagnose',RESTART_COUPLED:'Neustart gekoppelt'})[relation] || relation || 'verknüpft mit';
+  }
+  function helpButton(kind, id, label) {
+    const attr = kind === 'setting' ? `data-help-setting="${esc(id)}"` : (kind === 'category' ? `data-help-category="${esc(id)}"` : `data-help-section="${esc(id)}"`);
+    return `<button type="button" class="help-info-button" ${attr} aria-label="Hilfe zu ${esc(label)}" title="Erklärung anzeigen">i</button>`;
+  }
+  function currentByKey(key) {
+    const spec = settingByKey(key);
+    return spec ? currentValue(spec) : undefined;
+  }
+  function guidanceForSetting(s) {
+    const messages = [];
+    if (!dependencyVisible(s)) {
+      const rule = s.dependency_rule || {};
+      const driver = settingByKey(rule.key);
+      const driverLabel = driver?.label || rule.key || 'übergeordnete Einstellung';
+      let text = `Derzeit ohne Wirkung: ${driverLabel} erfüllt die Aktivierungsbedingung nicht.`;
+      if (s.key.startsWith('MANUAL_FIXED_') || s.key.startsWith('MANUAL_') && s.key.endsWith('_AFTER_TARGET')) text = 'Gespeichert, aber derzeit inaktiv: Der zugehörige feste manuelle Modus ist nicht ausgewählt.';
+      else if (s.key.startsWith('NIGHT_')) text = 'Gespeichert, aber derzeit inaktiv: Nachtbetrieb ist ausgeschaltet.';
+      else if (s.key.startsWith('ZENDURE_LOCAL_API_') && s.key !== 'ZENDURE_LOCAL_API_ENABLED') text = 'Derzeit ohne Wirkung: Die lokale Zendure-API ist ausgeschaltet.';
+      else if (s.key.startsWith('MEASUREMENT_') && currentByKey('MEASUREMENT_LOG_MODE') === 'off') text = 'Derzeit ohne Wirkung: Measurement-Logging ist ausgeschaltet.';
+      messages.push({kind:'inactive', text});
+    }
+    const overridePairs = {
+      HARVEST_PRIMARY_CHARGE_FLOOR_RATIO:'HARVEST_PRIMARY_CHARGE_FLOOR_W',
+      HARVEST_PRIMARY_CHARGE_RESTART_RATIO:'HARVEST_PRIMARY_CHARGE_RESTART_W',
+      HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_RATIO:'HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_W',
+    };
+    const override = overridePairs[s.key];
+    if (override && Number(currentByKey(override) || 0) > 0) messages.push({kind:'override', text:`Derzeit übersteuert: ${settingByKey(override)?.label || override} ist positiv gesetzt; dieser Ratio-Wert ist für die effektive Schwelle nicht wirksam.`});
+    const reverse = Object.entries(overridePairs).find(([,w]) => w === s.key)?.[0];
+    if (reverse && Number(currentValue(s) || 0) > 0) messages.push({kind:'effective', text:`Absolute W-Quelle aktiv: ${settingByKey(reverse)?.label || reverse} wird für diese Schwelle übersteuert.`});
+    if (s.key.startsWith('SECOND_BATTERY_') && currentByKey('SECOND_BATTERY_SOURCE_PROFILE') === 'evcc_standard' && ['SECOND_BATTERY_POWER_TOPIC','SECOND_BATTERY_SOC_TOPIC','SECOND_BATTERY_CAPACITY_TOPIC'].includes(s.key)) messages.push({kind:'inactive',text:'Für Profil EVCC Standard nicht verwendet; die Topics werden aus dem EVCC-Basis-Topic abgeleitet.'});
+    if (s.key === 'SECOND_BATTERY_EVCC_BASE_TOPIC' && currentByKey('SECOND_BATTERY_SOURCE_PROFILE') === 'custom') messages.push({kind:'inactive',text:'Für das benutzerdefinierte Profil nicht verwendet.'});
+    return messages;
+  }
+  function guidanceHtml(s) {
+    const messages = guidanceForSetting(s);
+    if (!messages.length) return '';
+    return `<div class="setting-guidance">${messages.map(m=>`<div class="guidance-line ${esc(m.kind)}"><span class="guidance-icon" aria-hidden="true">${m.kind==='override'?'↳':m.kind==='effective'?'✓':'i'}</span><span>${esc(m.text)}</span></div>`).join('')}</div>`;
+  }
+  function categoryGuidance(categoryName) {
+    const n = (key) => Number(currentByKey(key));
+    const notices = [];
+    if (categoryName === 'AUTO-Regelung') {
+      if (n('DEADBAND_W') < 20 && n('CONTROL_GAIN') > .5 && n('MAX_POWER_STEP_W') > 300) notices.push({kind:'warning',text:'Aggressive Kombination: sehr kleine Totzone, hoher Gain und großer Leistungsschritt können die Regelung unnötig nervös machen.'});
+      if (n('MOVING_AVERAGE_SAMPLES') > 30) notices.push({kind:'warning',text:'Großes Mittelwertfenster: Die Regelung reagiert deutlich träger auf reale Laständerungen.'});
+      if (n('INTERVAL_SECONDS') <= 1 && n('MOVING_AVERAGE_SAMPLES') <= 2 && n('SMOOTHING_FACTOR') >= .8) notices.push({kind:'warning',text:'Sehr schnelle Stellkonfiguration: kurzes Intervall, kleines Mittelwertfenster und geringe Glättung erhöhen die Reaktionsaktivität.'});
+      if (n('MIN_COMMAND_CHANGE_W') > n('MAX_POWER_STEP_W')) notices.push({kind:'warning',text:'Mindest-Commandänderung ist größer als der maximale Leistungsschritt; einzelne Schritte können häufig unterdrückt werden.'});
+      if (n('MIN_COMMAND_CHANGE_W') > 2*n('DEADBAND_W')) notices.push({kind:'info',text:'Die Command-Auflösung ist mehr als doppelt so groß wie die Totzone; Feinkorrekturen können verzögert publiziert werden.'});
+    }
+    if (categoryName === 'Harvest / Restüberschuss') {
+      const interval = n('INTERVAL_SECONDS');
+      ['HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS','REST_SURPLUS_ENTRY_CONFIRM_SECONDS'].forEach(key=>{
+        if (n(key) < 2*interval) notices.push({kind:'warning',text:`${settingByKey(key)?.label || key}: Bestätigungszeit liegt unter zwei Regelintervallen; kurze Ereignisse können früh qualifizieren.`});
+        if (n(key) > 180) notices.push({kind:'warning',text:`${settingByKey(key)?.label || key}: Bestätigungszeit über 180 s kann kurze nutzbare Harvestfenster verpassen.`});
+      });
+      if (n('MIN_COMMAND_CHANGE_W') > n('REST_SURPLUS_MIN_EXPORT_W')) notices.push({kind:'warning',text:'Command-Auflösung ist größer als die Restüberschuss-Entry-Schwelle; kleine Harvest-Korrekturen können unterdrückt werden.'});
+      if (n('REST_SURPLUS_MIN_EXPORT_W') < n('DEADBAND_W')) notices.push({kind:'info',text:'Restüberschuss-Entry liegt unter der normalen AUTO-Totzone. Das ist als Harvest-Speziallage zulässig; die Entry-Schwelle ist kein Restexportziel.'});
+      if (n('MAX_POWER_STEP_W') < n('REST_SURPLUS_MIN_EXPORT_W')) notices.push({kind:'warning',text:'Der maximale Leistungsschritt liegt unter der Harvest-Entry-Schwelle; Restüberschuss kann bewusst langsamer aufgenommen werden.'});
+      if (n('SMOOTHING_FACTOR') < .10 || interval >= 10) notices.push({kind:'warning',text:'Harvest-Reaktion ist durch starke Glättung oder langes Regelintervall deutlich träge.'});
+    }
+    if (categoryName === 'Cross-Charge-Schutz' && n('SECOND_BATTERY_STALE_TIMEOUT_SECONDS') < 5) notices.push({kind:'warning',text:'Sehr kurze Zweitbatterie-Freshness: kurze MQTT-Pausen können den Schutz unnötig früh blockieren.'});
+    if (categoryName === 'Kommandowirkung & Resync' && n('COMMAND_RESYNC_COOLDOWN_SECONDS') === 0) notices.push({kind:'warning',text:'Resync-Cooldown ist 0 s. Dadurch können Recovery-Publishes sehr häufig wiederholt werden.'});
+    if (categoryName === 'Nachtbetrieb' && currentByKey('NIGHT_DISCHARGE_ENABLED') === true) {
+      if (n('NIGHT_DISCHARGE_POWER_W') <= 0) notices.push({kind:'warning',text:'Nachtbetrieb ist aktiviert, aber die feste Nachtleistung ist 0 W. Die serverseitige Prüfung wird diese Kombination blockieren.'});
+      if (n('NIGHT_DISCHARGE_POWER_W') > n('MAX_DISCHARGE_POWER_W')) notices.push({kind:'warning',text:'Die feste Nachtleistung liegt über der globalen maximalen Entladeleistung und wird beim Preview blockiert.'});
+      const reserve = currentByKey('NIGHT_DISCHARGE_STOP_SOC_PERCENT');
+      if (reserve !== null && reserve !== '' && Number(reserve) < n('MIN_SOC_PERCENT')) notices.push({kind:'warning',text:'Der Nacht-Reserve-SOC liegt unter dem globalen Mindest-SOC und wird beim Preview blockiert.'});
+      if (reserve !== null && reserve !== '' && Number(reserve) > n('MAX_SOC_PERCENT')) notices.push({kind:'warning',text:'Der Nacht-Reserve-SOC liegt über MAX_SOC; die feste Nachtentladung kann dadurch sehr früh oder gar nicht starten.'});
+    }
+    if (categoryName === 'Schnittstellen & Datenquellen' && currentByKey('ZENDURE_LOCAL_API_ENABLED') === true) {
+      const interval = n('INTERVAL_SECONDS');
+      if (n('ZENDURE_LOCAL_API_CONTROL_TIMEOUT_CAP_SECONDS') >= .75*interval) notices.push({kind:'warning',text:'Local-API-Control-Timeout erreicht mindestens 75 % des Regelintervalls; bei Nutzung im relevanten Pfad steigt das Laufzeitrisiko.'});
+      if (n('ZENDURE_LOCAL_API_TIMEOUT_SECONDS') >= interval) notices.push({kind:'warning',text:'Der volle Local-API-Timeout ist mindestens so lang wie das Regelintervall. Der Zugriff läuft asynchron, kann aber Snapshot-Aktualisierung verzögern.'});
+    }
+    return notices;
+  }
+  function categoryGuidanceHtml(categoryName) {
+    const notices = categoryGuidance(categoryName);
+    if (!notices.length) return '';
+    return `<div class="guided-notices" aria-label="Geführte Hinweise">${notices.map(n=>`<div class="notice ${esc(n.kind)} guided-notice"><b>${n.kind==='warning'?'Hinweis zur Kombination':'Einordnung'}:</b> ${esc(n.text)}</div>`).join('')}</div>`;
+  }
   function currentValue(s) { return app.draft.has(s.key) ? app.draft.get(s.key) : s.configured; }
   function dirtyCount() {
     let count = Array.from(app.draft.keys()).filter(key => !NIGHT_KEYS.has(key)).length;
@@ -274,7 +362,7 @@
     const classes = ['setting-row', compoundDirty(kind)?'dirty':'', issues.some(i=>i.blocking)?'has-error':'', !dependencyOk?'hidden-by-dependency':''].filter(Boolean).join(' ');
     const defaultText = formatTime(hourSpec.default, minuteSpec.default);
     return `<article class="${classes}" data-compound="night-${kind}" data-setting="${esc(pair.hour)}">
-      <div class="setting-copy"><div class="setting-label">${esc(pair.label)}</div>${app.mode==='expert'?`<div class="setting-key">${esc(pair.hour)} + ${esc(pair.minute)}</div>`:''}<div class="setting-help">${esc(pair.description)}</div></div>
+      <div class="setting-copy"><div class="setting-title-line"><div class="setting-label">${esc(pair.label)}</div>${helpButton('setting', pair.hour, pair.label)}</div>${app.mode==='expert'?`<div class="setting-key">${esc(pair.hour)} + ${esc(pair.minute)}</div>`:''}<div class="setting-help">${esc(hourSpec.help?.short || pair.description)}</div>${guidanceHtml(hourSpec)}</div>
       <div class="setting-editor"><div class="setting-control"><input class="night-time-input" type="text" inputmode="numeric" autocomplete="off" maxlength="5" placeholder="HH:MM" data-night-time="${kind}" value="${esc(nightText(kind))}"${disabled?' disabled':''} aria-invalid="${issues.some(i=>i.blocking)?'true':'false'}"></div>${issueHtml(issues)}<div class="field-meta"><span class="meta-pill">Zulässig: 00:00–23:59</span><span class="meta-pill">Ausgangswert dieses Releases: ${esc(defaultText)}</span><span class="meta-pill ${hourSpec.apply_class==='restart_required'?'restart':'live'}">${esc(hourSpec.apply_text || hourSpec.apply_class)}</span></div></div>
     </article>`;
   }
@@ -320,7 +408,7 @@
     ].filter(Boolean);
     const resetAction = s.editable && !s.secret_set && s.default_ui?.action ? `<button type="button" class="reset-button" data-reset="${esc(s.key)}">${esc(s.default_ui.action)}</button>` : '';
     return `<article class="${classes}" data-setting="${esc(s.key)}">
-      <div class="setting-copy"><div class="setting-label">${esc(s.label)}</div>${app.mode==='expert'?`<div class="setting-key">${esc(s.key)}</div>`:''}<div class="setting-help">${esc(s.description || '')}</div></div>
+      <div class="setting-copy"><div class="setting-title-line"><div class="setting-label">${esc(s.label)}</div>${helpButton('setting', s.key, s.label)}</div>${app.mode==='expert'?`<div class="setting-key">${esc(s.key)}</div>`:''}<div class="setting-help">${esc(s.help?.short || s.description || '')}</div>${guidanceHtml(s)}</div>
       <div class="setting-editor">${inputHtml(s)}${issueHtml(issues)}<div class="field-meta">${metas.map(m=>`<span class="meta-pill">${esc(m)}</span>`).join('')}<span class="meta-pill ${s.apply_class==='restart_required'?'restart':'live'}">${esc(s.apply_text || s.apply_class)}</span>${resetAction}</div></div>
     </article>`;
   }
@@ -340,15 +428,16 @@
       content.innerHTML = '<div class="empty-state">Keine Einstellungen.</div>';
       return;
     }
-    let body = `<div class="category-panel"><div class="category-head"><div class="category-icon">${icon(c.name)}</div><div><h1>${esc(c.name)}</h1><p>${esc(c.description)}</p></div></div>`;
+    let body = `<div class="category-panel"><div class="category-head"><div class="category-icon">${icon(c.name)}</div><div class="category-head-copy"><div class="category-title-line"><h1>${esc(c.name)}</h1>${helpButton('category', c.name, c.name)}</div><p>${esc(c.description)}</p></div></div>`;
     if (app.model.status.startup_mode === 'FIRST_INSTALL_SETUP') body += `<div class="status-banner"><b>Erstinbetriebnahme:</b> ZEC bleibt fail-closed und sendet keine Gerätekommandos, bis alle Pflichtwerte ausdrücklich festgelegt, geprüft und gespeichert wurden.</div>`;
     else if (app.model.status.config_health !== 'valid') body += `<div class="status-banner"><b>Konfigurationsstatus:</b> ${esc(app.model.status.config_health)}. Configured bleibt reparierbar; effective nutzt den letzten gültigen Snapshot.</div>`;
     if (app.model.status.pending_restart) body += `<div class="status-banner"><b>Dienstneustart ausstehend.</b> ${app.model.status.pending_restart_keys.map(esc).join(', ')}</div>`;
+    body += categoryGuidanceHtml(c.name);
     let renderedSettings = 0;
     c.sections.forEach(section => {
       const rowParts = section.settings.map(settingHtml).filter(Boolean);
       renderedSettings += rowParts.length;
-      if (rowParts.length) body += `<section class="section-block"><h2>${esc(section.name)}</h2><div class="settings-grid">${rowParts.join('')}</div></section>`;
+      if (rowParts.length) body += `<section class="section-block"><div class="section-title-line"><h2>${esc(section.name)}</h2>${section.help ? helpButton('section', `${c.name}|||${section.name}`, section.name) : ''}</div><div class="settings-grid">${rowParts.join('')}</div></section>`;
     });
     const showAdmin = c.name === 'System & Diagnose' && app.mode === 'expert';
     if (renderedSettings === 0 && !showAdmin) body += emptyStateHtml(c);
@@ -363,6 +452,7 @@
     body += '</div>';
     content.innerHTML = body;
     bindInputs();
+    bindHelpButtons();
     const showExpert = $('#showExpertMode');
     if (showExpert) showExpert.onclick = () => { app.mode='expert'; storageSet('zecSettingsMode', app.mode); render(); };
     const adminRestart = $('#adminRestartAction');
@@ -379,20 +469,237 @@
     document.body.classList.remove('search-open');
     $('#searchDrawer').setAttribute('aria-hidden','true');
   }
+  function searchVisibleInMode(s) {
+    const firstInstallRequired = app.model?.status?.startup_mode === 'FIRST_INSTALL_SETUP' && s.required_first_install;
+    return firstInstallRequired || !s.expert || app.mode === 'expert';
+  }
+  function searchHaystack(s) {
+    const help = s.help || {};
+    const deps = (help.dependencies || []).map(dep => `${dep.relation || ''} ${dep.key || ''} ${settingByKey(dep.key)?.label || ''}`).join(' ');
+    const optionText = (help.option_help || []).map(o => `${o.value || ''} ${o.text || ''}`).join(' ');
+    return [s.label,s.key,s._category,s._section,s.description,help.short,help.extended,help.formula,help.override,help.risk,(help.search_terms||[]).join(' '),deps,optionText].filter(Boolean).join(' ').toLowerCase();
+  }
+  function searchReason(s, query) {
+    const q = query.toLowerCase();
+    if (String(s.label||'').toLowerCase().includes(q)) return null;
+    if (String(s.key||'').toLowerCase().includes(q)) return 'Config-Key';
+    if (String(s._section||'').toLowerCase().includes(q)) return 'Abschnitt';
+    const term = (s.help?.search_terms || []).find(term => String(term).toLowerCase().includes(q));
+    if (term) return String(term);
+    if (String(s.help?.formula||'').toLowerCase().includes(q)) return 'Formel';
+    return 'Hilfetext';
+  }
   function renderSearch() {
     const query = $('#settingsSearch').value.trim().toLowerCase();
     const box = $('#searchResults');
     if (!query) { box.innerHTML = '<div class="empty-state">Suchbegriff eingeben.</div>'; return; }
-    const results = settings().filter(s => !s.expert || app.mode === 'expert').filter(s => `${s.label} ${s.description} ${s.key} ${s._category}`.toLowerCase().includes(query));
-    box.innerHTML = `<b>${results.length} Treffer</b>${results.map(s=>`<button class="search-result" data-result="${esc(s.key)}"><span><strong>${esc(s.label)}</strong><small>${esc(s.description)}</small></span><span class="result-category">${esc(s._category)}</span></button>`).join('')}`;
+    const results = settings().filter(searchVisibleInMode).filter(s => searchHaystack(s).includes(query));
+    box.innerHTML = `<b>${results.length} Treffer</b>${results.map(s=>{
+      const reason = searchReason(s, query);
+      const snippet = s.help?.short || s.description || '';
+      return `<button class="search-result" data-result="${esc(s.key)}"><span><strong>${esc(s.label)}</strong><small>${esc(snippet)}</small>${reason?`<em class="search-reason">gefunden über: ${esc(reason)}</em>`:''}</span><span class="result-category">${esc(s._category)}<br>${esc(s._section)}</span></button>`;
+    }).join('')}`;
     $$('[data-result]').forEach(el => el.onclick = () => {
       const setting = settingByKey(el.dataset.result);
       app.category = setting._category;
       closeSearch();
       render();
-      setTimeout(() => targetForSettingKey(setting.key)?.scrollIntoView({behavior:'smooth',block:'center'}), 50);
+      setTimeout(() => {
+        const target = targetForSettingKey(setting.key);
+        target?.scrollIntoView({behavior:'smooth',block:'center'});
+        target?.classList.add('guided-target');
+        setTimeout(()=>target?.classList.remove('guided-target'), 1800);
+      }, 50);
     });
   }
+  function helpSection(title, content, extraClass = '') {
+    if (!content) return '';
+    return `<section class="help-section ${esc(extraClass)}"><h3>${esc(title)}</h3>${content}</section>`;
+  }
+  function helpText(text) { return text ? `<p>${esc(text)}</p>` : ''; }
+  function helpHandbook(ref) {
+    if (!ref?.url) return '';
+    return `<a class="handbook-link" href="${esc(ref.url)}" target="_blank" rel="noopener">Im Handbuch: ${esc(ref.section_title)} · Seite ${esc(ref.page)}</a>`;
+  }
+  function defaultHelpHtml(s) {
+    const meta = s.default_ui?.meta || '';
+    const action = s.default_ui?.action ? ` Verfügbare Aktion: ${s.default_ui.action}.` : '';
+    return helpText(`${meta || 'Kein allgemeines Reset-Ziel.'}${action}`);
+  }
+  function dependencyHelpHtml(s) {
+    const deps = s.help?.dependencies || [];
+    if (!deps.length) return '';
+    const intro = s.help?.dependency_help ? `<p>${esc(s.help.dependency_help)}</p>` : '';
+    const items = deps.map(dep => {
+      const target = settingByKey(dep.key);
+      const label = target?.label || dep.key;
+      const tech = app.mode === 'expert' ? `<span class="dep-key">${esc(dep.key)}</span>` : '';
+      if (!target) return `<div class="dependency-row static"><span>${esc(relationLabel(dep.relation))}</span><b>${esc(label)}</b>${tech}</div>`;
+      return `<button type="button" class="dependency-row" data-help-dependency="${esc(dep.key)}"><span>${esc(relationLabel(dep.relation))}</span><b>${esc(label)}</b>${tech}</button>`;
+    }).join('');
+    return `${intro}<div class="dependency-list">${items}</div>`;
+  }
+  function optionHelpHtml(s) {
+    const options = s.help?.option_help || [];
+    if (!options.length) return '';
+    return `<div class="help-kv-list">${options.map(o=>`<div><b>${esc(o.value)}</b><span>${esc(o.text)}</span></div>`).join('')}</div>`;
+  }
+  function effectHelpHtml(s) {
+    const h = s.help || {};
+    const rows = [];
+    if (h.effect_increase) rows.push(['Wert erhöhen', h.effect_increase]);
+    if (h.effect_decrease) rows.push(['Wert verringern', h.effect_decrease]);
+    if (h.effect_enable) rows.push(['Einschalten', h.effect_enable]);
+    if (h.effect_disable) rows.push(['Ausschalten', h.effect_disable]);
+    if (!rows.length) return '';
+    return `<div class="help-kv-list">${rows.map(([k,v])=>`<div><b>${esc(k)}</b><span>${esc(v)}</span></div>`).join('')}</div>`;
+  }
+  function validationHelpHtml(s) {
+    const rows = [];
+    if (s.minimum !== null || s.maximum !== null) rows.push(`<div><b>Wertebereich</b><span>${esc(s.minimum ?? '−∞')} bis ${esc(s.maximum ?? '∞')}${s.unit?` ${esc(s.unit)}`:''}</span></div>`);
+    if (s.options?.length) rows.push(`<div><b>Zulässige Werte</b><span>${s.options.map(o=>esc(o.label)).join(' · ')}</span></div>`);
+    if (s.validation_text) rows.push(`<div><b>Serververtrag</b><span>${esc(s.validation_text)}</span></div>`);
+    return rows.length ? `<div class="help-kv-list">${rows.join('')}</div>` : '';
+  }
+  function exampleHelpHtml(example) {
+    if (!example) return '';
+    return `<div class="help-example"><b>${esc(example.title)}</b>${(example.inputs||[]).length?`<ul>${example.inputs.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}<div class="help-formula">${esc(example.calculation)}</div><div class="help-example-result">${esc(example.result)}</div><p>${esc(example.interpretation)}</p></div>`;
+  }
+  function technicalHelpHtml(s) {
+    if (app.mode !== 'expert') return '';
+    const refs = s.help?.evidence_refs || [];
+    const validators = s.validator_ids || [];
+    const rows = [
+      ['Config-Key', s.key], ['Typ / Codec', `${s.value_type} / ${s.codec_id}`],
+      ['Apply-Klasse', s.apply_class], ['Risikoklasse', s.risk || 'nicht klassifiziert'],
+      ['Validatoren', validators.length ? validators.join(', ') : 'keine setting-spezifische ID'],
+      ['Vertragsquellen', refs.length ? refs.join(' · ') : 'SettingsRegistry'],
+    ];
+    return `<div class="technical-contract">${rows.map(([k,v])=>`<div><span>${esc(k)}</span><code>${esc(v)}</code></div>`).join('')}</div>`;
+  }
+  function settingHelpBody(s) {
+    const h = s.help || {};
+    const when = guidanceForSetting(s).map(x=>x.text).join(' ') || (s.dependency_rule ? 'Die Einstellung wirkt nur, wenn die zugehörige Aktivierungs-/Quellbedingung erfüllt ist.' : 'Die Einstellung wirkt gemäß der unten angegebenen Apply-Semantik und den fachlichen Schutzbedingungen.');
+    const body = [
+      `<div class="help-context"><span>${esc(s._category)}</span><span>›</span><span>${esc(s._section)}</span>${h.level==='rich'?'<span class="help-level rich">RICH</span>':'<span class="help-level">BASE</span>'}</div>`,
+      helpSection('Kurz erklärt', helpText(h.short || s.description)),
+      helpSection('Wann wirkt die Einstellung?', helpText(when)),
+      helpSection('Wirkung bei Änderung', effectHelpHtml(s)),
+      helpSection('Abhängigkeiten & Overrides', `${dependencyHelpHtml(s)}${h.override?`<div class="help-callout override"><b>Override</b><span>${esc(h.override)}</span></div>`:''}`),
+      helpSection('Grenzen / Validierung', validationHelpHtml(s)),
+      helpSection('Risiko / Sicherheitswirkung', helpText(h.risk)),
+      helpSection('Beispiel / Rechnung', `${h.formula?`<div class="help-formula">${esc(h.formula)}</div>`:''}${exampleHelpHtml(h.example)}`),
+      helpSection('Optionen', optionHelpHtml(s)),
+      helpSection('Default-/Profil-Semantik', defaultHelpHtml(s)),
+      helpSection('Wirksamkeit nach Speichern', helpText(s.apply_text || s.apply_class)),
+      helpSection('Handbuch', helpHandbook(h.handbook)),
+      helpSection('Technischer Vertrag', technicalHelpHtml(s), 'technical'),
+    ].filter(Boolean).join('');
+    return body;
+  }
+  function lockHelpScroll() {
+    if (document.body.classList.contains('preview-open') || document.body.classList.contains('help-open')) return;
+    app.helpScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    document.body.style.top = `-${app.helpScrollY}px`;
+    document.body.classList.add('help-open');
+  }
+  function unlockHelpScroll() {
+    if (!document.body.classList.contains('help-open')) return;
+    document.body.classList.remove('help-open');
+    document.body.style.top = '';
+    window.scrollTo({top:app.helpScrollY,left:0,behavior:'auto'});
+  }
+  function openHelpModal(title, bodyHtml, trigger = null) {
+    app.helpReturnFocus = trigger || document.activeElement;
+    $('#helpTitle').textContent = title;
+    $('#helpBody').innerHTML = bodyHtml;
+    lockHelpScroll();
+    $('#helpModal').classList.add('open');
+    bindHelpModalActions();
+    $('#helpClose')?.focus({preventScroll:true});
+  }
+  function closeHelpModal() {
+    if (!$('#helpModal')?.classList.contains('open')) return;
+    $('#helpModal').classList.remove('open');
+    $('#helpBody').innerHTML = '';
+    app.pendingHelpTarget = null;
+    unlockHelpScroll();
+    const target = app.helpReturnFocus;
+    app.helpReturnFocus = null;
+    if (target?.isConnected) target.focus({preventScroll:true});
+  }
+  function openSettingHelp(key, trigger = null) {
+    const s = settingByKey(key);
+    if (!s) return;
+    openHelpModal(s.label, settingHelpBody(s), trigger);
+  }
+  function openCategoryHelp(name, trigger = null) {
+    const c = app.model.categories.find(x=>x.name===name);
+    if (!c) return;
+    const sections = c.sections.filter(sec=>sec.help).map(sec=>`<button type="button" class="help-related" data-help-section="${esc(c.name)}|||${esc(sec.name)}">${esc(sec.name)}</button>`).join('');
+    const body = `<div class="help-context"><span>Kategorie</span><span>›</span><span>${esc(c.group)}</span></div>${helpSection('Zielbild', helpText(c.help || c.description))}${sections?helpSection('Abschnitte',`<div class="help-related-list">${sections}</div>`):''}${helpSection('Handbuch', helpHandbook(c.handbook))}`;
+    openHelpModal(c.name, body, trigger);
+  }
+  function openSectionHelp(encoded, trigger = null) {
+    const [categoryName, sectionName] = String(encoded||'').split('|||');
+    const c = app.model.categories.find(x=>x.name===categoryName);
+    const section = c?.sections.find(x=>x.name===sectionName);
+    if (!c || !section) return;
+    const related = section.settings.filter(searchVisibleInMode).map(s=>`<button type="button" class="help-related" data-help-setting="${esc(s.key)}">${esc(s.label)}</button>`).join('');
+    const body = `<div class="help-context"><span>${esc(c.name)}</span><span>›</span><span>Abschnitt</span></div>${helpSection('Zusammenhang', helpText(section.help))}${related?helpSection('Einstellungen in diesem Abschnitt',`<div class="help-related-list">${related}</div>`):''}${helpSection('Handbuch', helpHandbook(section.handbook))}`;
+    openHelpModal(section.name, body, trigger);
+  }
+  function showExpertHelpGate(key) {
+    const target = settingByKey(key);
+    if (!target) return;
+    app.pendingHelpTarget = key;
+    $('#helpBody').innerHTML = `<div class="notice info"><b>${esc(target.label)}</b> ist nur im Expertenmodus sichtbar. Der Ansichtsmodus wird nicht automatisch geändert.</div><div class="help-gate-actions"><button type="button" class="admin-action-button" data-help-show-expert="${esc(key)}">Im Expertenmodus anzeigen</button></div>`;
+    bindHelpModalActions();
+  }
+  function navigateHelpDependency(key) {
+    const target = settingByKey(key);
+    if (!target) return;
+    if (target.expert && app.mode !== 'expert' && !(app.model?.status?.startup_mode === 'FIRST_INSTALL_SETUP' && target.required_first_install)) {
+      showExpertHelpGate(key);
+      return;
+    }
+    closeHelpModal();
+    app.category = target._category;
+    render();
+    setTimeout(()=>{
+      const el = targetForSettingKey(key);
+      el?.scrollIntoView({behavior:'smooth',block:'center'});
+      el?.classList.add('guided-target');
+      setTimeout(()=>el?.classList.remove('guided-target'),1800);
+      el?.querySelector('input,select,button')?.focus({preventScroll:true});
+    },60);
+  }
+  function bindHelpModalActions() {
+    $$('[data-help-dependency]', $('#helpBody')).forEach(el=>el.onclick=()=>navigateHelpDependency(el.dataset.helpDependency));
+    $$('[data-help-setting]', $('#helpBody')).forEach(el=>el.onclick=()=>openSettingHelp(el.dataset.helpSetting, el));
+    $$('[data-help-section]', $('#helpBody')).forEach(el=>el.onclick=()=>openSectionHelp(el.dataset.helpSection, el));
+    $$('[data-help-show-expert]', $('#helpBody')).forEach(el=>el.onclick=()=>{
+      const key=el.dataset.helpShowExpert;
+      closeHelpModal();
+      app.mode='expert'; storageSet('zecSettingsMode', app.mode);
+      const target=settingByKey(key); app.category=target?._category || app.category; render();
+      setTimeout(()=>targetForSettingKey(key)?.scrollIntoView({behavior:'smooth',block:'center'}),60);
+    });
+  }
+  function bindHelpButtons() {
+    $$('[data-help-setting]').forEach(el=>{ if (!el.closest('#helpBody')) el.onclick=event=>{event.stopPropagation();openSettingHelp(el.dataset.helpSetting,el);}; });
+    $$('[data-help-category]').forEach(el=>el.onclick=event=>{event.stopPropagation();openCategoryHelp(el.dataset.helpCategory,el);});
+    $$('[data-help-section]').forEach(el=>{ if (!el.closest('#helpBody')) el.onclick=event=>{event.stopPropagation();openSectionHelp(el.dataset.helpSection,el);}; });
+  }
+  function trapHelpFocus(event) {
+    if (event.key !== 'Tab' || !$('#helpModal')?.classList.contains('open')) return;
+    const focusables = $$('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])', $('#helpModal')).filter(el=>!el.disabled && el.offsetParent!==null);
+    if (!focusables.length) return;
+    const first=focusables[0], last=focusables[focusables.length-1];
+    if (event.shiftKey && document.activeElement===first) {event.preventDefault();last.focus();}
+    else if (!event.shiftKey && document.activeElement===last) {event.preventDefault();first.focus();}
+  }
+
   function clearValidationIssues() {
     app.validationIssues = [];
   }
@@ -613,16 +920,19 @@
     $('#previewTitle').textContent = p.status === 'blocked' ? 'Änderungen können noch nicht gespeichert werden' : 'Änderungen prüfen';
     let out = '';
     if (issues.length) out += `<ul class="issue-list">${issues.map(i=>{
-      const firstKey = (i.keys || []).find(key => settingByKey(key));
+      const keys = (i.keys || []).filter(key => settingByKey(key));
+      const firstKey = keys[0];
       const code = app.mode === 'expert' && i.code ? `<span class="issue-code">${esc(i.code)}</span>` : '';
-      const jump = firstKey ? `<button type="button" class="issue-jump" data-issue-key="${esc(firstKey)}">Zur Einstellung</button>` : '';
-      return `<li class="${esc(i.severity || 'error')}"><div class="issue-copy"><span>${esc(i.message || 'Die Änderung ist nicht zulässig.')}</span>${code}</div>${jump}</li>`;
+      const source = i.params?.effective_source ? `<div class="issue-source">Wirksame Quelle: <code>${esc(i.params.effective_source)}</code>. Die Hilfe erläutert, welcher Wert in dieser Konstellation Vorrang hat.</div>` : '';
+      const links = keys.length ? `<div class="issue-actions">${keys.map((key,index)=>`<button type="button" class="issue-jump" data-issue-key="${esc(key)}">${index===0?'Zur Einstellung':esc(settingByKey(key)?.label || key)}</button>`).join('')}<button type="button" class="issue-jump issue-why" data-issue-help="${esc(firstKey)}">Warum?</button></div>` : '';
+      return `<li class="${esc(i.severity || 'error')}"><div class="issue-copy"><span>${esc(i.message || 'Die Änderung ist nicht zulässig.')}</span>${source}${code}</div>${links}</li>`;
     }).join('')}</ul>`;
     if (diff.length) out += diff.map(d=>`<div class="diff-row"><div><b>${esc(d.label)}</b><div class="diff-values">${esc(fmt(d.old))} <span class="diff-arrow">→</span> ${esc(fmt(d.new))}</div></div><span class="meta-pill ${d.apply_class==='restart_required'?'restart':'live'}">${esc(d.apply_text)}</span></div>`).join('');
     else if (!issues.length) out += '<div class="notice info">Keine wirksame Änderung erkannt.</div>';
     if (confirmations.length) out += confirmations.map(c=>`<label class="confirmation"><input type="checkbox" data-confirm="${esc(c)}"><span>Hinweis <b>${esc(c)}</b> wurde geprüft und wird bewusst bestätigt.</span></label>`).join('');
     $('#previewBody').innerHTML = out;
     $$('[data-issue-key]').forEach(button => button.onclick = () => jumpToSetting(button.dataset.issueKey));
+    $$('[data-issue-help]').forEach(button => button.onclick = () => openSettingHelp(button.dataset.issueHelp, button));
     $('#commitChanges').disabled = p.status !== 'ready' || !p.preview_id;
     $('#commitChanges').textContent = p.status === 'ready' && p.preview_id ? 'Speichern' : 'Speichern nicht möglich';
     $('#previewBack').textContent = 'Zurück';
@@ -825,6 +1135,10 @@
     $('#previewClose').onclick = closePreview;
     $('#previewBack').onclick = closePreview;
     $('#previewModal').onclick = event => { if (event.target === $('#previewModal')) closePreview(); };
+    $('#helpClose').onclick = closeHelpModal;
+    $('#helpDone').onclick = closeHelpModal;
+    $('#helpModal').onclick = event => { if (event.target === $('#helpModal')) closeHelpModal(); };
+    $('#helpModal').addEventListener('keydown', trapHelpFocus);
     $('#commitChanges').onclick = modalPrimaryAction;
     $('#mobileMenu').onclick = () => setCategoryDrawerOpen(!$('.settings-sidebar')?.classList.contains('open'));
     $('#categoryDrawerBackdrop').onclick = () => setCategoryDrawerOpen(false);
@@ -837,7 +1151,8 @@
     document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'hidden') refreshGlobalStatus(); });
     document.addEventListener('keydown', event => {
       if (event.key !== 'Escape') return;
-      if ($('#previewModal')?.classList.contains('open')) closePreview();
+      if ($('#helpModal')?.classList.contains('open')) closeHelpModal();
+      else if ($('#previewModal')?.classList.contains('open')) closePreview();
       else if ($('.settings-sidebar')?.classList.contains('open')) setCategoryDrawerOpen(false);
       else if (document.body.classList.contains('search-open')) closeSearch();
     });
