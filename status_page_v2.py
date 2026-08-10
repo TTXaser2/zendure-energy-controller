@@ -325,6 +325,7 @@ def render_status_page_v2(
         <div class="zec-day-nav"><button id="dayPrev" type="button">‹ Zurück</button><button id="dayToday" type="button">Heute</button><button id="dayNext" type="button">Vor ›</button><span class="zec-day-picker-wrap"><button id="socDayPickerButton" class="zec-day-picker-button" type="button" aria-label="Datum direkt auswählen"><strong id="socDayLabel"></strong></button><input id="socDayPicker" class="zec-day-picker-input" type="date" aria-label="Datum des Speicher-SOC-Tagesgraphen auswählen"></span></div>
       </header>
       <div class="zec-day-chart-wrap"><canvas id="storageSocChart" aria-label="Speicher-SOC im Tagesverlauf"></canvas><div id="storageSocTooltip" class="zec-chart-tooltip" hidden></div></div>
+      <div id="storageSocMobileDetails" class="zec-chart-mobile-details" hidden aria-live="polite"></div>
       <div id="storageSocLegend" class="zec-chart-legend"></div>
       <div id="storageSocStatus" class="zec-chart-status">SOC-Daten werden geladen…</div>
     </section>

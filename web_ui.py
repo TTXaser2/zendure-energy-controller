@@ -370,6 +370,13 @@ def build_ready_payload(cfg: Dict[str, Any], snap: Dict[str, Any]) -> Dict[str, 
         "version": APP_VERSION,
         "build_id": APP_BUILD_ID,
         "uptime_seconds": snap.get("uptime_seconds"),
+        "instance_owner": {
+            "active": bool(snap.get("instance_owner_active")),
+            "pid": snap.get("instance_owner_pid"),
+            "build_id": snap.get("instance_owner_build_id") or "",
+            "since_utc": snap.get("instance_owner_since_utc") or "",
+            "lock_path": snap.get("instance_owner_lock_path") or "",
+        },
         "checks": checks,
         "failed_checks": failed,
         "proof_revision": proof_revision,
@@ -385,6 +392,12 @@ def build_health_payload(snap: Dict[str, Any]) -> Dict[str, Any]:
         "version": APP_VERSION,
         "build_id": APP_BUILD_ID,
         "uptime_seconds": snap.get("uptime_seconds"),
+        "instance_owner": {
+            "active": bool(snap.get("instance_owner_active")),
+            "pid": snap.get("instance_owner_pid"),
+            "build_id": snap.get("instance_owner_build_id") or "",
+            "since_utc": snap.get("instance_owner_since_utc") or "",
+        },
     }
 
 
@@ -4701,6 +4714,10 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "timing_phases": timing_phases,
             "timing_stats": timing_stats,
             "controller_uptime_s": controller_uptime,
+            "instance_owner_active": bool(s.get("instance_owner_active")),
+            "instance_owner_pid": s.get("instance_owner_pid"),
+            "instance_owner_build_id": s.get("instance_owner_build_id") or "",
+            "instance_owner_since_utc": s.get("instance_owner_since_utc") or "",
             "resync": resync_reason,
             "resync_time": resync_time or "—",
             "resync_text": resync_text,

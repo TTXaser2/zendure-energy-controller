@@ -3,6 +3,7 @@ import sys
 import time
 import types
 import unittest
+from unittest import mock
 
 if "paho" not in sys.modules:
     paho = types.ModuleType("paho")
@@ -69,11 +70,12 @@ class RestSurplusHarvestRc9Tests(unittest.TestCase):
     def test_entry_requires_confirmed_duration_before_charging(self):
         cfg = cfg_rc9()
         controller, state, mqtt = make(cfg)
-        for _ in range(9):
+        with mock.patch("controller_logic.time.monotonic", side_effect=[100 + 3 * i for i in range(10)]):
+            for _ in range(9):
+                controller.run_once(cfg)
+                self.assertFalse(state.rest_surplus_harvest_active)
+                self.assertEqual(0, state.last_input_power)
             controller.run_once(cfg)
-            self.assertFalse(state.rest_surplus_harvest_active)
-            self.assertEqual(0, state.last_input_power)
-        controller.run_once(cfg)
         self.assertTrue(state.rest_surplus_harvest_active)
         self.assertGreaterEqual(state.rest_surplus_entry_progress_s, 30)
         self.assertEqual(100, state.last_input_power)

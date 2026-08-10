@@ -130,6 +130,10 @@ class ZendureController:
         self._late_effect_guard_neutral_observation_count: int = 0
         self._late_effect_guard_last_observation_signature: str = ""
         self._last_physical_non_neutral_direction: str = ""
+        # V12.12.2 Harvest time contract: elapsed monotonic time advances only
+        # on distinct fresh source observations. Wall-clock changes never affect it.
+        self._harvest_last_observation_token: Optional[Tuple[Optional[float], Optional[float]]] = None
+        self._harvest_last_observation_monotonic: Optional[float] = None
 
     def log(self, message: str) -> None:
         cfg = self.config_manager.get()
@@ -1053,8 +1057,10 @@ class ZendureController:
         try:
             if source == "sma_energy_meter_udp":
                 raw = self.sma_energy_meter.read_grid_power(cfg)
+                source_sample_epoch = self.sma_energy_meter.snapshot().last_received_epoch
             else:
                 raw = self.shelly.read_grid_power(cfg)
+                source_sample_epoch = time.time()
             plausibility_limit = float(cfg.get("GRID_POWER_PLAUSIBILITY_MAX_ABS_W", 30000) or 30000)
             if plausibility_limit > 0 and abs(float(raw)) > plausibility_limit:
                 raise RuntimeError(
@@ -1068,6 +1074,7 @@ class ZendureController:
                 self.state.grid_power = smoothed
                 self.state.current_rule_deviation = round(smoothed, 1)
                 self.state.last_shelly_update_epoch = now
+                self.state.grid_power_sample_epoch = float(source_sample_epoch or now)
                 self.state.last_shelly_update_time = now_text
                 self.state.grid_meter_source = source
                 self.state.raw_grid_source = source_display
@@ -2948,6 +2955,7 @@ class ZendureController:
             self.state.rest_surplus_harvest_eligible = False
             self.state.rest_surplus_entry_progress_s = 0.0
             self.state.rest_surplus_hold_remaining_s = 0.0
+            self.state.harvest_limiter_reason = ""
             self.state.rest_surplus_exit_reason = str(reason or "")
             self.state.rest_surplus_harvest_reason = "NONE"
             self.state.rest_surplus_harvest_block_reason = str(reason or "")
@@ -2972,6 +2980,8 @@ class ZendureController:
             self.state.harvest_entry_min_export_w = 0.0
             self.state.harvest_command_path_eligible = False
             self.state.harvest_command_path_block_reason = ""
+        self._harvest_last_observation_token = None
+        self._harvest_last_observation_monotonic = None
 
     def _update_harvest_capacity_diagnostics(self, cfg: Dict[str, Any]) -> None:
         with self.state.lock:
@@ -3101,32 +3111,64 @@ class ZendureController:
             reason = "NONE"
 
         entry_confirm_s = thresholds["high_entry_confirm_s"] if reason in {"HIGH_SMA_SOC", "HIGH_SMA_SOC_SMA_NEAR_LIMIT", "SMA_FULL_OR_IDLE"} else thresholds["entry_confirm_s"]
-        step_s = max(1.0, float(cfg.get("INTERVAL_SECONDS", 3) or 3))
+        nominal_step_s = max(1.0, float(cfg.get("INTERVAL_SECONDS", 3) or 3))
+        grid_timeout_key = "SMA_ENERGY_METER_STALE_TIMEOUT_SECONDS" if str(cfg.get("GRID_METER_SOURCE", "shelly_http")) == "sma_energy_meter_udp" else "SHELLY_STALE_TIMEOUT_SECONDS"
+        continuity_timeout_s = max(1.0, min(
+            float(cfg.get(grid_timeout_key, 15) or 15),
+            float(cfg.get("SECOND_BATTERY_STALE_TIMEOUT_SECONDS", cfg.get("EVCC_STALE_TIMEOUT_SECONDS", 30)) or 30),
+        ))
+        now_monotonic = time.monotonic()
+        with self.state.lock:
+            observation_token = (self.state.grid_power_sample_epoch, self.state.last_sma_battery_update_epoch)
+        observation_complete = observation_token[0] is not None and observation_token[1] is not None
+        distinct_observation = observation_complete and observation_token != self._harvest_last_observation_token
+        elapsed_observation_s = 0.0
+        continuity_broken = False
+        if distinct_observation:
+            if self._harvest_last_observation_monotonic is None:
+                elapsed_observation_s = nominal_step_s
+            else:
+                elapsed_observation_s = max(0.0, now_monotonic - self._harvest_last_observation_monotonic)
+                continuity_broken = elapsed_observation_s > continuity_timeout_s
+            self._harvest_last_observation_token = observation_token
+            self._harvest_last_observation_monotonic = now_monotonic
+
         with self.state.lock:
             self.state.rest_surplus_harvest_eligible = eligible_now
             self.state.rest_surplus_harvest_reason = reason if eligible_now or active else "NONE"
             self.state.rest_surplus_harvest_block_reason = "" if eligible_now else ("SOC_BELOW_EXIT" if active and not soc_stay_ok else "NOT_ELIGIBLE")
             if eligible_now:
-                self.state.rest_surplus_entry_progress_s = min(float(entry_confirm_s), float(self.state.rest_surplus_entry_progress_s or 0.0) + step_s)
+                if distinct_observation:
+                    if continuity_broken:
+                        self.state.rest_surplus_entry_progress_s = min(float(entry_confirm_s), nominal_step_s)
+                    else:
+                        self.state.rest_surplus_entry_progress_s = min(float(entry_confirm_s), float(self.state.rest_surplus_entry_progress_s or 0.0) + elapsed_observation_s)
                 self.state.rest_surplus_hold_remaining_s = float(thresholds["high_hold_s"])
                 if self.state.rest_surplus_entry_progress_s >= entry_confirm_s:
                     self.state.rest_surplus_harvest_active = True
                     self.state.rest_surplus_exit_reason = ""
                     self.state.rest_surplus_harvest_reason = reason
             elif active and soc_stay_ok and float(self.state.rest_surplus_hold_remaining_s or 0.0) > 0.0:
-                self.state.rest_surplus_hold_remaining_s = max(0.0, float(self.state.rest_surplus_hold_remaining_s or 0.0) - step_s)
+                # Hold time advances only when a new source observation arrives.
+                # A long host/process stall is not credited as a block of many
+                # independent observations; the first fresh observation after a
+                # broken continuity consumes only one nominal interval.
+                if distinct_observation:
+                    hold_elapsed_s = nominal_step_s if continuity_broken else elapsed_observation_s
+                    self.state.rest_surplus_hold_remaining_s = max(
+                        0.0,
+                        float(self.state.rest_surplus_hold_remaining_s or 0.0) - hold_elapsed_s,
+                    )
                 self.state.rest_surplus_harvest_reason = current_reason if current_reason != "NONE" else "EXPORT_HOLD"
                 self.state.rest_surplus_harvest_block_reason = "EXPORT_HOLD"
             elif active and not soc_stay_ok:
                 self.state.rest_surplus_harvest_active = False
                 self.state.rest_surplus_entry_progress_s = 0.0
                 self.state.rest_surplus_hold_remaining_s = 0.0
+                self.state.harvest_limiter_reason = ""
                 self.state.rest_surplus_exit_reason = "HIGH_SMA_SOC_EXIT"
                 self.state.rest_surplus_harvest_reason = "NONE"
             elif active:
-                # Aktiver High-SOC-Harvest bleibt diagnostisch im letzten Grund,
-                # damit handle_charge die Primär-Floor/Share-Rückregelung ausführen
-                # kann. Kein blindes Watt-Halten bei BELOW_FLOOR/RESTART_WAIT.
                 if thresholds.get("high_enabled"):
                     self.state.rest_surplus_harvest_reason = current_reason if current_reason != "NONE" else "EXPORT_HOLD"
                     self.state.rest_surplus_harvest_block_reason = "PRIMARY_BAND_LIMIT"
@@ -3134,7 +3176,12 @@ class ZendureController:
                     self.state.rest_surplus_harvest_reason = current_reason
                     self.state.rest_surplus_harvest_block_reason = "NOT_ELIGIBLE"
             elif not active:
-                self.state.rest_surplus_entry_progress_s = max(0.0, float(self.state.rest_surplus_entry_progress_s or 0.0) - step_s)
+                if distinct_observation:
+                    if continuity_broken:
+                        self.state.rest_surplus_entry_progress_s = 0.0
+                    else:
+                        self.state.rest_surplus_entry_progress_s = max(0.0, float(self.state.rest_surplus_entry_progress_s or 0.0) - elapsed_observation_s)
+                self.state.harvest_limiter_reason = ""
 
     def _rest_surplus_is_active(self) -> bool:
         with self.state.lock:
@@ -3945,10 +3992,7 @@ class ZendureController:
                 # Grund darf normale AUTO-Exportregelung wieder entscheiden.
                 if export_w >= thresholds.get("min_export", 80):
                     raw_target = last_input + int(effective * cfg.get("CONTROL_GAIN", 0.30))
-                    with self.state.lock:
-                        self.state.rest_surplus_exit_reason = "LATCH_RECOVERY_TO_AUTO_GRID_EXPORT"
-                        self.state.rest_surplus_harvest_active = False
-                        self.state.rest_surplus_harvest_reason = "LATCH_RECOVERY"
+                    self._reset_rest_surplus_harvest("LATCH_RECOVERY_TO_AUTO_GRID_EXPORT")
                     control_reason = "Restüberschuss-Ernte: Latch-Recovery, AUTO_GRID_EXPORT übernimmt"
                 else:
                     raw_target = last_input

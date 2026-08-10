@@ -298,6 +298,7 @@ class ControllerState:
 
     # Zeitstempel / Staleness
     last_shelly_update_epoch: Optional[float] = None
+    grid_power_sample_epoch: Optional[float] = None
     last_shelly_update_time: str = "-"
     last_soc_update_epoch: Optional[float] = None
     last_soc_update_time: str = "-"
@@ -313,6 +314,14 @@ class ControllerState:
     last_sma_battery_update_time: str = "-"
     last_zendure_power_update_epoch: Optional[float] = None
     last_zendure_power_update_time: str = "-"
+
+    # V12.12.2 productive single-owner diagnostics. The authoritative ownership
+    # is the kernel flock; these fields only expose the active owner to health/UI.
+    instance_owner_active: bool = False
+    instance_owner_pid: Optional[int] = None
+    instance_owner_build_id: str = ""
+    instance_owner_since_utc: str = ""
+    instance_owner_lock_path: str = ""
 
     # Batterie-Werte
     battery_soc: Optional[int] = None
@@ -1874,6 +1883,11 @@ class ControllerState:
             self._refresh_zendure_command_state_locked(now_epoch, max_age_s=command_state_max_age_s)
             return {
                 "uptime_seconds": int(now_epoch - self.startup_epoch),
+                "instance_owner_active": self.instance_owner_active,
+                "instance_owner_pid": self.instance_owner_pid,
+                "instance_owner_build_id": self.instance_owner_build_id,
+                "instance_owner_since_utc": self.instance_owner_since_utc,
+                "instance_owner_lock_path": self.instance_owner_lock_path,
                 "mqtt_connected": self.mqtt_connected,
                 "last_shelly_update_age_seconds": age_seconds(self.last_shelly_update_epoch),
                 "grid_power_valid": self.grid_power_valid,

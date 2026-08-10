@@ -199,3 +199,11 @@ html[data-theme="dark"] .zec-wordmark{color:#f4f7fb}
   .zec-info-popover.is-mobile-panel .zec-info-popover-head{position:sticky;top:0;z-index:1;padding:14px 16px 11px}
   .zec-info-popover.is-mobile-panel .zec-info-popover-body{padding:4px 16px calc(18px + env(safe-area-inset-bottom))}
 }
+
+/* V12.12.2 pinned diagnostics panel and mobile SOC detail dock. */
+.zec-chart-mobile-details{display:none}
+@media (max-width:620px){
+  .zec-chart-mobile-details:not([hidden]){display:block;margin:8px 0 10px;padding:11px 12px;border:1px solid var(--zec-card-border);border-radius:10px;background:var(--zec-page-bg);font-size:12px;line-height:1.45;color:var(--zec-text)}
+  .zec-chart-mobile-details strong{display:block;margin-bottom:5px;font-size:13px}
+  .zec-chart-mobile-details .zec-chart-tooltip-row{font-size:12px;padding:1px 0}
+}

@@ -1,0 +1,55 @@
+Zendure Energy Controller V12.12.1 -> V12.12.2
+
+NEW (11):
++ BUILD_VALIDATION_V12_12_2.md
++ RELEASE_INFO_V12_12_2.md
++ SPEZIFIKATION_ZEC_V12_12_2_SINGLE_OWNER_HARVEST_MANIFEST_UI_FINAL.md
++ TECHNICAL_NOTES_V12_12_2.md
++ V12_12_2_TARGETED_PROTECTED_DIFF.md
++ ZEC_V12_12_2_RELEASE_REPORT.md
++ instance_owner.py
++ tests/test_v12_12_2_installer_readiness_acceptance.py
++ tests/test_v12_12_2_productive_findings.py
++ V12_12_1_TO_V12_12_2_CHANGED_FILES.txt
++ V12_12_2_SOURCE_MANIFEST.sha256
+
+CHANGED (34):
+M README.md
+M README_INSTALLATION.md
+M ZendureController.py
+M controller_logic.py
+M measurement_v4.py
+M state.py
+M static/status_v2.css
+M static/status_v2.js
+M status_page_v2.py
+M tests/test_v12_10_rc9_rest_surplus.py
+M tests/test_v12_11_1_rc1_high_sma_harvest.py
+M tests/test_v12_11_2_rc10_status_preview.py
+M tests/test_v12_11_2_rc19_status_diagnostics_stabilization.py
+M tests/test_v12_11_2_rc20_fix5_runtime_readiness.py
+M tests/test_v12_11_2_rc20_release_integration.py
+M tests/test_v12_11_2_rc2_ui_polish.py
+M tests/test_v12_11_2_rc4_ui_polish.py
+M tests/test_v12_11_2_rc5_operations_dashboard.py
+M tests/test_v12_11_2_rc6_ui_diagnostics_hotfix.py
+M tests/test_v12_11_2_rc7_backlog_release.py
+M tests/test_v12_11_2_rc8_backlog_completion.py
+M tests/test_v12_11_2_rc9_ui_semantics.py
+M tests/test_v12_11_5_settings_bugfix.py
+M tests/test_v12_11_rc13_support_tools.py
+M tests/test_v12_11_rc14_ui_polish.py
+M tests/test_v12_11_rc15_ui_graph.py
+M tests/test_v12_11_rc16_performance.py
+M tests/test_v12_11_rc17_sqlite_store.py
+M tests/test_v12_11_rc18_import_tool.py
+M tests/test_v12_12_1_help_mobile_quality.py
+M tools/evaluate_installation_readiness.py
+M tools/update_zendure_controller.sh
+M version.py
+M web_ui.py
+
+DELETED/REPLACED (2):
+- V12_12_1_SOURCE_MANIFEST.sha256
+- tests/test_v12_12_1_installer_readiness_acceptance.py
+

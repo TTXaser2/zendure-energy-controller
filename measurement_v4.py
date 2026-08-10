@@ -1078,18 +1078,20 @@ class MeasurementV4Logger:
         self._manifest_last_write_epoch: Dict[str, float] = {}
         self._manifest_last_row_count: Dict[str, int] = {}
         self._manifest_meta: Dict[str, Dict[str, Any]] = {}
+        self._pending_rotation_reason: Dict[str, str] = {}
 
     def close(self) -> None:
         if self._last_runtime_directory:
             self._flush_pending_runtime_events(self._last_runtime_directory)
+        open_path = self._open_path
         if self._fh is not None:
             try:
                 self._fh.flush()
             except Exception:
                 pass
-        if self._open_path:
+        if open_path:
             try:
-                self._update_manifest(self._open_path, force=True)
+                self._finalize_manifest(open_path)
             except Exception:
                 pass
         if self._fh is not None:
@@ -1160,7 +1162,12 @@ class MeasurementV4Logger:
         if path not in self._first_epoch_ms:
             self._first_epoch_ms[path] = row_epoch
         self._last_epoch_ms[path] = row_epoch
-        rotation_reason = "FALLBACK_ENTER" if fallback_event and target_info.get("fallback_active") else "SERVICE_START"
+        rotation_reason = self._pending_rotation_reason.pop(path, "")
+        if not rotation_reason:
+            if fallback_event:
+                rotation_reason = "FALLBACK_ENTER" if target_info.get("fallback_active") else "FALLBACK_RECOVERED"
+            else:
+                rotation_reason = "SERVICE_START"
 
         try:
             self._register_manifest_file(directory, path, profile, fields, file_id, row_epoch, target_info, rotation_reason=rotation_reason)
@@ -1293,7 +1300,7 @@ class MeasurementV4Logger:
             "target_info": dict(target_info),
             "rotation_reason": rotation_reason,
         }
-        self._ensure_manifest_entry(directory, path, profile, fields, file_id, row_epoch, target_info, rotation_reason)
+        self._ensure_manifest_entry(directory, path, profile, fields, file_id, row_epoch, target_info, rotation_reason, closed_time_utc="")
         self._manifest_registered_paths.add(path)
         self._manifest_last_write_epoch[path] = __import__("time").time()
         self._manifest_last_row_count[path] = self._row_counts.get(path, 0)
@@ -1331,6 +1338,31 @@ class MeasurementV4Logger:
         self._manifest_last_write_epoch[path] = __import__("time").time()
         self._manifest_last_row_count[path] = self._row_counts.get(path, 0)
 
+    def _finalize_manifest(self, path: str) -> None:
+        """Persist the exact in-memory final row count and mark a clean close.
+
+        No file scan is performed here; the writer-owned counter is the source
+        of truth for cleanly closed files. A hard process death cannot execute
+        this path, leaving ``closed_time_utc`` empty by design.
+        """
+        if path not in self._manifest_meta:
+            return
+        meta = self._manifest_meta[path]
+        row_epoch = self._last_epoch_ms.get(path, self._first_epoch_ms.get(path, 0))
+        self._ensure_manifest_entry(
+            meta["directory"], path, meta["profile"], meta["fields"],
+            meta["file_id"], int(row_epoch or 0), meta["target_info"],
+            meta["rotation_reason"], closed_time_utc=_now_utc(),
+        )
+        self._manifest_last_write_epoch[path] = __import__("time").time()
+        self._manifest_last_row_count[path] = self._row_counts.get(path, 0)
+        self._runtime_best_effort(meta["directory"], {
+            "event_type": "logging_file_closed",
+            "measurement_file_id": meta["file_id"],
+            "logical_stream_id": self._logical_stream_id,
+            "row_count": self._row_counts.get(path, 0),
+        })
+
     def _file_id_for_path(self, path: str) -> str:
         if path not in self._file_ids:
             digest = hashlib.sha256(path.encode("utf-8")).hexdigest()[:8]
@@ -1338,13 +1370,13 @@ class MeasurementV4Logger:
             self._runtime_best_effort(os.path.dirname(path), {"event_type": "logging_file_opened", "measurement_file_id": self._file_ids[path], "logical_stream_id": self._logical_stream_id})
         return self._file_ids[path]
 
-    def _ensure_manifest_entry(self, directory: str, path: str, profile: str, fields: List[str], file_id: str, row_epoch: int, target_info: Dict[str, Any], rotation_reason: str) -> None:
+    def _ensure_manifest_entry(self, directory: str, path: str, profile: str, fields: List[str], file_id: str, row_epoch: int, target_info: Dict[str, Any], rotation_reason: str, *, closed_time_utc: Optional[str] = None) -> None:
         relative = os.path.relpath(path, directory)
         count = self._row_counts.get(path, 0)
         first_epoch = self._first_epoch_ms.get(path, row_epoch)
         file_role = "fallback_measurement" if target_info.get("fallback_active") else "primary_measurement"
         reason = rotation_reason if rotation_reason in ROTATION_REASON_VALUES else "UNKNOWN"
-        self._manifest.update_file(directory, {
+        entry = {
             "measurement_file_id": file_id,
             "logical_stream_id": self._logical_stream_id,
             "file_role": file_role,
@@ -1358,8 +1390,10 @@ class MeasurementV4Logger:
             "row_count": count,
             "rotation_reason": reason,
             "created_time_utc": _now_utc(),
-            "closed_time_utc": "",
-        })
+        }
+        if closed_time_utc is not None:
+            entry["closed_time_utc"] = closed_time_utc
+        self._manifest.update_file(directory, entry)
 
     def _get_writer(self, path: str, fields: List[str]):
         write_header = not os.path.exists(path) or os.path.getsize(path) == 0
@@ -1442,6 +1476,7 @@ class MeasurementV4Logger:
         for base, mapped in list(self._session_path_map.items()):
             if mapped == path:
                 self._session_path_map[base] = new_path
+        self._pending_rotation_reason[new_path] = "HEADER_CHANGED"
         self._runtime_best_effort(directory, {
             "event_type": "logging_file_rotated",
             "logical_stream_id": self._logical_stream_id,
@@ -1496,6 +1531,7 @@ class MeasurementV4Logger:
         for base, mapped in list(self._session_path_map.items()):
             if mapped == path:
                 self._session_path_map[base] = new_path
+        self._pending_rotation_reason[new_path] = "SIZE_LIMIT"
         self._runtime_best_effort(directory, {
             "event_type": "logging_file_rotated",
             "logical_stream_id": self._logical_stream_id,

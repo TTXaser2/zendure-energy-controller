@@ -2,6 +2,7 @@ import sys
 import types
 import time
 import unittest
+from unittest import mock
 
 if "paho" not in sys.modules:
     paho = types.ModuleType("paho")
@@ -77,8 +78,9 @@ class HighSmaSocHarvestRc1Tests(unittest.TestCase):
             state.actual_zendure_grid_input_update_epoch = now
             state.actual_zendure_output_home_update_epoch = now
         controller, state, mqtt = make(cfg, state=state, shelly=OkShelly(0))
-        for _ in range(2):
-            controller.run_once(cfg)
+        with mock.patch("controller_logic.time.monotonic", side_effect=[100, 103]):
+            for _ in range(2):
+                controller.run_once(cfg)
         self.assertTrue(state.rest_surplus_harvest_active)
         self.assertEqual("HIGH_SMA_SOC", state.rest_surplus_harvest_reason)
         self.assertGreater(state.last_input_power, 500)

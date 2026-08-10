@@ -94,8 +94,8 @@ class V12121HelpMobileQualityTests(unittest.TestCase):
         js = (ROOT / "static" / "status_v2.js").read_text(encoding="utf-8")
         css = (ROOT / "static" / "status_v2.css").read_text(encoding="utf-8")
         html = (ROOT / "status_page_v2.py").read_text(encoding="utf-8")
-        self.assertIn("scrollIsInsidePopover", js)
-        self.assertIn("if(!scrollIsInsidePopover(event))close()", js)
+        self.assertNotIn("addEventListener('mouseenter'", js)
+        self.assertNotIn("pop.addEventListener('mouseleave'", js)
         self.assertIn("is-mobile-panel", js)
         self.assertIn("zecInfoClose", js)
         self.assertIn("zec-info-popover-body", css)
@@ -136,11 +136,14 @@ class V12121HelpMobileQualityTests(unittest.TestCase):
 
     def test_updater_accepts_v12_12_0_as_primary_source(self):
         script = (ROOT / "tools" / "update_zendure_controller.sh").read_text(encoding="utf-8")
+        self.assertIn('EXPECTED_SOURCE_V12121_VERSION="12.12.1"', script)
+        self.assertIn('EXPECTED_SOURCE_V12121_BUILD_ID="v12.12.1-20260810"', script)
+        self.assertIn('SOURCE_MODE="V12_12_1"', script)
         self.assertIn('EXPECTED_SOURCE_V12120_VERSION="12.12.0"', script)
         self.assertIn('EXPECTED_SOURCE_V12120_BUILD_ID="v12.12.0-20260809"', script)
         self.assertIn('SOURCE_MODE="V12_12_0"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v12.12.1-20260810"', script)
-        self.assertIn('EXPECTED_VERSION="v12_12_1"', script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v12.12.2-20260810"', script)
+        self.assertIn('EXPECTED_VERSION="v12_12_2"', script)
 
 
 if __name__ == "__main__":

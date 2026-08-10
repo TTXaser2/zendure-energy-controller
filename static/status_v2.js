@@ -293,6 +293,11 @@
           {label:'Fehler / Backoff',value:`${Number(p.diag?.api_consecutive_errors||0)} · ${Number(p.diag?.api_backoff_remaining_s||0).toLocaleString('de-DE',{maximumFractionDigits:1})} s · ${p.diag?.api_error_code||'NONE'}`},
           {label:'Telemetriequelle',value:`${p.diag?.api_telemetry_source||'—'}${p.diag?.api_fallback_active?' · API-Fallback aktiv':''}`}
         ]},
+        {title:'Produktive Instanz',rows:[
+          {label:'Owner',value:p.diag?.instance_owner_active?'aktiv · exklusiv':'nicht bestätigt'},
+          {label:'Prozess',value:p.diag?.instance_owner_pid?`PID ${p.diag.instance_owner_pid}`:'—'},
+          {label:'Build',value:p.diag?.instance_owner_build_id||'—'}
+        ]},
         {title:'Einordnung',notes:[
           'Der farbige Balken zeigt ausschließlich synchrone Teilphasen des letzten aktiven Durchlaufs. SQLite und HTTP-Requests der lokalen API laufen asynchron und sind nicht enthalten.',
           'Beim Zendure-Kommandoabgleich sendet ZEC den aktuell gültigen AC-Modus sowie Lade- und Entladelimits erneut. Der Versand wird getrennt von der anschließend physisch bestätigten Wirkung ausgewiesen. Ein unterdrückter Versuch bedeutet ausdrücklich, dass nichts erneut gesendet wurde.'
@@ -380,7 +385,13 @@
   }
 
   class SocDayChart extends CanvasChart {
+    constructor(canvas,tooltip){super(canvas,tooltip);this.mobileDetails=$('#storageSocMobileDetails');this.mobileQuery=window.matchMedia('(max-width:620px)');this.mobileQuery.addEventListener?.('change',()=>{if(!this.mobileQuery.matches&&this.mobileDetails)this.mobileDetails.hidden=true;this.draw();});}
     setData(payload){this.payload=payload||{points:[]};this.kind='soc';this.drawLegend();this.draw();}
+    showSocDetails(html,x,y){
+      if(this.mobileQuery.matches&&this.mobileDetails){this.tooltip.hidden=true;this.mobileDetails.innerHTML=html;this.mobileDetails.hidden=false;return;}
+      if(this.mobileDetails)this.mobileDetails.hidden=true;
+      this.showTooltip(html,x,y);
+    }
     series(){
       const p=this.payload||{}; const colors=[css('--zec-green'),css('--zec-blue'),'#ef5f75'];
       const defs=[];
@@ -479,7 +490,7 @@
       const protectedLevels=[thresholds.min_soc,thresholds.max_soc,thresholds.reserve_soc,0,100];
       series.forEach(s=>{const raw=points.map(pt=>({minute:number(pt.minute),value:number(pt[s.key])}));this.drawQuantizedSocLine(ctx,raw,s.color,x,y,protectedLevels);});
       if(p.is_today){const now=new Date();const minute=now.getHours()*60+now.getMinutes();ctx.strokeStyle=css('--zec-blue');ctx.setLineDash([2,4]);ctx.beginPath();ctx.moveTo(x(minute),pad.t);ctx.lineTo(x(minute),h-pad.b);ctx.stroke();ctx.setLineDash([]);}
-      if(this.hoverX!==null&&points.length){const minute=Math.max(0,Math.min(1440,Math.round((this.hoverX-pad.l)/pw*1440)));let nearest=points[0],dist=Infinity;points.forEach(pt=>{const d=Math.abs(Number(pt.minute)-minute);if(d<dist){dist=d;nearest=pt;}});const px=x(nearest.minute);ctx.strokeStyle=css('--zec-blue');ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px,pad.t);ctx.lineTo(px,h-pad.b);ctx.stroke();series.forEach(s=>{const v=number(nearest[s.key]);if(v===null)return;ctx.fillStyle=s.color;ctx.beginPath();ctx.arc(px,y(v),3.5,0,Math.PI*2);ctx.fill();});const rows=series.map(s=>`<div class="zec-chart-tooltip-row"><span>${escapeHtml(s.label)}</span><b>${escapeHtml(fmtSoc(nearest[s.key]))}</b></div>`).join('');const reason=fmtReason(nearest.reason);const reasonRow=reason?`<div class="zec-chart-tooltip-row"><span>Grund</span><b>${escapeHtml(reason)}</b></div>`:'';const primaryPowerRow=p.primary_storage_present!==false?`<div class="zec-chart-tooltip-row"><span>Primärspeicher</span><b>${escapeHtml(fmtPower(nearest.primary_power_w))}</b></div>`:'';this.showTooltip(`<strong>${escapeHtml(p.date||'')} ${escapeHtml(nearest.time||'')}</strong>${rows}<div class="zec-chart-tooltip-row"><span>Zendure-Leistung</span><b>${escapeHtml(fmtPower(nearest.zendure_power_w))}</b></div>${primaryPowerRow}<div class="zec-chart-tooltip-row"><span>Modus</span><b>${escapeHtml(nearest.mode||'—')}</b></div>${reasonRow}`,px,pad.t+ph*.55);}
+      if(this.hoverX!==null&&points.length){const minute=Math.max(0,Math.min(1440,Math.round((this.hoverX-pad.l)/pw*1440)));let nearest=points[0],dist=Infinity;points.forEach(pt=>{const d=Math.abs(Number(pt.minute)-minute);if(d<dist){dist=d;nearest=pt;}});const px=x(nearest.minute);ctx.strokeStyle=css('--zec-blue');ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px,pad.t);ctx.lineTo(px,h-pad.b);ctx.stroke();series.forEach(s=>{const v=number(nearest[s.key]);if(v===null)return;ctx.fillStyle=s.color;ctx.beginPath();ctx.arc(px,y(v),3.5,0,Math.PI*2);ctx.fill();});const rows=series.map(s=>`<div class="zec-chart-tooltip-row"><span>${escapeHtml(s.label)}</span><b>${escapeHtml(fmtSoc(nearest[s.key]))}</b></div>`).join('');const reason=fmtReason(nearest.reason);const reasonRow=reason?`<div class="zec-chart-tooltip-row"><span>Grund</span><b>${escapeHtml(reason)}</b></div>`:'';const primaryPowerRow=p.primary_storage_present!==false?`<div class="zec-chart-tooltip-row"><span>Primärspeicher</span><b>${escapeHtml(fmtPower(nearest.primary_power_w))}</b></div>`:'';this.showSocDetails(`<strong>${escapeHtml(p.date||'')} ${escapeHtml(nearest.time||'')}</strong>${rows}<div class="zec-chart-tooltip-row"><span>Zendure-Leistung</span><b>${escapeHtml(fmtPower(nearest.zendure_power_w))}</b></div>${primaryPowerRow}<div class="zec-chart-tooltip-row"><span>Modus</span><b>${escapeHtml(nearest.mode||'—')}</b></div>${reasonRow}`,px,pad.t+ph*.55);}
     }
   }
 
@@ -514,13 +525,10 @@
     };
     const positionDesktop=(button)=>{const r=button.getBoundingClientRect();const pr=pop.getBoundingClientRect();let left=r.right-pr.width;let top=r.bottom+8;if(left<12)left=12;if(left+pr.width>innerWidth-12)left=innerWidth-pr.width-12;if(top+pr.height>innerHeight-12)top=r.top-pr.height-8;pop.style.left=`${Math.max(12,left)}px`;pop.style.top=`${Math.max(12,top)}px`;};
     const open=(button)=>{current=button;title.textContent=button.dataset.infoTitle||'Information';renderBody(button);pop.hidden=false;pop.classList.toggle('is-mobile-panel',mobileQuery.matches);pop.style.left='';pop.style.top='';requestAnimationFrame(()=>{body.scrollTop=0;if(!mobileQuery.matches)positionDesktop(button);});};
-    const scrollIsInsidePopover=(event)=>{const target=event.target;return target===pop||target===body||(target instanceof Node&&pop.contains(target));};
-    $$('.zec-info-button').forEach(btn=>{btn.addEventListener('mouseenter',()=>{if(!mobileQuery.matches)open(btn);});btn.addEventListener('focus',()=>open(btn));btn.addEventListener('click',e=>{e.stopPropagation();current===btn&&!pop.hidden?close():open(btn);});btn.addEventListener('mouseleave',()=>{if(!mobileQuery.matches&&!pop.matches(':hover'))close();});});
-    pop.addEventListener('mouseleave',()=>{if(!mobileQuery.matches)close();});
+    $$('.zec-info-button').forEach(btn=>{btn.addEventListener('click',e=>{e.stopPropagation();current===btn&&!pop.hidden?close():open(btn);});});
     closeButton?.addEventListener('click',e=>{e.stopPropagation();close();});
     document.addEventListener('click',e=>{if(!e.target.closest('.zec-info-button')&&!e.target.closest('#zecInfoPopover'))close();});
     window.addEventListener('resize',close);
-    window.addEventListener('scroll',event=>{if(!scrollIsInsidePopover(event))close();},true);
     document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!pop.hidden)close();});
   }
   function setupMenus(){

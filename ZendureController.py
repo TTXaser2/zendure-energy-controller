@@ -17,47 +17,53 @@ Webinterface:
 import os
 import sys
 import threading
-import fcntl
 import signal
 
-import uvicorn
+from version import APP_BUILD_ID, APP_VERSION_LABEL
+from instance_owner import INSTANCE_LOCK_EXIT_CODE, InstanceLockHeldError, acquire_instance_lock
 
-from app_logger import RotatingAppLogger
-from config_manager import ConfigManager
-from controller_logic import ZendureController
-from csv_logger import CsvRotatingLogger
-from mqtt_bridge import MqttBridge
-from shelly_client import ShellyClient
-from sma_energy_meter import SmaEnergyMeterClient
-from state import ControllerState
-from web_ui import create_app
-from version import APP_VERSION_LABEL
-from zendure_local_api import ZendureLocalApiClient
-
-
-def acquire_instance_lock() -> object:
-    lock_path = os.path.abspath("zendure_controller.lock")
-    lock_file = open(lock_path, "w", encoding="utf-8")
-    try:
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        print("[STARTUP] Eine andere Instanz des Zendure Energy Controller läuft bereits.")
-        print(f"[STARTUP] Lock-Datei: {lock_path}")
-        sys.exit(1)
-    lock_file.write(str(os.getpid()))
-    lock_file.flush()
-    return lock_file
 
 
 def main() -> None:
-    instance_lock = acquire_instance_lock()
+    try:
+        instance_lock = acquire_instance_lock(build_id=APP_BUILD_ID)
+    except InstanceLockHeldError as exc:
+        print("[STARTUP] Zweite Zendure-Controllerinstanz abgewiesen; produktive Ownership ist bereits belegt.")
+        print(f"[STARTUP] Globaler Instance-Lock: {exc.path}")
+        if exc.owner:
+            print(f"[STARTUP] Aktiver Owner: {exc.owner}")
+        raise SystemExit(INSTANCE_LOCK_EXIT_CODE)
+
+    # Runtime-/I/O-Komponenten werden absichtlich erst nach erfolgreicher
+    # produktiver Ownership geladen. Damit kann eine abgewiesene Zweitinstanz
+    # weder durch Import-Nebenwirkungen noch durch Initialisierung einen
+    # produktiven Pfad eröffnen.
+    import uvicorn
+    from app_logger import RotatingAppLogger
+    from config_manager import ConfigManager
+    from controller_logic import ZendureController
+    from csv_logger import CsvRotatingLogger
+    from mqtt_bridge import MqttBridge
+    from shelly_client import ShellyClient
+    from sma_energy_meter import SmaEnergyMeterClient
+    from state import ControllerState
+    from web_ui import create_app
+    from zendure_local_api import ZendureLocalApiClient
+
     config_manager = ConfigManager("config.json")
     config = config_manager.load()
 
     app_logger = RotatingAppLogger()
     app_logger.log(config, f"[STARTUP] Zendure Energy Controller {APP_VERSION_LABEL} startet")
+    app_logger.log(config, f"[INSTANCE] produktiver Owner pid={instance_lock.pid} build={instance_lock.build_id} lock={instance_lock.path}")
 
     state = ControllerState()
+    with state.lock:
+        state.instance_owner_active = True
+        state.instance_owner_pid = instance_lock.pid
+        state.instance_owner_build_id = instance_lock.build_id
+        state.instance_owner_since_utc = instance_lock.started_time_utc
+        state.instance_owner_lock_path = instance_lock.path
     state.ensure_graph_limit(int(config.get("GRAPH_HISTORY_LIMIT", 300)))
 
     mqtt_bridge = MqttBridge(state, config_manager.get, app_logger=app_logger)
