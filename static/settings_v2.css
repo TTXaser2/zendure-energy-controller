@@ -136,3 +136,20 @@ body.help-open{position:fixed;left:0;right:0;width:100%;overflow:hidden;touch-ac
 /* V12.12.0 search drawer must stay above sticky settings chrome. */
 .search-drawer{z-index:150}
 .drawer-backdrop{z-index:149}
+
+
+/* V12.12.1 mobile/iOS scroll owner: headers stay outside the scrolling content. */
+@media(max-width:820px){
+  html{height:100%;overflow:hidden}
+  body.zec-settings-v2{height:100dvh;min-height:0;overflow:hidden;display:flex;flex-direction:column;max-width:100%}
+  body.zec-settings-v2 .zec-topbar{position:relative;top:auto;flex:0 0 auto;width:100%;z-index:100}
+  .settings-contextbar{position:relative;top:auto;flex:0 0 auto;width:100%;z-index:80}
+  .settings-app{position:relative;display:block;flex:1 1 auto;height:auto;min-height:0;overflow:hidden;width:100%}
+  .settings-main{height:100%;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding-bottom:110px}
+  .settings-sidebar{position:absolute;left:0;top:0;bottom:0;height:auto;max-height:none;z-index:120}
+  body.category-drawer-open{position:relative;top:auto!important;height:100dvh;overflow:hidden}
+  body.category-drawer-open .settings-main{overflow:hidden}
+}
+
+/* V12.12.1 handbook + glossary links. */
+.help-handbook-links{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}

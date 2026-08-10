@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (c) 2026 Eduard Fuchs <info@eduardfuchs.de>
 #
-# V12.12.0 registry-native help/guidance metadata.  This module is deliberately
+# V12.12.1 registry-native help/guidance metadata.  This module is deliberately
 # static: opening help never performs I/O, network access or controller work.
 
 from __future__ import annotations
@@ -38,6 +38,7 @@ class HelpExample:
 class SettingHelpSpec:
     short_help: str
     extended_help: str
+    when_help: Optional[str]
     help_level: str
     search_terms: Tuple[str, ...]
     handbook_ref: Optional[HandbookRef]
@@ -128,7 +129,8 @@ CATEGORY_HELP_TEXT = {
     "System & Diagnose": "Diagnose- und Loggingparameter verändern nicht automatisch die physische Regelfunktion. Administrative Aktionen sind keine normalen Settings-Änderungen und bleiben explizit geschützt.",
 }
 
-# Page numbers are build-verified against the V12.12.0 generic manual.
+# Page numbers are build-verified against the V12.12.1 generic manual.
+HANDBOOK_GLOSSARY = HandbookRef("glossary", "Begriffe und Abkürzungen", 15)
 HANDBOOK_SECTIONS = {
     "Betriebsart & manuelle Steuerung": ("manual-modes", "Betriebsarten und manuelle Steuerung", 4),
     "Leistungsgrenzen & SOC-Schutz": ("limits-soc", "Leistungsgrenzen und SOC-Schutz", 5),
@@ -295,7 +297,7 @@ SHORT_HELP = {
     'CROSS_CHARGE_ENABLED': 'Aktiviert das Einlesen einer externen Zusatzbatterie per MQTT und verhindert unerwünschtes Batterie-zu-Batterie-Laden.',
     'SECOND_BATTERY_STALE_BLOCK_CHARGE': 'Konservativer Fallback: Wenn der Cross-Charge-Schutz aktiv ist, aber keine frischen Zusatzbatteriedaten vorliegen, wird Zendure-Ladung blockiert.',
     'CROSS_CHARGE_SIGNIFICANT_W': 'Ab diesem gegenläufigen Leistungsfluss zwischen Zusatzbatterie und Zendure wird der Cross-Charge-Schutz aktiv. Eine interne niedrigere Freigabeschwelle verhindert hektisches Ein-/Ausschalten.',
-    'COMMAND_NEUTRALIZATION_TIMEOUT_SECONDS': 'Nach dieser Zeit muss eine sicherheitsrelevante 0-W-Neutralisierung physisch bestätigt sein. Bei fortbestehender Leistung sendet ZEC AC-Modus sowie beide Limits als Full-State-Neutralisierung erneut.',
+    'COMMAND_NEUTRALIZATION_TIMEOUT_SECONDS': 'Nach dieser Zeit muss eine sicherheitsrelevante 0-W-Neutralisierung physisch bestätigt sein. Bei fortbestehender Leistung sendet ZEC AC-Modus sowie beide Limits als vollständige 0-W-Zustandsneutralisierung erneut.',
     'ZENDURE_COMMAND_STATE_FRESH_SECONDS': 'Maximales Alter der rückgelesenen Werte smartMode, acMode, inputLimit und outputLimit. Dynamische Limitänderungen werden nur bei bestätigtem smartMode=1 freigegeben.',
     'ZENDURE_COMMAND_STATE_RETRY_SECONDS': 'Mindestabstand für einen erneuten vollständigen Modus-/Limit-Abgleich, solange die Rücklesung noch nicht konsistent ist.',
     'ZENDURE_SMART_MODE_RETRY_SECONDS': 'Mindestabstand für erneutes smartMode=ON, wenn der volatile Flash-Schutz noch nicht rückgelesen wurde.',
@@ -313,7 +315,7 @@ SHORT_HELP = {
     'MEASUREMENT_LOG_FALLBACK_DIR': 'Begrenztes Fallback-Verzeichnis auf der internen SD, falls ein externes Logziel ausfällt.',
     'MEASUREMENT_LOG_FALLBACK_MAX_BYTES': 'Kleinere Rotationsgrenze für den SD-Fallback, damit ein USB-Ausfall die SD nicht unbegrenzt belastet.',
     'MEASUREMENT_LOG_FILE': 'Dateiname der aktuellen Measurement-Datei. Bei V4 und Standardname schreibt der Controller automatisch zendure_measurements_v4.csv, damit V3 und V4 nicht gemischt werden.',
-    'MEASUREMENT_LOG_MODE': 'Aus: keine zyklischen Messdaten, schont die SD-Karte. Standard: vollständige Reglerdiagnose inklusive Freshness, MQTT-Stale-Aggregat, Sollwertkaskade, Kommando und Szenario ohne Zendure. Erweitert: Standard plus Detaildaten für Simulation, What-if und tiefe MQTT-/Freshness-Analyse; erzeugt größere Dateien und sollte gezielt genutzt werden.',
+    'MEASUREMENT_LOG_MODE': 'Aus: keine zyklischen Messdaten, schont die SD-Karte. Standard: vollständige Reglerdiagnose inklusive Datenaktualität, MQTT-Veraltet-Aggregat, Sollwertkaskade, Kommando und Szenario ohne Zendure. Erweitert: Standard plus Detaildaten für Simulation, What-if und tiefe MQTT-/Aktualitätsanalyse; erzeugt größere Dateien und sollte gezielt genutzt werden.',
     'MEASUREMENT_DB_ENABLED': 'Schreibt parallel zu CSV/V4 einen leichten SQLite-Store für schnelle Status- und Graphdaten. Läuft auch, wenn Messdaten-CSV deaktiviert ist; die Regelung wird bei DB-Fehlern nicht blockiert.',
     'MEASUREMENT_DB_PATH': 'Optionaler absoluter Pfad zur SQLite-Datei. Leer bedeutet: automatisch neben den Messdaten im aktiven Speicherziel.',
     'MEASUREMENT_LOG_FLUSH_EVERY_ROWS': 'Schreibt gepufferte Messdaten periodisch aus dem Python-Puffer. Kein hartes fsync pro Zeile; bei Stromausfall können letzte Messdaten fehlen.',
@@ -406,11 +408,11 @@ SHORT_HELP.update({
     "SECOND_BATTERY_MAX_CHARGE_POWER_W": "Maximale Ladeleistung des Primärspeichers bzw. der Zweitbatterie. Dieser installationsabhängige Wert muss aus der konkreten Anlage bzw. deren Datenblatt stammen; leer bedeutet unbekannt.",
     "REST_SURPLUS_MIN_EXPORT_W": "Mindest-Netzexport, der den Near-Limit-/Restüberschuss-Eintritt qualifiziert. Der Wert ist eine Eintrittsschwelle und ausdrücklich kein gewünschter verbleibender Export.",
     "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS": "Zeit, über die die High-SOC-Eintrittsbedingungen bestätigt sein müssen. Das Tageszeitprofil kann in festen Profilfenstern eine profilbezogene Bestätigungszeit verwenden.",
-    "HARVEST_HIGH_SMA_SOC_HOLD_SECONDS": "Begrenzte Haltezeit eines bereits aktiven High-SOC-Harvest-Zustands nach kurzfristigem Wegfall der Eligibility. Sie ist keine maximale Harvest-Aktivdauer.",
+    "HARVEST_HIGH_SMA_SOC_HOLD_SECONDS": "Begrenzte Haltezeit eines bereits aktiven High-SOC-Harvest-Zustands nach kurzfristigem Wegfall der Freigabebedingung. Sie ist keine maximale Harvest-Aktivdauer.",
     "HARVEST_HIGH_SMA_SOC_ENABLED": "Aktiviert den High-SOC-Parallel-Harvest als Teil der ZEC-Harveststrategie. Der Primärspeicher bleibt priorisiert; die Funktion ist kein allgemeiner Ladefreigabeschalter.",
     "HARVEST_HIGH_SMA_SOC_ENTER_PERCENT": "SMA-SOC-Schwelle für den Eintritt in den High-SOC-Bereich. Zusammen mit dem niedrigeren Austrittswert bildet sie eine Hysterese.",
     "HARVEST_HIGH_SMA_SOC_EXIT_PERCENT": "SMA-SOC-Schwelle zum Verlassen des High-SOC-Bereichs. Sie muss unter der Eintrittsschwelle liegen.",
-    "HARVEST_HIGH_SMA_SOC_MIN_EXPORT_W": "Mindest-Netzexport für die High-SOC-Eligibility. Der Wert ist eine Eintrittsschwelle und kein gewünschter Restexport.",
+    "HARVEST_HIGH_SMA_SOC_MIN_EXPORT_W": "Mindest-Netzexport für die High-SOC-Freigabebedingung. Der Wert ist eine Eintrittsschwelle und kein gewünschter Restexport.",
     "HARVEST_SMA_FULL_SOC_PERCENT": "SOC-Schwelle, ab der der Primärspeicher für den Harvest-Voll-/Idle-Zweig als voll eingeordnet werden kann.",
     "REST_SURPLUS_ENTRY_CONFIRM_SECONDS": "Bestätigungszeit für Near-Limit-/Restexportbedingungen, bevor die Restüberschuss-Ernte eintritt.",
     "HARVEST_PRIMARY_CHARGE_FLOOR_RATIO": "Unterer Primärspeicher-Ladeanteil relativ zur bekannten maximalen Primärspeicher-Ladeleistung. Ein positiver absoluter Floor-Wert übersteuert dieses Verhältnis.",
@@ -459,7 +461,7 @@ RICH_EXTENDED = {
     "MOVING_AVERAGE_SAMPLES": "Legt die Anzahl der Netzleistungsmessungen im gleitenden Mittel fest. Zusammen mit dem Regelintervall ergibt sich näherungsweise das Beobachtungsfenster.",
     "MIN_EFFECTIVE_SURPLUS_FOR_CHARGE_W": "Normale AUTO-Ladung wird erst freigegeben, wenn der wirksame Überschuss mindestens die größere Schwelle aus Totzone und dieser Ladefreigabe erreicht.",
     "SMA_GUARD_RAMP_DOWN_W": "Schrittweite für den Abbau einer bereits bestehenden AUTO-Ladung in den dafür vorgesehenen Schutz-/Ramp-down-Pfaden. Nicht mit dem allgemeinen MAX_POWER_STEP_W gleichsetzen.",
-    "INTERVAL_SECONDS": "Nominale Zyklusbasis. Der reale Zyklusabstand besteht aus aktiver Arbeit plus Wartezeit; der Wert beeinflusst gemeinsam mit Mittelwertfenster, Step und Freshness die Reaktionsdynamik.",
+    "INTERVAL_SECONDS": "Nominale Zyklusbasis. Der reale Zyklusabstand besteht aus aktiver Arbeit plus Wartezeit; der Wert beeinflusst gemeinsam mit Mittelwertfenster, Step und Aktualität der Daten die Reaktionsdynamik.",
     "NIGHT_DISCHARGE_ENABLED": "Aktiviert nur innerhalb des gültigen Nachtfensters eine feste Basisentladung, sofern MANUAL_MODE=AUTO und die Schutzbedingungen erfüllt sind.",
     "NIGHT_DISCHARGE_POWER_W": "Feste Entladeleistung im Nachtmodus. Sie wird nicht fortlaufend an die aktuelle Haus-Netzleistung angepasst. Ein zu hoher Wert kann deshalb bei geringer Hauslast Einspeisung verursachen und muss zur eigenen Anlage passen.",
     "NIGHT_DISCHARGE_STOP_SOC_PERCENT": "Optionale zusätzliche Nachtreserve. Bei Erreichen wird die feste Nacht-Basisentladung pausiert; normale AUTO-Regelung darf im selben Nachtfenster weiterarbeiten, solange globale Schutzbedingungen dies zulassen.",
@@ -468,10 +470,10 @@ RICH_EXTENDED = {
     "HARVEST_HIGH_SMA_SOC_ENTER_PERCENT": "Eintrittsschwelle der High-SOC-Hysterese. Sie muss oberhalb des Austrittswerts und höchstens an der Voll-SOC-Schwelle liegen.",
     "HARVEST_HIGH_SMA_SOC_EXIT_PERCENT": "Austrittsschwelle der High-SOC-Hysterese. Der Abstand zur Eintrittsschwelle verhindert unmittelbares Flattern um einen einzelnen SOC-Wert.",
     "HARVEST_SMA_FULL_SOC_PERCENT": "Grenze für den Voll-/Idle-Zweig des Primärspeichers innerhalb Harvest. Sie ist Teil der geordneten SOC-Schwellen und kein allgemeines Batterie-Maximum.",
-    "HARVEST_HIGH_SMA_SOC_MIN_EXPORT_W": "Eligibility-Schwelle für den High-SOC-Eintritt. Der Wert ist kein Netz-Zielwert und beschreibt nicht, wie viel Export nach der Regelung verbleiben soll.",
+    "HARVEST_HIGH_SMA_SOC_MIN_EXPORT_W": "Freigabeschwelle für den High-SOC-Eintritt. Der Wert ist kein Netz-Zielwert und beschreibt nicht, wie viel Export nach der Regelung verbleiben soll.",
     "REST_SURPLUS_MIN_EXPORT_W": "Entry-Schwelle für den Near-Limit-/Restüberschusszweig. Ein Restexportwert ist nicht automatisch der absolute Zendure-Ladesollwert.",
-    "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS": "Bestätigt High-SOC-Eligibility über reale Zeit. Profilfenster können abweichende, bereits spezifizierte Bestätigungszeiten verwenden; daher ist dieser Wert nicht zu jeder Tageszeit allein maßgeblich.",
-    "HARVEST_HIGH_SMA_SOC_HOLD_SECONDS": "Hält einen zuvor aktiven Harvestzustand nach kurzfristigem Eligibility-Verlust begrenzt aufrecht, solange insbesondere die Exit-SOC-Bedingung nicht verletzt ist.",
+    "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS": "Bestätigt High-SOC-Freigabebedingung über reale Zeit. Profilfenster können abweichende, bereits spezifizierte Bestätigungszeiten verwenden; daher ist dieser Wert nicht zu jeder Tageszeit allein maßgeblich.",
+    "HARVEST_HIGH_SMA_SOC_HOLD_SECONDS": "Hält einen zuvor aktiven Harvestzustand nach kurzfristigem Wegfall der Freigabebedingung begrenzt aufrecht, solange insbesondere die Exit-SOC-Bedingung nicht verletzt ist.",
     "REST_SURPLUS_ENTRY_CONFIRM_SECONDS": "Bestätigt Near-Limit-/Restexportbedingungen über Zeit, damit kurze Spitzen nicht sofort einen Harvest-Eintritt auslösen.",
     "CROSS_CHARGE_ENABLED": "Aktiviert die symmetrische Konfliktprüfung zwischen Zendure-Sollrichtung und frischer Zweitbatterieleistung. Der Schutz reduziert gegenläufige Ziele proportional und kehrt die Richtung nicht selbst um.",
     "SECOND_BATTERY_STALE_BLOCK_CHARGE": "Konservativer Fallback bei veralteten Zweitbatteriedaten. Aktiv bedeutet, dass neue Zendure-Ladung bei fehlender verlässlicher Gegenflussbewertung blockiert werden kann.",
@@ -484,10 +486,10 @@ RICH_EXTENDED = {
     "COMMAND_EFFECT_FORCE_RESEND_SECONDS": "Recovery-Zeit für einen erzwungenen vollständigen Resend bei anhaltender bestätigter Nichtwirkung. Keine normale periodische Command-Wiederholung.",
     "COMMAND_RESYNC_COOLDOWN_SECONDS": "Drosselt identische Resync-/Recovery-Wiederholungen und verhindert unnötige Publish-Schleifen.",
     "COMMAND_NEUTRALIZATION_TIMEOUT_SECONDS": "Überwacht die physische Wirkung einer aktiven sicherheitsrelevanten 0-W-Neutralisierung.",
-    "ZENDURE_COMMAND_STATE_FRESH_SECONDS": "Freshness-Grenze für den vollständig rückgelesenen Command-State aus smartMode, acMode, inputLimit und outputLimit.",
+    "ZENDURE_COMMAND_STATE_FRESH_SECONDS": "Aktualitätsgrenze für den vollständig rückgelesenen Command-State aus smartMode, acMode, inputLimit und outputLimit.",
     "ZENDURE_COMMAND_STATE_RETRY_SECONDS": "Abstand für das erneute Anfordern/Herstellen eines vollständigen Command-States im vorgesehenen Recoverypfad.",
     "ZENDURE_SMART_MODE_RETRY_SECONDS": "Abstand für SmartMode-bezogene Wiederholungsversuche, wenn der erforderliche Gerätevertrag noch nicht bestätigt ist.",
-    "COMMAND_RESYNC_STALE_MIN_SECONDS": "Mindestalter für einen stale-basierten MQTT-Recovery-/Resyncfall. Der Wert beschreibt Recovery, nicht normale Stellgeschwindigkeit.",
+    "COMMAND_RESYNC_STALE_MIN_SECONDS": "Mindestalter für einen auf veralteten Daten basierenden MQTT-Recovery-/Resyncfall. Der Wert beschreibt Recovery, nicht normale Stellgeschwindigkeit.",
     "COMMAND_RESYNC_ON_MQTT_RECOVERY_ALWAYS": "Legacy-/Notfalloption für aggressiveren Resync nach MQTT-Recovery. Sie erhöht potenziell Recovery-Publishes und ist keine normale Regeloption.",
 }
 
@@ -509,6 +511,94 @@ for _key in (
 ):
     RICH_EXTENDED[_key] = SHORT_HELP[_key] + " Der Anteil beschreibt eine Strategieallokation und ist kein direkter Zendure-Leistungssollwert."
 
+
+# V12.12.1: RICH help must answer the operational "when" question explicitly.
+# These texts describe existing contracts only; they introduce no new thresholds.
+RICH_WHEN = {
+    "MANUAL_MODE": "Die Betriebsart wird in jedem Regelzyklus vor Nacht- und AUTO-Regelung ausgewertet. Ein manueller Modus ungleich AUTO hat Vorrang vor beiden; Schutz- und Safe-State-Bedingungen können das angeforderte Ziel weiterhin begrenzen oder neutralisieren.",
+    "MANUAL_FIXED_DISCHARGE_POWER_W": "Der Wert wird nur verwendet, wenn MANUAL_MODE auf Feste Entladung steht, der aktuelle Zendure-SOC gültig ist und das Entlade-Ziel noch nicht erreicht wurde. Die globale maximale Entladeleistung und der Mindest-SOC bleiben harte Grenzen.",
+    "MANUAL_FIXED_DISCHARGE_TARGET_SOC": "Der Ziel-SOC wird nur im manuellen Modus Feste Entladung ausgewertet. Er muss unter dem aktuellen SOC liegen und darf die globale MIN-SOC-Grenze nicht unterschreiten.",
+    "MANUAL_DISCHARGE_AFTER_TARGET": "Die Folgeaktion wird genau dann ausgewertet, wenn eine aktive feste Entladung ihren Ziel-SOC erreicht. AUTO gibt anschließend wieder an die normale Regelung zurück; STOP/HOLD fordert aktive 0-W-Neutralität.",
+    "MANUAL_FIXED_CHARGE_POWER_W": "Der Wert wird nur verwendet, wenn MANUAL_MODE auf Feste Ladung steht, der aktuelle Zendure-SOC gültig ist und das Lade-Ziel noch nicht erreicht wurde. Die globale maximale Ladeleistung und der Maximal-SOC bleiben harte Grenzen.",
+    "MANUAL_FIXED_CHARGE_TARGET_SOC": "Der Ziel-SOC wird nur im manuellen Modus Feste Ladung ausgewertet. Er muss über dem aktuellen SOC liegen und darf die globale MAX-SOC-Grenze nicht überschreiten.",
+    "MANUAL_CHARGE_AFTER_TARGET": "Die Folgeaktion wird genau dann ausgewertet, wenn eine aktive feste Ladung ihren Ziel-SOC erreicht. AUTO gibt anschließend wieder an die normale Regelung zurück; STOP/HOLD fordert aktive 0-W-Neutralität.",
+    "MAX_CHARGE_POWER_W": "Die Grenze wirkt in jedem Zweig, der Zendure-Ladung anfordern kann: AUTO, Harvest und feste Ladung. Sie begrenzt den berechneten Zielwert unabhängig davon, welcher Zweig ihn erzeugt hat.",
+    "MAX_DISCHARGE_POWER_W": "Die Grenze wirkt in jedem Zweig, der Zendure-Entladung anfordern kann: AUTO, Nachtbetrieb und feste Entladung. Sie begrenzt den berechneten Zielwert unabhängig davon, welcher Zweig ihn erzeugt hat.",
+    "MIN_SOC_PERCENT": "Die Untergrenze wird bei allen Entladeentscheidungen geprüft. Erreichen der Grenze ist bei gültigen Daten ein normaler Schutz-/HOLD-Zustand; Entladeprofile und Nachtreserve dürfen sie nicht unterschreiten.",
+    "MAX_SOC_PERCENT": "Die Obergrenze wird bei allen Ladeentscheidungen geprüft. Erreichen der Grenze ist bei gültigen Daten ein normaler Schutz-/HOLD-Zustand; Ladeprofile dürfen sie nicht überschreiten.",
+    "DEADBAND_W": "Die Totzone wird in der normalen AUTO-Netzregelung ausgewertet, wenn keine höher priorisierte Betriebs- oder Schutzbedingung greift. Innerhalb der Totzone wird keine unnötige Nachregelung angestrebt; ausdrücklich definierte Harvest-Spezialzweige besitzen eigene Eintrittsbedingungen.",
+    "CONTROL_GAIN": "Der Gain wirkt bei einer aktiven AUTO-Korrektur auf die aktuelle wirksame Netzabweichung. Nach dieser Rohkorrektur folgen Glättung, Schrittbegrenzung, Leistungs-/SOC-Limits, Cross-Charge-Schutz und der Commandpfad.",
+    "SMOOTHING_FACTOR": "Die Glättung wirkt nach der Rohzielberechnung auf Änderungen des AUTO-Zielwerts. Sie wird relevant, sobald sich das Rohziel gegenüber dem bisherigen Ziel verändert.",
+    "MAX_POWER_STEP_W": "Die Schrittbegrenzung wirkt bei Zielwertänderungen der normalen Reglerpfade und begrenzt die Änderung von einem Regelzyklus zum nächsten. Sie ersetzt keine absolute Leistungsgrenze.",
+    "MIN_COMMAND_CHANGE_W": "Der Wert wirkt erst im Commandpfad nach der internen Zielwertberechnung. Er entscheidet, ob eine kleine Zielwertänderung tatsächlich erneut per MQTT publiziert werden muss.",
+    "MOVING_AVERAGE_SAMPLES": "Die Mittelwertbildung wirkt auf die für AUTO verwendete Netzleistung, sobald mehrere Messwerte vorliegen. Zusammen mit dem Regelintervall bestimmt die Samplezahl die zeitliche Glättung der Eingangsgröße.",
+    "MIN_EFFECTIVE_SURPLUS_FOR_CHARGE_W": "Die Schwelle wird bei normaler AUTO-Ladung geprüft. Erst wenn nach den relevanten Abzügen und Reserven ausreichend wirksamer Überschuss verbleibt, wird normale AUTO-Ladung freigegeben.",
+    "SMA_GUARD_RAMP_DOWN_W": "Die Schrittweite wird nur in den dafür vorgesehenen AUTO-Schutz-/Ramp-down-Pfaden verwendet, wenn eine bestehende Ladung kontrolliert reduziert werden muss. Sie ist nicht die allgemeine Stellschrittgrenze.",
+    "INTERVAL_SECONDS": "Der Wert bestimmt den nominalen Abstand zwischen Regelzyklen. Er beeinflusst deshalb zeitlich alle zyklischen AUTO-/Harvest-/Diagnosebewertungen, ohne deren fachliche Eintrittsbedingungen zu ersetzen.",
+    "NIGHT_DISCHARGE_ENABLED": "Der Nachtmodus kann nur im konfigurierten Zeitfenster und bei MANUAL_MODE=AUTO aktiv werden. Gültiger SOC, globale Schutzgrenzen und weitere Safety-Bedingungen bleiben Voraussetzung.",
+    "NIGHT_DISCHARGE_POWER_W": "Die feste Leistung wird nur während eines aktiven Nachtfensters verwendet, wenn Nachtbetrieb freigegeben ist und keine Reserve-/SOC-/Safety-Bedingung die Entladung stoppt. Sie wird nicht anhand der aktuellen Hauslast nachgeführt.",
+    "NIGHT_DISCHARGE_STOP_SOC_PERCENT": "Die zusätzliche Nachtreserve wird nur ausgewertet, wenn sie gesetzt ist und die feste Nachtentladung aktiv werden könnte. Bei Erreichen pausiert sie die feste Basisentladung; die globale MIN-SOC-Grenze bleibt zusätzlich wirksam.",
+    "NIGHT_START_HOUR": "Startstunde und Startminute bilden gemeinsam die logische Startzeit des Nachtfensters. Die UI behandelt beide technischen Werte als ein HH:MM-Feld; ein Fenster über Mitternacht ist zulässig.",
+    "NIGHT_START_MINUTE": "Startstunde und Startminute bilden gemeinsam die logische Startzeit des Nachtfensters. Die UI behandelt beide technischen Werte als ein HH:MM-Feld; ein Fenster über Mitternacht ist zulässig.",
+    "NIGHT_END_HOUR": "Endstunde und Endminute bilden gemeinsam die logische Endzeit des Nachtfensters. Beim Verlassen des Fensters ist eine aktive 0-W-Neutralisierung Teil des Sicherheitsvertrags.",
+    "NIGHT_END_MINUTE": "Endstunde und Endminute bilden gemeinsam die logische Endzeit des Nachtfensters. Beim Verlassen des Fensters ist eine aktive 0-W-Neutralisierung Teil des Sicherheitsvertrags.",
+    "REST_SURPLUS_HARVEST_ENABLED": "Die Masterfreigabe wird nur in AUTO-Betrieb berücksichtigt. Erst zusätzliche Harvest-Freigabebedingungen wie Primärspeicherzustand, Export, Zeitprofil und Schutzgrenzen entscheiden, ob tatsächlich zusätzliche Zendure-Ladung angefordert wird.",
+    "HARVEST_HIGH_SMA_SOC_ENABLED": "Der Schalter wirkt nur bei aktivierter Restüberschuss-Ernte. Für einen tatsächlichen High-SOC-Eintritt müssen zusätzlich Primärspeicher-SOC, Exportbedingung, Zeitprofil und Bestätigungszeit passen.",
+    "HARVEST_HIGH_SMA_SOC_ENTER_PERCENT": "Die Eintrittsschwelle wird nur bei aktivem High-SOC-Parallel-Harvest und gültigem aktuellem Primärspeicher-SOC ausgewertet. Ein Eintritt benötigt zusätzlich die Export-/Zeit-/Bestätigungsbedingungen; der niedrigere Austrittswert beendet den Zustand wieder.",
+    "HARVEST_HIGH_SMA_SOC_EXIT_PERCENT": "Die Austrittsschwelle wird ausgewertet, wenn ein High-SOC-Harvestzustand aktiv ist. Fällt der Primärspeicher-SOC auf bzw. unter diese Grenze, wird der High-SOC-Zustand verlassen; der Abstand zur Eintrittsschwelle verhindert häufiges Hin- und Herschalten.",
+    "HARVEST_SMA_FULL_SOC_PERCENT": "Die Schwelle wird für den Voll-/Idle-Zweig des Primärspeichers innerhalb Harvest ausgewertet. Sie ist nicht mit dem globalen Zendure-MAX-SOC gleichzusetzen.",
+    "HARVEST_HIGH_SMA_SOC_MIN_EXPORT_W": "Die Exportgrenze wird beim Eintritt in High-SOC-Harvest geprüft. Sie qualifiziert die Freigabe; sie ist ausdrücklich kein gewünschter Restexport nach der Regelung.",
+    "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS": "Die Bestätigungszeit läuft nur, solange die High-SOC-Freigabebedingungen zusammenhängend erfüllt bleiben. Profilfenster können spezifizierte abweichende Zeiten verwenden.",
+    "HARVEST_HIGH_SMA_SOC_HOLD_SECONDS": "Die Haltezeit wird erst relevant, nachdem High-SOC-Harvest bereits aktiv war und eine Freigabebedingung kurzzeitig wegfällt. Harte Exit-/Schutzbedingungen können den Zustand trotzdem sofort beenden.",
+    "REST_SURPLUS_MIN_EXPORT_W": "Die Schwelle wird für den Near-Limit-/Restüberschuss-Eintritt geprüft. Sie entscheidet über die Freigabe des Zweigs, nicht über den endgültigen absoluten Zendure-Ladesollwert.",
+    "REST_SURPLUS_ENTRY_CONFIRM_SECONDS": "Die Bestätigungszeit läuft nur, solange die Near-Limit-/Restexport-Freigabebedingungen zusammenhängend erfüllt bleiben. Kurze Exportspitzen sollen dadurch nicht sofort einen Eintritt auslösen.",
+    "HARVEST_PRIMARY_CHARGE_FLOOR_RATIO": "Der Ratio-Wert wird nur verwendet, wenn kein positiver absoluter Floor-Wert gesetzt ist. Er wird aus der bekannten maximalen Primärspeicher-Ladeleistung abgeleitet und bildet die untere Harvest-Schwelle.",
+    "HARVEST_PRIMARY_CHARGE_RESTART_RATIO": "Der Ratio-Wert wird nur verwendet, wenn kein positiver absoluter Restart-Wert gesetzt ist. Er bildet die Wiederanlaufschwelle oberhalb des Floors.",
+    "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_RATIO": "Der Ratio-Wert wird nur verwendet, wenn kein positiver absoluter Near-Limit-Wert gesetzt ist. Er kennzeichnet den Bereich nahe der Primärspeicher-Ladegrenze.",
+    "HARVEST_PRIMARY_CHARGE_FLOOR_W": "Ein positiver Wert ersetzt den zugehörigen Floor-Ratio-Wert vollständig. Leer bzw. automatisch bedeutet, dass ZEC wieder die Ratio-Ableitung aus der maximalen Primärspeicher-Ladeleistung verwendet.",
+    "HARVEST_PRIMARY_CHARGE_RESTART_W": "Ein positiver Wert ersetzt den zugehörigen Restart-Ratio-Wert vollständig. Leer bzw. automatisch bedeutet, dass ZEC wieder die Ratio-Ableitung verwendet.",
+    "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_W": "Ein positiver Wert ersetzt den zugehörigen Near-Limit-Ratio-Wert vollständig. Leer bzw. automatisch bedeutet, dass ZEC wieder die Ratio-Ableitung verwendet.",
+    "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MORNING": "Der Anteil wird nur im zugehörigen morgendlichen Harvest-Zeitprofil verwendet, wenn der betreffende Harvestzweig aktiv ist. Er beschreibt eine Strategieallokation für den Primärspeicher und ist kein direkter Zendure-Sollwert.",
+    "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY": "Der Anteil wird nur im zugehörigen mittäglichen Harvest-Zeitprofil verwendet, wenn der betreffende Harvestzweig aktiv ist. Er beschreibt eine Strategieallokation für den Primärspeicher und ist kein direkter Zendure-Sollwert.",
+    "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_AFTERNOON": "Der Anteil wird nur im zugehörigen nachmittäglichen Harvest-Zeitprofil verwendet, wenn der betreffende Harvestzweig aktiv ist. Er beschreibt eine Strategieallokation für den Primärspeicher und ist kein direkter Zendure-Sollwert.",
+    "CROSS_CHARGE_ENABLED": "Der Schutz wird nur wirksam, wenn ausreichend aktuelle Zweitbatteriedaten für eine belastbare Gegenflussbewertung vorliegen. Er reduziert gegenläufige Zendure-Ziele proportional und kehrt die Richtung nicht selbst um.",
+    "SECOND_BATTERY_STALE_BLOCK_CHARGE": "Die Option wird relevant, wenn Zweitbatteriedaten die zulässige Aktualitätsgrenze überschreiten. Sie bestimmt dann, ob neue Zendure-Ladung vorsorglich blockiert wird, weil Gegenfluss nicht zuverlässig bewertet werden kann.",
+    "CROSS_CHARGE_SIGNIFICANT_W": "Die Schwelle wird bei aktuellem Zweitbatterie-Leistungswert und aktivem Cross-Charge-Schutz ausgewertet. Ab dieser Gegenflussstärke greift die Schutzlogik; die niedrigere Rücknahmeschwelle verhindert häufiges Ein-/Ausschalten nahe der Grenze.",
+    "COMMAND_EFFECT_MIN_TARGET_W": "Die Diagnosegrenze wird nur für aktive Sollwerte ungleich 0 W verwendet. Unterhalb dieser Größe wird die Wirkung als nicht robust bewertbar behandelt und nicht fälschlich als bestätigt gewertet.",
+    "COMMAND_EFFECT_MIN_W": "Die Mindest-Istleistung wird bei der Prüfung einer angeforderten Lade- oder Entladerichtung verwendet. Sie belegt höchstens eine belastbare Richtungsreaktion, nicht automatisch das Sollwerttracking.",
+    "COMMAND_EFFECT_TIMEOUT_SECONDS": "Der Timeout läuft während einer zusammenhängenden Wirkungsprüfung desselben fachlichen Intents. Kleine Sollwertänderungen innerhalb derselben Richtung sollen eine anhaltende Nichtwirkung nicht analytisch verstecken.",
+    "COMMAND_EFFECT_TOLERANCE_W": "Die absolute Toleranz wird beim Sollwerttracking mit der relativen Prozenttoleranz verglichen. Für die Bewertung gilt jeweils die größere der beiden Grenzen.",
+    "COMMAND_EFFECT_TOLERANCE_PERCENT": "Die relative Toleranz wird aus dem Betrag des Sollwerts berechnet und mit der absoluten W-Toleranz verglichen. Für die Bewertung gilt jeweils die größere Grenze.",
+    "COMMAND_EFFECT_FORCE_RESEND_SECONDS": "Die Zeit wird erst bei anhaltender bestätigter Nichtwirkung relevant. Danach darf ZEC im spezifizierten Recoverypfad den vollständigen Gerätezustand erneut senden; dies ist keine zyklische Normalwiederholung.",
+    "COMMAND_RESYNC_COOLDOWN_SECONDS": "Der Cooldown wird nach einem Resync-/Recovery-Versuch ausgewertet. Er verhindert, dass derselbe vollständige Wiederabgleich unnötig häufig wiederholt wird.",
+    "COMMAND_NEUTRALIZATION_TIMEOUT_SECONDS": "Der Timeout wird bei sicherheitsrelevanten 0-W-Zielen verwendet. Bleibt physische Leistung bestehen, kann ZEC die vollständige 0-W-Zustandsneutralisierung mit AC-Modus und beiden Limits erneut anfordern.",
+    "ZENDURE_COMMAND_STATE_FRESH_SECONDS": "Die Grenze wird auf den vollständig rückgelesenen Gerätezustand aus smartMode, acMode, inputLimit und outputLimit angewandt. Überschreitet dessen Datenalter die Grenze, gilt der Zustand nicht mehr als aktuell genug für einen belastbaren Commandnachweis.",
+    "ZENDURE_COMMAND_STATE_RETRY_SECONDS": "Das Intervall wird verwendet, wenn der vollständige Gerätezustand noch nicht konsistent bestätigt ist und im vorgesehenen Recoverypfad erneut angefordert bzw. hergestellt werden muss.",
+    "ZENDURE_SMART_MODE_RETRY_SECONDS": "Das Intervall wird relevant, wenn der erforderliche smartMode noch nicht bestätigt ist. Wiederholungen bleiben auf den Recoverypfad beschränkt und sollen keine dauerhafte Schreibschleife erzeugen.",
+    "COMMAND_RESYNC_STALE_MIN_SECONDS": "Die Mindestdauer wird nur für Recovery nach ausreichend lange veralteten MQTT-/Command-Daten ausgewertet. Sie ist keine normale Stell- oder Regelverzögerung.",
+    "COMMAND_RESYNC_ON_MQTT_RECOVERY_ALWAYS": "Die Legacy-/Notfalloption wird beim Wiederkehren der MQTT-Verbindung ausgewertet. Aktiv erzwingt sie aggressiver einen vollständigen Wiederabgleich und kann dadurch zusätzliche Publishes verursachen.",
+}
+
+RICH_RISK_BY_CATEGORY = {
+    "Betriebsart & manuelle Steuerung": "Fehlkonfiguration kann eine feste Lade-/Entladeanforderung oder einen unerwarteten Folgeübergang auslösen. Globale SOC-/Leistungsgrenzen und Safe-State bleiben übergeordnet.",
+    "Leistungsgrenzen & SOC-Schutz": "Diese Werte sind anlagenbezogene Schutzgrenzen. Zu hohe Grenzen können Hardware-/Batterieschutz schwächen; unpassend niedrige Grenzen können nutzbare Leistung oder SOC-Bereich unnötig einschränken.",
+    "AUTO-Regelung": "Unpassend aggressive Kombinationen können Pendeln, häufigere Sollwertänderungen und unnötige Commandaktivität begünstigen; zu träge Kombinationen können Netzabweichungen länger bestehen lassen.",
+    "Nachtbetrieb": "Eine unpassende feste Nachtleistung kann bei geringer Hauslast Einspeisung verursachen. Zeitfenster, Reserve-SOC und globale SOC-Grenzen müssen zur eigenen Anlage und Nutzung passen.",
+    "Harvest / Restüberschuss": "Unpassende Schwellen oder Allokationen können Restexport unnötig bestehen lassen oder die gewünschte Primärspeicherpriorität verschieben. Die geordneten Schwellen und Override-Regeln müssen konsistent bleiben.",
+    "Cross-Charge-Schutz": "Eine zu hohe Gegenflussschwelle kann relevanten Cross-Charge übersehen; eine zu niedrige Schwelle kann bei Messrauschen unnötig eingreifen. Aktuelle und eindeutig interpretierbare Zweitbatteriedaten sind Voraussetzung.",
+    "Kommandowirkung & Resync": "Zu aggressive Diagnose-/Recovery-Zeiten können unnötige Wiederholpublishes erzeugen; zu großzügige Zeiten verzögern die Erkennung echter Nichtwirkung. Publish allein bleibt kein Wirkungsnachweis.",
+}
+
+RICH_DEPENDENCY_HELP = {
+    "Betriebsart & manuelle Steuerung": "Die unten genannten Werte bestimmen Profil, Leistungs-/SOC-Grenzen oder Folgeaktion des gewählten manuellen Modus.",
+    "Leistungsgrenzen & SOC-Schutz": "Die unten genannten Einstellungen stehen in direkter Schutz- oder Zielbeziehung zu dieser Grenze.",
+    "AUTO-Regelung": "AUTO-Parameter wirken als aufeinanderfolgende Teile derselben Zielwertpipeline; die unten genannten Beziehungen zeigen die wichtigsten Kopplungen.",
+    "Nachtbetrieb": "Nachtbetrieb ist an Aktivierung, logisches Zeitfenster, feste Leistung und SOC-Schutz gekoppelt. Die unten genannten Beziehungen zeigen die direkte Abhängigkeit.",
+    "Harvest / Restüberschuss": "Harvest nutzt mehrere Freigabeschwellen und Allokationswerte gemeinsam. Positive absolute W-Werte können zugehörige Ratio-Werte ersetzen; die unten genannten Beziehungen zeigen diese Kopplungen.",
+    "Cross-Charge-Schutz": "Der Schutz benötigt aktuelle Zweitbatteriedaten und eine konsistente Gegenflussschwelle. Die unten genannten Beziehungen bestimmen Freigabe und Fallback.",
+    "Kommandowirkung & Resync": "Wirkungsdiagnose und Recovery verwenden getrennte Schwellen, Toleranzen und Zeitbedingungen. Die unten genannten Beziehungen zeigen die wichtigsten Abhängigkeiten.",
+}
+
 EFFECT_INCREASE = {
     "MAX_CHARGE_POWER_W": "Erlaubt höhere Ladeziele, soweit Hardware, SOC und weitere Limiter dies zulassen.",
     "MAX_DISCHARGE_POWER_W": "Erlaubt höhere Entladeziele, soweit Hardware, SOC und weitere Limiter dies zulassen.",
@@ -529,8 +619,8 @@ EFFECT_INCREASE = {
     "HARVEST_HIGH_SMA_SOC_EXIT_PERCENT": "Der High-SOC-Bereich wird früher verlassen; die Hysterese wird bei unverändertem Enter kleiner.",
     "HARVEST_HIGH_SMA_SOC_MIN_EXPORT_W": "Verlangt mehr Netzexport für den High-SOC-Eintritt.",
     "REST_SURPLUS_MIN_EXPORT_W": "Verlangt mehr Netzexport für Near-Limit-/Restüberschuss-Entry.",
-    "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS": "Verlangt eine länger bestätigte Eligibility und filtert kurze Ereignisse stärker.",
-    "HARVEST_HIGH_SMA_SOC_HOLD_SECONDS": "Hält einen zuvor aktiven Harvestzustand länger über kurze Eligibility-Lücken.",
+    "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS": "Verlangt eine länger bestätigte Freigabebedingung und filtert kurze Ereignisse stärker.",
+    "HARVEST_HIGH_SMA_SOC_HOLD_SECONDS": "Hält einen zuvor aktiven Harvestzustand länger über kurze kurze Lücken der Freigabebedingung.",
     "REST_SURPLUS_ENTRY_CONFIRM_SECONDS": "Verlangt einen länger bestätigten Restexportzustand vor Entry.",
     "CROSS_CHARGE_SIGNIFICANT_W": "Ignoriert kleinere Gegenflüsse und greift erst bei stärkerem Konflikt ein.",
     "COMMAND_EFFECT_MIN_TARGET_W": "Mehr kleine Sollwerte werden als nicht robust bewertbar eingestuft.",
@@ -556,7 +646,7 @@ EFFECT_DECREASE = {
 
 EFFECT_ENABLE = {
     "CROSS_CHARGE_ENABLED": "Aktiviert die Gegenfluss-Schutzlogik bei frischen Zweitbatteriedaten.",
-    "SECOND_BATTERY_STALE_BLOCK_CHARGE": "Blockiert konservativ neue Ladung, wenn die erforderliche Zweitbatteriebewertung stale ist.",
+    "SECOND_BATTERY_STALE_BLOCK_CHARGE": "Blockiert konservativ neue Ladung, wenn die erforderliche Zweitbatteriebewertung veraltet ist.",
     "NIGHT_DISCHARGE_ENABLED": "Erlaubt die feste Nacht-Basisentladung im gültigen Fenster, sofern MANUAL_MODE=AUTO und Schutzbedingungen erfüllt sind.",
     "REST_SURPLUS_HARVEST_ENABLED": "Erlaubt die spezifizierten Harvestzweige; die einzelnen Eintritts- und Schutzbedingungen gelten weiterhin.",
     "HARVEST_HIGH_SMA_SOC_ENABLED": "Erlaubt zusätzlich den High-SOC-Harvestzweig innerhalb der Master-Harvestlogik.",
@@ -646,7 +736,7 @@ RISK_HELP = {
     "MAX_CONSECUTIVE_ERRORS": "Sehr niedrige Werte können Safe-State früh auslösen; sehr hohe Werte verzögern die Reaktion auf anhaltende Fehler.",
     "MQTT_DISCONNECTED_SAFE_STATE": "Deaktivieren reduziert den konservativen Schutz bei längeren Broker-/MQTT-Problemen.",
     "SAFE_STATE_ON_SHELLY_ERROR": "Deaktivieren reduziert den konservativen Schutz bei anhaltend fehlerhafter Netzleistungsmessung.",
-    "SOC_STALE_TIMEOUT_SECONDS": "Zu große Freshness-Fenster können Entladung mit veraltetem SOC länger zulassen; zu kleine Fenster können bei kurzen Telemetrielücken unnötig blockieren.",
+    "SOC_STALE_TIMEOUT_SECONDS": "Zu große Aktualitätsfenster können Entladung mit veraltetem SOC länger zulassen; zu kleine Fenster können bei kurzen Telemetrielücken unnötig blockieren.",
     "WEB_HOST": "Eine breite Bind-Adresse kann das Webinterface in mehr Netzsegmenten erreichbar machen. Zugriffsschutz erfolgt außerhalb dieses Parameters.",
 }
 
@@ -703,12 +793,12 @@ def build_setting_help(row: Mapping[str, Any]) -> SettingHelpSpec:
     deps = _dependencies(row)
     dep_help = None
     if deps:
-        dep_help = "Verknüpfte Einstellungen können Aktivierung, Grenzen, Quelle oder Override-Semantik beeinflussen. Die konkrete Beziehung ist unten aufgeführt."
+        dep_help = RICH_DEPENDENCY_HELP.get(category) if rich else "Verknüpfte Einstellungen können Aktivierung, Grenzen, Quelle oder Vorrang beeinflussen. Die konkrete Beziehung ist unten aufgeführt."
     risk = RISK_HELP.get(key)
-    if rich and not risk and str(row.get("risk") or ""):
-        risk = f"Registry-Risikoklasse: {row.get('risk')}. Änderungen nur innerhalb der beschriebenen Grenzen und Abhängigkeiten vornehmen."
+    if rich and not risk:
+        risk = RICH_RISK_BY_CATEGORY.get(category)
     if key in VERY_HIGH_EXTRA and not risk:
-        risk = "Sehr hohe Registry-Risikoklasse. Fehlkonfiguration kann Datenquelle, Zugriff, Safety-/Freshness-Verhalten oder Dienstverfügbarkeit beeinträchtigen."
+        risk = "Sehr hohes Änderungsrisiko. Fehlkonfiguration kann Datenquelle, Zugriff, Schutz-/Aktualitätsverhalten oder Dienstverfügbarkeit beeinträchtigen."
     evidence = tuple(filter(None, (
         "SettingsRegistry",
         *(f"settings_validation:{validator}" for validator in tuple(row.get("validator_ids") or ())),
@@ -716,6 +806,7 @@ def build_setting_help(row: Mapping[str, Any]) -> SettingHelpSpec:
     return SettingHelpSpec(
         short_help=short,
         extended_help=extended,
+        when_help=RICH_WHEN.get(key) if rich else None,
         help_level="rich" if rich else "base",
         search_terms=_search_terms(row, short),
         handbook_ref=_handbook_ref(category),

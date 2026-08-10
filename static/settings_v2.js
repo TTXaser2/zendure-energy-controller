@@ -160,8 +160,8 @@
       if (n('MAX_POWER_STEP_W') < n('REST_SURPLUS_MIN_EXPORT_W')) notices.push({kind:'warning',text:'Der maximale Leistungsschritt liegt unter der Harvest-Entry-Schwelle; Restüberschuss kann bewusst langsamer aufgenommen werden.'});
       if (n('SMOOTHING_FACTOR') < .10 || interval >= 10) notices.push({kind:'warning',text:'Harvest-Reaktion ist durch starke Glättung oder langes Regelintervall deutlich träge.'});
     }
-    if (categoryName === 'Cross-Charge-Schutz' && n('SECOND_BATTERY_STALE_TIMEOUT_SECONDS') < 5) notices.push({kind:'warning',text:'Sehr kurze Zweitbatterie-Freshness: kurze MQTT-Pausen können den Schutz unnötig früh blockieren.'});
-    if (categoryName === 'Kommandowirkung & Resync' && n('COMMAND_RESYNC_COOLDOWN_SECONDS') === 0) notices.push({kind:'warning',text:'Resync-Cooldown ist 0 s. Dadurch können Recovery-Publishes sehr häufig wiederholt werden.'});
+    if (categoryName === 'Cross-Charge-Schutz' && n('SECOND_BATTERY_STALE_TIMEOUT_SECONDS') < 5) notices.push({kind:'warning',text:'Sehr kurze Zweitbatterie-Aktualität: kurze MQTT-Pausen können den Schutz unnötig früh blockieren.'});
+    if (categoryName === 'Kommandowirkung & Resync' && n('COMMAND_RESYNC_COOLDOWN_SECONDS') === 0) notices.push({kind:'warning',text:'Resync-Wartezeit ist 0 s. Dadurch können Wiederherstellungs-Publishes sehr häufig wiederholt werden.'});
     if (categoryName === 'Nachtbetrieb' && currentByKey('NIGHT_DISCHARGE_ENABLED') === true) {
       if (n('NIGHT_DISCHARGE_POWER_W') <= 0) notices.push({kind:'warning',text:'Nachtbetrieb ist aktiviert, aber die feste Nachtleistung ist 0 W. Die serverseitige Prüfung wird diese Kombination blockieren.'});
       if (n('NIGHT_DISCHARGE_POWER_W') > n('MAX_DISCHARGE_POWER_W')) notices.push({kind:'warning',text:'Die feste Nachtleistung liegt über der globalen maximalen Entladeleistung und wird beim Preview blockiert.'});
@@ -203,15 +203,15 @@
   }
   function lockCategoryDrawerScroll() {
     if (document.body.classList.contains('category-drawer-open')) return;
-    app.drawerScrollY = window.scrollY || document.documentElement.scrollTop || 0;
-    document.body.style.top = `-${app.drawerScrollY}px`;
+    const main = $('.settings-main');
+    app.drawerScrollY = categoryDrawerIsMobile() ? (main?.scrollTop || 0) : (window.scrollY || document.documentElement.scrollTop || 0);
     document.body.classList.add('category-drawer-open');
   }
   function unlockCategoryDrawerScroll() {
     if (!document.body.classList.contains('category-drawer-open')) return;
     document.body.classList.remove('category-drawer-open');
-    document.body.style.top = '';
-    window.scrollTo({top:app.drawerScrollY, left:0, behavior:'auto'});
+    if (categoryDrawerIsMobile()) { const main = $('.settings-main'); if (main) main.scrollTop = app.drawerScrollY || 0; }
+    else window.scrollTo({top:app.drawerScrollY, left:0, behavior:'auto'});
   }
   function setCategoryDrawerOpen(open) {
     const sidebar = $('.settings-sidebar');
@@ -477,25 +477,53 @@
     const help = s.help || {};
     const deps = (help.dependencies || []).map(dep => `${dep.relation || ''} ${dep.key || ''} ${settingByKey(dep.key)?.label || ''}`).join(' ');
     const optionText = (help.option_help || []).map(o => `${o.value || ''} ${o.text || ''}`).join(' ');
-    return [s.label,s.key,s._category,s._section,s.description,help.short,help.extended,help.formula,help.override,help.risk,(help.search_terms||[]).join(' '),deps,optionText].filter(Boolean).join(' ').toLowerCase();
+    return [s.label,s.key,s._category,s._section,s.description,help.short,help.extended,help.when,help.formula,help.override,help.risk,(help.search_terms||[]).join(' '),deps,optionText].filter(Boolean).join(' ').toLowerCase();
   }
-  function searchReason(s, query) {
-    const q = query.toLowerCase();
-    if (String(s.label||'').toLowerCase().includes(q)) return null;
-    if (String(s.key||'').toLowerCase().includes(q)) return 'Config-Key';
-    if (String(s._section||'').toLowerCase().includes(q)) return 'Abschnitt';
-    const term = (s.help?.search_terms || []).find(term => String(term).toLowerCase().includes(q));
-    if (term) return String(term);
-    if (String(s.help?.formula||'').toLowerCase().includes(q)) return 'Formel';
-    return 'Hilfetext';
+  function normalizedSearchText(value) { return String(value || '').trim().toLowerCase(); }
+  function searchMatch(s, query) {
+    const q = normalizedSearchText(query);
+    if (!q) return null;
+    const label = normalizedSearchText(s.label);
+    const key = normalizedSearchText(s.key);
+    const category = normalizedSearchText(s._category);
+    const section = normalizedSearchText(s._section);
+    const terms = (s.help?.search_terms || []).map(term => normalizedSearchText(term)).filter(Boolean);
+    const exactTerm = terms.find(term => term === q);
+    const termContains = terms.find(term => term.includes(q));
+    const short = normalizedSearchText(s.help?.short);
+    const extended = normalizedSearchText(s.help?.extended);
+    const when = normalizedSearchText(s.help?.when);
+    const formula = normalizedSearchText(s.help?.formula);
+    const override = normalizedSearchText(s.help?.override);
+    const risk = normalizedSearchText(s.help?.risk);
+    const deps = (s.help?.dependencies || []).map(dep => `${dep.relation || ''} ${dep.key || ''} ${settingByKey(dep.key)?.label || ''}`.toLowerCase()).join(' ');
+    const options = (s.help?.option_help || []).map(o => `${o.value || ''} ${o.text || ''}`.toLowerCase()).join(' ');
+    if (label === q) return {score:0, reason:null};
+    if (label.startsWith(q)) return {score:5, reason:null};
+    if (label.includes(q)) return {score:10, reason:null};
+    if (exactTerm) return {score:15, reason:`Synonym: ${exactTerm}`};
+    if (key === q) return {score:20, reason:'Config-Key'};
+    if (key.includes(q)) return {score:25, reason:'Config-Key'};
+    if (termContains) return {score:30, reason:`Suchbegriff: ${termContains}`};
+    if (section.includes(q)) return {score:40, reason:'Abschnitt'};
+    if (category.includes(q)) return {score:45, reason:'Kategorie'};
+    if (short.includes(q)) return {score:60, reason:'Kurz-Hilfe'};
+    if (when.includes(q)) return {score:65, reason:'Wirkbedingungen'};
+    if (override.includes(q)) return {score:68, reason:'Vorrang / Überschreibung'};
+    if (formula.includes(q)) return {score:70, reason:'Formel'};
+    if (deps.includes(q)) return {score:72, reason:'Abhängigkeit'};
+    if (options.includes(q)) return {score:74, reason:'Option'};
+    if (risk.includes(q)) return {score:76, reason:'Sicherheitshinweis'};
+    if (extended.includes(q) || searchHaystack(s).includes(q)) return {score:80, reason:'Hilfetext'};
+    return null;
   }
   function renderSearch() {
     const query = $('#settingsSearch').value.trim().toLowerCase();
     const box = $('#searchResults');
     if (!query) { box.innerHTML = '<div class="empty-state">Suchbegriff eingeben.</div>'; return; }
-    const results = settings().filter(searchVisibleInMode).filter(s => searchHaystack(s).includes(query));
+    const results = settings().filter(searchVisibleInMode).map(s => ({s, match:searchMatch(s, query)})).filter(x => x.match).sort((a,b) => a.match.score - b.match.score || String(a.s.label).localeCompare(String(b.s.label),'de')).map(x => Object.assign({_searchMatch:x.match}, x.s));
     box.innerHTML = `<b>${results.length} Treffer</b>${results.map(s=>{
-      const reason = searchReason(s, query);
+      const reason = s._searchMatch?.reason || null;
       const snippet = s.help?.short || s.description || '';
       return `<button class="search-result" data-result="${esc(s.key)}"><span><strong>${esc(s.label)}</strong><small>${esc(snippet)}</small>${reason?`<em class="search-reason">gefunden über: ${esc(reason)}</em>`:''}</span><span class="result-category">${esc(s._category)}<br>${esc(s._section)}</span></button>`;
     }).join('')}`;
@@ -518,13 +546,20 @@
   }
   function helpText(text) { return text ? `<p>${esc(text)}</p>` : ''; }
   function helpHandbook(ref) {
-    if (!ref?.url) return '';
-    return `<a class="handbook-link" href="${esc(ref.url)}" target="_blank" rel="noopener">Im Handbuch: ${esc(ref.section_title)} · Seite ${esc(ref.page)}</a>`;
+    const links = [];
+    if (ref?.url) links.push(`<a class="handbook-link" href="${esc(ref.url)}" target="_blank" rel="noopener">Im Handbuch: ${esc(ref.section_title)} · Seite ${esc(ref.page)}</a>`);
+    const glossary = app.model?.glossary;
+    if (glossary?.url) links.push(`<a class="handbook-link" href="${esc(glossary.url)}" target="_blank" rel="noopener">Begriffe & Abkürzungen · Seite ${esc(glossary.page)}</a>`);
+    return links.length ? `<div class="help-handbook-links">${links.join('')}</div>` : '';
   }
   function defaultHelpHtml(s) {
-    const meta = s.default_ui?.meta || '';
-    const action = s.default_ui?.action ? ` Verfügbare Aktion: ${s.default_ui.action}.` : '';
-    return helpText(`${meta || 'Kein allgemeines Reset-Ziel.'}${action}`);
+    const meta = String(s.default_ui?.meta || '').trim();
+    const action = String(s.default_ui?.action || '').trim();
+    const rows = [];
+    rows.push(`<div><b>Einordnung</b><span>${esc(meta || 'Kein allgemeines Reset-Ziel verfügbar.')}</span></div>`);
+    if (action) rows.push(`<div><b>Verfügbare Aktion</b><span>${esc(action)}</span></div>`);
+    else rows.push('<div><b>Reset</b><span>Für diese Einstellung gibt es bewusst kein allgemeines Reset-Ziel.</span></div>');
+    return `<div class="help-kv-list">${rows.join('')}</div>`;
   }
   function dependencyHelpHtml(s) {
     const deps = s.help?.dependencies || [];
@@ -558,7 +593,7 @@
     const rows = [];
     if (s.minimum !== null || s.maximum !== null) rows.push(`<div><b>Wertebereich</b><span>${esc(s.minimum ?? '−∞')} bis ${esc(s.maximum ?? '∞')}${s.unit?` ${esc(s.unit)}`:''}</span></div>`);
     if (s.options?.length) rows.push(`<div><b>Zulässige Werte</b><span>${s.options.map(o=>esc(o.label)).join(' · ')}</span></div>`);
-    if (s.validation_text) rows.push(`<div><b>Serververtrag</b><span>${esc(s.validation_text)}</span></div>`);
+    if (s.validation_text) rows.push(`<div><b>Serverseitige Validierungsregel</b><span>${esc(s.validation_text)}</span></div>`);
     return rows.length ? `<div class="help-kv-list">${rows.join('')}</div>` : '';
   }
   function exampleHelpHtml(example) {
@@ -571,7 +606,7 @@
     const validators = s.validator_ids || [];
     const rows = [
       ['Config-Key', s.key], ['Typ / Codec', `${s.value_type} / ${s.codec_id}`],
-      ['Apply-Klasse', s.apply_class], ['Risikoklasse', s.risk || 'nicht klassifiziert'],
+      ['Art der Wirksamkeit', s.apply_class], ['Änderungsrisiko', s.risk || 'nicht klassifiziert'],
       ['Validatoren', validators.length ? validators.join(', ') : 'keine setting-spezifische ID'],
       ['Vertragsquellen', refs.length ? refs.join(' · ') : 'SettingsRegistry'],
     ];
@@ -579,13 +614,14 @@
   }
   function settingHelpBody(s) {
     const h = s.help || {};
-    const when = guidanceForSetting(s).map(x=>x.text).join(' ') || (s.dependency_rule ? 'Die Einstellung wirkt nur, wenn die zugehörige Aktivierungs-/Quellbedingung erfüllt ist.' : 'Die Einstellung wirkt gemäß der unten angegebenen Apply-Semantik und den fachlichen Schutzbedingungen.');
+    const dynamicWhen = guidanceForSetting(s).map(x=>x.text).join(' ');
+    const when = dynamicWhen || h.when || (s.dependency_rule ? 'Die Einstellung wirkt nur, wenn die zugehörige Aktivierungs- oder Quellbedingung erfüllt ist.' : 'Die Einstellung wirkt gemäß der unten angegebenen Wirksamkeitsart und den fachlichen Schutzbedingungen.');
     const body = [
       `<div class="help-context"><span>${esc(s._category)}</span><span>›</span><span>${esc(s._section)}</span>${h.level==='rich'?'<span class="help-level rich">RICH</span>':'<span class="help-level">BASE</span>'}</div>`,
       helpSection('Kurz erklärt', helpText(h.short || s.description)),
       helpSection('Wann wirkt die Einstellung?', helpText(when)),
       helpSection('Wirkung bei Änderung', effectHelpHtml(s)),
-      helpSection('Abhängigkeiten & Overrides', `${dependencyHelpHtml(s)}${h.override?`<div class="help-callout override"><b>Override</b><span>${esc(h.override)}</span></div>`:''}`),
+      helpSection('Abhängigkeiten & Vorrangregeln', `${dependencyHelpHtml(s)}${h.override?`<div class="help-callout override"><b>Vorrang / Überschreibung</b><span>${esc(h.override)}</span></div>`:''}`),
       helpSection('Grenzen / Validierung', validationHelpHtml(s)),
       helpSection('Risiko / Sicherheitswirkung', helpText(h.risk)),
       helpSection('Beispiel / Rechnung', `${h.formula?`<div class="help-formula">${esc(h.formula)}</div>`:''}${exampleHelpHtml(h.example)}`),
@@ -612,10 +648,13 @@
   function openHelpModal(title, bodyHtml, trigger = null) {
     app.helpReturnFocus = trigger || document.activeElement;
     $('#helpTitle').textContent = title;
-    $('#helpBody').innerHTML = bodyHtml;
+    const helpBody = $('#helpBody');
+    helpBody.innerHTML = bodyHtml;
+    helpBody.scrollTop = 0;
     lockHelpScroll();
     $('#helpModal').classList.add('open');
     bindHelpModalActions();
+    requestAnimationFrame(() => { helpBody.scrollTop = 0; });
     $('#helpClose')?.focus({preventScroll:true});
   }
   function closeHelpModal() {
@@ -653,8 +692,11 @@
     const target = settingByKey(key);
     if (!target) return;
     app.pendingHelpTarget = key;
-    $('#helpBody').innerHTML = `<div class="notice info"><b>${esc(target.label)}</b> ist nur im Expertenmodus sichtbar. Der Ansichtsmodus wird nicht automatisch geändert.</div><div class="help-gate-actions"><button type="button" class="admin-action-button" data-help-show-expert="${esc(key)}">Im Expertenmodus anzeigen</button></div>`;
+    const helpBody = $('#helpBody');
+    helpBody.innerHTML = `<div class="notice info"><b>${esc(target.label)}</b> ist nur im Expertenmodus sichtbar. Der Ansichtsmodus wird nicht automatisch geändert.</div><div class="help-gate-actions"><button type="button" class="admin-action-button" data-help-show-expert="${esc(key)}">Im Expertenmodus anzeigen</button></div>`;
+    helpBody.scrollTop = 0;
     bindHelpModalActions();
+    requestAnimationFrame(() => { helpBody.scrollTop = 0; });
   }
   function navigateHelpDependency(key) {
     const target = settingByKey(key);
@@ -703,6 +745,7 @@
   function clearValidationIssues() {
     app.validationIssues = [];
   }
+  function scheduleRenderAfterInput() { requestAnimationFrame(() => render()); }
   function setNightCompound(kind, raw) {
     const pair = NIGHT_COMPOUNDS[kind];
     const parsed = parseTime(raw);
@@ -713,7 +756,7 @@
       app.draft.delete(pair.hour);
       app.draft.delete(pair.minute);
       addValidationIssue({code:'TIME_FORMAT_INVALID',severity:'error',blocking:true,keys:[pair.hour,pair.minute],message:`${NIGHT_COMPOUNDS[kind].label}: Bitte eine gültige Uhrzeit im Format HH:MM zwischen 00:00 und 23:59 eingeben.`});
-      render();
+      scheduleRenderAfterInput();
       return;
     }
     app.compoundDraft.delete(kind);
@@ -721,7 +764,7 @@
     const minuteSpec = settingByKey(pair.minute);
     if (same(parsed.hour, hourSpec.configured)) app.draft.delete(pair.hour); else app.draft.set(pair.hour, parsed.hour);
     if (same(parsed.minute, minuteSpec.configured)) app.draft.delete(pair.minute); else app.draft.set(pair.minute, parsed.minute);
-    render();
+    scheduleRenderAfterInput();
   }
   function bindInputs() {
     $$('[data-night-time]').forEach(el => {
@@ -740,7 +783,7 @@
         app.preview = null;
         clearValidationIssuesForKeys([s.key]);
         validateSingleSetting(s, value, el.value).forEach(addValidationIssue);
-        render();
+        scheduleRenderAfterInput();
       };
     });
     $$('[data-reset]').forEach(button => button.onclick = () => {
@@ -896,6 +939,30 @@
     if (kind) return document.querySelector(`[data-compound="night-${kind}"]`);
     return document.querySelector(`[data-setting="${CSS.escape(key)}"]`);
   }
+  function logicalIssueTargets(keys) {
+    const out = [];
+    const seen = new Set();
+    (keys || []).forEach(key => {
+      const kind = nightCompoundForKey(key);
+      if (kind) {
+        const id = `night:${kind}`;
+        if (!seen.has(id)) { seen.add(id); out.push({id, key:NIGHT_COMPOUNDS[kind].hour, label:NIGHT_COMPOUNDS[kind].label, kind}); }
+        return;
+      }
+      if (!seen.has(key)) { seen.add(key); out.push({id:key, key, label:settingByKey(key)?.label || key, kind:null}); }
+    });
+    return out;
+  }
+  function openIssueHelp(targetId, trigger = null) {
+    if (String(targetId).startsWith('night:')) {
+      const kind = String(targetId).split(':')[1];
+      const pair = NIGHT_COMPOUNDS[kind];
+      const representative = settingByKey(pair?.hour);
+      if (representative) openHelpModal(pair.label, settingHelpBody(representative), trigger);
+      return;
+    }
+    openSettingHelp(targetId, trigger);
+  }
   function jumpToSetting(key) {
     const setting = settingByKey(key);
     if (!setting) return;
@@ -921,10 +988,11 @@
     let out = '';
     if (issues.length) out += `<ul class="issue-list">${issues.map(i=>{
       const keys = (i.keys || []).filter(key => settingByKey(key));
-      const firstKey = keys[0];
+      const targets = logicalIssueTargets(keys);
+      const firstTarget = targets[0];
       const code = app.mode === 'expert' && i.code ? `<span class="issue-code">${esc(i.code)}</span>` : '';
       const source = i.params?.effective_source ? `<div class="issue-source">Wirksame Quelle: <code>${esc(i.params.effective_source)}</code>. Die Hilfe erläutert, welcher Wert in dieser Konstellation Vorrang hat.</div>` : '';
-      const links = keys.length ? `<div class="issue-actions">${keys.map((key,index)=>`<button type="button" class="issue-jump" data-issue-key="${esc(key)}">${index===0?'Zur Einstellung':esc(settingByKey(key)?.label || key)}</button>`).join('')}<button type="button" class="issue-jump issue-why" data-issue-help="${esc(firstKey)}">Warum?</button></div>` : '';
+      const links = targets.length ? `<div class="issue-actions">${targets.map((target,index)=>`<button type="button" class="issue-jump" data-issue-key="${esc(target.key)}">${index===0?'Zur Einstellung':esc(target.label)}</button>`).join('')}<button type="button" class="issue-jump issue-why" data-issue-help="${esc(firstTarget.id)}">Warum?</button></div>` : '';
       return `<li class="${esc(i.severity || 'error')}"><div class="issue-copy"><span>${esc(i.message || 'Die Änderung ist nicht zulässig.')}</span>${source}${code}</div>${links}</li>`;
     }).join('')}</ul>`;
     if (diff.length) out += diff.map(d=>`<div class="diff-row"><div><b>${esc(d.label)}</b><div class="diff-values">${esc(fmt(d.old))} <span class="diff-arrow">→</span> ${esc(fmt(d.new))}</div></div><span class="meta-pill ${d.apply_class==='restart_required'?'restart':'live'}">${esc(d.apply_text)}</span></div>`).join('');
@@ -932,7 +1000,7 @@
     if (confirmations.length) out += confirmations.map(c=>`<label class="confirmation"><input type="checkbox" data-confirm="${esc(c)}"><span>Hinweis <b>${esc(c)}</b> wurde geprüft und wird bewusst bestätigt.</span></label>`).join('');
     $('#previewBody').innerHTML = out;
     $$('[data-issue-key]').forEach(button => button.onclick = () => jumpToSetting(button.dataset.issueKey));
-    $$('[data-issue-help]').forEach(button => button.onclick = () => openSettingHelp(button.dataset.issueHelp, button));
+    $$('[data-issue-help]').forEach(button => button.onclick = () => openIssueHelp(button.dataset.issueHelp, button));
     $('#commitChanges').disabled = p.status !== 'ready' || !p.preview_id;
     $('#commitChanges').textContent = p.status === 'ready' && p.preview_id ? 'Speichern' : 'Speichern nicht möglich';
     $('#previewBack').textContent = 'Zurück';

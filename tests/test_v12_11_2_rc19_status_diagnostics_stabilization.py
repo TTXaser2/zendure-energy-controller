@@ -73,8 +73,8 @@ def payload(cfg, snap):
 
 class Rc19StatusTextTests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual("12.12.0", version.APP_VERSION)
-        self.assertEqual("V12.12.0", version.APP_VERSION_LABEL)
+        self.assertEqual("12.12.1", version.APP_VERSION)
+        self.assertEqual("V12.12.1", version.APP_VERSION_LABEL)
 
     def test_discharge_path_is_not_misclassified_as_charge(self):
         snap = {

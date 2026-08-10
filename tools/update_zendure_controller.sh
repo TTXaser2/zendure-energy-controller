@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/root_artifact_transaction.sh"
 
 VERSION="${1:-}"
-EXPECTED_VERSION="v12_12_0"
+EXPECTED_VERSION="v12_12_1"
 EXPECTED_SOURCE_RC19="12.11.2-rc19"
 EXPECTED_SOURCE_FIX5_VERSION="12.11.2-rc20"
 EXPECTED_SOURCE_FIX5_BUILD_ID="rc20-audit-fix5-20260806"
@@ -21,10 +21,12 @@ EXPECTED_SOURCE_V12116_VERSION="12.11.6"
 EXPECTED_SOURCE_V12116_BUILD_ID="v12.11.6-20260808"
 EXPECTED_SOURCE_V12117_VERSION="12.11.7"
 EXPECTED_SOURCE_V12117_BUILD_ID="v12.11.7-20260808"
-EXPECTED_TARGET_BUILD_ID="v12.12.0-20260809"
+EXPECTED_SOURCE_V12120_VERSION="12.12.0"
+EXPECTED_SOURCE_V12120_BUILD_ID="v12.12.0-20260809"
+EXPECTED_TARGET_BUILD_ID="v12.12.1-20260810"
 
 if [ "$VERSION" != "$EXPECTED_VERSION" ]; then
-    echo "FEHLER: Dieses Update-Skript unterstützt V12.11.7 sowie die dokumentierten kompatiblen Recovery-Ausgangsstände als Quelle für V12.12.0."
+    echo "FEHLER: Dieses Update-Skript unterstützt V12.12.0 sowie die dokumentierten kompatiblen Recovery-Ausgangsstände als Quelle für V12.12.1."
     echo "Aufruf: $0 ${EXPECTED_VERSION}"
     exit 1
 fi
@@ -34,8 +36,8 @@ DIR="/home/pi/Downloads/zendure_controller_${VERSION}"
 TARGET="/opt/zendure-controller"
 STAMP="$(date +%Y%m%d_%H%M%S)"
 BACKUP="/home/pi/zendure-controller-backup-${STAMP}.tar.gz"
-CONFIG_BACKUP="/home/pi/config.pre-v12.12.0.${STAMP}.json"
-ROOT_ARTIFACT_BACKUP="/var/backups/zec-v12.12.0-root-artifacts-${STAMP}"
+CONFIG_BACKUP="/home/pi/config.pre-v12.12.1.${STAMP}.json"
+ROOT_ARTIFACT_BACKUP="/var/backups/zec-v12.12.1-root-artifacts-${STAMP}"
 RESTART_HELPER_DEST="/usr/local/sbin/zendure-controller-restart"
 SUDOERS_DEST="/etc/sudoers.d/zendure-controller"
 ROLLBACK_STARTED=0
@@ -100,11 +102,11 @@ recover_on_error() {
     ROLLBACK_STARTED=1
     echo
     if [ "$INSTALLATION_STARTED" -eq 0 ]; then
-        echo "FEHLER: V12.12.0-Paketvorprüfung wurde abgebrochen."
+        echo "FEHLER: V12.12.1-Paketvorprüfung wurde abgebrochen."
         echo "Die Produktivinstallation wurde noch nicht begonnen; Dienste und /opt/zendure-controller blieben unverändert."
         exit "$exit_code"
     fi
-    echo "FEHLER: V12.12.0-Update wurde während der Produktivinstallation abgebrochen. Starte automatischen Rollback."
+    echo "FEHLER: V12.12.1-Update wurde während der Produktivinstallation abgebrochen. Starte automatischen Rollback."
     sudo systemctl stop zendure-controller.service zendure-replay.service zendure-status-preview.service >/dev/null 2>&1 || true
     if [ "$BACKUP_CREATED" -eq 1 ] && [ -f "$BACKUP" ]; then
         sudo rm -rf "$TARGET"
@@ -131,14 +133,14 @@ recover_on_error() {
 trap 'recover_on_error $?' ERR
 
 verify_source_manifest() {
-    [ -f "$DIR/V12_12_0_SOURCE_MANIFEST.sha256" ] || {
-        echo "FEHLER: V12_12_0_SOURCE_MANIFEST.sha256 fehlt im Paket."
+    [ -f "$DIR/V12_12_1_SOURCE_MANIFEST.sha256" ] || {
+        echo "FEHLER: V12_12_1_SOURCE_MANIFEST.sha256 fehlt im Paket."
         return 1
     }
     (
         trap - ERR
         cd "$DIR"
-        sha256sum -c V12_12_0_SOURCE_MANIFEST.sha256 >/dev/null
+        sha256sum -c V12_12_1_SOURCE_MANIFEST.sha256 >/dev/null
     )
 }
 
@@ -196,6 +198,8 @@ elif [ "$INSTALLED_VERSION" = "$EXPECTED_SOURCE_FIX6_VERSION" ] && [ "$INSTALLED
     SOURCE_MODE="RC20_FIX6"
 elif [ "$INSTALLED_VERSION" = "$EXPECTED_SOURCE_V12113_VERSION" ] && [ "$INSTALLED_BUILD_ID" = "$EXPECTED_SOURCE_V12113_BUILD_ID" ]; then
     SOURCE_MODE="V12_11_3"
+elif [ "$INSTALLED_VERSION" = "$EXPECTED_SOURCE_V12120_VERSION" ] && [ "$INSTALLED_BUILD_ID" = "$EXPECTED_SOURCE_V12120_BUILD_ID" ]; then
+    SOURCE_MODE="V12_12_0"
 elif [ "$INSTALLED_VERSION" = "$EXPECTED_SOURCE_V12117_VERSION" ] && [ "$INSTALLED_BUILD_ID" = "$EXPECTED_SOURCE_V12117_BUILD_ID" ]; then
     SOURCE_MODE="V12_11_7"
 elif [ "$INSTALLED_VERSION" = "$EXPECTED_SOURCE_V12116_VERSION" ] && [ "$INSTALLED_BUILD_ID" = "$EXPECTED_SOURCE_V12116_BUILD_ID" ]; then
@@ -206,7 +210,7 @@ elif [ "$INSTALLED_VERSION" = "$EXPECTED_SOURCE_V12114_VERSION" ] && [ "$INSTALL
     SOURCE_MODE="V12_11_4"
 else
     echo "FEHLER: Nicht unterstützter Ausgangsstand: Version=${INSTALLED_VERSION}, Build-ID=${INSTALLED_BUILD_ID:-nicht gesetzt}"
-    echo "Erlaubt sind exakt V12.11.7, V12.11.6, V12.11.5, V12.11.4, V12.11.3, RC20 Fix 6, RC20 Fix 5 oder RC19."
+    echo "Erlaubt sind exakt V12.12.0, V12.11.7, V12.11.6, V12.11.5, V12.11.4, V12.11.3, RC20 Fix 6, RC20 Fix 5 oder RC19."
     exit 1
 fi
 echo "Ausgangsstand erkannt: ${SOURCE_MODE} (${INSTALLED_VERSION}${INSTALLED_BUILD_ID:+ / ${INSTALLED_BUILD_ID}})"
@@ -215,7 +219,7 @@ if systemctl is-active --quiet zendure-controller.service; then CONTROLLER_WAS_A
 if systemctl is-active --quiet zendure-replay.service; then REPLAY_WAS_ACTIVE=1; fi
 if systemctl is-active --quiet zendure-status-preview.service; then PREVIEW_WAS_ACTIVE=1; fi
 
-echo "V12.12.0-Paket vor dem Stoppen des Produktivdienstes entpacken und prüfen..."
+echo "V12.12.1-Paket vor dem Stoppen des Produktivdienstes entpacken und prüfen..."
 rm -rf "$DIR"
 unzip -q "$ZIP" -d /home/pi/Downloads
 [ -d "$DIR" ] || { echo "FEHLER: erwarteter ZIP-Root fehlt: $DIR"; exit 1; }
@@ -235,7 +239,7 @@ PY
 mapfile -t PACKAGE_IDENTITY < <(read_package_identity)
 TARGET_PACKAGE_VERSION="${PACKAGE_IDENTITY[0]:-}"
 TARGET_PACKAGE_BUILD_ID="${PACKAGE_IDENTITY[1]:-}"
-[ "$TARGET_PACKAGE_VERSION" = "12.12.0" ] || { echo "FEHLER: Paket meldet Version ${TARGET_PACKAGE_VERSION}"; exit 1; }
+[ "$TARGET_PACKAGE_VERSION" = "12.12.1" ] || { echo "FEHLER: Paket meldet Version ${TARGET_PACKAGE_VERSION}"; exit 1; }
 [ "$TARGET_PACKAGE_BUILD_ID" = "$EXPECTED_TARGET_BUILD_ID" ] || { echo "FEHLER: Paket meldet Build-ID ${TARGET_PACKAGE_BUILD_ID}"; exit 1; }
 
 verify_source_manifest
@@ -268,7 +272,7 @@ cp "$TARGET/config.json" "$CONFIG_BACKUP"
 chmod 600 "$CONFIG_BACKUP"
 backup_root_artifacts
 
-echo "Kopiere V12.12.0-Dateien; config.json, Last-Good und Laufzeitdaten bleiben erhalten..."
+echo "Kopiere V12.12.1-Dateien; config.json, Last-Good und Laufzeitdaten bleiben erhalten..."
 rsync -a \
   --exclude 'config.json' \
   --exclude 'config.json.last-good*' \
@@ -364,7 +368,7 @@ elif [ "$TRANSITIONAL_ACCEPTED" -eq 1 ]; then
     echo "Kein Rollback: Controller, Datenquellen, Command-State, statische Invarianten und Telemetrie sind gesund."
     [ -s "$READY_JSON" ] && cat "$READY_JSON"
 else
-    echo "FEHLER: V12.12.0 erreichte weder ready=true noch einen stabilen sicheren Übergangszustand."
+    echo "FEHLER: V12.12.1 erreichte weder ready=true noch einen stabilen sicheren Übergangszustand."
     [ -s "$READY_JSON" ] && cat "$READY_JSON"
     journalctl -u zendure-controller.service --since "@$INSTALL_START_EPOCH" --no-pager || true
     false
@@ -375,7 +379,7 @@ cleanup_tmp
 trap - EXIT
 
 echo "Update abgeschlossen und Installations-Abnahme erfolgreich."
-echo "V12.12.0 erfolgreich installiert."
+echo "V12.12.1 erfolgreich installiert."
 echo "Backup: $BACKUP"
 echo "Config-Backup: $CONFIG_BACKUP"
 echo "Root-Artefakt-Backup: $ROOT_ARTIFACT_BACKUP"

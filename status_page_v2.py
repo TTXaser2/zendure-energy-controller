@@ -404,7 +404,7 @@ def render_status_page_v2(
     </section>
   </main>
 
-  <div id="zecInfoPopover" class="zec-info-popover" hidden><strong id="zecInfoTitle"></strong><div id="zecInfoText"></div></div>
+  <div id="zecInfoPopover" class="zec-info-popover" hidden><div class="zec-info-popover-head"><strong id="zecInfoTitle"></strong><button id="zecInfoClose" class="zec-info-popover-close" type="button" aria-label="Information schließen">×</button></div><div id="zecInfoText" class="zec-info-popover-body"></div></div>
   <script>window.ZEC_BOOTSTRAP={bootstrap};</script>
   <script src="/static/status_v2.js?v={_e(APP_VERSION_LABEL)}"></script>
 </body>

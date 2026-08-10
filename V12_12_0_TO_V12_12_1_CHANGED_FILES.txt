@@ -1,0 +1,55 @@
+ZEC V12.12.0 -> V12.12.1
+
+NEW (9)
++ BUILD_VALIDATION_V12_12_1.md
++ RELEASE_INFO_V12_12_1.md
++ SPEZIFIKATION_ZEC_V12_12_1_HELP_MOBILE_QUALITY_FINAL.md
++ TECHNICAL_NOTES_V12_12_1.md
++ V12_12_0_TO_V12_12_1_CHANGED_FILES.txt
++ V12_12_1_SOURCE_MANIFEST.sha256
++ ZEC_V12_12_1_RELEASE_REPORT.md
++ tests/test_v12_12_1_help_mobile_quality.py
++ tests/test_v12_12_1_installer_readiness_acceptance.py
+
+CHANGED (35)
+~ README.md
+~ README_INSTALLATION.md
+~ docs/Zendure_Energy_Controller_Handbuch.docx
+~ docs/Zendure_Energy_Controller_Handbuch.pdf
+~ generated/SETTINGS_REGISTRY_SNAPSHOT.json
+~ settings_help.py
+~ settings_model.py
+~ settings_registry.py
+~ static/settings_v2.css
+~ static/settings_v2.js
+~ static/status_v2.css
+~ static/status_v2.js
+~ status_page_v2.py
+~ tests/test_v12_11_2_rc10_status_preview.py
+~ tests/test_v12_11_2_rc19_status_diagnostics_stabilization.py
+~ tests/test_v12_11_2_rc20_fix5_runtime_readiness.py
+~ tests/test_v12_11_2_rc20_release_integration.py
+~ tests/test_v12_11_2_rc2_ui_polish.py
+~ tests/test_v12_11_2_rc4_ui_polish.py
+~ tests/test_v12_11_2_rc5_operations_dashboard.py
+~ tests/test_v12_11_2_rc6_ui_diagnostics_hotfix.py
+~ tests/test_v12_11_2_rc7_backlog_release.py
+~ tests/test_v12_11_2_rc8_backlog_completion.py
+~ tests/test_v12_11_2_rc9_ui_semantics.py
+~ tests/test_v12_11_5_settings_bugfix.py
+~ tests/test_v12_11_rc13_support_tools.py
+~ tests/test_v12_11_rc14_ui_polish.py
+~ tests/test_v12_11_rc15_ui_graph.py
+~ tests/test_v12_11_rc16_performance.py
+~ tests/test_v12_11_rc17_sqlite_store.py
+~ tests/test_v12_11_rc18_import_tool.py
+~ tests/test_v12_12_0_settings_help_guided_configuration.py
+~ tools/evaluate_installation_readiness.py
+~ tools/update_zendure_controller.sh
+~ version.py
+
+DELETED / REPLACED (2)
+- V12_12_0_SOURCE_MANIFEST.sha256
+- tests/test_v12_12_0_installer_readiness_acceptance.py
+
+Hinweis: keine geschützte Regler-/Command-/Measurementdatei wurde funktional geändert.

@@ -184,3 +184,18 @@ html[data-theme="dark"] .zec-wordmark{color:#f4f7fb}
 .zec-info-grid b{font-weight:700;color:var(--zec-text);text-align:right;overflow-wrap:anywhere}
 .zec-info-note{margin:7px 0 0;padding:8px 10px;border-radius:8px;background:color-mix(in srgb,var(--zec-blue-soft) 68%,transparent);color:var(--zec-muted);line-height:1.5}
 @media(max-width:620px){.zec-info-popover{width:calc(100vw - 16px);max-height:72vh}.zec-info-grid{grid-template-columns:1fr;gap:2px}.zec-info-grid b{text-align:left;margin-bottom:5px}}
+
+
+/* V12.12.1 info-popover scrolling and mobile panel hardening. */
+.zec-info-popover{display:flex;flex-direction:column;overflow:hidden;max-height:min(78vh,720px);padding:0}
+.zec-info-popover[hidden]{display:none}
+.zec-info-popover-head{display:flex;align-items:center;gap:12px;padding:13px 14px 10px;border-bottom:1px solid var(--zec-card-border);background:var(--zec-card-bg);flex:none}
+.zec-info-popover-head>strong{font-size:15px;margin:0;color:var(--zec-text);flex:1;min-width:0}
+.zec-info-popover-close{width:32px;height:32px;border:0;border-radius:8px;background:transparent;color:var(--zec-text);font-size:23px;line-height:1;cursor:pointer;flex:none}
+.zec-info-popover-close:hover,.zec-info-popover-close:focus-visible{background:var(--zec-page-bg);outline:2px solid color-mix(in srgb,var(--zec-blue) 30%,transparent);outline-offset:1px}
+.zec-info-popover-body{padding:4px 16px 14px;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;min-height:0;color:var(--zec-text)}
+@media(max-width:620px){
+  .zec-info-popover.is-mobile-panel{position:fixed;left:8px!important;right:8px!important;top:auto!important;bottom:max(8px,env(safe-area-inset-bottom));width:auto;max-height:calc(100dvh - 24px);border-radius:16px;box-shadow:0 20px 55px rgba(15,23,42,.3)}
+  .zec-info-popover.is-mobile-panel .zec-info-popover-head{position:sticky;top:0;z-index:1;padding:14px 16px 11px}
+  .zec-info-popover.is-mobile-panel .zec-info-popover-body{padding:4px 16px calc(18px + env(safe-area-inset-bottom))}
+}

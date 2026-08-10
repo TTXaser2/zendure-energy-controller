@@ -54,7 +54,8 @@
           "MANUAL",
           "MODE"
         ],
-        "short": "Automatik überlässt die Leistung der normalen Netz-/PV-Regelung. Stop/Hold setzt Lade- und Entladeleistung auf 0 W und hält diesen Zustand, bis hier wieder ein anderer Modus gespeichert wird. Feste Entladung oder Beladung übersteuern die Automatik bis zum eingestellten Ziel-SOC."
+        "short": "Automatik überlässt die Leistung der normalen Netz-/PV-Regelung. Stop/Hold setzt Lade- und Entladeleistung auf 0 W und hält diesen Zustand, bis hier wieder ein anderer Modus gespeichert wird. Feste Entladung oder Beladung übersteuern die Automatik bis zum eingestellten Ziel-SOC.",
+        "when": "Die Betriebsart wird in jedem Regelzyklus vor Nacht- und AUTO-Regelung ausgewertet. Ein manueller Modus ungleich AUTO hat Vorrang vor beiden; Schutz- und Safe-State-Bedingungen können das angeforderte Ziel weiterhin begrenzen oder neutralisieren."
       },
       "key": "MANUAL_MODE",
       "label": "Manueller Betriebsmodus",
@@ -135,7 +136,8 @@
           "AFTER",
           "TARGET"
         ],
-        "short": "Legt fest, was passiert, sobald der Ziel-SOC der festen Entladung erreicht ist. Automatik aktiviert wieder die normale Regelung; Stop/Hold setzt beide Leistungen auf 0 W und bleibt dort."
+        "short": "Legt fest, was passiert, sobald der Ziel-SOC der festen Entladung erreicht ist. Automatik aktiviert wieder die normale Regelung; Stop/Hold setzt beide Leistungen auf 0 W und bleibt dort.",
+        "when": "Die Folgeaktion wird genau dann ausgewertet, wenn eine aktive feste Entladung ihren Ziel-SOC erreicht. AUTO gibt anschließend wieder an die normale Regelung zurück; STOP/HOLD fordert aktive 0-W-Neutralität."
       },
       "key": "MANUAL_DISCHARGE_AFTER_TARGET",
       "label": "Nach Entlade-Ziel",
@@ -205,7 +207,8 @@
           "DISCHARGE",
           "POWER"
         ],
-        "short": "Leistung für den manuellen Modus Feste Entladung. Der Controller begrenzt diesen Wert zusätzlich auf die konfigurierte maximale Entladeleistung."
+        "short": "Leistung für den manuellen Modus Feste Entladung. Der Controller begrenzt diesen Wert zusätzlich auf die konfigurierte maximale Entladeleistung.",
+        "when": "Der Wert wird nur verwendet, wenn MANUAL_MODE auf Feste Entladung steht, der aktuelle Zendure-SOC gültig ist und das Entlade-Ziel noch nicht erreicht wurde. Die globale maximale Entladeleistung und der Mindest-SOC bleiben harte Grenzen."
       },
       "key": "MANUAL_FIXED_DISCHARGE_POWER_W",
       "label": "Feste Entladeleistung",
@@ -270,7 +273,8 @@
           "TARGET",
           "SOC"
         ],
-        "short": "Ziel-SOC für die feste Entladung. Zur Laufzeit wird dieser Wert mindestens auf den konfigurierten Min Zendure SOC angehoben, damit die allgemeine Akku-Schutzgrenze nicht unterschritten wird."
+        "short": "Ziel-SOC für die feste Entladung. Zur Laufzeit wird dieser Wert mindestens auf den konfigurierten Min Zendure SOC angehoben, damit die allgemeine Akku-Schutzgrenze nicht unterschritten wird.",
+        "when": "Der Ziel-SOC wird nur im manuellen Modus Feste Entladung ausgewertet. Er muss unter dem aktuellen SOC liegen und darf die globale MIN-SOC-Grenze nicht unterschreiten."
       },
       "key": "MANUAL_FIXED_DISCHARGE_TARGET_SOC",
       "label": "Entladen bis Zendure SOC",
@@ -333,7 +337,8 @@
           "AFTER",
           "TARGET"
         ],
-        "short": "Legt fest, was passiert, sobald der Ziel-SOC der festen Beladung erreicht ist. Automatik aktiviert wieder die normale Regelung; Stop/Hold setzt beide Leistungen auf 0 W und bleibt dort."
+        "short": "Legt fest, was passiert, sobald der Ziel-SOC der festen Beladung erreicht ist. Automatik aktiviert wieder die normale Regelung; Stop/Hold setzt beide Leistungen auf 0 W und bleibt dort.",
+        "when": "Die Folgeaktion wird genau dann ausgewertet, wenn eine aktive feste Ladung ihren Ziel-SOC erreicht. AUTO gibt anschließend wieder an die normale Regelung zurück; STOP/HOLD fordert aktive 0-W-Neutralität."
       },
       "key": "MANUAL_CHARGE_AFTER_TARGET",
       "label": "Nach Lade-Ziel",
@@ -403,7 +408,8 @@
           "CHARGE",
           "POWER"
         ],
-        "short": "Leistung für den manuellen Modus Feste Beladung. Der Controller begrenzt diesen Wert zusätzlich auf die konfigurierte maximale Ladeleistung."
+        "short": "Leistung für den manuellen Modus Feste Beladung. Der Controller begrenzt diesen Wert zusätzlich auf die konfigurierte maximale Ladeleistung.",
+        "when": "Der Wert wird nur verwendet, wenn MANUAL_MODE auf Feste Ladung steht, der aktuelle Zendure-SOC gültig ist und das Lade-Ziel noch nicht erreicht wurde. Die globale maximale Ladeleistung und der Maximal-SOC bleiben harte Grenzen."
       },
       "key": "MANUAL_FIXED_CHARGE_POWER_W",
       "label": "Feste Ladeleistung",
@@ -468,7 +474,8 @@
           "TARGET",
           "SOC"
         ],
-        "short": "Ziel-SOC für die feste Beladung. Zur Laufzeit wird dieser Wert höchstens auf den konfigurierten Max Zendure SOC abgesenkt, damit die allgemeine obere Akku-Grenze eingehalten wird."
+        "short": "Ziel-SOC für die feste Beladung. Zur Laufzeit wird dieser Wert höchstens auf den konfigurierten Max Zendure SOC abgesenkt, damit die allgemeine obere Akku-Grenze eingehalten wird.",
+        "when": "Der Ziel-SOC wird nur im manuellen Modus Feste Ladung ausgewertet. Er muss über dem aktuellen SOC liegen und darf die globale MAX-SOC-Grenze nicht überschreiten."
       },
       "key": "MANUAL_FIXED_CHARGE_TARGET_SOC",
       "label": "Laden bis Zendure SOC",
@@ -529,7 +536,8 @@
           "CAPACITY",
           "KWH"
         ],
-        "short": "Konfiguration für ZENDURE_BATTERY_CAPACITY_KWH."
+        "short": "Konfiguration für ZENDURE_BATTERY_CAPACITY_KWH.",
+        "when": null
       },
       "key": "ZENDURE_BATTERY_CAPACITY_KWH",
       "label": "ZENDURE_BATTERY_CAPACITY_KWH",
@@ -592,7 +600,8 @@
           "BATTERY",
           "CAPACITY"
         ],
-        "short": "Gesamtkapazität der installierten Zendure-Batterien in Wh für Prognose und Diagnose. Leer bedeutet: Kapazität ist nicht bekannt; ZEC erfindet keinen Anlagenwert."
+        "short": "Gesamtkapazität der installierten Zendure-Batterien in Wh für Prognose und Diagnose. Leer bedeutet: Kapazität ist nicht bekannt; ZEC erfindet keinen Anlagenwert.",
+        "when": null
       },
       "key": "ZENDURE_BATTERY_CAPACITY_WH",
       "label": "Zendure Batteriekapazität für Prognose",
@@ -652,7 +661,8 @@
           "Gerätezuordnung",
           "DEVICE"
         ],
-        "short": "Identifier der Zendure Headunit für die MQTT-Topics."
+        "short": "Identifier der Zendure Headunit für die MQTT-Topics.",
+        "when": null
       },
       "key": "DEVICE_ID",
       "label": "Zendure Device ID",
@@ -714,7 +724,8 @@
           "CHARGE",
           "POWER"
         ],
-        "short": "Maximale Leistung, mit der Zendure bei PV-Überschuss geladen werden darf."
+        "short": "Maximale Leistung, mit der Zendure bei PV-Überschuss geladen werden darf.",
+        "when": "Die Grenze wirkt in jedem Zweig, der Zendure-Ladung anfordern kann: AUTO, Harvest und feste Ladung. Sie begrenzt den berechneten Zielwert unabhängig davon, welcher Zweig ihn erzeugt hat."
       },
       "key": "MAX_CHARGE_POWER_W",
       "label": "Max Ladeleistung",
@@ -775,7 +786,8 @@
           "DISCHARGE",
           "POWER"
         ],
-        "short": "Maximale Leistung, mit der Zendure das Haus versorgen darf."
+        "short": "Maximale Leistung, mit der Zendure das Haus versorgen darf.",
+        "when": "Die Grenze wirkt in jedem Zweig, der Zendure-Entladung anfordern kann: AUTO, Nachtbetrieb und feste Entladung. Sie begrenzt den berechneten Zielwert unabhängig davon, welcher Zweig ihn erzeugt hat."
       },
       "key": "MAX_DISCHARGE_POWER_W",
       "label": "Max Entladeleistung",
@@ -837,7 +849,8 @@
           "SOC",
           "PERCENT"
         ],
-        "short": "Ab diesem SOC wird Ladung verhindert."
+        "short": "Ab diesem SOC wird Ladung verhindert.",
+        "when": "Die Obergrenze wird bei allen Ladeentscheidungen geprüft. Erreichen der Grenze ist bei gültigen Daten ein normaler Schutz-/HOLD-Zustand; Ladeprofile dürfen sie nicht überschreiten."
       },
       "key": "MAX_SOC_PERCENT",
       "label": "Max Zendure SOC",
@@ -903,7 +916,8 @@
           "SOC",
           "PERCENT"
         ],
-        "short": "Unterhalb dieses SOC wird Entladung verhindert."
+        "short": "Unterhalb dieses SOC wird Entladung verhindert.",
+        "when": "Die Untergrenze wird bei allen Entladeentscheidungen geprüft. Erreichen der Grenze ist bei gültigen Daten ein normaler Schutz-/HOLD-Zustand; Entladeprofile und Nachtreserve dürfen sie nicht unterschreiten."
       },
       "key": "MIN_SOC_PERCENT",
       "label": "Min Zendure SOC",
@@ -977,7 +991,8 @@
           "COMMAND",
           "CHANGE"
         ],
-        "short": "MQTT-Leistungsbefehle werden nur gesendet, wenn sich der Wert mindestens um diesen Betrag ändert. 0 deaktiviert die Optimierung."
+        "short": "MQTT-Leistungsbefehle werden nur gesendet, wenn sich der Wert mindestens um diesen Betrag ändert. 0 deaktiviert die Optimierung.",
+        "when": "Der Wert wirkt erst im Commandpfad nach der internen Zielwertberechnung. Er entscheidet, ob eine kleine Zielwertänderung tatsächlich erneut per MQTT publiziert werden muss."
       },
       "key": "MIN_COMMAND_CHANGE_W",
       "label": "Mindeständerung MQTT",
@@ -1041,7 +1056,8 @@
           "AVERAGE",
           "SAMPLES"
         ],
-        "short": "Anzahl der Messwerte im gleitenden Mittelwert. Höher = ruhiger, aber träger."
+        "short": "Anzahl der Messwerte im gleitenden Mittelwert. Höher = ruhiger, aber träger.",
+        "when": "Die Mittelwertbildung wirkt auf die für AUTO verwendete Netzleistung, sobald mehrere Messwerte vorliegen. Zusammen mit dem Regelintervall bestimmt die Samplezahl die zeitliche Glättung der Eingangsgröße."
       },
       "key": "MOVING_AVERAGE_SAMPLES",
       "label": "Mittelwertbildung",
@@ -1108,7 +1124,8 @@
           "0 W",
           "Restabweichung"
         ],
-        "short": "Bereich um 0 W Netzleistung, in dem die Leistung gehalten wird. Reduziert Pendeln und MQTT-Kommandos."
+        "short": "Bereich um 0 W Netzleistung, in dem die Leistung gehalten wird. Reduziert Pendeln und MQTT-Kommandos.",
+        "when": "Die Totzone wird in der normalen AUTO-Netzregelung ausgewertet, wenn keine höher priorisierte Betriebs- oder Schutzbedingung greift. Innerhalb der Totzone wird keine unnötige Nachregelung angestrebt; ausdrücklich definierte Harvest-Spezialzweige besitzen eigene Eintrittsbedingungen."
       },
       "key": "DEADBAND_W",
       "label": "Netz-Totzone um 0 W",
@@ -1171,7 +1188,8 @@
           "FOR",
           "CHARGE"
         ],
-        "short": "Zendure lädt nur, wenn nach Zusatzbatterie-Abzug und Reserve mindestens dieser Überschuss übrig bleibt."
+        "short": "Zendure lädt nur, wenn nach Zusatzbatterie-Abzug und Reserve mindestens dieser Überschuss übrig bleibt.",
+        "when": "Die Schwelle wird bei normaler AUTO-Ladung geprüft. Erst wenn nach den relevanten Abzügen und Reserven ausreichend wirksamer Überschuss verbleibt, wird normale AUTO-Ladung freigegeben."
       },
       "key": "MIN_EFFECTIVE_SURPLUS_FOR_CHARGE_W",
       "label": "Mindestüberschuss für normale AUTO-Ladung",
@@ -1238,7 +1256,8 @@
           "MAX",
           "POWER"
         ],
-        "short": "Maximale Änderung der Lade-/Entladeleistung pro Zyklus."
+        "short": "Maximale Änderung der Lade-/Entladeleistung pro Zyklus.",
+        "when": "Die Schrittbegrenzung wirkt bei Zielwertänderungen der normalen Reglerpfade und begrenzt die Änderung von einem Regelzyklus zum nächsten. Sie ersetzt keine absolute Leistungsgrenze."
       },
       "key": "MAX_POWER_STEP_W",
       "label": "Maximale Sollwertänderung je Zyklus",
@@ -1301,7 +1320,8 @@
           "RAMP",
           "DOWN"
         ],
-        "short": "Schrittweite, mit der Zendure-Ladung reduziert wird, wenn der Cross-Charge-Schutz blockiert."
+        "short": "Schrittweite, mit der Zendure-Ladung reduziert wird, wenn der Cross-Charge-Schutz blockiert.",
+        "when": "Die Schrittweite wird nur in den dafür vorgesehenen AUTO-Schutz-/Ramp-down-Pfaden verwendet, wenn eine bestehende Ladung kontrolliert reduziert werden muss. Sie ist nicht die allgemeine Stellschrittgrenze."
       },
       "key": "SMA_GUARD_RAMP_DOWN_W",
       "label": "Schrittweite beim Abbau einer AUTO-Ladung",
@@ -1366,7 +1386,8 @@
           "Nachregelung",
           "CONTROL"
         ],
-        "short": "Reglerverstärkung. 0.30 bedeutet, dass nur 30 % der Abweichung pro Zyklus aufaddiert werden."
+        "short": "Reglerverstärkung. 0.30 bedeutet, dass nur 30 % der Abweichung pro Zyklus aufaddiert werden.",
+        "when": "Der Gain wirkt bei einer aktiven AUTO-Korrektur auf die aktuelle wirksame Netzabweichung. Nach dieser Rohkorrektur folgen Glättung, Schrittbegrenzung, Leistungs-/SOC-Limits, Cross-Charge-Schutz und der Commandpfad."
       },
       "key": "CONTROL_GAIN",
       "label": "Control Gain",
@@ -1433,7 +1454,8 @@
           "Trägheit",
           "FACTOR"
         ],
-        "short": "Zusätzliche Glättung der Zielwerte. 1.0 reagiert sofort, kleinere Werte sind weicher."
+        "short": "Zusätzliche Glättung der Zielwerte. 1.0 reagiert sofort, kleinere Werte sind weicher.",
+        "when": "Die Glättung wirkt nach der Rohzielberechnung auf Änderungen des AUTO-Zielwerts. Sie wird relevant, sobald sich das Rohziel gegenüber dem bisherigen Ziel verändert."
       },
       "key": "SMOOTHING_FACTOR",
       "label": "Smoothing Factor",
@@ -1494,7 +1516,8 @@
           "LOCK",
           "SECONDS"
         ],
-        "short": "Konfiguration für Umschalt-Sperrzeit."
+        "short": "Konfiguration für Umschalt-Sperrzeit.",
+        "when": null
       },
       "key": "MODE_CHANGE_LOCK_SECONDS",
       "label": "Umschalt-Sperrzeit",
@@ -1539,7 +1562,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Nominale Zyklusbasis. Der reale Zyklusabstand besteht aus aktiver Arbeit plus Wartezeit; der Wert beeinflusst gemeinsam mit Mittelwertfenster, Step und Freshness die Reaktionsdynamik.",
+        "extended": "Nominale Zyklusbasis. Der reale Zyklusabstand besteht aus aktiver Arbeit plus Wartezeit; der Wert beeinflusst gemeinsam mit Mittelwertfenster, Step und Aktualität der Daten die Reaktionsdynamik.",
         "guidance_rule_ids": [
           "GUIDE-AUTO-FAST",
           "GUIDE-HARVEST-ENTRY",
@@ -1560,7 +1583,8 @@
           "INTERVAL",
           "SECONDS"
         ],
-        "short": "Zeit zwischen zwei Regelschritten. Kleinere Werte reagieren schneller, größere Werte laufen ruhiger."
+        "short": "Zeit zwischen zwei Regelschritten. Kleinere Werte reagieren schneller, größere Werte laufen ruhiger.",
+        "when": "Der Wert bestimmt den nominalen Abstand zwischen Regelzyklen. Er beeinflusst deshalb zeitlich alle zyklischen AUTO-/Harvest-/Diagnosebewertungen, ohne deren fachliche Eintrittsbedingungen zu ersetzen."
       },
       "key": "INTERVAL_SECONDS",
       "label": "Regelintervall",
@@ -1625,7 +1649,8 @@
           "DISCHARGE",
           "ENABLED"
         ],
-        "short": "Aktiviert eine feste Entladeleistung im konfigurierten Zeitfenster."
+        "short": "Aktiviert eine feste Entladeleistung im konfigurierten Zeitfenster.",
+        "when": "Der Nachtmodus kann nur im konfigurierten Zeitfenster und bei MANUAL_MODE=AUTO aktiv werden. Gültiger SOC, globale Schutzgrenzen und weitere Safety-Bedingungen bleiben Voraussetzung."
       },
       "key": "NIGHT_DISCHARGE_ENABLED",
       "label": "Nachtmodus aktiv",
@@ -1689,7 +1714,8 @@
           "DISCHARGE",
           "POWER"
         ],
-        "short": "Feste Entladeleistung im Nachtmodus."
+        "short": "Feste Entladeleistung im Nachtmodus.",
+        "when": "Die feste Leistung wird nur während eines aktiven Nachtfensters verwendet, wenn Nachtbetrieb freigegeben ist und keine Reserve-/SOC-/Safety-Bedingung die Entladung stoppt. Sie wird nicht anhand der aktuellen Hauslast nachgeführt."
       },
       "key": "NIGHT_DISCHARGE_POWER_W",
       "label": "Feste Nacht-Basisentladung",
@@ -1752,7 +1778,8 @@
           "SOC",
           "PERCENT"
         ],
-        "short": "Optionaler Reserve-/Stop-SOC für die Nachtentladung. Leer lassen für bisheriges Verhalten. Wenn gesetzt, stoppt die Nachtentladung bei SOC kleiner/gleich diesem Wert. Steigt der SOC später wieder über diesen Wert, darf die Nachtentladung im selben Nachtfenster wieder laufen. Der Wert muss mindestens dem globalen Mindest-SOC entsprechen."
+        "short": "Optionaler Reserve-/Stop-SOC für die Nachtentladung. Leer lassen für bisheriges Verhalten. Wenn gesetzt, stoppt die Nachtentladung bei SOC kleiner/gleich diesem Wert. Steigt der SOC später wieder über diesen Wert, darf die Nachtentladung im selben Nachtfenster wieder laufen. Der Wert muss mindestens dem globalen Mindest-SOC entsprechen.",
+        "when": "Die zusätzliche Nachtreserve wird nur ausgewertet, wenn sie gesetzt ist und die feste Nachtentladung aktiv werden könnte. Bei Erreichen pausiert sie die feste Basisentladung; die globale MIN-SOC-Grenze bleibt zusätzlich wirksam."
       },
       "key": "NIGHT_DISCHARGE_STOP_SOC_PERCENT",
       "label": "Reserve-SOC für feste Nachtentladung",
@@ -1815,7 +1842,8 @@
           "END",
           "HOUR"
         ],
-        "short": "Endstunde des Nachtmodus."
+        "short": "Endstunde des Nachtmodus.",
+        "when": "Endstunde und Endminute bilden gemeinsam die logische Endzeit des Nachtfensters. Beim Verlassen des Fensters ist eine aktive 0-W-Neutralisierung Teil des Sicherheitsvertrags."
       },
       "key": "NIGHT_END_HOUR",
       "label": "Ende Stunde",
@@ -1878,7 +1906,8 @@
           "END",
           "MINUTE"
         ],
-        "short": "Endminute des Nachtmodus. Wird in der Weboberfläche zusammen mit der Stunde als hh:mm-Feld dargestellt."
+        "short": "Endminute des Nachtmodus. Wird in der Weboberfläche zusammen mit der Stunde als hh:mm-Feld dargestellt.",
+        "when": "Endstunde und Endminute bilden gemeinsam die logische Endzeit des Nachtfensters. Beim Verlassen des Fensters ist eine aktive 0-W-Neutralisierung Teil des Sicherheitsvertrags."
       },
       "key": "NIGHT_END_MINUTE",
       "label": "Ende Minute",
@@ -1941,7 +1970,8 @@
           "START",
           "HOUR"
         ],
-        "short": "Startstunde des Nachtmodus."
+        "short": "Startstunde des Nachtmodus.",
+        "when": "Startstunde und Startminute bilden gemeinsam die logische Startzeit des Nachtfensters. Die UI behandelt beide technischen Werte als ein HH:MM-Feld; ein Fenster über Mitternacht ist zulässig."
       },
       "key": "NIGHT_START_HOUR",
       "label": "Start Stunde",
@@ -2004,7 +2034,8 @@
           "START",
           "MINUTE"
         ],
-        "short": "Startminute des Nachtmodus."
+        "short": "Startminute des Nachtmodus.",
+        "when": "Startstunde und Startminute bilden gemeinsam die logische Startzeit des Nachtfensters. Die UI behandelt beide technischen Werte als ein HH:MM-Feld; ein Fenster über Mitternacht ist zulässig."
       },
       "key": "NIGHT_START_MINUTE",
       "label": "Start Minute",
@@ -2071,7 +2102,8 @@
           "TIMEOUT",
           "SECONDS"
         ],
-        "short": "Nach dieser Zeit ohne Update auf einem konfigurierten Zusatzbatterie-MQTT-Topic gelten die Daten als veraltet. Je kleiner der Wert, desto schneller reagiert der Schutz auf fehlende Daten; je größer der Wert, desto toleranter ist das System gegenüber kurzen MQTT-Aussetzern."
+        "short": "Nach dieser Zeit ohne Update auf einem konfigurierten Zusatzbatterie-MQTT-Topic gelten die Daten als veraltet. Je kleiner der Wert, desto schneller reagiert der Schutz auf fehlende Daten; je größer der Wert, desto toleranter ist das System gegenüber kurzen MQTT-Aussetzern.",
+        "when": null
       },
       "key": "SECOND_BATTERY_STALE_TIMEOUT_SECONDS",
       "label": "Daten-Timeout",
@@ -2132,7 +2164,8 @@
           "DISPLAY",
           "NAME"
         ],
-        "short": "Freier Anzeigename der externen Batterie auf Statusseite, Graph und CSV-Beschreibungen, z. B. SMA Sunny Island, Victron ESS oder Hausspeicher Keller."
+        "short": "Freier Anzeigename der externen Batterie auf Statusseite, Graph und CSV-Beschreibungen, z. B. SMA Sunny Island, Victron ESS oder Hausspeicher Keller.",
+        "when": null
       },
       "key": "SECOND_BATTERY_DISPLAY_NAME",
       "label": "Zusatzbatterie Anzeigename",
@@ -2190,7 +2223,8 @@
           "INTEGRATION",
           "ENABLED"
         ],
-        "short": "Konfiguration für Primärspeicher-Integration aktiv."
+        "short": "Konfiguration für Primärspeicher-Integration aktiv.",
+        "when": null
       },
       "key": "SECOND_BATTERY_INTEGRATION_ENABLED",
       "label": "Primärspeicher-Integration aktiv",
@@ -2257,7 +2291,8 @@
           "SOURCE",
           "PROFILE"
         ],
-        "short": "EVCC Standard ist eine Komfort-Vorlage: aus dem Basis-Topic werden /power, /soc und /capacity gebildet. Benutzerdefiniert erlaubt vollständig frei angegebene Einzel-Topics und optionale JSON-Feldpfade."
+        "short": "EVCC Standard ist eine Komfort-Vorlage: aus dem Basis-Topic werden /power, /soc und /capacity gebildet. Benutzerdefiniert erlaubt vollständig frei angegebene Einzel-Topics und optionale JSON-Feldpfade.",
+        "when": null
       },
       "key": "SECOND_BATTERY_SOURCE_PROFILE",
       "label": "Datenquellen-Profil",
@@ -2331,7 +2366,8 @@
           "CAPACITY",
           "TOPIC"
         ],
-        "short": "Optionales MQTT-Topic für die Zusatzbatterie-Kapazität. Die Kapazität dient Anzeige und Diagnose, ist aber nicht zwingend für die Schutzentscheidung erforderlich."
+        "short": "Optionales MQTT-Topic für die Zusatzbatterie-Kapazität. Die Kapazität dient Anzeige und Diagnose, ist aber nicht zwingend für die Schutzentscheidung erforderlich.",
+        "when": null
       },
       "key": "SECOND_BATTERY_CAPACITY_TOPIC",
       "label": "Kapazitäts-Topic",
@@ -2395,7 +2431,8 @@
           "POWER",
           "TOPIC"
         ],
-        "short": "Vollständiges MQTT-Topic der Zusatzbatterie-Leistung. Dieses Topic ist im benutzerdefinierten Profil Pflicht, weil der Cross-Charge-Schutz primär aus der Leistung erkennt, ob die Zusatzbatterie entlädt."
+        "short": "Vollständiges MQTT-Topic der Zusatzbatterie-Leistung. Dieses Topic ist im benutzerdefinierten Profil Pflicht, weil der Cross-Charge-Schutz primär aus der Leistung erkennt, ob die Zusatzbatterie entlädt.",
+        "when": null
       },
       "key": "SECOND_BATTERY_POWER_TOPIC",
       "label": "Leistungs-Topic",
@@ -2459,7 +2496,8 @@
           "SOC",
           "TOPIC"
         ],
-        "short": "Optionales MQTT-Topic für den Ladezustand der Zusatzbatterie in Prozent. Der Schutz kann auch ohne SOC arbeiten; die Anzeige zeigt dann 'nicht konfiguriert'."
+        "short": "Optionales MQTT-Topic für den Ladezustand der Zusatzbatterie in Prozent. Der Schutz kann auch ohne SOC arbeiten; die Anzeige zeigt dann 'nicht konfiguriert'.",
+        "when": null
       },
       "key": "SECOND_BATTERY_SOC_TOPIC",
       "label": "SOC-Topic",
@@ -2523,7 +2561,8 @@
           "BASE",
           "TOPIC"
         ],
-        "short": "Basis-Topic der Zusatzbatterie bei EVCC-Standardstruktur, z. B. evcc/site/battery/devices/1. Daraus werden Leistung, SOC und Kapazität automatisch als /power, /soc und /capacity abgeleitet."
+        "short": "Basis-Topic der Zusatzbatterie bei EVCC-Standardstruktur, z. B. evcc/site/battery/devices/1. Daraus werden Leistung, SOC und Kapazität automatisch als /power, /soc und /capacity abgeleitet.",
+        "when": null
       },
       "key": "SECOND_BATTERY_EVCC_BASE_TOPIC",
       "label": "EVCC Batterie-Basis-Topic",
@@ -2584,7 +2623,8 @@
           "JSON",
           "PATH"
         ],
-        "short": "Feldpfad innerhalb eines JSON-Payloads, z. B. capacity oder battery.capacity. Nur relevant, wenn Kapazitäts-Payload = JSON gewählt ist."
+        "short": "Feldpfad innerhalb eines JSON-Payloads, z. B. capacity oder battery.capacity. Nur relevant, wenn Kapazitäts-Payload = JSON gewählt ist.",
+        "when": null
       },
       "key": "SECOND_BATTERY_CAPACITY_JSON_PATH",
       "label": "Kapazität JSON-Feldpfad",
@@ -2646,7 +2686,8 @@
           "PAYLOAD",
           "TYPE"
         ],
-        "short": "Gibt an, ob das Kapazitäts-Topic direkt eine Zahl enthält oder ein JSON-Objekt liefert."
+        "short": "Gibt an, ob das Kapazitäts-Topic direkt eine Zahl enthält oder ein JSON-Objekt liefert.",
+        "when": null
       },
       "key": "SECOND_BATTERY_CAPACITY_PAYLOAD_TYPE",
       "label": "Kapazitäts-Payload",
@@ -2716,7 +2757,8 @@
           "JSON",
           "PATH"
         ],
-        "short": "Feldpfad innerhalb eines JSON-Payloads, z. B. power oder battery.power. Nur relevant, wenn Leistungs-Payload = JSON gewählt ist."
+        "short": "Feldpfad innerhalb eines JSON-Payloads, z. B. power oder battery.power. Nur relevant, wenn Leistungs-Payload = JSON gewählt ist.",
+        "when": null
       },
       "key": "SECOND_BATTERY_POWER_JSON_PATH",
       "label": "Leistung JSON-Feldpfad",
@@ -2778,7 +2820,8 @@
           "PAYLOAD",
           "TYPE"
         ],
-        "short": "Gibt an, ob das Leistungs-Topic direkt eine Zahl enthält oder ein JSON-Objekt liefert."
+        "short": "Gibt an, ob das Leistungs-Topic direkt eine Zahl enthält oder ein JSON-Objekt liefert.",
+        "when": null
       },
       "key": "SECOND_BATTERY_POWER_PAYLOAD_TYPE",
       "label": "Leistungs-Payload",
@@ -2848,7 +2891,8 @@
           "JSON",
           "PATH"
         ],
-        "short": "Feldpfad innerhalb eines JSON-Payloads, z. B. soc oder battery.soc. Nur relevant, wenn SOC-Payload = JSON gewählt ist."
+        "short": "Feldpfad innerhalb eines JSON-Payloads, z. B. soc oder battery.soc. Nur relevant, wenn SOC-Payload = JSON gewählt ist.",
+        "when": null
       },
       "key": "SECOND_BATTERY_SOC_JSON_PATH",
       "label": "SOC JSON-Feldpfad",
@@ -2910,7 +2954,8 @@
           "PAYLOAD",
           "TYPE"
         ],
-        "short": "Gibt an, ob das SOC-Topic direkt eine Zahl enthält oder ein JSON-Objekt liefert."
+        "short": "Gibt an, ob das SOC-Topic direkt eine Zahl enthält oder ein JSON-Objekt liefert.",
+        "when": null
       },
       "key": "SECOND_BATTERY_SOC_PAYLOAD_TYPE",
       "label": "SOC-Payload",
@@ -2979,7 +3024,8 @@
           "CAPACITY",
           "UNIT"
         ],
-        "short": "Einheit des Kapazitätswerts der Zusatzbatterie. Die Statusseite zeigt den Wert in kWh an."
+        "short": "Einheit des Kapazitätswerts der Zusatzbatterie. Die Statusseite zeigt den Wert in kWh an.",
+        "when": null
       },
       "key": "SECOND_BATTERY_CAPACITY_UNIT",
       "label": "Kapazitätseinheit",
@@ -3051,7 +3097,8 @@
           "DISCHARGE",
           "SIGN"
         ],
-        "short": "+1 bedeutet: positive MQTT-Leistung = Zusatzbatterie entlädt. -1 bedeutet: negative MQTT-Leistung = Zusatzbatterie entlädt. Die Statusanzeige normiert danach auf positiv = Ladung, negativ = Entladung."
+        "short": "+1 bedeutet: positive MQTT-Leistung = Zusatzbatterie entlädt. -1 bedeutet: negative MQTT-Leistung = Zusatzbatterie entlädt. Die Statusanzeige normiert danach auf positiv = Ladung, negativ = Entladung.",
+        "when": null
       },
       "key": "SECOND_BATTERY_DISCHARGE_SIGN",
       "label": "Bedeutung des MQTT-Leistungsvorzeichens",
@@ -3112,7 +3159,8 @@
           "POWER",
           "UNIT"
         ],
-        "short": "Einheit des Leistungswerts der Zusatzbatterie. Intern wird immer auf Watt normalisiert."
+        "short": "Einheit des Leistungswerts der Zusatzbatterie. Intern wird immer auf Watt normalisiert.",
+        "when": null
       },
       "key": "SECOND_BATTERY_POWER_UNIT",
       "label": "Leistungseinheit",
@@ -3188,7 +3236,8 @@
           "CHARGE",
           "POWER"
         ],
-        "short": "Maximale Ladeleistung des Primärspeichers bzw. der Zweitbatterie. Dieser installationsabhängige Wert muss aus der konkreten Anlage bzw. deren Datenblatt stammen; leer bedeutet unbekannt."
+        "short": "Maximale Ladeleistung des Primärspeichers bzw. der Zweitbatterie. Dieser installationsabhängige Wert muss aus der konkreten Anlage bzw. deren Datenblatt stammen; leer bedeutet unbekannt.",
+        "when": null
       },
       "key": "SECOND_BATTERY_MAX_CHARGE_POWER_W",
       "label": "Maximale Ladeleistung Primärspeicher",
@@ -3251,7 +3300,8 @@
           "WEIGHTING",
           "MODE"
         ],
-        "short": "Konfiguration für HARVEST_CAPACITY_WEIGHTING_MODE."
+        "short": "Konfiguration für HARVEST_CAPACITY_WEIGHTING_MODE.",
+        "when": null
       },
       "key": "HARVEST_CAPACITY_WEIGHTING_MODE",
       "label": "HARVEST_CAPACITY_WEIGHTING_MODE",
@@ -3294,7 +3344,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Bestätigt High-SOC-Eligibility über reale Zeit. Profilfenster können abweichende, bereits spezifizierte Bestätigungszeiten verwenden; daher ist dieser Wert nicht zu jeder Tageszeit allein maßgeblich.",
+        "extended": "Bestätigt High-SOC-Freigabebedingung über reale Zeit. Profilfenster können abweichende, bereits spezifizierte Bestätigungszeiten verwenden; daher ist dieser Wert nicht zu jeder Tageszeit allein maßgeblich.",
         "guidance_rule_ids": [
           "GUIDE-HARVEST-ENTRY"
         ],
@@ -3317,7 +3367,8 @@
           "CONFIRM",
           "SECONDS"
         ],
-        "short": "Zeit, über die die High-SOC-Eintrittsbedingungen bestätigt sein müssen. Das Tageszeitprofil kann in festen Profilfenstern eine profilbezogene Bestätigungszeit verwenden."
+        "short": "Zeit, über die die High-SOC-Eintrittsbedingungen bestätigt sein müssen. Das Tageszeitprofil kann in festen Profilfenstern eine profilbezogene Bestätigungszeit verwenden.",
+        "when": "Die Bestätigungszeit läuft nur, solange die High-SOC-Freigabebedingungen zusammenhängend erfüllt bleiben. Profilfenster können spezifizierte abweichende Zeiten verwenden."
       },
       "key": "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS",
       "label": "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS",
@@ -3360,7 +3411,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Hält einen zuvor aktiven Harvestzustand nach kurzfristigem Eligibility-Verlust begrenzt aufrecht, solange insbesondere die Exit-SOC-Bedingung nicht verletzt ist.",
+        "extended": "Hält einen zuvor aktiven Harvestzustand nach kurzfristigem Wegfall der Freigabebedingung begrenzt aufrecht, solange insbesondere die Exit-SOC-Bedingung nicht verletzt ist.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 9,
@@ -3380,7 +3431,8 @@
           "HOLD",
           "SECONDS"
         ],
-        "short": "Begrenzte Haltezeit eines bereits aktiven High-SOC-Harvest-Zustands nach kurzfristigem Wegfall der Eligibility. Sie ist keine maximale Harvest-Aktivdauer."
+        "short": "Begrenzte Haltezeit eines bereits aktiven High-SOC-Harvest-Zustands nach kurzfristigem Wegfall der Freigabebedingung. Sie ist keine maximale Harvest-Aktivdauer.",
+        "when": "Die Haltezeit wird erst relevant, nachdem High-SOC-Harvest bereits aktiv war und eine Freigabebedingung kurzzeitig wegfällt. Harte Exit-/Schutzbedingungen können den Zustand trotzdem sofort beenden."
       },
       "key": "HARVEST_HIGH_SMA_SOC_HOLD_SECONDS",
       "label": "HARVEST_HIGH_SMA_SOC_HOLD_SECONDS",
@@ -3444,7 +3496,8 @@
           "SOC",
           "ENABLED"
         ],
-        "short": "Aktiviert den High-SOC-Parallel-Harvest als Teil der ZEC-Harveststrategie. Der Primärspeicher bleibt priorisiert; die Funktion ist kein allgemeiner Ladefreigabeschalter."
+        "short": "Aktiviert den High-SOC-Parallel-Harvest als Teil der ZEC-Harveststrategie. Der Primärspeicher bleibt priorisiert; die Funktion ist kein allgemeiner Ladefreigabeschalter.",
+        "when": "Der Schalter wirkt nur bei aktivierter Restüberschuss-Ernte. Für einen tatsächlichen High-SOC-Eintritt müssen zusätzlich Primärspeicher-SOC, Exportbedingung, Zeitprofil und Bestätigungszeit passen."
       },
       "key": "HARVEST_HIGH_SMA_SOC_ENABLED",
       "label": "HARVEST_HIGH_SMA_SOC_ENABLED",
@@ -3511,7 +3564,8 @@
           "ENTER",
           "PERCENT"
         ],
-        "short": "SMA-SOC-Schwelle für den Eintritt in den High-SOC-Bereich. Zusammen mit dem niedrigeren Austrittswert bildet sie eine Hysterese."
+        "short": "SMA-SOC-Schwelle für den Eintritt in den High-SOC-Bereich. Zusammen mit dem niedrigeren Austrittswert bildet sie eine Hysterese.",
+        "when": "Die Eintrittsschwelle wird nur bei aktivem High-SOC-Parallel-Harvest und gültigem aktuellem Primärspeicher-SOC ausgewertet. Ein Eintritt benötigt zusätzlich die Export-/Zeit-/Bestätigungsbedingungen; der niedrigere Austrittswert beendet den Zustand wieder."
       },
       "key": "HARVEST_HIGH_SMA_SOC_ENTER_PERCENT",
       "label": "HARVEST_HIGH_SMA_SOC_ENTER_PERCENT",
@@ -3576,7 +3630,8 @@
           "EXIT",
           "PERCENT"
         ],
-        "short": "SMA-SOC-Schwelle zum Verlassen des High-SOC-Bereichs. Sie muss unter der Eintrittsschwelle liegen."
+        "short": "SMA-SOC-Schwelle zum Verlassen des High-SOC-Bereichs. Sie muss unter der Eintrittsschwelle liegen.",
+        "when": "Die Austrittsschwelle wird ausgewertet, wenn ein High-SOC-Harvestzustand aktiv ist. Fällt der Primärspeicher-SOC auf bzw. unter diese Grenze, wird der High-SOC-Zustand verlassen; der Abstand zur Eintrittsschwelle verhindert häufiges Hin- und Herschalten."
       },
       "key": "HARVEST_HIGH_SMA_SOC_EXIT_PERCENT",
       "label": "HARVEST_HIGH_SMA_SOC_EXIT_PERCENT",
@@ -3622,7 +3677,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Eligibility-Schwelle für den High-SOC-Eintritt. Der Wert ist kein Netz-Zielwert und beschreibt nicht, wie viel Export nach der Regelung verbleiben soll.",
+        "extended": "Freigabeschwelle für den High-SOC-Eintritt. Der Wert ist kein Netz-Zielwert und beschreibt nicht, wie viel Export nach der Regelung verbleiben soll.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 9,
@@ -3642,7 +3697,8 @@
           "MIN",
           "EXPORT"
         ],
-        "short": "Mindest-Netzexport für die High-SOC-Eligibility. Der Wert ist eine Eintrittsschwelle und kein gewünschter Restexport."
+        "short": "Mindest-Netzexport für die High-SOC-Freigabebedingung. Der Wert ist eine Eintrittsschwelle und kein gewünschter Restexport.",
+        "when": "Die Exportgrenze wird beim Eintritt in High-SOC-Harvest geprüft. Sie qualifiziert die Freigabe; sie ist ausdrücklich kein gewünschter Restexport nach der Regelung."
       },
       "key": "HARVEST_HIGH_SMA_SOC_MIN_EXPORT_W",
       "label": "HARVEST_HIGH_SMA_SOC_MIN_EXPORT_W",
@@ -3704,7 +3760,8 @@
           "SOC",
           "PERCENT"
         ],
-        "short": "SOC-Schwelle, ab der der Primärspeicher für den Harvest-Voll-/Idle-Zweig als voll eingeordnet werden kann."
+        "short": "SOC-Schwelle, ab der der Primärspeicher für den Harvest-Voll-/Idle-Zweig als voll eingeordnet werden kann.",
+        "when": "Die Schwelle wird für den Voll-/Idle-Zweig des Primärspeichers innerhalb Harvest ausgewertet. Sie ist nicht mit dem globalen Zendure-MAX-SOC gleichzusetzen."
       },
       "key": "HARVEST_SMA_FULL_SOC_PERCENT",
       "label": "HARVEST_SMA_FULL_SOC_PERCENT",
@@ -3769,7 +3826,8 @@
           "HARVEST",
           "ENABLED"
         ],
-        "short": "Aktiviert eine spezielle AUTO-Funktion: Wenn der Primärspeicher über längere Zeit nahe seiner Ladegrenze lädt und trotzdem Netzexport übrig bleibt, darf Zendure diesen Restüberschuss zusätzlich laden. Die Funktion startet nicht bei kurzen Spitzen und darf nur laden, niemals Entladung auslösen."
+        "short": "Aktiviert eine spezielle AUTO-Funktion: Wenn der Primärspeicher über längere Zeit nahe seiner Ladegrenze lädt und trotzdem Netzexport übrig bleibt, darf Zendure diesen Restüberschuss zusätzlich laden. Die Funktion startet nicht bei kurzen Spitzen und darf nur laden, niemals Entladung auslösen.",
+        "when": "Die Masterfreigabe wird nur in AUTO-Betrieb berücksichtigt. Erst zusätzliche Harvest-Freigabebedingungen wie Primärspeicherzustand, Export, Zeitprofil und Schutzgrenzen entscheiden, ob tatsächlich zusätzliche Zendure-Ladung angefordert wird."
       },
       "key": "REST_SURPLUS_HARVEST_ENABLED",
       "label": "Restüberschuss-Ernte aktivieren",
@@ -3837,7 +3895,8 @@
           "CONFIRM",
           "SECONDS"
         ],
-        "short": "Bestätigungszeit für Near-Limit-/Restexportbedingungen, bevor die Restüberschuss-Ernte eintritt."
+        "short": "Bestätigungszeit für Near-Limit-/Restexportbedingungen, bevor die Restüberschuss-Ernte eintritt.",
+        "when": "Die Bestätigungszeit läuft nur, solange die Near-Limit-/Restexport-Freigabebedingungen zusammenhängend erfüllt bleiben. Kurze Exportspitzen sollen dadurch nicht sofort einen Eintritt auslösen."
       },
       "key": "REST_SURPLUS_ENTRY_CONFIRM_SECONDS",
       "label": "REST_SURPLUS_ENTRY_CONFIRM_SECONDS",
@@ -3908,7 +3967,8 @@
           "MIN",
           "EXPORT"
         ],
-        "short": "Mindest-Netzexport, der den Near-Limit-/Restüberschuss-Eintritt qualifiziert. Der Wert ist eine Eintrittsschwelle und ausdrücklich kein gewünschter verbleibender Export."
+        "short": "Mindest-Netzexport, der den Near-Limit-/Restüberschuss-Eintritt qualifiziert. Der Wert ist eine Eintrittsschwelle und ausdrücklich kein gewünschter verbleibender Export.",
+        "when": "Die Schwelle wird für den Near-Limit-/Restüberschuss-Eintritt geprüft. Sie entscheidet über die Freigabe des Zweigs, nicht über den endgültigen absoluten Zendure-Ladesollwert."
       },
       "key": "REST_SURPLUS_MIN_EXPORT_W",
       "label": "Mindest-Netzexport zur Aktivierung",
@@ -3974,7 +4034,8 @@
           "CHARGE",
           "RATIO"
         ],
-        "short": "Unterer Primärspeicher-Ladeanteil relativ zur bekannten maximalen Primärspeicher-Ladeleistung. Ein positiver absoluter Floor-Wert übersteuert dieses Verhältnis."
+        "short": "Unterer Primärspeicher-Ladeanteil relativ zur bekannten maximalen Primärspeicher-Ladeleistung. Ein positiver absoluter Floor-Wert übersteuert dieses Verhältnis.",
+        "when": "Der Ratio-Wert wird nur verwendet, wenn kein positiver absoluter Floor-Wert gesetzt ist. Er wird aus der bekannten maximalen Primärspeicher-Ladeleistung abgeleitet und bildet die untere Harvest-Schwelle."
       },
       "key": "HARVEST_PRIMARY_CHARGE_FLOOR_RATIO",
       "label": "HARVEST_PRIMARY_CHARGE_FLOOR_RATIO",
@@ -4038,7 +4099,8 @@
           "CHARGE",
           "FLOOR"
         ],
-        "short": "Optionaler absoluter Primärspeicher-Floor in Watt. Ein positiver Wert ersetzt den zugehörigen Ratio-Wert; leer bzw. automatisch nutzt das Verhältnis."
+        "short": "Optionaler absoluter Primärspeicher-Floor in Watt. Ein positiver Wert ersetzt den zugehörigen Ratio-Wert; leer bzw. automatisch nutzt das Verhältnis.",
+        "when": "Ein positiver Wert ersetzt den zugehörigen Floor-Ratio-Wert vollständig. Leer bzw. automatisch bedeutet, dass ZEC wieder die Ratio-Ableitung aus der maximalen Primärspeicher-Ladeleistung verwendet."
       },
       "key": "HARVEST_PRIMARY_CHARGE_FLOOR_W",
       "label": "HARVEST_PRIMARY_CHARGE_FLOOR_W",
@@ -4108,7 +4170,8 @@
           "LIMIT",
           "RATIO"
         ],
-        "short": "Near-Limit-Schwelle des Primärspeichers relativ zur maximalen Ladeleistung. Ein positiver absoluter Near-Limit-Wert übersteuert dieses Verhältnis."
+        "short": "Near-Limit-Schwelle des Primärspeichers relativ zur maximalen Ladeleistung. Ein positiver absoluter Near-Limit-Wert übersteuert dieses Verhältnis.",
+        "when": "Der Ratio-Wert wird nur verwendet, wenn kein positiver absoluter Near-Limit-Wert gesetzt ist. Er kennzeichnet den Bereich nahe der Primärspeicher-Ladegrenze."
       },
       "key": "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_RATIO",
       "label": "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_RATIO",
@@ -4173,7 +4236,8 @@
           "NEAR",
           "LIMIT"
         ],
-        "short": "Optionaler absoluter Near-Limit-Wert in Watt. Ein positiver Wert ersetzt den zugehörigen Ratio-Wert."
+        "short": "Optionaler absoluter Near-Limit-Wert in Watt. Ein positiver Wert ersetzt den zugehörigen Ratio-Wert.",
+        "when": "Ein positiver Wert ersetzt den zugehörigen Near-Limit-Ratio-Wert vollständig. Leer bzw. automatisch bedeutet, dass ZEC wieder die Ratio-Ableitung verwendet."
       },
       "key": "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_W",
       "label": "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_W",
@@ -4241,7 +4305,8 @@
           "CHARGE",
           "RATIO"
         ],
-        "short": "Primärspeicher-Wiederanlaufschwelle relativ zur maximalen Ladeleistung. Ein positiver absoluter Restart-Wert übersteuert dieses Verhältnis."
+        "short": "Primärspeicher-Wiederanlaufschwelle relativ zur maximalen Ladeleistung. Ein positiver absoluter Restart-Wert übersteuert dieses Verhältnis.",
+        "when": "Der Ratio-Wert wird nur verwendet, wenn kein positiver absoluter Restart-Wert gesetzt ist. Er bildet die Wiederanlaufschwelle oberhalb des Floors."
       },
       "key": "HARVEST_PRIMARY_CHARGE_RESTART_RATIO",
       "label": "HARVEST_PRIMARY_CHARGE_RESTART_RATIO",
@@ -4305,7 +4370,8 @@
           "CHARGE",
           "RESTART"
         ],
-        "short": "Optionaler absoluter Wiederanlaufwert in Watt. Ein positiver Wert ersetzt den zugehörigen Ratio-Wert."
+        "short": "Optionaler absoluter Wiederanlaufwert in Watt. Ein positiver Wert ersetzt den zugehörigen Ratio-Wert.",
+        "when": "Ein positiver Wert ersetzt den zugehörigen Restart-Ratio-Wert vollständig. Leer bzw. automatisch bedeutet, dass ZEC wieder die Ratio-Ableitung verwendet."
       },
       "key": "HARVEST_PRIMARY_CHARGE_RESTART_W",
       "label": "HARVEST_PRIMARY_CHARGE_RESTART_W",
@@ -4367,7 +4433,8 @@
           "SEASON",
           "MODE"
         ],
-        "short": "Konfiguration für Strategische Parallelallokation."
+        "short": "Konfiguration für Strategische Parallelallokation.",
+        "when": null
       },
       "key": "HARVEST_SEASON_MODE",
       "label": "Strategische Parallelallokation",
@@ -4442,7 +4509,8 @@
           "PARALLEL",
           "END"
         ],
-        "short": "Konfiguration für Parallel-Harvest-Saison bis."
+        "short": "Konfiguration für Parallel-Harvest-Saison bis.",
+        "when": null
       },
       "key": "HARVEST_SEASON_PARALLEL_END_MM_DD",
       "label": "Parallel-Harvest-Saison bis",
@@ -4504,7 +4572,8 @@
           "PARALLEL",
           "START"
         ],
-        "short": "Konfiguration für Parallel-Harvest-Saison ab."
+        "short": "Konfiguration für Parallel-Harvest-Saison ab.",
+        "when": null
       },
       "key": "HARVEST_SEASON_PARALLEL_START_MM_DD",
       "label": "Parallel-Harvest-Saison ab",
@@ -4568,7 +4637,8 @@
           "AFTERNOON",
           "SECONDS"
         ],
-        "short": "Konfiguration für Entry-Bestätigung nachmittags."
+        "short": "Konfiguration für Entry-Bestätigung nachmittags.",
+        "when": null
       },
       "key": "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_AFTERNOON_SECONDS",
       "label": "Entry-Bestätigung nachmittags",
@@ -4630,7 +4700,8 @@
           "MIDDAY",
           "SECONDS"
         ],
-        "short": "Konfiguration für Entry-Bestätigung mittags."
+        "short": "Konfiguration für Entry-Bestätigung mittags.",
+        "when": null
       },
       "key": "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_MIDDAY_SECONDS",
       "label": "Entry-Bestätigung mittags",
@@ -4692,7 +4763,8 @@
           "MORNING",
           "SECONDS"
         ],
-        "short": "Konfiguration für Entry-Bestätigung morgens."
+        "short": "Konfiguration für Entry-Bestätigung morgens.",
+        "when": null
       },
       "key": "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_MORNING_SECONDS",
       "label": "Entry-Bestätigung morgens",
@@ -4754,7 +4826,8 @@
           "START",
           "TIME"
         ],
-        "short": "Konfiguration für Mittag → Nachmittag."
+        "short": "Konfiguration für Mittag → Nachmittag.",
+        "when": null
       },
       "key": "HARVEST_HIGH_SMA_SOC_PROFILE_AFTERNOON_START_TIME",
       "label": "Mittag → Nachmittag",
@@ -4817,7 +4890,8 @@
           "END",
           "TIME"
         ],
-        "short": "Konfiguration für Parallel-Harvest Ende."
+        "short": "Konfiguration für Parallel-Harvest Ende.",
+        "when": null
       },
       "key": "HARVEST_HIGH_SMA_SOC_PROFILE_END_TIME",
       "label": "Parallel-Harvest Ende",
@@ -4881,7 +4955,8 @@
           "START",
           "TIME"
         ],
-        "short": "Konfiguration für Morgen → Mittag."
+        "short": "Konfiguration für Morgen → Mittag.",
+        "when": null
       },
       "key": "HARVEST_HIGH_SMA_SOC_PROFILE_MIDDAY_START_TIME",
       "label": "Morgen → Mittag",
@@ -4944,7 +5019,8 @@
           "START",
           "TIME"
         ],
-        "short": "Konfiguration für Parallel-Harvest Start."
+        "short": "Konfiguration für Parallel-Harvest Start.",
+        "when": null
       },
       "key": "HARVEST_HIGH_SMA_SOC_PROFILE_START_TIME",
       "label": "Parallel-Harvest Start",
@@ -5011,7 +5087,8 @@
           "PROFILE",
           "ENABLED"
         ],
-        "short": "Konfiguration für HARVEST_HIGH_SMA_SOC_TIME_PROFILE_ENABLED."
+        "short": "Konfiguration für HARVEST_HIGH_SMA_SOC_TIME_PROFILE_ENABLED.",
+        "when": null
       },
       "key": "HARVEST_HIGH_SMA_SOC_TIME_PROFILE_ENABLED",
       "label": "HARVEST_HIGH_SMA_SOC_TIME_PROFILE_ENABLED",
@@ -5075,7 +5152,8 @@
           "SHARE",
           "AFTERNOON"
         ],
-        "short": "Primärspeicher-Zielanteil des Harvest-Zeitprofils am Nachmittag."
+        "short": "Primärspeicher-Zielanteil des Harvest-Zeitprofils am Nachmittag.",
+        "when": "Der Anteil wird nur im zugehörigen nachmittäglichen Harvest-Zeitprofil verwendet, wenn der betreffende Harvestzweig aktiv ist. Er beschreibt eine Strategieallokation für den Primärspeicher und ist kein direkter Zendure-Sollwert."
       },
       "key": "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_AFTERNOON",
       "label": "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_AFTERNOON",
@@ -5139,7 +5217,8 @@
           "SHARE",
           "MIDDAY"
         ],
-        "short": "Primärspeicher-Zielanteil des Harvest-Zeitprofils zur Mittagsphase."
+        "short": "Primärspeicher-Zielanteil des Harvest-Zeitprofils zur Mittagsphase.",
+        "when": "Der Anteil wird nur im zugehörigen mittäglichen Harvest-Zeitprofil verwendet, wenn der betreffende Harvestzweig aktiv ist. Er beschreibt eine Strategieallokation für den Primärspeicher und ist kein direkter Zendure-Sollwert."
       },
       "key": "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY",
       "label": "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY",
@@ -5203,7 +5282,8 @@
           "SHARE",
           "MORNING"
         ],
-        "short": "Primärspeicher-Zielanteil des Harvest-Zeitprofils am Morgen. Ein höherer Anteil reserviert in dieser Strategie grundsätzlich mehr Leistung für den Primärspeicher."
+        "short": "Primärspeicher-Zielanteil des Harvest-Zeitprofils am Morgen. Ein höherer Anteil reserviert in dieser Strategie grundsätzlich mehr Leistung für den Primärspeicher.",
+        "when": "Der Anteil wird nur im zugehörigen morgendlichen Harvest-Zeitprofil verwendet, wenn der betreffende Harvestzweig aktiv ist. Er beschreibt eine Strategieallokation für den Primärspeicher und ist kein direkter Zendure-Sollwert."
       },
       "key": "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MORNING",
       "label": "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MORNING",
@@ -5263,7 +5343,8 @@
           "CONFIRM",
           "SECONDS"
         ],
-        "short": "Konfiguration für HARVEST_IMPORT_EXIT_CONFIRM_SECONDS."
+        "short": "Konfiguration für HARVEST_IMPORT_EXIT_CONFIRM_SECONDS.",
+        "when": null
       },
       "key": "HARVEST_IMPORT_EXIT_CONFIRM_SECONDS",
       "label": "HARVEST_IMPORT_EXIT_CONFIRM_SECONDS",
@@ -5323,7 +5404,8 @@
           "CONFIRM",
           "SECONDS"
         ],
-        "short": "Konfiguration für HARVEST_IMPORT_REDUCE_CONFIRM_SECONDS."
+        "short": "Konfiguration für HARVEST_IMPORT_REDUCE_CONFIRM_SECONDS.",
+        "when": null
       },
       "key": "HARVEST_IMPORT_REDUCE_CONFIRM_SECONDS",
       "label": "HARVEST_IMPORT_REDUCE_CONFIRM_SECONDS",
@@ -5384,7 +5466,8 @@
           "CONFIRM",
           "SECONDS"
         ],
-        "short": "Konfiguration für HARVEST_PRIMARY_BELOW_FLOOR_CONFIRM_SECONDS."
+        "short": "Konfiguration für HARVEST_PRIMARY_BELOW_FLOOR_CONFIRM_SECONDS.",
+        "when": null
       },
       "key": "HARVEST_PRIMARY_BELOW_FLOOR_CONFIRM_SECONDS",
       "label": "HARVEST_PRIMARY_BELOW_FLOOR_CONFIRM_SECONDS",
@@ -5444,7 +5527,8 @@
           "CONFIRM",
           "SECONDS"
         ],
-        "short": "Konfiguration für HARVEST_PRIMARY_RESTART_CONFIRM_SECONDS."
+        "short": "Konfiguration für HARVEST_PRIMARY_RESTART_CONFIRM_SECONDS.",
+        "when": null
       },
       "key": "HARVEST_PRIMARY_RESTART_CONFIRM_SECONDS",
       "label": "HARVEST_PRIMARY_RESTART_CONFIRM_SECONDS",
@@ -5506,7 +5590,8 @@
           "SATURATION",
           "MARGIN"
         ],
-        "short": "Konfiguration für SECOND_BATTERY_CHARGE_SATURATION_MARGIN_W."
+        "short": "Konfiguration für SECOND_BATTERY_CHARGE_SATURATION_MARGIN_W.",
+        "when": null
       },
       "key": "SECOND_BATTERY_CHARGE_SATURATION_MARGIN_W",
       "label": "SECOND_BATTERY_CHARGE_SATURATION_MARGIN_W",
@@ -5569,7 +5654,8 @@
           "CHARGE",
           "ENABLED"
         ],
-        "short": "Aktiviert das Einlesen einer externen Zusatzbatterie per MQTT und verhindert unerwünschtes Batterie-zu-Batterie-Laden."
+        "short": "Aktiviert das Einlesen einer externen Zusatzbatterie per MQTT und verhindert unerwünschtes Batterie-zu-Batterie-Laden.",
+        "when": "Der Schutz wird nur wirksam, wenn ausreichend aktuelle Zweitbatteriedaten für eine belastbare Gegenflussbewertung vorliegen. Er reduziert gegenläufige Zendure-Ziele proportional und kehrt die Richtung nicht selbst um."
       },
       "key": "CROSS_CHARGE_ENABLED",
       "label": "Cross-Charge-Schutz aktiv",
@@ -5636,7 +5722,8 @@
           "BLOCK",
           "CHARGE"
         ],
-        "short": "Konservativer Fallback: Wenn der Cross-Charge-Schutz aktiv ist, aber keine frischen Zusatzbatteriedaten vorliegen, wird Zendure-Ladung blockiert."
+        "short": "Konservativer Fallback: Wenn der Cross-Charge-Schutz aktiv ist, aber keine frischen Zusatzbatteriedaten vorliegen, wird Zendure-Ladung blockiert.",
+        "when": "Die Option wird relevant, wenn Zweitbatteriedaten die zulässige Aktualitätsgrenze überschreiten. Sie bestimmt dann, ob neue Zendure-Ladung vorsorglich blockiert wird, weil Gegenfluss nicht zuverlässig bewertet werden kann."
       },
       "key": "SECOND_BATTERY_STALE_BLOCK_CHARGE",
       "label": "Bei Daten-Timeout Ladung blockieren",
@@ -5695,7 +5782,8 @@
           "DISCHARGE",
           "BLOCK"
         ],
-        "short": "Konfiguration für Entlade-Blockgrenze (Legacy)."
+        "short": "Konfiguration für Entlade-Blockgrenze (Legacy).",
+        "when": null
       },
       "key": "SMA_DISCHARGE_BLOCK_W",
       "label": "Entlade-Blockgrenze (Legacy)",
@@ -5760,7 +5848,8 @@
           "CHARGE",
           "SIGNIFICANT"
         ],
-        "short": "Leistungsschwelle, ab der ein gegenläufiger Zweitbatteriefluss als relevanter Cross-Charge-Konflikt behandelt wird. Bei aktivem Cross-Charge muss der Wert größer als 0 W sein."
+        "short": "Leistungsschwelle, ab der ein gegenläufiger Zweitbatteriefluss als relevanter Cross-Charge-Konflikt behandelt wird. Bei aktivem Cross-Charge muss der Wert größer als 0 W sein.",
+        "when": "Die Schwelle wird bei aktuellem Zweitbatterie-Leistungswert und aktivem Cross-Charge-Schutz ausgewertet. Ab dieser Gegenflussstärke greift die Schutzlogik; die niedrigere Rücknahmeschwelle verhindert häufiges Ein-/Ausschalten nahe der Grenze."
       },
       "key": "CROSS_CHARGE_SIGNIFICANT_W",
       "label": "Gegenfluss ab",
@@ -5819,7 +5908,8 @@
           "CHARGE",
           "RESERVE"
         ],
-        "short": "Konfiguration für Cross-Charge Reserve."
+        "short": "Konfiguration für Cross-Charge Reserve.",
+        "when": null
       },
       "key": "CROSS_CHARGE_RESERVE_W",
       "label": "Cross-Charge Reserve",
@@ -5880,7 +5970,8 @@
           "TIMEOUT",
           "SECONDS"
         ],
-        "short": "Nach dieser Zeit muss eine sicherheitsrelevante 0-W-Neutralisierung physisch bestätigt sein. Bei fortbestehender Leistung sendet ZEC AC-Modus sowie beide Limits als Full-State-Neutralisierung erneut."
+        "short": "Nach dieser Zeit muss eine sicherheitsrelevante 0-W-Neutralisierung physisch bestätigt sein. Bei fortbestehender Leistung sendet ZEC AC-Modus sowie beide Limits als vollständige 0-W-Zustandsneutralisierung erneut.",
+        "when": "Der Timeout wird bei sicherheitsrelevanten 0-W-Zielen verwendet. Bleibt physische Leistung bestehen, kann ZEC die vollständige 0-W-Zustandsneutralisierung mit AC-Modus und beiden Limits erneut anfordern."
       },
       "key": "COMMAND_NEUTRALIZATION_TIMEOUT_SECONDS",
       "label": "Prüfzeit für 0-W-Neutralisierung",
@@ -5924,7 +6015,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Freshness-Grenze für den vollständig rückgelesenen Command-State aus smartMode, acMode, inputLimit und outputLimit.",
+        "extended": "Aktualitätsgrenze für den vollständig rückgelesenen Command-State aus smartMode, acMode, inputLimit und outputLimit.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 11,
@@ -5943,7 +6034,8 @@
           "FRESH",
           "SECONDS"
         ],
-        "short": "Maximales Alter der rückgelesenen Werte smartMode, acMode, inputLimit und outputLimit. Dynamische Limitänderungen werden nur bei bestätigtem smartMode=1 freigegeben."
+        "short": "Maximales Alter der rückgelesenen Werte smartMode, acMode, inputLimit und outputLimit. Dynamische Limitänderungen werden nur bei bestätigtem smartMode=1 freigegeben.",
+        "when": "Die Grenze wird auf den vollständig rückgelesenen Gerätezustand aus smartMode, acMode, inputLimit und outputLimit angewandt. Überschreitet dessen Datenalter die Grenze, gilt der Zustand nicht mehr als aktuell genug für einen belastbaren Commandnachweis."
       },
       "key": "ZENDURE_COMMAND_STATE_FRESH_SECONDS",
       "label": "Gültigkeit Zendure-Command-State",
@@ -6005,7 +6097,8 @@
           "RETRY",
           "SECONDS"
         ],
-        "short": "Mindestabstand für einen erneuten vollständigen Modus-/Limit-Abgleich, solange die Rücklesung noch nicht konsistent ist."
+        "short": "Mindestabstand für einen erneuten vollständigen Modus-/Limit-Abgleich, solange die Rücklesung noch nicht konsistent ist.",
+        "when": "Das Intervall wird verwendet, wenn der vollständige Gerätezustand noch nicht konsistent bestätigt ist und im vorgesehenen Recoverypfad erneut angefordert bzw. hergestellt werden muss."
       },
       "key": "ZENDURE_COMMAND_STATE_RETRY_SECONDS",
       "label": "Wiederholintervall vollständiger Command-State",
@@ -6067,7 +6160,8 @@
           "RETRY",
           "SECONDS"
         ],
-        "short": "Mindestabstand für erneutes smartMode=ON, wenn der volatile Flash-Schutz noch nicht rückgelesen wurde."
+        "short": "Mindestabstand für erneutes smartMode=ON, wenn der volatile Flash-Schutz noch nicht rückgelesen wurde.",
+        "when": "Das Intervall wird relevant, wenn der erforderliche smartMode noch nicht bestätigt ist. Wiederholungen bleiben auf den Recoverypfad beschränkt und sollen keine dauerhafte Schreibschleife erzeugen."
       },
       "key": "ZENDURE_SMART_MODE_RETRY_SECONDS",
       "label": "Wiederholintervall Flash-Schutz",
@@ -6111,7 +6205,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Mindestalter für einen stale-basierten MQTT-Recovery-/Resyncfall. Der Wert beschreibt Recovery, nicht normale Stellgeschwindigkeit.",
+        "extended": "Mindestalter für einen auf veralteten Daten basierenden MQTT-Recovery-/Resyncfall. Der Wert beschreibt Recovery, nicht normale Stellgeschwindigkeit.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 11,
@@ -6130,7 +6224,8 @@
           "MIN",
           "SECONDS"
         ],
-        "short": "Mindestdauer eines unsicheren Zendure-MQTT-Zustands, bevor Recovery einen Command-Resync auslöst."
+        "short": "Mindestdauer eines unsicheren Zendure-MQTT-Zustands, bevor Recovery einen Command-Resync auslöst.",
+        "when": "Die Mindestdauer wird nur für Recovery nach ausreichend lange veralteten MQTT-/Command-Daten ausgewertet. Sie ist keine normale Stell- oder Regelverzögerung."
       },
       "key": "COMMAND_RESYNC_STALE_MIN_SECONDS",
       "label": "Resync ab Stale-Dauer",
@@ -6192,7 +6287,8 @@
           "MIN",
           "CYCLES"
         ],
-        "short": "Konfiguration für Resync ab Stale-Zyklen."
+        "short": "Konfiguration für Resync ab Stale-Zyklen.",
+        "when": null
       },
       "key": "COMMAND_RESYNC_STALE_MIN_CYCLES",
       "label": "Resync ab Stale-Zyklen",
@@ -6255,7 +6351,8 @@
           "RECOVERY",
           "ALWAYS"
         ],
-        "short": "Notfall-/Legacy-Schalter: erzwingt Resync bei jeder Zendure-MQTT-Recovery. Standard in V12.11.2-RC1 ist aus, damit kurze STALE-Phasen keinen Resync-Sturm auslösen."
+        "short": "Notfall-/Legacy-Schalter: erzwingt Resync bei jeder Zendure-MQTT-Recovery. Standard in V12.11.2-RC1 ist aus, damit kurze STALE-Phasen keinen Resync-Sturm auslösen.",
+        "when": "Die Legacy-/Notfalloption wird beim Wiederkehren der MQTT-Verbindung ausgewertet. Aktiv erzwingt sie aggressiver einen vollständigen Wiederabgleich und kann dadurch zusätzliche Publishes verursachen."
       },
       "key": "COMMAND_RESYNC_ON_MQTT_RECOVERY_ALWAYS",
       "label": "Zendure-Command-Resync bei jeder MQTT-Recovery",
@@ -6317,7 +6414,8 @@
           "RESEND",
           "SECONDS"
         ],
-        "short": "Nach dieser Zeit sendet ZEC einen weiterhin unwirksamen aktiven Sollzustand vollständig erneut. Resync-Versand und anschließend bestätigte Gerätewirkung werden getrennt dokumentiert."
+        "short": "Nach dieser Zeit sendet ZEC einen weiterhin unwirksamen aktiven Sollzustand vollständig erneut. Resync-Versand und anschließend bestätigte Gerätewirkung werden getrennt dokumentiert.",
+        "when": "Die Zeit wird erst bei anhaltender bestätigter Nichtwirkung relevant. Danach darf ZEC im spezifizierten Recoverypfad den vollständigen Gerätezustand erneut senden; dies ist keine zyklische Normalwiederholung."
       },
       "key": "COMMAND_EFFECT_FORCE_RESEND_SECONDS",
       "label": "Resend-Zeit bei anhaltender Nichtwirkung",
@@ -6381,7 +6479,8 @@
           "COOLDOWN",
           "SECONDS"
         ],
-        "short": "Unterdrückt identische Resync-Wiederholungen im Cooldown, außer bei weiter bestätigtem Mismatch nach Ablauf des Cooldowns."
+        "short": "Unterdrückt identische Resync-Wiederholungen im Cooldown, außer bei weiter bestätigtem Mismatch nach Ablauf des Cooldowns.",
+        "when": "Der Cooldown wird nach einem Resync-/Recovery-Versuch ausgewertet. Er verhindert, dass derselbe vollständige Wiederabgleich unnötig häufig wiederholt wird."
       },
       "key": "COMMAND_RESYNC_COOLDOWN_SECONDS",
       "label": "Resync-Cooldown",
@@ -6441,7 +6540,8 @@
           "TOLERANCE",
           "PERCENT"
         ],
-        "short": "Relative Toleranz für hohe Sollwerte. Sie verändert nur die Wirkungsdiagnose, niemals den Regler-Sollwert oder eine Gerätegrenze."
+        "short": "Relative Toleranz für hohe Sollwerte. Sie verändert nur die Wirkungsdiagnose, niemals den Regler-Sollwert oder eine Gerätegrenze.",
+        "when": "Die relative Toleranz wird aus dem Betrag des Sollwerts berechnet und mit der absoluten W-Toleranz verglichen. Für die Bewertung gilt jeweils die größere Grenze."
       },
       "key": "COMMAND_EFFECT_TOLERANCE_PERCENT",
       "label": "Relative Soll/Ist-Toleranz für Zielwerttracking",
@@ -6504,7 +6604,8 @@
           "EFFECT",
           "TOLERANCE"
         ],
-        "short": "Absolute Mindesttoleranz für das Zielwerttracking. Verwendet wird der größere Wert aus dieser absoluten Toleranz und der relativen Prozenttoleranz."
+        "short": "Absolute Mindesttoleranz für das Zielwerttracking. Verwendet wird der größere Wert aus dieser absoluten Toleranz und der relativen Prozenttoleranz.",
+        "when": "Die absolute Toleranz wird beim Sollwerttracking mit der relativen Prozenttoleranz verglichen. Für die Bewertung gilt jeweils die größere der beiden Grenzen."
       },
       "key": "COMMAND_EFFECT_TOLERANCE_W",
       "label": "Absolute Soll/Ist-Toleranz für Zielwerttracking",
@@ -6568,7 +6669,8 @@
           "MIN",
           "TARGET"
         ],
-        "short": "Unterhalb dieser Schwelle ist die physische Wirkung nicht belastbar bewertbar; der Zustand wird nicht als COMMAND_EFFECTIVE ausgegeben."
+        "short": "Unterhalb dieser Schwelle ist die physische Wirkung nicht belastbar bewertbar; der Zustand wird nicht als COMMAND_EFFECTIVE ausgegeben.",
+        "when": "Die Diagnosegrenze wird nur für aktive Sollwerte ungleich 0 W verwendet. Unterhalb dieser Größe wird die Wirkung als nicht robust bewertbar behandelt und nicht fälschlich als bestätigt gewertet."
       },
       "key": "COMMAND_EFFECT_MIN_TARGET_W",
       "label": "Mindest-Sollwert für Wirksamkeitsdiagnose",
@@ -6628,7 +6730,8 @@
           "EFFECT",
           "MIN"
         ],
-        "short": "Schwellwert, ab dem eine unabhängige Istleistungsbeobachtung als belastbare Reaktion in Lade- oder Entladerichtung gilt. Das beweist noch kein vollständiges Sollwerttracking."
+        "short": "Schwellwert, ab dem eine unabhängige Istleistungsbeobachtung als belastbare Reaktion in Lade- oder Entladerichtung gilt. Das beweist noch kein vollständiges Sollwerttracking.",
+        "when": "Die Mindest-Istleistung wird bei der Prüfung einer angeforderten Lade- oder Entladerichtung verwendet. Sie belegt höchstens eine belastbare Richtungsreaktion, nicht automatisch das Sollwerttracking."
       },
       "key": "COMMAND_EFFECT_MIN_W",
       "label": "Mindest-Istleistung für Richtungsreaktion",
@@ -6691,7 +6794,8 @@
           "TIMEOUT",
           "SECONDS"
         ],
-        "short": "Nach dieser zusammenhängenden Zeit desselben Lade-/Entlade-Intents bestätigt ZEC fehlende Richtungsreaktion oder dauerhaft erhebliches Untertracking. Kleine Wattänderungen derselben Richtung starten die Zeit nicht neu."
+        "short": "Nach dieser zusammenhängenden Zeit desselben Lade-/Entlade-Intents bestätigt ZEC fehlende Richtungsreaktion oder dauerhaft erhebliches Untertracking. Kleine Wattänderungen derselben Richtung starten die Zeit nicht neu.",
+        "when": "Der Timeout läuft während einer zusammenhängenden Wirkungsprüfung desselben fachlichen Intents. Kleine Sollwertänderungen innerhalb derselben Richtung sollen eine anhaltende Nichtwirkung nicht analytisch verstecken."
       },
       "key": "COMMAND_EFFECT_TIMEOUT_SECONDS",
       "label": "Warnzeit für fehlende oder unzureichende Wirkung",
@@ -6749,7 +6853,8 @@
           "BACKUP",
           "COUNT"
         ],
-        "short": "Konfiguration für Rotationsdateien."
+        "short": "Konfiguration für Rotationsdateien.",
+        "when": null
       },
       "key": "MEASUREMENT_LOG_BACKUP_COUNT",
       "label": "Rotationsdateien",
@@ -6808,7 +6913,8 @@
           "ROW",
           "BYTES"
         ],
-        "short": "Konfiguration für Schätzgröße je Messpunkt."
+        "short": "Konfiguration für Schätzgröße je Messpunkt.",
+        "when": null
       },
       "key": "MEASUREMENT_LOG_ESTIMATED_ROW_BYTES",
       "label": "Schätzgröße je Messpunkt",
@@ -6866,7 +6972,8 @@
           "MAX",
           "BYTES"
         ],
-        "short": "Bei Überschreitung wird rotiert. Zusammen mit der Dateianzahl bestimmt dieser Wert die geschätzte Aufbewahrung."
+        "short": "Bei Überschreitung wird rotiert. Zusammen mit der Dateianzahl bestimmt dieser Wert die geschätzte Aufbewahrung.",
+        "when": null
       },
       "key": "MEASUREMENT_LOG_MAX_BYTES",
       "label": "Max Dateigröße",
@@ -6926,7 +7033,8 @@
           "LOG",
           "ALLOW"
         ],
-        "short": "Wenn das externe Speicherziel nicht verfügbar ist, darf begrenzt auf die interne SD geschrieben werden. Der Fallback wird sichtbar markiert und enger rotiert."
+        "short": "Wenn das externe Speicherziel nicht verfügbar ist, darf begrenzt auf die interne SD geschrieben werden. Der Fallback wird sichtbar markiert und enger rotiert.",
+        "when": null
       },
       "key": "MEASUREMENT_LOG_ALLOW_SD_FALLBACK",
       "label": "SD-Fallback bei USB-Ausfall",
@@ -6986,7 +7094,8 @@
           "LOG",
           "DIR"
         ],
-        "short": "Begrenztes Fallback-Verzeichnis auf der internen SD, falls ein externes Logziel ausfällt."
+        "short": "Begrenztes Fallback-Verzeichnis auf der internen SD, falls ein externes Logziel ausfällt.",
+        "when": null
       },
       "key": "MEASUREMENT_LOG_FALLBACK_DIR",
       "label": "SD-Fallback-Verzeichnis",
@@ -7044,7 +7153,8 @@
           "MAX",
           "BYTES"
         ],
-        "short": "Kleinere Rotationsgrenze für den SD-Fallback, damit ein USB-Ausfall die SD nicht unbegrenzt belastet."
+        "short": "Kleinere Rotationsgrenze für den SD-Fallback, damit ein USB-Ausfall die SD nicht unbegrenzt belastet.",
+        "when": null
       },
       "key": "MEASUREMENT_LOG_FALLBACK_MAX_BYTES",
       "label": "Fallback Max Dateigröße",
@@ -7103,7 +7213,8 @@
           "BACKUP",
           "COUNT"
         ],
-        "short": "Konfiguration für Fallback Rotationsdateien."
+        "short": "Konfiguration für Fallback Rotationsdateien.",
+        "when": null
       },
       "key": "MEASUREMENT_LOG_FALLBACK_BACKUP_COUNT",
       "label": "Fallback Rotationsdateien",
@@ -7162,7 +7273,8 @@
           "SCHEMA",
           "VERSION"
         ],
-        "short": "Konfiguration für Measurement-Schema."
+        "short": "Konfiguration für Measurement-Schema.",
+        "when": null
       },
       "key": "MEASUREMENT_SCHEMA_VERSION",
       "label": "Measurement-Schema",
@@ -7228,7 +7340,8 @@
           "LOG",
           "FILE"
         ],
-        "short": "Dateiname der aktuellen Measurement-Datei. Bei V4 und Standardname schreibt der Controller automatisch zendure_measurements_v4.csv, damit V3 und V4 nicht gemischt werden."
+        "short": "Dateiname der aktuellen Measurement-Datei. Bei V4 und Standardname schreibt der Controller automatisch zendure_measurements_v4.csv, damit V3 und V4 nicht gemischt werden.",
+        "when": null
       },
       "key": "MEASUREMENT_LOG_FILE",
       "label": "Messdaten-Datei",
@@ -7271,7 +7384,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Aus: keine zyklischen Messdaten, schont die SD-Karte. Standard: vollständige Reglerdiagnose inklusive Freshness, MQTT-Stale-Aggregat, Sollwertkaskade, Kommando und Szenario ohne Zendure. Erweitert: Standard plus Detaildaten für Simulation, What-if und tiefe MQTT-/Freshness-Analyse; erzeugt größere Dateien und sollte gezielt genutzt werden. Wirksamkeit nach Speichern: Wirksam im nächsten Zyklus; Moduswechsel erzeugt neuen Profil-/Dateikontext. Die Einstellung steht in Beziehung zu: MEASUREMENT_SCHEMA_VERSION, MEASUREMENT_LOG_STORAGE_TARGET.",
+        "extended": "Aus: keine zyklischen Messdaten, schont die SD-Karte. Standard: vollständige Reglerdiagnose inklusive Datenaktualität, MQTT-Veraltet-Aggregat, Sollwertkaskade, Kommando und Szenario ohne Zendure. Erweitert: Standard plus Detaildaten für Simulation, What-if und tiefe MQTT-/Aktualitätsanalyse; erzeugt größere Dateien und sollte gezielt genutzt werden. Wirksamkeit nach Speichern: Wirksam im nächsten Zyklus; Moduswechsel erzeugt neuen Profil-/Dateikontext. Die Einstellung steht in Beziehung zu: MEASUREMENT_SCHEMA_VERSION, MEASUREMENT_LOG_STORAGE_TARGET.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 13,
@@ -7288,7 +7401,8 @@
           "LOG",
           "MODE"
         ],
-        "short": "Aus: keine zyklischen Messdaten, schont die SD-Karte. Standard: vollständige Reglerdiagnose inklusive Freshness, MQTT-Stale-Aggregat, Sollwertkaskade, Kommando und Szenario ohne Zendure. Erweitert: Standard plus Detaildaten für Simulation, What-if und tiefe MQTT-/Freshness-Analyse; erzeugt größere Dateien und sollte gezielt genutzt werden."
+        "short": "Aus: keine zyklischen Messdaten, schont die SD-Karte. Standard: vollständige Reglerdiagnose inklusive Datenaktualität, MQTT-Veraltet-Aggregat, Sollwertkaskade, Kommando und Szenario ohne Zendure. Erweitert: Standard plus Detaildaten für Simulation, What-if und tiefe MQTT-/Aktualitätsanalyse; erzeugt größere Dateien und sollte gezielt genutzt werden.",
+        "when": null
       },
       "key": "MEASUREMENT_LOG_MODE",
       "label": "V4-Messwertaufzeichnung",
@@ -7361,7 +7475,8 @@
           "QUEUE",
           "ROWS"
         ],
-        "short": "Konfiguration für SQLite Queue-Größe."
+        "short": "Konfiguration für SQLite Queue-Größe.",
+        "when": null
       },
       "key": "MEASUREMENT_DB_MAX_QUEUE_ROWS",
       "label": "SQLite Queue-Größe",
@@ -7419,7 +7534,8 @@
           "MEASUREMENT",
           "ENABLED"
         ],
-        "short": "Schreibt parallel zu CSV/V4 einen leichten SQLite-Store für schnelle Status- und Graphdaten. Läuft auch, wenn Messdaten-CSV deaktiviert ist; die Regelung wird bei DB-Fehlern nicht blockiert."
+        "short": "Schreibt parallel zu CSV/V4 einen leichten SQLite-Store für schnelle Status- und Graphdaten. Läuft auch, wenn Messdaten-CSV deaktiviert ist; die Regelung wird bei DB-Fehlern nicht blockiert.",
+        "when": null
       },
       "key": "MEASUREMENT_DB_ENABLED",
       "label": "SQLite-Graphstore",
@@ -7478,7 +7594,8 @@
           "MEASUREMENT",
           "FILE"
         ],
-        "short": "Konfiguration für SQLite-Datei."
+        "short": "Konfiguration für SQLite-Datei.",
+        "when": null
       },
       "key": "MEASUREMENT_DB_FILE",
       "label": "SQLite-Datei",
@@ -7534,7 +7651,8 @@
           "MEASUREMENT",
           "PATH"
         ],
-        "short": "Optionaler absoluter Pfad zur SQLite-Datei. Leer bedeutet: automatisch neben den Messdaten im aktiven Speicherziel."
+        "short": "Optionaler absoluter Pfad zur SQLite-Datei. Leer bedeutet: automatisch neben den Messdaten im aktiven Speicherziel.",
+        "when": null
       },
       "key": "MEASUREMENT_DB_PATH",
       "label": "SQLite-Pfad optional",
@@ -7596,7 +7714,8 @@
           "RETENTION",
           "DAYS"
         ],
-        "short": "Konfiguration für 1-Minuten-Historie – Tage."
+        "short": "Konfiguration für 1-Minuten-Historie – Tage.",
+        "when": null
       },
       "key": "MEASUREMENT_DB_1MIN_RETENTION_DAYS",
       "label": "1-Minuten-Historie – Tage",
@@ -7656,7 +7775,8 @@
           "RETENTION",
           "MODE"
         ],
-        "short": "Konfiguration für 1-Minuten-Historie aufbewahren."
+        "short": "Konfiguration für 1-Minuten-Historie aufbewahren.",
+        "when": null
       },
       "key": "MEASUREMENT_DB_1MIN_RETENTION_MODE",
       "label": "1-Minuten-Historie aufbewahren",
@@ -7724,7 +7844,8 @@
           "MAINTENANCE",
           "MODE"
         ],
-        "short": "Konfiguration für SQLite-Wartungsmodus."
+        "short": "Konfiguration für SQLite-Wartungsmodus.",
+        "when": null
       },
       "key": "MEASUREMENT_DB_MAINTENANCE_MODE",
       "label": "SQLite-Wartungsmodus",
@@ -7795,7 +7916,8 @@
           "RETENTION",
           "DAYS"
         ],
-        "short": "Konfiguration für Zyklusgenaue Daten – Tage."
+        "short": "Konfiguration für Zyklusgenaue Daten – Tage.",
+        "when": null
       },
       "key": "MEASUREMENT_DB_RAW_RETENTION_DAYS",
       "label": "Zyklusgenaue Daten – Tage",
@@ -7855,7 +7977,8 @@
           "RETENTION",
           "MODE"
         ],
-        "short": "Konfiguration für Zyklusgenaue Daten aufbewahren."
+        "short": "Konfiguration für Zyklusgenaue Daten aufbewahren.",
+        "when": null
       },
       "key": "MEASUREMENT_DB_RAW_RETENTION_MODE",
       "label": "Zyklusgenaue Daten aufbewahren",
@@ -7925,7 +8048,8 @@
           "EVERY",
           "ROWS"
         ],
-        "short": "Schreibt gepufferte Messdaten periodisch aus dem Python-Puffer. Kein hartes fsync pro Zeile; bei Stromausfall können letzte Messdaten fehlen."
+        "short": "Schreibt gepufferte Messdaten periodisch aus dem Python-Puffer. Kein hartes fsync pro Zeile; bei Stromausfall können letzte Messdaten fehlen.",
+        "when": null
       },
       "key": "MEASUREMENT_LOG_FLUSH_EVERY_ROWS",
       "label": "Flush alle X Zeilen",
@@ -7984,7 +8108,8 @@
           "EVERY",
           "SECONDS"
         ],
-        "short": "Zeitbasierte Flush-Grenze für gepuffertes Logging. Reduziert kleine Sync-Schreibvorgänge gegenüber hartem Schreiben pro Messpunkt."
+        "short": "Zeitbasierte Flush-Grenze für gepuffertes Logging. Reduziert kleine Sync-Schreibvorgänge gegenüber hartem Schreiben pro Messpunkt.",
+        "when": null
       },
       "key": "MEASUREMENT_LOG_FLUSH_EVERY_SECONDS",
       "label": "Flush alle X Sekunden",
@@ -8043,7 +8168,8 @@
           "FREE",
           "DISK"
         ],
-        "short": "Mindestfreier Speicher am aktuell aktiven Messdatenziel: interne SD, externer USB-/Mountpoint oder bei aktivem Fallback der SD-Fallback-Pfad. Wenn weniger Speicher frei ist, pausiert das Messdaten-Logging; die Regelung läuft weiter."
+        "short": "Mindestfreier Speicher am aktuell aktiven Messdatenziel: interne SD, externer USB-/Mountpoint oder bei aktivem Fallback der SD-Fallback-Pfad. Wenn weniger Speicher frei ist, pausiert das Messdaten-Logging; die Regelung läuft weiter.",
+        "when": null
       },
       "key": "MEASUREMENT_LOG_MIN_FREE_DISK_MB",
       "label": "Mindestfreier Speicher",
@@ -8102,7 +8228,8 @@
           "LOG",
           "DIR"
         ],
-        "short": "Verzeichnis für ZEC-MEASUREMENT-Messdaten. Bei internal_sd/custom_path wird dieses Feld direkt verwendet. Bei external_mount wird es als Unterordner auf dem USB-/Mountpoint verwendet, z. B. USB + ZEC/logs."
+        "short": "Verzeichnis für ZEC-MEASUREMENT-Messdaten. Bei internal_sd/custom_path wird dieses Feld direkt verwendet. Bei external_mount wird es als Unterordner auf dem USB-/Mountpoint verwendet, z. B. USB + ZEC/logs.",
+        "when": null
       },
       "key": "MEASUREMENT_LOG_DIR",
       "label": "Messdaten-Verzeichnis / Custom-Pfad",
@@ -8162,7 +8289,8 @@
           "LOG",
           "MOUNTPOINT"
         ],
-        "short": "Optionaler Mountpoint für externes Messdaten-Logging, z. B. /media/pi/USBSTICK oder /mnt/zec-logs. Wenn leer, wird bei Speicherziel external_mount ein erkannter schreibbarer USB-/Mountpoint automatisch verwendet."
+        "short": "Optionaler Mountpoint für externes Messdaten-Logging, z. B. /media/pi/USBSTICK oder /mnt/zec-logs. Wenn leer, wird bei Speicherziel external_mount ein erkannter schreibbarer USB-/Mountpoint automatisch verwendet.",
+        "when": null
       },
       "key": "MEASUREMENT_LOG_MOUNTPOINT",
       "label": "USB-/Mountpoint",
@@ -8224,7 +8352,8 @@
           "STORAGE",
           "TARGET"
         ],
-        "short": "Legt fest, wo Messdaten primär geschrieben werden. Bei erkanntem USB-/Mountpoint wird ein schreibbarer externer Mount automatisch verwendet; das Feld USB-/Mountpoint kann optional einen bestimmten Mountpoint festlegen."
+        "short": "Legt fest, wo Messdaten primär geschrieben werden. Bei erkanntem USB-/Mountpoint wird ein schreibbarer externer Mount automatisch verwendet; das Feld USB-/Mountpoint kann optional einen bestimmten Mountpoint festlegen.",
+        "when": null
       },
       "key": "MEASUREMENT_LOG_STORAGE_TARGET",
       "label": "V4-Speicherziel",
@@ -8296,7 +8425,8 @@
           "HISTORY",
           "LIMIT"
         ],
-        "short": "Anzahl der im RAM gehaltenen Graph-Datenpunkte. Diese Historie ist unabhängig vom dauerhaften Messdaten-Logging."
+        "short": "Anzahl der im RAM gehaltenen Graph-Datenpunkte. Diese Historie ist unabhängig vom dauerhaften Messdaten-Logging.",
+        "when": null
       },
       "key": "GRAPH_HISTORY_LIMIT",
       "label": "Graph-Historie",
@@ -8356,7 +8486,8 @@
           "CACHE",
           "SECONDS"
         ],
-        "short": "Zeit, für die ein aus Messdaten aufgebauter SOC-Tagesgraph-Bootstrap im Speicher wiederverwendet werden darf."
+        "short": "Zeit, für die ein aus Messdaten aufgebauter SOC-Tagesgraph-Bootstrap im Speicher wiederverwendet werden darf.",
+        "when": null
       },
       "key": "SOC_DAY_GRAPH_BOOTSTRAP_CACHE_SECONDS",
       "label": "SOC_DAY_GRAPH_BOOTSTRAP_CACHE_SECONDS",
@@ -8419,7 +8550,8 @@
           "FROM",
           "MEASUREMENTS"
         ],
-        "short": "Versucht beim Abruf der SOC-Tageskurve, heutige Measurement-V4-Logs best-effort einzulesen. Fehler sind nicht kritisch; die Kurve startet dann ab jetzt."
+        "short": "Versucht beim Abruf der SOC-Tageskurve, heutige Measurement-V4-Logs best-effort einzulesen. Fehler sind nicht kritisch; die Kurve startet dann ab jetzt.",
+        "when": null
       },
       "key": "SOC_DAY_GRAPH_BOOTSTRAP_FROM_MEASUREMENTS",
       "label": "SOC-Tageskurve aus Messdaten starten",
@@ -8477,7 +8609,8 @@
           "GRAPH",
           "ENABLED"
         ],
-        "short": "Zeigt auf der Statusseite eine leichte 24h-Zendure-SOC-Kurve für den aktuellen lokalen Tag."
+        "short": "Zeigt auf der Statusseite eine leichte 24h-Zendure-SOC-Kurve für den aktuellen lokalen Tag.",
+        "when": null
       },
       "key": "SOC_DAY_GRAPH_ENABLED",
       "label": "SOC-Tageskurve anzeigen",
@@ -8539,7 +8672,8 @@
           "SAMPLE",
           "SECONDS"
         ],
-        "short": "Samplingintervall der SOC-Tageskurve im RAM. Default 60 Sekunden; der Controller hält maximal etwa 1440 Punkte pro Tag."
+        "short": "Samplingintervall der SOC-Tageskurve im RAM. Default 60 Sekunden; der Controller hält maximal etwa 1440 Punkte pro Tag.",
+        "when": null
       },
       "key": "SOC_DAY_GRAPH_SAMPLE_SECONDS",
       "label": "CSV-/V4-Fallback-Auflösung der SOC-Tageskurve",
@@ -8599,7 +8733,8 @@
           "AGE",
           "MINUTES"
         ],
-        "short": "Konfiguration für Kompression frühestens nach."
+        "short": "Konfiguration für Kompression frühestens nach.",
+        "when": null
       },
       "key": "MEASUREMENT_LOG_COMPRESSION_MIN_AGE_MINUTES",
       "label": "Kompression frühestens nach",
@@ -8656,7 +8791,8 @@
           "MAINTENANCE",
           "MODE"
         ],
-        "short": "Konfiguration für V4-Archivpflege."
+        "short": "Konfiguration für V4-Archivpflege.",
+        "when": null
       },
       "key": "MEASUREMENT_LOG_MAINTENANCE_MODE",
       "label": "V4-Archivpflege",
@@ -8731,7 +8867,8 @@
           "AGE",
           "DAYS"
         ],
-        "short": "Konfiguration für Maximales V4-Archiv-Alter."
+        "short": "Konfiguration für Maximales V4-Archiv-Alter.",
+        "when": null
       },
       "key": "MEASUREMENT_LOG_RETENTION_MAX_AGE_DAYS",
       "label": "Maximales V4-Archiv-Alter",
@@ -8793,7 +8930,8 @@
           "TOTAL",
           "BYTES"
         ],
-        "short": "Konfiguration für Maximale V4-Archivgröße."
+        "short": "Konfiguration für Maximale V4-Archivgröße.",
+        "when": null
       },
       "key": "MEASUREMENT_LOG_RETENTION_MAX_TOTAL_BYTES",
       "label": "Maximale V4-Archivgröße",
@@ -8853,7 +8991,8 @@
           "RETENTION",
           "MODE"
         ],
-        "short": "Konfiguration für V4-Aufbewahrung."
+        "short": "Konfiguration für V4-Aufbewahrung.",
+        "when": null
       },
       "key": "MEASUREMENT_LOG_RETENTION_MODE",
       "label": "V4-Aufbewahrung",
@@ -8923,7 +9062,8 @@
           "PROTECT",
           "HOURS"
         ],
-        "short": "Konfiguration für Jüngste Archive immer schützen."
+        "short": "Konfiguration für Jüngste Archive immer schützen.",
+        "when": null
       },
       "key": "MEASUREMENT_LOG_RETENTION_PROTECT_HOURS",
       "label": "Jüngste Archive immer schützen",
@@ -8984,7 +9124,8 @@
           "EVERY",
           "ROWS"
         ],
-        "short": "Schreibt das V4-Manifest gepuffert statt pro Zyklus. Niedrigere Werte sind aktueller, höhere Werte reduzieren I/O."
+        "short": "Schreibt das V4-Manifest gepuffert statt pro Zyklus. Niedrigere Werte sind aktueller, höhere Werte reduzieren I/O.",
+        "when": null
       },
       "key": "MEASUREMENT_V4_MANIFEST_UPDATE_EVERY_ROWS",
       "label": "V4 Manifest-Update nach Zeilen",
@@ -9043,7 +9184,8 @@
           "EVERY",
           "SECONDS"
         ],
-        "short": "Spätester gepufferter V4-Manifest-Update. Beim Schließen wird immer final aktualisiert."
+        "short": "Spätester gepufferter V4-Manifest-Update. Beim Schließen wird immer final aktualisiert.",
+        "when": null
       },
       "key": "MEASUREMENT_V4_MANIFEST_UPDATE_EVERY_SECONDS",
       "label": "V4 Manifest-Update spätestens nach Sekunden",
@@ -9101,7 +9243,8 @@
           "DIAGNOSTIC",
           "ENABLED"
         ],
-        "short": "Wenn aktiv, abonniert das Script zusätzlich das konfigurierte Diagnose-Topic, standardmäßig Zendure/#, und zeigt die letzten MQTT-Nachrichten unter /mqtt-diagnostics an. Nur für Analysephasen empfohlen, weil dadurch mehr MQTT-Daten verarbeitet werden."
+        "short": "Wenn aktiv, abonniert das Script zusätzlich das konfigurierte Diagnose-Topic, standardmäßig Zendure/#, und zeigt die letzten MQTT-Nachrichten unter /mqtt-diagnostics an. Nur für Analysephasen empfohlen, weil dadurch mehr MQTT-Daten verarbeitet werden.",
+        "when": null
       },
       "key": "MQTT_TOPIC_DIAGNOSTIC_ENABLED",
       "label": "MQTT Topic-Diagnose aktiv",
@@ -9159,7 +9302,8 @@
           "DIAGNOSTIC",
           "FILTER"
         ],
-        "short": "MQTT-Topic-Filter für den Diagnosemitschnitt, z. B. Zendure/# oder evcc/#. MQTT Topic Matching ist groß-/kleinschreibungssensitiv; EVCC/# passt also nicht auf evcc/site/... . Änderungen an diesem Filter erfordern meist einen Neustart oder erneutes Speichern der Config."
+        "short": "MQTT-Topic-Filter für den Diagnosemitschnitt, z. B. Zendure/# oder evcc/#. MQTT Topic Matching ist groß-/kleinschreibungssensitiv; EVCC/# passt also nicht auf evcc/site/... . Änderungen an diesem Filter erfordern meist einen Neustart oder erneutes Speichern der Config.",
+        "when": null
       },
       "key": "MQTT_TOPIC_DIAGNOSTIC_FILTER",
       "label": "MQTT Topic-Diagnose Filter",
@@ -9218,7 +9362,8 @@
           "HISTORY",
           "LIMIT"
         ],
-        "short": "Anzahl der letzten MQTT-Diagnosemeldungen, die im RAM gehalten werden. Höhere Werte brauchen mehr Speicher, sind aber für Topic-Analyse hilfreich."
+        "short": "Anzahl der letzten MQTT-Diagnosemeldungen, die im RAM gehalten werden. Höhere Werte brauchen mehr Speicher, sind aber für Topic-Analyse hilfreich.",
+        "when": null
       },
       "key": "MQTT_TOPIC_DIAGNOSTIC_HISTORY_LIMIT",
       "label": "MQTT Topic-Diagnose Historie",
@@ -9277,7 +9422,8 @@
           "VIEW",
           "MODE"
         ],
-        "short": "filtered speichert/zeigt nur Nachrichten, die zum MQTT Topic-Diagnose Filter passen. all speichert alle vom Controller empfangenen MQTT-Nachrichten und ist nur für kurze Fehlersuche empfohlen."
+        "short": "filtered speichert/zeigt nur Nachrichten, die zum MQTT Topic-Diagnose Filter passen. all speichert alle vom Controller empfangenen MQTT-Nachrichten und ist nur für kurze Fehlersuche empfohlen.",
+        "when": null
       },
       "key": "MQTT_TOPIC_DIAGNOSTIC_VIEW_MODE",
       "label": "MQTT Diagnose Anzeige",
@@ -9342,7 +9488,8 @@
           "MQTT",
           "BROKER"
         ],
-        "short": "Adresse des MQTT-Brokers. Meist der Raspberry Pi selbst."
+        "short": "Adresse des MQTT-Brokers. Meist der Raspberry Pi selbst.",
+        "when": null
       },
       "key": "MQTT_BROKER",
       "label": "MQTT Broker",
@@ -9400,7 +9547,8 @@
           "MQTT",
           "PASSWORD"
         ],
-        "short": "Passwort für MQTT. Wird in der lokalen config.json gespeichert."
+        "short": "Passwort für MQTT. Wird in der lokalen config.json gespeichert.",
+        "when": null
       },
       "key": "MQTT_PASSWORD",
       "label": "MQTT Passwort",
@@ -9459,7 +9607,8 @@
           "MQTT",
           "PORT"
         ],
-        "short": "Port des MQTT-Brokers. Standard ist 1883."
+        "short": "Port des MQTT-Brokers. Standard ist 1883.",
+        "when": null
       },
       "key": "MQTT_PORT",
       "label": "MQTT Port",
@@ -9517,7 +9666,8 @@
           "MQTT",
           "USER"
         ],
-        "short": "Benutzername für MQTT. Leer lassen, wenn keine Authentifizierung verwendet wird."
+        "short": "Benutzername für MQTT. Leer lassen, wenn keine Authentifizierung verwendet wird.",
+        "when": null
       },
       "key": "MQTT_USER",
       "label": "MQTT Benutzer",
@@ -9578,7 +9728,8 @@
           "MAX",
           "ABS"
         ],
-        "short": "Absolute Obergrenze für plausible Netzleistungswerte. Messwerte oberhalb dieser Grenze werden verworfen und nicht für AUTO-Regelung oder Glättung verwendet. Default 30000 W schützt vor offensichtlich defekten SMA-/Shelly-Ausreißern."
+        "short": "Absolute Obergrenze für plausible Netzleistungswerte. Messwerte oberhalb dieser Grenze werden verworfen und nicht für AUTO-Regelung oder Glättung verwendet. Default 30000 W schützt vor offensichtlich defekten SMA-/Shelly-Ausreißern.",
+        "when": null
       },
       "key": "GRID_POWER_PLAUSIBILITY_MAX_ABS_W",
       "label": "Netzleistungs-Plausibilitätsgrenze",
@@ -9637,7 +9788,8 @@
           "LOG",
           "DIAGNOSTICS"
         ],
-        "short": "Schreibt kompakte SMA-Socket-/Paketdiagnosen in das Runtime-Textlog. Zusätzlich muss Datei-Logging aktiv sein, damit die Meldungen in zendure_runtime.log landen."
+        "short": "Schreibt kompakte SMA-Socket-/Paketdiagnosen in das Runtime-Textlog. Zusätzlich muss Datei-Logging aktiv sein, damit die Meldungen in zendure_runtime.log landen.",
+        "when": null
       },
       "key": "SMA_ENERGY_METER_LOG_DIAGNOSTICS",
       "label": "SMA-Direktquelle Diagnose ins Runtime-Log",
@@ -9697,7 +9849,8 @@
           "INTERVAL",
           "SECONDS"
         ],
-        "short": "Mindestabstand zwischen periodischen SMA_DIAG-Zeilen im Runtime-Log, wenn SMA-Diagnoselogging aktiv ist."
+        "short": "Mindestabstand zwischen periodischen SMA_DIAG-Zeilen im Runtime-Log, wenn SMA-Diagnoselogging aktiv ist.",
+        "when": null
       },
       "key": "SMA_ENERGY_METER_LOG_INTERVAL_SECONDS",
       "label": "SMA-Diagnose Log-Intervall",
@@ -9758,7 +9911,8 @@
           "WARN",
           "SECONDS"
         ],
-        "short": "Ab dieser Lücke zwischen empfangenen SMA-Speedwire-Paketen wird die Lücke in der SMA-Diagnose markiert. Der Stream kommt typischerweise ungefähr sekündlich."
+        "short": "Ab dieser Lücke zwischen empfangenen SMA-Speedwire-Paketen wird die Lücke in der SMA-Diagnose markiert. Der Stream kommt typischerweise ungefähr sekündlich.",
+        "when": null
       },
       "key": "SMA_ENERGY_METER_PACKET_GAP_WARN_SECONDS",
       "label": "SMA Paketlücken-Warnung",
@@ -9816,7 +9970,8 @@
           "METER",
           "GROUP"
         ],
-        "short": "Multicast-Adresse der SMA Energy Meter Daten. Typischer Standard: 239.12.255.254."
+        "short": "Multicast-Adresse der SMA Energy Meter Daten. Typischer Standard: 239.12.255.254.",
+        "when": null
       },
       "key": "SMA_ENERGY_METER_GROUP",
       "label": "SMA Energy Meter Multicast-Gruppe",
@@ -9874,7 +10029,8 @@
           "METER",
           "INTERFACE"
         ],
-        "short": "Optional: lokale IPv4-Adresse oder Interface-Name wie eth0 für den Multicast-Join. Bei mehreren Netzwerkinterfaces bevorzugt eth0 eintragen."
+        "short": "Optional: lokale IPv4-Adresse oder Interface-Name wie eth0 für den Multicast-Join. Bei mehreren Netzwerkinterfaces bevorzugt eth0 eintragen.",
+        "when": null
       },
       "key": "SMA_ENERGY_METER_INTERFACE",
       "label": "SMA Energy Meter Interface/IP",
@@ -9933,7 +10089,8 @@
           "PASSIVE",
           "ENABLED"
         ],
-        "short": "Nur relevant, wenn als Netzleistungsquelle die Shelly-kompatible HTTP-Quelle gewählt ist: startet zusätzlich einen passiven SMA Energy Meter / Sunny Home Manager 2.0 Listener zum Vergleich. Wenn SMA Home Manager direkt als Netzleistungsquelle gewählt ist, wird der Listener automatisch aktiviert; dieser Schalter ist dann fachlich redundant."
+        "short": "Nur relevant, wenn als Netzleistungsquelle die Shelly-kompatible HTTP-Quelle gewählt ist: startet zusätzlich einen passiven SMA Energy Meter / Sunny Home Manager 2.0 Listener zum Vergleich. Wenn SMA Home Manager direkt als Netzleistungsquelle gewählt ist, wird der Listener automatisch aktiviert; dieser Schalter ist dann fachlich redundant.",
+        "when": null
       },
       "key": "SMA_ENERGY_METER_PASSIVE_ENABLED",
       "label": "SMA-Direktquelle zusätzlich passiv beobachten",
@@ -9991,7 +10148,8 @@
           "METER",
           "PORT"
         ],
-        "short": "UDP-Port für SMA Energy Meter / Sunny Home Manager 2.0 Multicast. Typischer Standard: 9522."
+        "short": "UDP-Port für SMA Energy Meter / Sunny Home Manager 2.0 Multicast. Typischer Standard: 9522.",
+        "when": null
       },
       "key": "SMA_ENERGY_METER_PORT",
       "label": "SMA Energy Meter UDP-Port",
@@ -10051,7 +10209,8 @@
           "METER",
           "SERIAL"
         ],
-        "short": "Optionaler Filter auf die Seriennummer des Energy Meters am Netzbezugspunkt. Bei mehreren SMA Energy Metern vor produktiver Nutzung zwingend empfohlen."
+        "short": "Optionaler Filter auf die Seriennummer des Energy Meters am Netzbezugspunkt. Bei mehreren SMA Energy Metern vor produktiver Nutzung zwingend empfohlen.",
+        "when": null
       },
       "key": "SMA_ENERGY_METER_SERIAL",
       "label": "SMA Energy Meter Seriennummer",
@@ -10114,7 +10273,8 @@
           "SOCKET",
           "MODE"
         ],
-        "short": "Experten-/Diagnoseoption für die Koexistenz mit EVCC, UniMeter oder weiteren SMA-Speedwire-Listenern auf demselben Host. Default group_bind bindet auf die SMA-Multicast-Gruppe und war im Nachtlauf mit EVCC auf demselben Raspberry Pi stabil. Wildcard-Modi auf 0.0.0.0:9522 bleiben reine Diagnoseoptionen und können EVCC stören."
+        "short": "Experten-/Diagnoseoption für die Koexistenz mit EVCC, UniMeter oder weiteren SMA-Speedwire-Listenern auf demselben Host. Default group_bind bindet auf die SMA-Multicast-Gruppe und war im Nachtlauf mit EVCC auf demselben Raspberry Pi stabil. Wildcard-Modi auf 0.0.0.0:9522 bleiben reine Diagnoseoptionen und können EVCC stören.",
+        "when": null
       },
       "key": "SMA_ENERGY_METER_SOCKET_MODE",
       "label": "SMA Socket-Modus",
@@ -10191,7 +10351,8 @@
           "TIMEOUT",
           "SECONDS"
         ],
-        "short": "Maximales Alter eines direkt per SMA Energy Meter empfangenen Netzleistungswerts, falls die direkte SMA-Quelle als Regelquelle verwendet wird."
+        "short": "Maximales Alter eines direkt per SMA Energy Meter empfangenen Netzleistungswerts, falls die direkte SMA-Quelle als Regelquelle verwendet wird.",
+        "when": null
       },
       "key": "SMA_ENERGY_METER_STALE_TIMEOUT_SECONDS",
       "label": "SMA Direkt Timeout",
@@ -10249,7 +10410,8 @@
           "METER",
           "SUSY"
         ],
-        "short": "Optionaler Filter auf die SMA SUSy-ID des gewünschten Energy Meters. Bei mehreren SMA Energy Metern empfohlen. Beispiel: <SMA-SUSY-ID>."
+        "short": "Optionaler Filter auf die SMA SUSy-ID des gewünschten Energy Meters. Bei mehreren SMA Energy Metern empfohlen. Beispiel: <SMA-SUSY-ID>.",
+        "when": null
       },
       "key": "SMA_ENERGY_METER_SUSY_ID",
       "label": "SMA Energy Meter SUSy-ID",
@@ -10306,7 +10468,8 @@
           "Netzleistung · Shelly-kompatibel",
           "SHELLY"
         ],
-        "short": "IP-Adresse der Shelly- oder Shelly-kompatiblen Messdatenquelle. Das kann ein echter Shelly Pro 3EM oder ein anderer Shelly-kompatibler HTTP-Endpunkt sein."
+        "short": "IP-Adresse der Shelly- oder Shelly-kompatiblen Messdatenquelle. Das kann ein echter Shelly Pro 3EM oder ein anderer Shelly-kompatibler HTTP-Endpunkt sein.",
+        "when": null
       },
       "key": "SHELLY_IP",
       "label": "Shelly-kompatible HTTP-Quelle IP",
@@ -10364,7 +10527,8 @@
           "TIMEOUT",
           "SECONDS"
         ],
-        "short": "Maximales Alter des letzten gültigen Netzleistungswerts."
+        "short": "Maximales Alter des letzten gültigen Netzleistungswerts.",
+        "when": null
       },
       "key": "SHELLY_STALE_TIMEOUT_SECONDS",
       "label": "Shelly Timeout",
@@ -10425,7 +10589,8 @@
           "METER",
           "SOURCE"
         ],
-        "short": "Quelle für die Netzleistung am Hausanschlusspunkt. Shelly-kompatibles HTTP bleibt dauerhaft als Alternative für echte Shelly Pro 3EM und kompatible Endpunkte erhalten. SMA direkt nutzt das lokale SMA Energy Meter / Sunny Home Manager UDP-Multicast-Protokoll."
+        "short": "Quelle für die Netzleistung am Hausanschlusspunkt. Shelly-kompatibles HTTP bleibt dauerhaft als Alternative für echte Shelly Pro 3EM und kompatible Endpunkte erhalten. SMA direkt nutzt das lokale SMA Energy Meter / Sunny Home Manager UDP-Multicast-Protokoll.",
+        "when": null
       },
       "key": "GRID_METER_SOURCE",
       "label": "Netzleistungsquelle",
@@ -10495,7 +10660,8 @@
           "API",
           "ENABLED"
         ],
-        "short": "Aktiviert den Diagnose-Endpunkt /zendure-properties. Diese Option steuert die Web-Diagnoseseite; die Telemetrie-Fallback-Nutzung wird separat über die folgenden Optionen gesteuert."
+        "short": "Aktiviert den Diagnose-Endpunkt /zendure-properties. Diese Option steuert die Web-Diagnoseseite; die Telemetrie-Fallback-Nutzung wird separat über die folgenden Optionen gesteuert.",
+        "when": null
       },
       "key": "ZENDURE_LOCAL_API_ENABLED",
       "label": "Zendure lokale API Diagnose aktiv",
@@ -10555,7 +10721,8 @@
           "BACKOFF",
           "SECONDS"
         ],
-        "short": "Pause nach einem Timeout oder Fehler der lokalen Zendure-API, bevor der Controller erneut /properties/report abfragt. Schützt EVCC und die Zendure-Headunit vor aggressiven Wiederholungen."
+        "short": "Pause nach einem Timeout oder Fehler der lokalen Zendure-API, bevor der Controller erneut /properties/report abfragt. Schützt EVCC und die Zendure-Headunit vor aggressiven Wiederholungen.",
+        "when": null
       },
       "key": "ZENDURE_LOCAL_API_ERROR_BACKOFF_SECONDS",
       "label": "Zendure lokale API Fehler-Backoff",
@@ -10615,7 +10782,8 @@
           "INTERVAL",
           "SECONDS"
         ],
-        "short": "Mindestabstand zwischen zwei lokalen Zendure-API-Abfragen für Telemetrie und Temperaturdiagnose."
+        "short": "Mindestabstand zwischen zwei lokalen Zendure-API-Abfragen für Telemetrie und Temperaturdiagnose.",
+        "when": null
       },
       "key": "ZENDURE_LOCAL_API_POLL_INTERVAL_SECONDS",
       "label": "Zendure lokale API Poll-Intervall",
@@ -10674,7 +10842,8 @@
           "SOC",
           "PRIORITY"
         ],
-        "short": "Legt fest, welcher SOC-Wert aus /properties/report bevorzugt wird, falls sowohl properties.electricLevel als auch packData[0].socLevel vorhanden sind."
+        "short": "Legt fest, welcher SOC-Wert aus /properties/report bevorzugt wird, falls sowohl properties.electricLevel als auch packData[0].socLevel vorhanden sind.",
+        "when": null
       },
       "key": "ZENDURE_LOCAL_API_SOC_PRIORITY",
       "label": "Zendure lokale API SOC-Priorität",
@@ -10746,7 +10915,8 @@
           "FALLBACK",
           "ONLY"
         ],
-        "short": "Wenn aktiv, bleibt MQTT die bevorzugte Quelle für SOC und Istleistung. Die lokale API aktualisiert den aktiven SOC nur dann, wenn MQTT fehlt oder veraltet ist. Sobald MQTT wieder gültige Werte liefert, wechselt die Anzeige automatisch zurück zu MQTT."
+        "short": "Wenn aktiv, bleibt MQTT die bevorzugte Quelle für SOC und Istleistung. Die lokale API aktualisiert den aktiven SOC nur dann, wenn MQTT fehlt oder veraltet ist. Sobald MQTT wieder gültige Werte liefert, wechselt die Anzeige automatisch zurück zu MQTT.",
+        "when": null
       },
       "key": "ZENDURE_LOCAL_API_TELEMETRY_FALLBACK_ONLY",
       "label": "Zendure lokale API nur als Fallback",
@@ -10809,7 +10979,8 @@
           "FOR",
           "TELEMETRY"
         ],
-        "short": "Wenn aktiv, darf der Controller die lokale Zendure-API als zusätzliche Telemetriequelle für SOC, Istleistung und Akkutemperatur verwenden. Das ist ein Fallback gegen den bekannten Fall, dass Zendure nach Broker-/Raspberry-Neustart keine MQTT-Sensordaten mehr publiziert."
+        "short": "Wenn aktiv, darf der Controller die lokale Zendure-API als zusätzliche Telemetriequelle für SOC, Istleistung und Akkutemperatur verwenden. Das ist ein Fallback gegen den bekannten Fall, dass Zendure nach Broker-/Raspberry-Neustart keine MQTT-Sensordaten mehr publiziert.",
+        "when": null
       },
       "key": "ZENDURE_LOCAL_API_USE_FOR_TELEMETRY",
       "label": "Zendure lokale API für Telemetrie nutzen",
@@ -10869,7 +11040,8 @@
           "ZENDURE",
           "LOCAL"
         ],
-        "short": "IP-Adresse der Zendure-Headunit für lokale Abfragen wie /properties/report. Wird sowohl für die Diagnose-Webseite als auch für den optionalen Telemetrie-Fallback verwendet."
+        "short": "IP-Adresse der Zendure-Headunit für lokale Abfragen wie /properties/report. Wird sowohl für die Diagnose-Webseite als auch für den optionalen Telemetrie-Fallback verwendet.",
+        "when": null
       },
       "key": "ZENDURE_LOCAL_IP",
       "label": "Zendure lokale IP",
@@ -10934,7 +11106,8 @@
           "CAP",
           "SECONDS"
         ],
-        "short": "Begrenzt den Hintergrundrequest unabhängig vom höheren allgemeinen API-Timeout. Seit RC18 blockiert die lokale API den Regelzyklus nicht mehr."
+        "short": "Begrenzt den Hintergrundrequest unabhängig vom höheren allgemeinen API-Timeout. Seit RC18 blockiert die lokale API den Regelzyklus nicht mehr.",
+        "when": null
       },
       "key": "ZENDURE_LOCAL_API_CONTROL_TIMEOUT_CAP_SECONDS",
       "label": "Zendure lokale API Request-Timeoutdeckel",
@@ -10998,7 +11171,8 @@
           "TIMEOUT",
           "SECONDS"
         ],
-        "short": "Maximale Wartezeit eines asynchronen lokalen Zendure-API-Requests. Der Regelzyklus wartet nicht auf diesen Request."
+        "short": "Maximale Wartezeit eines asynchronen lokalen Zendure-API-Requests. Der Regelzyklus wartet nicht auf diesen Request.",
+        "when": null
       },
       "key": "ZENDURE_LOCAL_API_TIMEOUT_SECONDS",
       "label": "Zendure lokale API Timeout",
@@ -11056,7 +11230,8 @@
           "RESTART",
           "ENABLED"
         ],
-        "short": "Erlaubt der Weboberfläche, nach dem Speichern neustartrelevanter Einstellungen den systemd-Dienst kontrolliert neu zu starten. Aus Sicherheitsgründen ist diese Funktion standardmäßig deaktiviert und benötigt zusätzlich ein freigegebenes Restart-Hilfsscript mit sudoers-Regel."
+        "short": "Erlaubt der Weboberfläche, nach dem Speichern neustartrelevanter Einstellungen den systemd-Dienst kontrolliert neu zu starten. Aus Sicherheitsgründen ist diese Funktion standardmäßig deaktiviert und benötigt zusätzlich ein freigegebenes Restart-Hilfsscript mit sudoers-Regel.",
+        "when": null
       },
       "key": "WEB_SERVICE_RESTART_ENABLED",
       "label": "Service-Neustart aus Weboberfläche erlauben",
@@ -11114,7 +11289,8 @@
           "MAX",
           "FILES"
         ],
-        "short": "Erweiterte Dateianzahl für bewusst bestätigte größere Analysen. Auf dem Raspberry Pi nur mit Warnung verwenden."
+        "short": "Erweiterte Dateianzahl für bewusst bestätigte größere Analysen. Auf dem Raspberry Pi nur mit Warnung verwenden.",
+        "when": null
       },
       "key": "ANALYSIS_EXTENDED_MAX_FILES",
       "label": "Analyse Extended Dateien",
@@ -11172,7 +11348,8 @@
           "MAX",
           "ROWS"
         ],
-        "short": "Erweiterte Messpunktzahl für bewusst bestätigte größere Analysen. Alles darüber wird fail-closed abgelehnt."
+        "short": "Erweiterte Messpunktzahl für bewusst bestätigte größere Analysen. Alles darüber wird fail-closed abgelehnt.",
+        "when": null
       },
       "key": "ANALYSIS_EXTENDED_MAX_ROWS",
       "label": "Analyse Extended Messpunkte",
@@ -11231,7 +11408,8 @@
           "TOTAL",
           "BYTES"
         ],
-        "short": "Erweiterte Gesamtgröße für bewusst bestätigte größere Analysen. Alles darüber wird lokal abgelehnt und sollte offline/auf dem PC analysiert werden."
+        "short": "Erweiterte Gesamtgröße für bewusst bestätigte größere Analysen. Alles darüber wird lokal abgelehnt und sollte offline/auf dem PC analysiert werden.",
+        "when": null
       },
       "key": "ANALYSIS_EXTENDED_MAX_TOTAL_BYTES",
       "label": "Analyse Extended Gesamtgröße",
@@ -11290,7 +11468,8 @@
           "MEMORY",
           "LIMIT"
         ],
-        "short": "Speicherlimit für bewusst bestätigte größere Analyse-Worker."
+        "short": "Speicherlimit für bewusst bestätigte größere Analyse-Worker.",
+        "when": null
       },
       "key": "ANALYSIS_EXTENDED_WORKER_MEMORY_LIMIT_MB",
       "label": "Analyse Extended Speicherlimit",
@@ -11349,7 +11528,8 @@
           "TIMEOUT",
           "SECONDS"
         ],
-        "short": "Zeitlimit für bewusst bestätigte größere Analyse-Worker."
+        "short": "Zeitlimit für bewusst bestätigte größere Analyse-Worker.",
+        "when": null
       },
       "key": "ANALYSIS_EXTENDED_WORKER_TIMEOUT_SECONDS",
       "label": "Analyse Extended Timeout",
@@ -11406,7 +11586,8 @@
           "MAX",
           "FILES"
         ],
-        "short": "Maximale Dateianzahl für normale lokale Analysen auf dem Raspberry Pi. Standard ist bewusst konservativ, um EVCC, MQTT und Live-Regler zu schützen."
+        "short": "Maximale Dateianzahl für normale lokale Analysen auf dem Raspberry Pi. Standard ist bewusst konservativ, um EVCC, MQTT und Live-Regler zu schützen.",
+        "when": null
       },
       "key": "ANALYSIS_MAX_FILES",
       "label": "Analyse Pi-Safe Dateien",
@@ -11463,7 +11644,8 @@
           "MAX",
           "ROWS"
         ],
-        "short": "Maximale Messpunktzahl für normale lokale Analysen. Das Limit wird bereits beim Lesen geprüft; zusätzlich läuft die Analyse in einem isolierten Worker."
+        "short": "Maximale Messpunktzahl für normale lokale Analysen. Das Limit wird bereits beim Lesen geprüft; zusätzlich läuft die Analyse in einem isolierten Worker.",
+        "when": null
       },
       "key": "ANALYSIS_MAX_ROWS",
       "label": "Analyse Pi-Safe Messpunkte",
@@ -11521,7 +11703,8 @@
           "TOTAL",
           "BYTES"
         ],
-        "short": "Maximale Gesamtgröße der ausgewählten CSV-Dateien für normale lokale Analysen. Standard ist bewusst konservativ, weil Python-/HTML-/Diagrammstrukturen deutlich mehr RAM benötigen als die CSV-Datei auf der SD-Karte."
+        "short": "Maximale Gesamtgröße der ausgewählten CSV-Dateien für normale lokale Analysen. Standard ist bewusst konservativ, weil Python-/HTML-/Diagrammstrukturen deutlich mehr RAM benötigen als die CSV-Datei auf der SD-Karte.",
+        "when": null
       },
       "key": "ANALYSIS_MAX_TOTAL_BYTES",
       "label": "Analyse Pi-Safe Gesamtgröße",
@@ -11579,7 +11762,8 @@
           "MEMORY",
           "LIMIT"
         ],
-        "short": "Speicherlimit für normale Analyse-Worker. Bei Überschreitung wird nur der Analyse-Worker beendet, nicht der Live-Controller."
+        "short": "Speicherlimit für normale Analyse-Worker. Bei Überschreitung wird nur der Analyse-Worker beendet, nicht der Live-Controller.",
+        "when": null
       },
       "key": "ANALYSIS_WORKER_MEMORY_LIMIT_MB",
       "label": "Analyse Worker Speicherlimit",
@@ -11637,7 +11821,8 @@
           "TIMEOUT",
           "SECONDS"
         ],
-        "short": "Zeitlimit für normale Analyse-Worker. Bei Überschreitung wird der Worker abgebrochen."
+        "short": "Zeitlimit für normale Analyse-Worker. Bei Überschreitung wird der Worker abgebrochen.",
+        "when": null
       },
       "key": "ANALYSIS_WORKER_TIMEOUT_SECONDS",
       "label": "Analyse Timeout",
@@ -11694,7 +11879,8 @@
           "WEB",
           "PORT"
         ],
-        "short": "Port des optionalen separaten Analyse-/Replay-Webdienstes. Der Dienst wird mitgeliefert, aber nicht automatisch aktiviert."
+        "short": "Port des optionalen separaten Analyse-/Replay-Webdienstes. Der Dienst wird mitgeliefert, aber nicht automatisch aktiviert.",
+        "when": null
       },
       "key": "REPLAY_WEB_PORT",
       "label": "Analyse-Web Port",
@@ -11750,7 +11936,8 @@
           "DARK",
           "MODE"
         ],
-        "short": "Aktiviert ein dunkles Farbschema für Statusseite, Settings, Graph, Diagnose, Analyse-Linkseiten und Headless-Hinweisseite. Die Änderung wird nach dem Speichern sofort bei neu geladenen Webseiten sichtbar."
+        "short": "Aktiviert ein dunkles Farbschema für Statusseite, Settings, Graph, Diagnose, Analyse-Linkseiten und Headless-Hinweisseite. Die Änderung wird nach dem Speichern sofort bei neu geladenen Webseiten sichtbar.",
+        "when": null
       },
       "key": "UI_DARK_MODE",
       "label": "Dark Mode aktiv",
@@ -11805,7 +11992,8 @@
           "Darstellung",
           "MODE"
         ],
-        "short": "Vorbereitung für eine reduzierte Standardansicht und eine vollständige Expertenansicht. Expertenmodus ist fachlich ein Superset des Standardmodus: Kernstatus und Warnungen bleiben immer sichtbar, Expert-only-Details kommen zusätzlich hinzu."
+        "short": "Vorbereitung für eine reduzierte Standardansicht und eine vollständige Expertenansicht. Expertenmodus ist fachlich ein Superset des Standardmodus: Kernstatus und Warnungen bleiben immer sichtbar, Expert-only-Details kommen zusätzlich hinzu.",
+        "when": null
       },
       "key": "UI_MODE",
       "label": "Oberflächenmodus",
@@ -11871,7 +12059,8 @@
           "RESTART",
           "COMMAND"
         ],
-        "short": "Konfiguration für Service-Neustart Befehl."
+        "short": "Konfiguration für Service-Neustart Befehl.",
+        "when": null
       },
       "key": "SERVICE_RESTART_COMMAND",
       "label": "Service-Neustart Befehl",
@@ -11928,7 +12117,8 @@
           "CYCLE",
           "WARN"
         ],
-        "short": "Schreibt einen Runtime-Hinweis, wenn ein Reglerzyklus ohne Sleep länger dauert. Dient der RC3-Timingdiagnose."
+        "short": "Schreibt einen Runtime-Hinweis, wenn ein Reglerzyklus ohne Sleep länger dauert. Dient der RC3-Timingdiagnose.",
+        "when": null
       },
       "key": "SLOW_CYCLE_WARN_MS",
       "label": "Warnschwelle langsamer Zyklus",
@@ -11986,7 +12176,8 @@
           "BACKUP",
           "COUNT"
         ],
-        "short": "Anzahl alter Text-Logdateien, die behalten werden."
+        "short": "Anzahl alter Text-Logdateien, die behalten werden.",
+        "when": null
       },
       "key": "FILE_LOG_BACKUP_COUNT",
       "label": "Datei-Log Backup-Dateien",
@@ -12045,7 +12236,8 @@
           "LOG",
           "DIR"
         ],
-        "short": "Relatives oder absolutes Verzeichnis für die Text-Logdatei."
+        "short": "Relatives oder absolutes Verzeichnis für die Text-Logdatei.",
+        "when": null
       },
       "key": "FILE_LOG_DIR",
       "label": "Datei-Log Verzeichnis",
@@ -12104,7 +12296,8 @@
           "LOG",
           "ENABLED"
         ],
-        "short": "Schreibt Betriebs-, Fehler- und Diagnosemeldungen zusätzlich rollierend in eine Text-Logdatei. Das ersetzt nicht das CSV-Datenlogging."
+        "short": "Schreibt Betriebs-, Fehler- und Diagnosemeldungen zusätzlich rollierend in eine Text-Logdatei. Das ersetzt nicht das CSV-Datenlogging.",
+        "when": null
       },
       "key": "FILE_LOG_ENABLED",
       "label": "Datei-Logging aktiv",
@@ -12160,7 +12353,8 @@
           "FILE",
           "LOG"
         ],
-        "short": "Dateiname der aktuellen Runtime-Text-Logdatei, standardmäßig zendure_runtime.log."
+        "short": "Dateiname der aktuellen Runtime-Text-Logdatei, standardmäßig zendure_runtime.log.",
+        "when": null
       },
       "key": "FILE_LOG_FILE",
       "label": "Datei-Log Dateiname",
@@ -12218,7 +12412,8 @@
           "MAX",
           "BYTES"
         ],
-        "short": "Bei Überschreitung wird die Text-Logdatei rotiert. Alte Dateien werden nach dem Schema zendure_runtime_1.log, zendure_runtime_2.log usw. gehalten."
+        "short": "Bei Überschreitung wird die Text-Logdatei rotiert. Alte Dateien werden nach dem Schema zendure_runtime_1.log, zendure_runtime_2.log usw. gehalten.",
+        "when": null
       },
       "key": "FILE_LOG_MAX_BYTES",
       "label": "Max Datei-Log Größe",
@@ -12272,7 +12467,8 @@
           "System & Diagnose",
           "Runtime-Logging · Detailkanäle"
         ],
-        "short": "Allgemeine Konsolenausgaben."
+        "short": "Allgemeine Konsolenausgaben.",
+        "when": null
       },
       "key": "DEBUG",
       "label": "Debug Logging",
@@ -12328,7 +12524,8 @@
           "LOG",
           "CONTROL"
         ],
-        "short": "Schreibt zusätzliche menschenlesbare Debug-Meldungen zu Zielwerten und Regelentscheidungen ins Runtime-Textlog. Das ist kein strukturiertes Measurement-Logging; die V4-Standard-Messdaten enthalten die Reglerdiagnose bereits."
+        "short": "Schreibt zusätzliche menschenlesbare Debug-Meldungen zu Zielwerten und Regelentscheidungen ins Runtime-Textlog. Das ist kein strukturiertes Measurement-Logging; die V4-Standard-Messdaten enthalten die Reglerdiagnose bereits.",
+        "when": null
       },
       "key": "LOG_CONTROL",
       "label": "Regelentscheidungen ins Textlog schreiben (Debug)",
@@ -12384,7 +12581,8 @@
           "LOG",
           "MANUAL"
         ],
-        "short": "Loggt Aktionen des manuellen Modus, z. B. Start, Ziel erreicht und automatische Umschaltung nach Ziel-SOC."
+        "short": "Loggt Aktionen des manuellen Modus, z. B. Start, Ziel erreicht und automatische Umschaltung nach Ziel-SOC.",
+        "when": null
       },
       "key": "LOG_MANUAL",
       "label": "Manuellen Modus loggen",
@@ -12440,7 +12638,8 @@
           "LOG",
           "MQTT"
         ],
-        "short": "Loggt MQTT-Kommandos an Zendure."
+        "short": "Loggt MQTT-Kommandos an Zendure.",
+        "when": null
       },
       "key": "LOG_MQTT",
       "label": "MQTT loggen",
@@ -12497,7 +12696,8 @@
           "RAW",
           "RESPONSE"
         ],
-        "short": "Loggt vollständige Shelly-JSON-Antworten. Nur für Fehlersuche verwenden."
+        "short": "Loggt vollständige Shelly-JSON-Antworten. Nur für Fehlersuche verwenden.",
+        "when": null
       },
       "key": "LOG_RAW_RESPONSE",
       "label": "Shelly RAW loggen",
@@ -12553,7 +12753,8 @@
           "LOG",
           "SOC"
         ],
-        "short": "Loggt empfangene Zendure-SOC-Werte."
+        "short": "Loggt empfangene Zendure-SOC-Werte.",
+        "when": null
       },
       "key": "LOG_SOC",
       "label": "SOC loggen",
@@ -12609,7 +12810,8 @@
           "LOG",
           "VALUES"
         ],
-        "short": "Loggt Shelly-Rohwert und geglättete Netzleistung."
+        "short": "Loggt Shelly-Rohwert und geglättete Netzleistung.",
+        "when": null
       },
       "key": "LOG_VALUES",
       "label": "Werte loggen",
@@ -12666,7 +12868,8 @@
           "CONSECUTIVE",
           "ERRORS"
         ],
-        "short": "Nach dieser Anzahl direkt aufeinanderfolgender Fehler aktiviert der Controller den Safe-State. Safe-State bedeutet: Ladeleistung und Entladeleistung werden per MQTT auf 0 W gesetzt, der Modus wird auf SAFE_STATE gestellt und die Regelung versucht nicht weiter aktiv Leistung zu verschieben, bis wieder gültige Daten vorliegen und der nächste Regelzyklus sauber laufen kann."
+        "short": "Nach dieser Anzahl direkt aufeinanderfolgender Fehler aktiviert der Controller den Safe-State. Safe-State bedeutet: Ladeleistung und Entladeleistung werden per MQTT auf 0 W gesetzt, der Modus wird auf SAFE_STATE gestellt und die Regelung versucht nicht weiter aktiv Leistung zu verschieben, bis wieder gültige Daten vorliegen und der nächste Regelzyklus sauber laufen kann.",
+        "when": null
       },
       "key": "MAX_CONSECUTIVE_ERRORS",
       "label": "Max Fehler in Folge",
@@ -12724,7 +12927,8 @@
           "SAFE",
           "STATE"
         ],
-        "short": "Wenn aktiv, setzt der Controller bei erkannter MQTT-Trennung Lade- und Entladeleistung auf 0 W. Das ist die konservativste Variante, weil ohne MQTT keine zuverlässigen neuen Befehle und teilweise keine aktuellen Rückmeldungen möglich sind. Wenn diese Option nicht aktiv ist, läuft die Logik weiter und zeigt den MQTT-Fehler an; bereits zuletzt an Zendure gesendete Werte können dort aber weiter gültig bleiben, weil der Controller sie während der Trennung nicht sicher ändern kann. Nicht aktiv ist daher toleranter bei kurzen Broker-Aussetzern, aber weniger sicher bei längeren MQTT-Problemen."
+        "short": "Wenn aktiv, setzt der Controller bei erkannter MQTT-Trennung Lade- und Entladeleistung auf 0 W. Das ist die konservativste Variante, weil ohne MQTT keine zuverlässigen neuen Befehle und teilweise keine aktuellen Rückmeldungen möglich sind. Wenn diese Option nicht aktiv ist, läuft die Logik weiter und zeigt den MQTT-Fehler an; bereits zuletzt an Zendure gesendete Werte können dort aber weiter gültig bleiben, weil der Controller sie während der Trennung nicht sicher ändern kann. Nicht aktiv ist daher toleranter bei kurzen Broker-Aussetzern, aber weniger sicher bei längeren MQTT-Problemen.",
+        "when": null
       },
       "key": "MQTT_DISCONNECTED_SAFE_STATE",
       "label": "Safe-State bei MQTT-Trennung",
@@ -12786,7 +12990,8 @@
           "SHELLY",
           "ERROR"
         ],
-        "short": "Wenn aktiv, fährt der Controller bei anhaltenden Messfehlern auf 0 W."
+        "short": "Wenn aktiv, fährt der Controller bei anhaltenden Messfehlern auf 0 W.",
+        "when": null
       },
       "key": "SAFE_STATE_ON_SHELLY_ERROR",
       "label": "Safe-State bei Ausfall der aktiven Netzquelle",
@@ -12846,7 +13051,8 @@
           "TIMEOUT",
           "SECONDS"
         ],
-        "short": "Maximales Alter des Zendure-SOC. Bei Überschreitung wird Entladung blockiert."
+        "short": "Maximales Alter des Zendure-SOC. Bei Überschreitung wird Entladung blockiert.",
+        "when": null
       },
       "key": "SOC_STALE_TIMEOUT_SECONDS",
       "label": "SOC Timeout",
@@ -12905,7 +13111,8 @@
           "TIMEOUT",
           "SECONDS"
         ],
-        "short": "Alter der Zendure-Istleistungswerte, ab dem eine Warnung gesetzt wird."
+        "short": "Alter der Zendure-Istleistungswerte, ab dem eine Warnung gesetzt wird.",
+        "when": null
       },
       "key": "ZENDURE_POWER_STALE_TIMEOUT_SECONDS",
       "label": "Zendure Istwert Timeout",
@@ -12961,7 +13168,8 @@
           "HEADLESS",
           "MODE"
         ],
-        "short": "Schaltet die Weboberflächen ab. Beim Aufruf der Web-URLs wird nur noch eine Hinweisseite angezeigt. Die Regelung läuft weiter; Änderungen sind dann ausschließlich über die config.json und den regulären Config-Reload möglich. Ein Neustart ist zum Beenden des Headless Mode nicht erforderlich, wenn die config.json während des laufenden Programms angepasst wird."
+        "short": "Schaltet die Weboberflächen ab. Beim Aufruf der Web-URLs wird nur noch eine Hinweisseite angezeigt. Die Regelung läuft weiter; Änderungen sind dann ausschließlich über die config.json und den regulären Config-Reload möglich. Ein Neustart ist zum Beenden des Headless Mode nicht erforderlich, wenn die config.json während des laufenden Programms angepasst wird.",
+        "when": null
       },
       "key": "HEADLESS_MODE",
       "label": "Headless Mode",
@@ -13017,7 +13225,8 @@
           "WEB",
           "HOST"
         ],
-        "short": "Bind-Adresse des HTTP-Webservers. Eine Änderung betrifft den Netzwerkzugriff und wird erst nach Dienstneustart wirksam."
+        "short": "Bind-Adresse des HTTP-Webservers. Eine Änderung betrifft den Netzwerkzugriff und wird erst nach Dienstneustart wirksam.",
+        "when": null
       },
       "key": "WEB_HOST",
       "label": "WEB_HOST",
@@ -13073,7 +13282,8 @@
           "WEB",
           "PORT"
         ],
-        "short": "HTTP-Port des Webinterfaces. Änderung erfordert Neustart."
+        "short": "HTTP-Port des Webinterfaces. Änderung erfordert Neustart.",
+        "when": null
       },
       "key": "WEB_PORT",
       "label": "Web Port",
@@ -13133,7 +13343,8 @@
           "GRACE",
           "SECONDS"
         ],
-        "short": "Wartezeit nach MQTT-Reconnect/Broker-Neustart, bevor fehlende nicht-retained Live-Werte als Neustart-/App-Neuspeicherproblem gemeldet werden."
+        "short": "Wartezeit nach MQTT-Reconnect/Broker-Neustart, bevor fehlende nicht-retained Live-Werte als Neustart-/App-Neuspeicherproblem gemeldet werden.",
+        "when": null
       },
       "key": "ZENDURE_MQTT_AFTER_RESTART_GRACE_SECONDS",
       "label": "Zendure MQTT Neustart-Toleranz",
@@ -13193,7 +13404,8 @@
           "STALE",
           "SECONDS"
         ],
-        "short": "Maximales Alter kritischer Zendure-MQTT-Gruppen für die Live-/Partial-Stale-Diagnose. Warnungen verschwinden automatisch, sobald wieder frische nicht-retained Live-Werte eintreffen."
+        "short": "Maximales Alter kritischer Zendure-MQTT-Gruppen für die Live-/Partial-Stale-Diagnose. Warnungen verschwinden automatisch, sobald wieder frische nicht-retained Live-Werte eintreffen.",
+        "when": null
       },
       "key": "ZENDURE_MQTT_CRITICAL_GROUP_STALE_SECONDS",
       "label": "Zendure MQTT Live-Timeout",

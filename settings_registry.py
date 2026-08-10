@@ -6639,6 +6639,7 @@ def registry_snapshot() -> Dict[str, Any]:
                 "level": spec.help.help_level,
                 "short": spec.help.short_help,
                 "extended": spec.help.extended_help,
+                "when": spec.help.when_help,
                 "search_terms": list(spec.help.search_terms),
                 "handbook": None if spec.help.handbook_ref is None else {
                     "section_id": spec.help.handbook_ref.section_id,

@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Mapping, Optional
 
 from settings_registry import SETTINGS, SETTINGS_BY_KEY, Visibility, ApplyClass, Editability, DefaultClass, ResetPolicy
-from settings_help import (CATEGORY_GROUPS, CATEGORY_DESCRIPTIONS, SECTION_ORDER_OVERRIDES, SETTING_ORDER_OVERRIDES, LABEL_OVERRIDES, DEPENDENCY_RULES, build_category_specs, build_section_specs)
+from settings_help import (CATEGORY_GROUPS, CATEGORY_DESCRIPTIONS, SECTION_ORDER_OVERRIDES, SETTING_ORDER_OVERRIDES, LABEL_OVERRIDES, DEPENDENCY_RULES, HANDBOOK_GLOSSARY, build_category_specs, build_section_specs)
 from settings_runtime import SettingsRuntimeManager
 from settings_service import ISSUE_MESSAGES
 
@@ -84,6 +84,7 @@ def _help_payload(spec: Any) -> Dict[str, Any]:
         "level": help_spec.help_level,
         "short": help_spec.short_help,
         "extended": help_spec.extended_help,
+        "when": help_spec.when_help,
         "effect_increase": help_spec.effect_increase,
         "effect_decrease": help_spec.effect_decrease,
         "effect_enable": help_spec.effect_enable,
@@ -230,6 +231,7 @@ def build_settings_model(
         "effective_revision": manager.effective_revision(),
         "status": status,
         "categories": category_list,
+        "glossary": _handbook_payload(HANDBOOK_GLOSSARY),
         "global_issues": issue_by_key.get("__global__", []),
         "unknown_keys": sorted(key for key in configured if key not in SETTINGS_BY_KEY),
         "capabilities": {
