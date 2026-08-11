@@ -1,8 +1,12 @@
-# Zendure Energy Controller V13.0.0
+# Zendure Energy Controller V13.0.1
 
-**Build-ID:** `v13.0.0-20260811`
+**Build-ID:** `v13.0.1-20260811`
 
-V13.0.0 führt den neuen Entwicklungsblock **Konfigurationsstände / Import / Export** ein und korrigiert gleichzeitig die historische Darstellung der SOC-Grenzen und Nachtfenster im Speicher-SOC-Tagesgraphen. Die produktive Regelung selbst bleibt fachlich unverändert: AUTO, Harvest-Zielwertbildung, Cross-Charge, NIGHT, Command Lifecycle/Resync, Single-Owner und Measurement V4 sind No-Regression-Bereiche.
+V13.0.1 enthält den vollständigen V13.0.0-Entwicklungsblock **Konfigurationsstände / Import / Export** und korrigiert gleichzeitig die historische Darstellung der SOC-Grenzen und Nachtfenster im Speicher-SOC-Tagesgraphen. Die produktive Regelung selbst bleibt fachlich unverändert: AUTO, Harvest-Zielwertbildung, Cross-Charge, NIGHT, Command Lifecycle/Resync, Single-Owner und Measurement V4 sind No-Regression-Bereiche.
+
+## V13.0.1 Hotfix
+
+V13.0.1 behebt ausschließlich den Installations-Abnahmefehler aus V13.0.0: Der Post-Install-Readiness-Evaluator hatte noch die alte V12.13.0-Identität hart codiert und konnte dadurch einen bereits `ready=true` laufenden V13.0.0-Controller fälschlich zurückrollen. Der Evaluator liest seine erwartete Version und Build-ID nun direkt aus der gemeinsam ausgelieferten `version.py`. Der historische Measurement-V4-Graph-Backfill bleibt unverändert und wird nach erfolgreicher Installations-Abnahme automatisch ausgeführt.
 
 ## 1. Benannte Konfigurationsstände
 
@@ -27,7 +31,7 @@ Die Bundle-Integritätsprüfung verwendet kanonisches JSON und SHA-256. Der Hash
 
 ## 3. Scope und Portabilität
 
-Die SettingsRegistry bleibt Schemaautorität. In V13.0.0 sind alle 191 aktiven editierbaren LIVE/RESTART-Settings ausdrücklich einer Portabilitätsklasse zugeordnet.
+Die SettingsRegistry bleibt Schemaautorität. Im V13-Entwicklungsblock sind alle 191 aktiven editierbaren LIVE/RESTART-Settings ausdrücklich einer Portabilitätsklasse zugeordnet.
 
 Ein teilbares Regelprofil enthält ausschließlich `portable_profile`-Settings. Insbesondere Secrets, lokale Runtime-/Pfadangaben und anlagen-/standortspezifische Einstellungen werden nicht automatisch als Regelprofil transportiert.
 
@@ -67,7 +71,7 @@ Konfigurationsstände und Imports umgehen diesen Vertrag nicht.
 
 ## 7. Historisch korrekte SOC-Graph-Overlays
 
-V12.13.0 konnte historische Messpunkte korrekt cachen, aber dabei Max-/Min-SOC, Nachtreserve und Nachtfenster als Teil desselben Payloads veralten lassen. V13.0.0 trennt deshalb historische Messpunkte und Config-Overlays.
+V12.13.0 konnte historische Messpunkte korrekt cachen, aber dabei Max-/Min-SOC, Nachtreserve und Nachtfenster als Teil desselben Payloads veralten lassen. V13 trennt deshalb historische Messpunkte und Config-Overlays.
 
 - Measurement V4 selbst bleibt unverändert und führt weiterhin `config_control_hash`.
 - V13 nutzt daraus eine kleine separate `graph_config_timeline` im SQLite-Graphstore.
@@ -114,5 +118,5 @@ README_INSTALLATION.md
 RELEASE_INFO_V13_0_0.md
 V13_0_0_FINAL_VALIDATION.md
 SPEZIFIKATION_ZEC_V13_0_0_KONFIGURATIONSSTAENDE_IMPORT_EXPORT_UND_SOC_GRAPH_HISTORIE_V1_1.md
-V13_0_0_SOURCE_MANIFEST.sha256
+V13_0_1_SOURCE_MANIFEST.sha256
 ```

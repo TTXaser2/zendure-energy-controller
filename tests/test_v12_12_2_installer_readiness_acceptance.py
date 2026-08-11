@@ -1,7 +1,8 @@
 import copy
 import unittest
 
-from tools.evaluate_installation_readiness import classify
+from tools.evaluate_installation_readiness import EXPECTED_BUILD_ID, EXPECTED_VERSION, classify
+import version
 
 
 class V12122InstallerReadinessAcceptanceTests(unittest.TestCase):
@@ -9,8 +10,8 @@ class V12122InstallerReadinessAcceptanceTests(unittest.TestCase):
         return {
             "status": "degraded",
             "ready": False,
-            "version": "12.13.0",
-            "build_id": "v12.13.0-20260811",
+            "version": EXPECTED_VERSION,
+            "build_id": EXPECTED_BUILD_ID,
             "checks": {
                 "mqtt": {"ok": True},
                 "grid_measurement": {"ok": True},
@@ -88,6 +89,22 @@ class V12122InstallerReadinessAcceptanceTests(unittest.TestCase):
         payload = self.base_payload()
         payload["failed_checks"].append("grid_measurement")
         self.assertEqual(("REJECT", "UNSAFE_FAILED_CHECKS"), classify(payload))
+
+    def test_release_identity_is_derived_from_version_module(self):
+        self.assertEqual(version.APP_VERSION, EXPECTED_VERSION)
+        self.assertEqual(version.APP_BUILD_ID, EXPECTED_BUILD_ID)
+
+    def test_exact_current_ready_identity_is_accepted(self):
+        payload = self.base_payload()
+        payload["ready"] = True
+        payload["failed_checks"] = []
+        self.assertEqual(("READY", "FULL_READY"), classify(payload))
+
+    def test_previous_release_identity_is_rejected(self):
+        payload = self.base_payload()
+        payload["version"] = "13.0.0"
+        payload["build_id"] = "v13.0.0-20260811"
+        self.assertEqual(("REJECT", "IDENTITY"), classify(payload))
 
     def test_wrong_release_identity_is_rejected(self):
         payload = self.base_payload()

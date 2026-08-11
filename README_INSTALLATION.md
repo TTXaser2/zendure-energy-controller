@@ -1,6 +1,6 @@
-# Installation - Zendure Energy Controller V13.0.0
+# Installation - Zendure Energy Controller V13.0.1
 
-**Ziel-Build-ID:** `v13.0.0-20260811`
+**Ziel-Build-ID:** `v13.0.1-20260811`
 
 ## 1. Verbindlicher Ausgangsstand
 
@@ -26,8 +26,8 @@ Erhalten bleiben insbesondere:
 
 ```bash
 cd /home/pi/Downloads
-sha256sum zendure_controller_v13_0_0.zip
-unzip -t zendure_controller_v13_0_0.zip
+sha256sum zendure_controller_v13_0_1.zip
+unzip -t zendure_controller_v13_0_1.zip
 ```
 
 Der SHA256 muss exakt dem Wert der Releaseübergabe entsprechen.
@@ -36,10 +36,10 @@ Der SHA256 muss exakt dem Wert der Releaseübergabe entsprechen.
 
 ```bash
 cd /home/pi/Downloads
-rm -rf zendure_controller_v13_0_0
-unzip -q zendure_controller_v13_0_0.zip
-chmod +x zendure_controller_v13_0_0/tools/update_zendure_controller.sh
-bash zendure_controller_v13_0_0/tools/update_zendure_controller.sh v13_0_0
+rm -rf zendure_controller_v13_0_1
+unzip -q zendure_controller_v13_0_1.zip
+chmod +x zendure_controller_v13_0_1/tools/update_zendure_controller.sh
+bash zendure_controller_v13_0_1/tools/update_zendure_controller.sh v13_0_1
 ```
 
 Der Installer entpackt und verifiziert das Release-ZIP vor dem Dienststopp noch einmal selbst. Node.js ist keine Produktivvoraussetzung; wenn Node lokal vorhanden ist, wird die JavaScript-Syntax zusätzlich geprüft.
@@ -50,7 +50,7 @@ Vor dem Stoppen des Controllers prüft der Installer unter anderem:
 
 - exakt V12.13.0 / `v12.13.0-20260811` als installierte Quelle;
 - Paketversion und Build-ID;
-- `V13_0_0_SOURCE_MANIFEST.sha256`;
+- `V13_0_1_SOURCE_MANIFEST.sha256`;
 - Python-, Bash- und, falls verfügbar, JavaScript-Syntax;
 - Runtime-/Readiness-Smoke;
 - vollständige Config-Migration im `--check-only`-Modus;
@@ -64,8 +64,8 @@ Nach bestandenem Preflight und vor dem Ersetzen produktiver Dateien legt der Ins
 
 ```text
 /home/pi/zendure-controller-backup-<Zeitstempel>.tar.gz
-/home/pi/config.pre-v13.0.0.<Zeitstempel>.json
-/var/backups/zec-v13.0.0-root-artifacts-<Zeitstempel>
+/home/pi/config.pre-v13.0.1.<Zeitstempel>.json
+/var/backups/zec-v13.0.1-root-artifacts-<Zeitstempel>
 ```
 
 Bei einem echten Installationsfehler nach Beginn der Produktivtransaktion wird automatisch auf den gesicherten Stand zurückgerollt.
@@ -102,9 +102,9 @@ curl -fsS http://127.0.0.1:8080/ready  | python3 -m json.tool
 Erwartet:
 
 ```text
-APP_VERSION = "13.0.0"
-APP_VERSION_LABEL = "V13.0.0"
-APP_BUILD_ID = "v13.0.0-20260811"
+APP_VERSION = "13.0.1"
+APP_VERSION_LABEL = "V13.0.1"
+APP_BUILD_ID = "v13.0.1-20260811"
 Dienst = active
 /ready ready = true   (bevorzugter Normalfall)
 ```
@@ -151,7 +151,7 @@ Historische V3-Dateien bleiben offline/read-only. Es wird kein V3-Runtimewriter 
 /opt/zendure-controller/docs/Zendure_Energy_Controller_Handbuch.pdf
 ```
 
-Das Handbuch ist als Benutzerhandbuch V13.0.0 gekennzeichnet und erläutert zusätzlich Konfigurationsstände, Scope, Import/Export, teilbare Regelprofile, Secrets, Preview/CAS, Last-Good-Abgrenzung und historisch korrekte Graph-Overlays.
+Das fachlich unveränderte Benutzerhandbuch trägt weiterhin die V13.0.0-Kennzeichnung und erläutert zusätzlich Konfigurationsstände, Scope, Import/Export, teilbare Regelprofile, Secrets, Preview/CAS, Last-Good-Abgrenzung und historisch korrekte Graph-Overlays.
 
 ## 12. Rollbackhinweis
 
@@ -162,6 +162,6 @@ Ein manueller Rollback soll nur auf Basis des konkret vom Installer ausgegebenen
 ## 13. Git-Übernahme
 
 ```text
-Commit: feat: release ZEC V13.0.0 config states and historical graph overlays
-Tag:    v13.0.0
+Commit: fix: release ZEC V13.0.1 installer readiness identity hotfix
+Tag:    v13.0.1
 ```

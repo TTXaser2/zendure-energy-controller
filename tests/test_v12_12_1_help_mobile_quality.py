@@ -139,8 +139,8 @@ class V12121HelpMobileQualityTests(unittest.TestCase):
         self.assertIn('EXPECTED_SOURCE_VERSION="12.13.0"', script)
         self.assertIn('EXPECTED_SOURCE_BUILD_ID="v12.13.0-20260811"', script)
         self.assertIn('SOURCE_MODE="V12_13_0"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v13.0.0-20260811"', script)
-        self.assertIn('EXPECTED_VERSION="v13_0_0"', script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v13.0.1-20260811"', script)
+        self.assertIn('EXPECTED_VERSION="v13_0_1"', script)
         self.assertNotIn('SOURCE_MODE="V12_12_0"', script)
 
 

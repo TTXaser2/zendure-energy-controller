@@ -72,9 +72,9 @@ class V12115SettingsBugfixTests(unittest.TestCase):
         self.app = create_app(self.manager, self.state)
 
     def test_release_identity_is_v12_12_1_without_measurement_schema_change(self):
-        self.assertEqual("13.0.0", version.APP_VERSION)
-        self.assertEqual("V13.0.0", version.APP_VERSION_LABEL)
-        self.assertEqual("v13.0.0-20260811", version.APP_BUILD_ID)
+        self.assertEqual("13.0.1", version.APP_VERSION)
+        self.assertEqual("V13.0.1", version.APP_VERSION_LABEL)
+        self.assertEqual("v13.0.1-20260811", version.APP_BUILD_ID)
         self.assertFalse(hasattr(version, "CSV_SCHEMA"))
 
     def test_desktop_scroll_contract_owns_vertical_scroll_in_content_pane(self):
@@ -180,16 +180,16 @@ class V12115SettingsBugfixTests(unittest.TestCase):
 
     def test_updater_accepts_only_v12_13_0_and_keeps_transitional_readback_gate(self):
         script = UPDATER.read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_VERSION="v13_0_0"', script)
+        self.assertIn('EXPECTED_VERSION="v13_0_1"', script)
         self.assertIn('EXPECTED_SOURCE_VERSION="12.13.0"', script)
         self.assertIn('EXPECTED_SOURCE_BUILD_ID="v12.13.0-20260811"', script)
         self.assertIn('SOURCE_MODE="V12_13_0"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v13.0.0-20260811"', script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v13.0.1-20260811"', script)
         self.assertNotIn('SOURCE_MODE="V12_12_2"', script)
         self.assertIn("TRANSITIONAL_STREAK", script)
         self.assertIn("INPUT_LIMIT/OUTPUT_LIMIT-Readback", script)
         self.assertIn('PYTHONWARNINGS="error::ResourceWarning"', script)
-        self.assertIn("V13_0_0_SOURCE_MANIFEST.sha256", script)
+        self.assertIn("V13_0_1_SOURCE_MANIFEST.sha256", script)
 
 
 if __name__ == "__main__":

@@ -15,8 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class Rc20ReleaseIntegrationTests(unittest.TestCase):
     def test_version_is_rc20_without_measurement_schema_change(self):
-        self.assertEqual("13.0.0", version.APP_VERSION)
-        self.assertEqual("V13.0.0", version.APP_VERSION_LABEL)
+        self.assertEqual("13.0.1", version.APP_VERSION)
+        self.assertEqual("V13.0.1", version.APP_VERSION_LABEL)
         self.assertFalse(hasattr(version, "CSV_SCHEMA"))
 
     def test_migration_cli_check_apply_and_idempotence(self):
@@ -100,11 +100,11 @@ class Rc20ReleaseIntegrationTests(unittest.TestCase):
 
     def test_updater_is_exact_sequential_atomic_and_rollback_capable(self):
         script = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_VERSION="v13_0_0"', script)
+        self.assertIn('EXPECTED_VERSION="v13_0_1"', script)
         self.assertIn('EXPECTED_SOURCE_VERSION="12.13.0"', script)
         self.assertIn('EXPECTED_SOURCE_BUILD_ID="v12.13.0-20260811"', script)
-        self.assertIn('EXPECTED_TARGET_VERSION="13.0.0"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v13.0.0-20260811"', script)
+        self.assertIn('EXPECTED_TARGET_VERSION="13.0.1"', script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v13.0.1-20260811"', script)
         self.assertIn('SOURCE_MODE="V12_13_0"', script)
         self.assertIn('EXPECTED_TARGET_VERSION" ]', script)
         self.assertIn("migrate_config_to_current.py", script)
@@ -156,7 +156,7 @@ class Rc20ReleaseIntegrationTests(unittest.TestCase):
         self.assertIn('os.environ.get("ZEC_INSTALLER_PREFLIGHT") == "1"', web_ui)
 
     def test_release_manifest_must_not_ship_runtime_logs(self):
-        manifest = (ROOT / "V13_0_0_SOURCE_MANIFEST.sha256").read_text(encoding="utf-8")
+        manifest = (ROOT / "V13_0_1_SOURCE_MANIFEST.sha256").read_text(encoding="utf-8")
         self.assertNotIn("./logs/", manifest)
         self.assertNotIn(".sqlite3", manifest)
 

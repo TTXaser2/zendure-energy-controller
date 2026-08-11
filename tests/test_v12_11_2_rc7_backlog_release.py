@@ -19,8 +19,8 @@ from web_ui import build_status_view_payload
 
 class V12112Rc7BacklogReleaseTests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual("13.0.0", version.APP_VERSION)
-        self.assertEqual("V13.0.0", version.APP_VERSION_LABEL)
+        self.assertEqual("13.0.1", version.APP_VERSION)
+        self.assertEqual("V13.0.1", version.APP_VERSION_LABEL)
 
     def test_age_zero_is_fresh_not_stale(self):
         state = ControllerState()

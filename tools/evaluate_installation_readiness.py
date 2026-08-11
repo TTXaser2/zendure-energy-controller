@@ -2,13 +2,40 @@
 """Classify post-install /ready payloads without weakening runtime readiness."""
 from __future__ import annotations
 
+import ast
 import json
 import sys
 from pathlib import Path
 from typing import Any, Mapping
 
-EXPECTED_VERSION = "12.13.0"
-EXPECTED_BUILD_ID = "v12.13.0-20260811"
+
+def _read_release_identity() -> tuple[str, str]:
+    """Read the expected runtime identity from the release tree's version.py.
+
+    The installer and runtime both deploy this exact version.py. Keeping the
+    post-install readiness evaluator bound to that file prevents a stale,
+    separately maintained version/build constant from rejecting a healthy
+    target release.
+    """
+    version_path = Path(__file__).resolve().parents[1] / "version.py"
+    tree = ast.parse(version_path.read_text(encoding="utf-8"), filename=str(version_path))
+    values: dict[str, str] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        if not isinstance(target, ast.Name) or target.id not in {"APP_VERSION", "APP_BUILD_ID"}:
+            continue
+        if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+            values[target.id] = node.value.value
+    version = values.get("APP_VERSION", "")
+    build_id = values.get("APP_BUILD_ID", "")
+    if not version or not build_id:
+        raise RuntimeError(f"release identity missing in {version_path}")
+    return version, build_id
+
+
+EXPECTED_VERSION, EXPECTED_BUILD_ID = _read_release_identity()
 
 _REQUIRED_HEALTHY_CHECKS = (
     "mqtt",
