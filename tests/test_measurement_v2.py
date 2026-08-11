@@ -2,12 +2,11 @@ import csv
 import io
 import unittest
 
-from csv_logger import CSV_FIELDS, rows_to_csv
+from csv_logger import GRAPH_EXPORT_SCHEMA, rows_to_csv
 from measurement import classify_charge_acceptance, derive_zendure_actual_power, signed_zendure_target_w
-from version import CSV_SCHEMA
 
 
-class MeasurementV3Tests(unittest.TestCase):
+class MeasurementCompatibilityTests(unittest.TestCase):
     def test_signed_target_uses_positive_charge_negative_discharge(self):
         self.assertEqual(signed_zendure_target_w(500, 0), 500)
         self.assertEqual(signed_zendure_target_w(0, 400), -400)
@@ -20,16 +19,15 @@ class MeasurementV3Tests(unittest.TestCase):
         self.assertEqual(0, derived["signed_power_w"])
         self.assertEqual(300, derived["battery_signed_power_w"])
 
-    def test_csv_v3_uses_semicolon_and_schema_column(self):
-        text = rows_to_csv([{"schema": CSV_SCHEMA, "grid_power_w": -120.5, "zendure_target_power_w": 200}])
+    def test_graph_export_is_semicolon_separated_and_not_measurement(self):
+        text = rows_to_csv([{"grid_power_w": -120.5, "zendure_target_power_w": 200}])
         first_line = text.splitlines()[0]
-        self.assertIn("schema;", first_line)
-        self.assertIn("schema_version", first_line)
-        self.assertIn("measurement_profile", first_line)
+        self.assertTrue(first_line.startswith("schema;schema_version;"))
         self.assertNotIn(",", first_line)
         parsed = list(csv.DictReader(io.StringIO(text), delimiter=";"))
-        self.assertEqual(parsed[0]["schema"], CSV_SCHEMA)
-        self.assertIn("zendure_actual_power_w", CSV_FIELDS)
+        self.assertEqual(parsed[0]["schema"], GRAPH_EXPORT_SCHEMA)
+        self.assertEqual(parsed[0]["schema_version"], "1.0")
+        self.assertNotEqual(parsed[0]["schema"], "ZEC-MEASUREMENT-V4")
 
     def test_charge_acceptance_diagnostic_detects_not_accepting(self):
         result = classify_charge_acceptance(

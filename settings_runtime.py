@@ -265,6 +265,19 @@ def migrate_rc19_to_rc20(raw: Mapping[str, Any]) -> Tuple[Dict[str, Any], Tuple[
     result = dict(raw)
     steps = []
 
+    # V12.13: Measurement runtime is V4-only. Keep the marker for rollback
+    # compatibility, but migrate every historical selector value to the fixed 4.
+    schema_marker = str(result.get("MEASUREMENT_SCHEMA_VERSION", "") or "").strip().lower()
+    legacy_schema_marker = str(result.get("MEASUREMENT_LOG_SCHEMA", "") or "").strip().lower()
+    if schema_marker in {"3", "v3", "zec3", "zec-measurement-v3"} or (not schema_marker and legacy_schema_marker in {"3", "v3", "zec3", "zec-measurement-v3"}):
+        result["MEASUREMENT_SCHEMA_VERSION"] = "4"
+        steps.append("MIG-V12.13-MEASUREMENT-SCHEMA-3-TO-4")
+    elif schema_marker and schema_marker not in {"4", "v4", "zec4", "zec-measurement-v4"}:
+        raise ValueError("MEASUREMENT_SCHEMA_VERSION_INVALID")
+    elif schema_marker in {"v4", "zec4", "zec-measurement-v4"}:
+        result["MEASUREMENT_SCHEMA_VERSION"] = "4"
+        steps.append("MIG-V12.13-NORMALIZE-MEASUREMENT-SCHEMA-4")
+
     if "SERVICE_RESTART_COMMAND" in result:
         result.pop("SERVICE_RESTART_COMMAND", None)
         steps.append("MIG-RC20-REMOVE-FREE-RESTART-COMMAND")

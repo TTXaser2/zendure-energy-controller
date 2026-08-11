@@ -2,15 +2,15 @@ import os
 import tempfile
 import unittest
 
-from tools.replay_core import CSV_SCHEMA, analyze_file
+from tools.replay_core import LEGACY_V3_SCHEMA, analyze_file
 
 
 class ReplayCoreTests(unittest.TestCase):
     def test_analyze_file_accepts_only_v3_and_calculates_energy(self):
         content = (
             "schema;controller_version;epoch;dt_s;grid_power_w;zendure_soc_percent;mode;technical_limiters;mqtt_commands_sent_in_cycle;charge_acceptance_state\n"
-            f"{CSV_SCHEMA};12.7;1000;3;1200;50;DISCHARGE;;1;ok\n"
-            f"{CSV_SCHEMA};12.7;1003;3;-600;99;NIGHT_DISCHARGE;SMA_DISCHARGE;0;limited\n"
+            f"{LEGACY_V3_SCHEMA};12.7;1000;3;1200;50;DISCHARGE;;1;ok\n"
+            f"{LEGACY_V3_SCHEMA};12.7;1003;3;-600;99;NIGHT_DISCHARGE;SMA_DISCHARGE;0;limited\n"
         )
         with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False, encoding="utf-8") as f:
             f.write(content)

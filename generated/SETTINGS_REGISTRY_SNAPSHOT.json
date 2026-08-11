@@ -7278,17 +7278,13 @@
       },
       "key": "MEASUREMENT_SCHEMA_VERSION",
       "label": "Measurement-Schema",
-      "lifecycle": "fixed_v4_remove_setting",
+      "lifecycle": "fixed_v4_compatibility_marker",
       "maximum": null,
       "minimum": null,
       "options": [
         {
           "label": "ZEC-MEASUREMENT-V4",
           "value": "4"
-        },
-        {
-          "label": "Legacy V3",
-          "value": "3"
         }
       ],
       "order": 111,
@@ -7323,7 +7319,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Dateiname der aktuellen Measurement-Datei. Bei V4 und Standardname schreibt der Controller automatisch zendure_measurements_v4.csv, damit V3 und V4 nicht gemischt werden. Wirksamkeit nach Speichern: Wirksam im nächsten Zyklus; neue Datei/Stream.",
+        "extended": "Dateiname der aktuellen Measurement-V4-Datei. Beim Standardnamen schreibt der Controller automatisch zendure_measurements_v4.csv; produktive Messdaten werden ausschließlich im V4-Vertrag erzeugt. Wirksamkeit nach Speichern: Wirksam im nächsten Zyklus; neue Datei/Stream.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 13,
@@ -7340,7 +7336,7 @@
           "LOG",
           "FILE"
         ],
-        "short": "Dateiname der aktuellen Measurement-Datei. Bei V4 und Standardname schreibt der Controller automatisch zendure_measurements_v4.csv, damit V3 und V4 nicht gemischt werden.",
+        "short": "Dateiname der aktuellen Measurement-V4-Datei. Beim Standardnamen schreibt der Controller automatisch zendure_measurements_v4.csv; produktive Messdaten werden ausschließlich im V4-Vertrag erzeugt.",
         "when": null
       },
       "key": "MEASUREMENT_LOG_FILE",
@@ -7379,12 +7375,11 @@
       "default_new_install": "standard",
       "default_rc19": "off",
       "dependency_keys": [
-        "MEASUREMENT_SCHEMA_VERSION",
         "MEASUREMENT_LOG_STORAGE_TARGET"
       ],
       "editability": "editable",
       "help": {
-        "extended": "Aus: keine zyklischen Messdaten, schont die SD-Karte. Standard: vollständige Reglerdiagnose inklusive Datenaktualität, MQTT-Veraltet-Aggregat, Sollwertkaskade, Kommando und Szenario ohne Zendure. Erweitert: Standard plus Detaildaten für Simulation, What-if und tiefe MQTT-/Aktualitätsanalyse; erzeugt größere Dateien und sollte gezielt genutzt werden. Wirksamkeit nach Speichern: Wirksam im nächsten Zyklus; Moduswechsel erzeugt neuen Profil-/Dateikontext. Die Einstellung steht in Beziehung zu: MEASUREMENT_SCHEMA_VERSION, MEASUREMENT_LOG_STORAGE_TARGET.",
+        "extended": "Aus: keine zyklischen Messdaten, schont die SD-Karte. Standard: vollständige Reglerdiagnose inklusive Datenaktualität, MQTT-Veraltet-Aggregat, Sollwertkaskade, Kommando und Szenario ohne Zendure. Erweitert: Standard plus Detaildaten für Simulation, What-if und tiefe MQTT-/Aktualitätsanalyse; erzeugt größere Dateien und sollte gezielt genutzt werden. Wirksamkeit nach Speichern: Wirksam im nächsten Zyklus; Moduswechsel erzeugt neuen Profil-/Dateikontext. Die Einstellung steht in Beziehung zu: MEASUREMENT_LOG_STORAGE_TARGET.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 13,

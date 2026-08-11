@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 from measurement import derive_zendure_actual_power
-from tools.replay_core import AnalysisLimits, CSV_SCHEMA, analyze_files
+from tools.replay_core import AnalysisLimits, LEGACY_V3_SCHEMA, analyze_files
 from tools.replay_web import extended_limits, safe_limits, selection_profile
 
 
@@ -13,7 +13,7 @@ class V1285SafetyTests(unittest.TestCase):
         with path.open("w", encoding="utf-8") as f:
             f.write("schema;controller_version;epoch;dt_s;datetime_local;grid_power_w;zendure_target_power_w;zendure_actual_power_w;zendure_soc_percent;mode;mqtt_commands_sent_in_cycle;charge_acceptance_state\n")
             for i in range(rows):
-                f.write(f"{CSV_SCHEMA};12.8.5;{1000+i*3};3;2026-06-01 00:00:{i:02d};0;0;0;50;HOLD;0;ok\n")
+                f.write(f"{LEGACY_V3_SCHEMA};12.8.5;{1000+i*3};3;2026-06-01 00:00:{i:02d};0;0;0;50;HOLD;0;ok\n")
         return path
 
     def test_pack_discharge_is_separate_from_grid_side_command_effect(self):

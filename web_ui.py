@@ -32,7 +32,7 @@ from config_validator import ValidationIssue, restart_relevant_changes, split_is
 from cross_charge import cross_charge_enabled
 from csv_logger import rows_to_csv, estimate_retention_hours, measurement_log_mode, detected_log_mounts, resolve_log_path
 from measurement_db import query_graph_points, query_measurement_date_range, resolve_measurement_db_path, db_status_for_config
-from version import APP_BUILD_ID, APP_VERSION, APP_VERSION_LABEL, CSV_SCHEMA
+from version import APP_BUILD_ID, APP_VERSION, APP_VERSION_LABEL
 from status_page_v2 import render_global_topbar, render_status_page_v2
 from system_metrics import get_system_metrics
 from operational_events import OperationalEventJournal, read_recent_events
@@ -1424,6 +1424,7 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
 
     @app.get("/graph-data.csv")
     def graph_data_csv():
+        # Schema-neutraler UI-Graph-Export; ausdrücklich kein Measurement-V4-Paket.
         if config_manager.get().get("HEADLESS_MODE", False):
             return HTMLResponse(build_headless_page(config_manager.get()))
         return PlainTextResponse(

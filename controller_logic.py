@@ -4181,7 +4181,7 @@ class ZendureController:
         """Format a compact runtime-log line for measurement storage fallback events.
 
         This is operational logger diagnostics, intentionally kept out of the
-        ZEC-MEASUREMENT-V3 row schema.
+        schema-neutral internal controller snapshot used by Measurement V4.
         """
         parts = [
             "[MEASUREMENT_LOG] fallback_to_sd",

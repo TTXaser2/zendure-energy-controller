@@ -3,7 +3,7 @@ import unittest
 
 from config_manager import DEFAULT_CONFIG, validate_config
 from config_validator import split_issues, validate_config_semantics
-from csv_logger import CSV_FIELDS
+from measurement_v4_contract import STANDARD_HEADER
 from tests.test_operation_priority import OkShelly, base_cfg, fresh_state, make_controller
 from web_ui import apply_night_time_form_fields, build_settings_page, parse_hhmm
 
@@ -128,10 +128,9 @@ class V12815NightModeReserveSocTests(unittest.TestCase):
         self.assertTrue(any(issue.code == "NIGHT_STOP_SOC_BELOW_MIN_SOC" for issue in buckets["ERROR"]))
 
     def test_csv_fields_include_night_reserve_soc_contract(self):
-        self.assertIn("night_discharge_stop_soc_percent", CSV_FIELDS)
-        self.assertNotIn("night_discharge_latched_off", CSV_FIELDS)
-        self.assertNotIn("night_discharge_latch_reason", CSV_FIELDS)
-        self.assertIn("night_discharge_stop_reason", CSV_FIELDS)
+        self.assertIn("control_night_reserve_active", STANDARD_HEADER)
+        self.assertIn("control_night_exit_neutralized", STANDARD_HEADER)
+        self.assertNotIn("night_discharge_latched_off", STANDARD_HEADER)
 
 
 class V12815NightTimeSettingsTests(unittest.TestCase):

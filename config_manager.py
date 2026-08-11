@@ -356,14 +356,14 @@ CONFIG_SCHEMA: Dict[str, Dict[str, Any]] = {
 
     "GRAPH_HISTORY_LIMIT": {"group": "Messdaten / Historie", "label": "Graph-Historie", "type": "int", "min": 50, "max": 5000, "description": "Anzahl der im RAM gehaltenen Graph-Datenpunkte. Diese Historie ist unabhängig vom dauerhaften Messdaten-Logging."},
     "MEASUREMENT_LOG_MODE": {"group": "Messdaten / Historie", "label": "Messdaten-Logging", "type": "select", "options": {"off": "Aus", "standard": "Standard", "extended": "Erweitert"}, "description": "Aus: keine zyklischen Messdaten, schont die SD-Karte. Standard: vollständige Reglerdiagnose inklusive Freshness, MQTT-Stale-Aggregat, Sollwertkaskade, Kommando und Szenario ohne Zendure. Erweitert: Standard plus Detaildaten für Simulation, What-if und tiefe MQTT-/Freshness-Analyse; erzeugt größere Dateien und sollte gezielt genutzt werden."},
-    "MEASUREMENT_SCHEMA_VERSION": {"group": "Messdaten / Historie", "label": "Measurement-Schema", "type": "select", "options": {"4": "ZEC-MEASUREMENT-V4", "3": "Legacy V3"}, "description": "Legt das dauerhafte Measurement-Schema fest. V4 schreibt separate V4-CSV-Dateien plus Manifest, Config-Snapshots und Runtime-JSONL. Legacy V3 bleibt für Rollback/Altanalyse verfügbar."},
+    "MEASUREMENT_SCHEMA_VERSION": {"group": "Messdaten / Historie", "label": "Measurement-Schema", "type": "select", "options": {"4": "ZEC-MEASUREMENT-V4"}, "description": "In V12.13.0 ein fester, nicht editierbarer Kompatibilitätsmarker. Produktives Measurement wird ausschließlich als V4 geschrieben; historische V3-Dateien bleiben nur offline lesbar."},
     "MEASUREMENT_DB_ENABLED": {"group": "Messdaten / Historie", "label": "SQLite-Graphspeicher", "type": "bool", "description": "Schreibt parallel zu CSV/V4 einen leichten SQLite-Store für schnelle Status- und Graphdaten. Läuft auch, wenn Messdaten-CSV deaktiviert ist; die Regelung wird bei DB-Fehlern nicht blockiert."},
     "MEASUREMENT_DB_FILE": {"group": "Messdaten / Historie", "label": "SQLite-Datei", "type": "str", "description": "Dateiname des SQLite-Graphspeichers im aktiven Messdatenverzeichnis, sofern kein absoluter SQLite-Pfad gesetzt ist."},
     "MEASUREMENT_DB_PATH": {"group": "Messdaten / Historie", "label": "SQLite-Pfad optional", "type": "str", "description": "Optionaler absoluter Pfad zur SQLite-Datei. Leer bedeutet: automatisch neben den Messdaten im aktiven Speicherziel."},
     "MEASUREMENT_LOG_STORAGE_TARGET": {"group": "Messdaten / Historie", "label": "Speicherziel", "type": "select", "options": {"internal_sd": "Interne SD-Karte", "external_mount": "erkannter USB-/Mountpoint", "custom_path": "benutzerdefinierter Pfad"}, "description": "Legt fest, wo Messdaten primär geschrieben werden. Bei erkanntem USB-/Mountpoint wird ein schreibbarer externer Mount automatisch verwendet; das Feld USB-/Mountpoint kann optional einen bestimmten Mountpoint festlegen."},
     "MEASUREMENT_LOG_MOUNTPOINT": {"group": "Messdaten / Historie", "label": "USB-/Mountpoint", "type": "str", "description": "Optionaler Mountpoint für externes Messdaten-Logging, z. B. /media/pi/USBSTICK oder /mnt/zec-logs. Wenn leer, wird bei Speicherziel external_mount ein erkannter schreibbarer USB-/Mountpoint automatisch verwendet."},
     "MEASUREMENT_LOG_DIR": {"group": "Messdaten / Historie", "label": "Messdaten-Verzeichnis / Custom-Pfad", "type": "str", "description": "Verzeichnis für ZEC-MEASUREMENT-Messdaten. Bei internal_sd/custom_path wird dieses Feld direkt verwendet. Bei external_mount wird es als Unterordner auf dem USB-/Mountpoint verwendet, z. B. USB + ZEC/logs."},
-    "MEASUREMENT_LOG_FILE": {"group": "Messdaten / Historie", "label": "Messdaten-Datei", "type": "str", "description": "Dateiname der aktuellen Measurement-Datei. Bei V4 und Standardname schreibt der Controller automatisch zendure_measurements_v4.csv, damit V3 und V4 nicht gemischt werden."},
+    "MEASUREMENT_LOG_FILE": {"group": "Messdaten / Historie", "label": "Messdaten-Datei", "type": "str", "description": "Dateiname der aktuellen Measurement-V4-Datei. Beim Standardnamen schreibt der Controller automatisch zendure_measurements_v4.csv; produktive Messdaten werden ausschließlich im V4-Vertrag erzeugt."},
     "MEASUREMENT_LOG_MAX_BYTES": {"group": "Messdaten / Historie", "label": "Max Dateigröße", "type": "int", "min": 100_000, "max": 100_000_000, "unit": "Bytes", "description": "Bei Überschreitung wird rotiert. Zusammen mit der Dateianzahl bestimmt dieser Wert die geschätzte Aufbewahrung."},
     "MEASUREMENT_LOG_BACKUP_COUNT": {"group": "Messdaten / Historie", "label": "Rotationsdateien", "type": "int", "min": 1, "max": 20, "description": "Anzahl der Messdaten-Dateien, die rollierend behalten werden. Höhere Werte verlängern die analysierbare Historie, benötigen aber mehr Speicherplatz."},
     "MEASUREMENT_LOG_MIN_FREE_DISK_MB": {"group": "Messdaten / Historie", "label": "Mindestfreier Speicher", "type": "int", "min": 100, "max": 100000, "unit": "MB", "description": "Mindestfreier Speicher am aktuell aktiven Messdatenziel: interne SD, externer USB-/Mountpoint oder bei aktivem Fallback der SD-Fallback-Pfad. Wenn weniger Speicher frei ist, pausiert das Messdaten-Logging; die Regelung läuft weiter."},
@@ -524,12 +524,17 @@ def validate_config(candidate: Dict[str, Any]) -> Tuple[Dict[str, Any], bool]:
             result["SECOND_BATTERY_STALE_BLOCK_CHARGE"] = bool(result.get("EVCC_STALE_BLOCK_CHARGE", True))
             changed = True
 
-    # V12.10: neue/normalisierte Installationen schreiben standardmäßig V4.
-    # Bestehende Installationen können explizit auf Legacy V3 zurückgestellt werden.
-    if isinstance(candidate, dict):
-        if "MEASUREMENT_SCHEMA_VERSION" not in candidate and "MEASUREMENT_LOG_SCHEMA" not in candidate:
-            result["MEASUREMENT_SCHEMA_VERSION"] = "4"
-            changed = True
+    # V12.13: produktive Runtime ist fest V4. Der Key bleibt als inerter
+    # Kompatibilitätsmarker erhalten, damit ein Code-Rollback auf V12.12.x mit
+    # derselben Config weiterhin sicher V4 verwendet. Historisches 3 wird
+    # einmalig auf 4 migriert; MEASUREMENT_LOG_SCHEMA ist keine Runtimewahl mehr.
+    if result.get("MEASUREMENT_SCHEMA_VERSION") != "4":
+        result["MEASUREMENT_SCHEMA_VERSION"] = "4"
+        changed = True
+    if isinstance(candidate, dict) and candidate.get("MEASUREMENT_LOG_SCHEMA") is not None:
+        # Legacy-Key bleibt unbekannter Key und wird nach Whole-File-Vertrag
+        # erhalten, beeinflusst aber den produktiven Writer nicht mehr.
+        pass
 
     # V12.9: einmalige Übersetzung alter CSV_LOG_*-Keys in das neue
     # betriebslogische Messdaten-Logging. Keine V2-Datenmigration.

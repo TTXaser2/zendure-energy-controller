@@ -2,7 +2,7 @@ import os
 import tempfile
 import unittest
 
-from tools.replay_core import CSV_SCHEMA, analyze_files
+from tools.replay_core import LEGACY_V3_SCHEMA, analyze_files
 from tools.replay_report import command_efficiency_table, deadband_table, fair_regulator_table, recommendations_table, summary_cards
 
 
@@ -20,8 +20,8 @@ class V1283AnalysisTests(unittest.TestCase):
 
     def test_fair_quality_separates_non_controllable_max_soc_export(self):
         f = self._write_csv([
-            f"{CSV_SCHEMA};12.8.4;1000;3;2026-05-29 12:00:00;-4000;2100;0;0;0;99;SAFE_STATE;;0;not_accepting\n",
-            f"{CSV_SCHEMA};12.8.4;1003;3;2026-05-29 12:00:03;-200;300;250;0;0;50;CHARGE;;1;ok\n",
+            f"{LEGACY_V3_SCHEMA};12.8.4;1000;3;2026-05-29 12:00:00;-4000;2100;0;0;0;99;SAFE_STATE;;0;not_accepting\n",
+            f"{LEGACY_V3_SCHEMA};12.8.4;1003;3;2026-05-29 12:00:03;-200;300;250;0;0;50;CHARGE;;1;ok\n",
         ])
         try:
             result = analyze_files([f], max_soc_percent=99, max_charge_power_w=2100, max_discharge_power_w=2100)

@@ -3,6 +3,9 @@
 #
 # ZEC-MEASUREMENT-V4 contract constants.
 
+MEASUREMENT_SCHEMA_NAME = "ZEC-MEASUREMENT-V4"
+MEASUREMENT_SCHEMA_VERSION = 4
+
 import hashlib
 from typing import Dict, List
 

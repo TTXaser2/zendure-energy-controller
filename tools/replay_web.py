@@ -32,7 +32,8 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 from replay_core import (  # noqa: E402
-    CSV_SCHEMA,
+    CURRENT_MEASUREMENT_SCHEMA,
+    LEGACY_V3_SCHEMA,
     AnalysisLimits,
     analyze_files,
     summary_csv,
@@ -263,8 +264,8 @@ def _scan_csv_profile(paths: Sequence[Path], max_scan_rows: int = 100_000) -> Di
                     if rows < max_scan_rows:
                         if schema_kind == "v3":
                             schema = (row.get("schema") or "").strip()
-                            if schema != CSV_SCHEMA:
-                                schema_errors.append(f"{path.name}: Schema {schema or 'leer'} ist nicht {CSV_SCHEMA}")
+                            if schema != LEGACY_V3_SCHEMA:
+                                schema_errors.append(f"{path.name}: Schema {schema or 'leer'} ist nicht {LEGACY_V3_SCHEMA}")
                                 break
                             label = _csv_timestamp_label(row)
                         else:
@@ -1220,7 +1221,7 @@ def build_app() -> FastAPI:
     @app.get("/health")
     def health():
         job = _current_job_snapshot()
-        return {"status": "ok", "schema": CSV_SCHEMA, "version": REPLAY_VERSION, "analysis_job": {"status": job.get("status"), "phase": job.get("phase")} if job else None}
+        return {"status": "ok", "schema": CURRENT_MEASUREMENT_SCHEMA, "legacy_v3_read_only": True, "legacy_v3_schema": LEGACY_V3_SCHEMA, "version": REPLAY_VERSION, "analysis_job": {"status": job.get("status"), "phase": job.get("phase")} if job else None}
 
     return app
 

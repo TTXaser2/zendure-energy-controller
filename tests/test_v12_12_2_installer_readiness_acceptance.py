@@ -9,8 +9,8 @@ class V12122InstallerReadinessAcceptanceTests(unittest.TestCase):
         return {
             "status": "degraded",
             "ready": False,
-            "version": "12.12.2",
-            "build_id": "v12.12.2-20260810",
+            "version": "12.13.0",
+            "build_id": "v12.13.0-20260811",
             "checks": {
                 "mqtt": {"ok": True},
                 "grid_measurement": {"ok": True},

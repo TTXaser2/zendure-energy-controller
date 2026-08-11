@@ -13,7 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
-CSV_SCHEMA = "ZEC-MEASUREMENT-V3"
+CURRENT_MEASUREMENT_SCHEMA = "ZEC-MEASUREMENT-V4"
+LEGACY_V3_SCHEMA = "ZEC-MEASUREMENT-V3"
 
 DEFAULT_MAX_FILES = 2
 DEFAULT_MAX_TOTAL_BYTES = 6 * 1024 * 1024
@@ -169,10 +170,10 @@ def _event(events: List[Dict[str, Any]], row: Dict[str, Any], severity: str, kin
 
 
 def read_measurement_csv(path: str, max_rows: Optional[int] = None, cancel_check: Optional[Callable[[], bool]] = None) -> CsvMeasurementFile:
-    """Read a ZEC-MEASUREMENT-V3 CSV file.
+    """Read a historical ZEC-MEASUREMENT-V3 file in offline/read-only mode.
 
-    Legacy CSV formats are intentionally unsupported. The schema column must be
-    present and every non-empty row must declare ZEC-MEASUREMENT-V3.
+    Older formats remain unsupported. The schema column must be present and
+    every non-empty row must explicitly declare the historical V3 schema.
     """
     if not os.path.exists(path):
         raise FileNotFoundError(path)
@@ -193,8 +194,8 @@ def read_measurement_csv(path: str, max_rows: Optional[int] = None, cancel_check
             if not any((v or "").strip() for v in row.values()):
                 continue
             schema = (row.get("schema") or "").strip()
-            if schema != CSV_SCHEMA:
-                raise ValueError(f"Nicht unterstütztes CSV-Schema: {schema or 'leer'}. Dieses Analyse-/Replay-Tool akzeptiert ausschließlich gültige ZEC-MEASUREMENT-V3-Dateien.")
+            if schema != LEGACY_V3_SCHEMA:
+                raise ValueError(f"Nicht unterstütztes CSV-Schema: {schema or 'leer'}. Historische V3-Dateien werden nur offline/read-only unterstützt; aktuelle produktive Messdaten verwenden V4.")
             rows.append(dict(row))
             if max_rows is not None and len(rows) > max_rows:
                 raise ValueError(f"Zu viele Messpunkte: maximal {max_rows:,} Zeilen pro Analyselauf.".replace(",", "."))
@@ -1247,7 +1248,7 @@ def analyze_rows(
     }
 
     result = {
-        "schema": CSV_SCHEMA,
+        "schema": LEGACY_V3_SCHEMA,
         "analysis_version": "12.8.4",
         "file_count": int(file_count),
         "filenames": filenames or [],

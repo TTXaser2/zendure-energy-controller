@@ -151,6 +151,7 @@ def _row_schema_supported(row: Dict[str, Any]) -> bool:
     if schema.startswith("ZEC-MEASUREMENT-V2"):
         return False
     if schema.startswith("ZEC-MEASUREMENT-V3") or schema.startswith("ZEC-MEASUREMENT-V4"):
+        # V3 is accepted only as an offline historical import source; the live writer is V4-only.
         return True
     if version in {"3", "4"}:
         return True

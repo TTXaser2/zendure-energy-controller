@@ -17,7 +17,7 @@ from measurement import derive_zendure_actual_power, signed_zendure_target_w
 from zendure_power_observation import derive_zendure_power_observation
 from freshness import boolean_status, timestamp_status
 from translations import limiter_text, mode_label, path_label, technical_limiter_text
-from version import APP_VERSION, CSV_SCHEMA
+from version import APP_VERSION
 
 
 def power_flow_meaning(value: float, positive_label: str = "Netzbezug", negative_label: str = "Einspeisung", deadband: float = 1.0) -> str:
@@ -449,7 +449,7 @@ class ControllerState:
     event_history: Deque[Dict[str, Any]] = field(default_factory=lambda: deque(maxlen=50))
     mqtt_topic_diagnostics: Deque[Dict[str, Any]] = field(default_factory=lambda: deque(maxlen=200))
 
-    # ZEC-MEASUREMENT-V3: Zendure MQTT Live-/Retained-/Partial-Stale-Diagnose.
+    # Interner Controller-Snapshot: Zendure MQTT Live-/Retained-/Partial-Stale-Diagnose.
     zendure_mqtt_connect_epoch: Optional[float] = None
     zendure_mqtt_disconnect_epoch: Optional[float] = None
     zendure_mqtt_topics: Dict[str, Dict[str, Any]] = field(default_factory=dict)
@@ -465,7 +465,7 @@ class ControllerState:
     zendure_mqtt_missing_critical_groups: str = ""
     zendure_mqtt_stale_critical_groups: str = ""
 
-    # ZEC-MEASUREMENT-V3: Logging darf die Regelung nie blockieren.
+    # Interner Controller-Snapshot: Logging darf die Regelung nie blockieren.
     measurement_log_status: str = "disabled"
     measurement_log_status_reason: str = "Messdaten-Logging aus."
     measurement_estimated_retention_hours: Optional[float] = None
@@ -491,7 +491,7 @@ class ControllerState:
     measurement_db_rows_dropped: int = 0
     measurement_db_size_bytes: int = 0
 
-    # ZEC-MEASUREMENT-V3: Istleistungs-Freshness.
+    # Interner Controller-Snapshot: Istleistungs-Freshness.
     actual_zendure_power_valid: bool = False
     actual_zendure_power_age_s: Optional[int] = None
     actual_zendure_power_validity_reason: str = "ZENDURE_POWER_MISSING"
@@ -575,7 +575,7 @@ class ControllerState:
             self.invalidate_zendure_command_state("MQTT-Verbindung getrennt")
 
     def track_zendure_mqtt_topic(self, topic: str, payload: str, retain: bool, group: str, now: Optional[float] = None) -> None:
-        """Track topic freshness and retained/live evidence for V3 diagnostics."""
+        """Track topic freshness and retained/live evidence for controller diagnostics."""
         if not topic.startswith("Zendure/"):
             return
         now_epoch = now if now is not None else time.time()
@@ -1447,14 +1447,12 @@ class ControllerState:
 
             row = {
                 # Schema / Zeitbasis
-                "schema": CSV_SCHEMA,
                 "controller_version": APP_VERSION,
                 "date": now_dt.strftime("%Y-%m-%d"),
                 "timestamp": now_dt.strftime("%H:%M:%S"),
                 "datetime_local": now_dt.strftime("%Y-%m-%d %H:%M:%S"),
                 "epoch": round(now_epoch, 3),
                 "dt_s": round(dt_s, 3),
-                "schema_version": "3.0",
                 "measurement_profile": "standard",
                 "controller_version_label": f"V{APP_VERSION}",
                 "cycle_id": self.loop_counter,

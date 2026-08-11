@@ -297,14 +297,14 @@ class UiFieldFixContractTests(unittest.TestCase):
         snap={
             'instance_owner_active':True,
             'instance_owner_pid':4242,
-            'instance_owner_build_id':'v12.12.2-20260810',
+            'instance_owner_build_id':'v12.13.0-20260811',
             'instance_owner_since_utc':'2026-08-10T12:00:00Z',
             'instance_owner_lock_path':'/opt/zendure-controller/zendure_controller.instance.lock',
         }
         health=build_health_payload(snap)
         self.assertEqual(True,health['instance_owner']['active'])
         self.assertEqual(4242,health['instance_owner']['pid'])
-        self.assertEqual('v12.12.2-20260810',health['instance_owner']['build_id'])
+        self.assertEqual('v12.13.0-20260811',health['instance_owner']['build_id'])
         self.assertNotIn('lock_path',health['instance_owner'])
 
     def test_desktop_info_panel_is_click_pinned_not_hover_lifecycle(self):

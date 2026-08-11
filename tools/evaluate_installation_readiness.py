@@ -7,8 +7,8 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping
 
-EXPECTED_VERSION = "12.12.2"
-EXPECTED_BUILD_ID = "v12.12.2-20260810"
+EXPECTED_VERSION = "12.13.0"
+EXPECTED_BUILD_ID = "v12.13.0-20260811"
 
 _REQUIRED_HEALTHY_CHECKS = (
     "mqtt",

@@ -158,7 +158,7 @@ class V12120SettingsHelpContractTests(unittest.TestCase):
         self.assertNotIn("192.168.0.40", xml)
         self.assertNotIn("MAX_CHARGE_POWER_W = 2100", xml)
         self.assertNotIn("MAX_DISCHARGE_POWER_W = 2100", xml)
-        self.assertIn("Benutzerhandbuch V12.12.1", xml)
+        self.assertIn("Benutzerhandbuch V12.13.0", xml)
 
     def test_ui_contains_help_modal_search_guidance_and_preview_help_contract(self):
         js = (ROOT / "static" / "settings_v2.js").read_text(encoding="utf-8")

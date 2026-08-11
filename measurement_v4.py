@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (c) 2026 Eduard Fuchs <info@eduardfuchs.de>
 #
-# ZEC-MEASUREMENT-V4 runtime writer. The writer is intentionally separate from
-# the legacy V3 csv_logger field list so V3 can remain available during the V12.10 release-candidate phase.
+# ZEC-MEASUREMENT-V4 runtime writer. Since V12.13.0 this is the sole productive
+# Measurement CSV writer; historical V3 compatibility exists only in offline tools.
 
 import csv
 from collections import deque

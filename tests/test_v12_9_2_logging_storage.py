@@ -11,28 +11,15 @@ from tools.replay_web import selection_profile
 
 
 class V1292LoggingStorageTests(unittest.TestCase):
-    def test_bool_values_are_written_as_1_0_and_v3_soc_is_read(self):
-        csv_text = rows_to_csv([
-            {
-                "datetime_local": "2026-06-16 10:00:00",
-                "epoch": 1,
-                "dt_s": 3,
-                "grid_power_w": 0,
-                "norm_zendure_soc_percent": 75,
-                "soc_available": True,
-                "soc_fresh": True,
-                "soc_valid": True,
-                "zendure_actual_power_w": 0,
-                "mode": "AUTO_DISCHARGE",
-            }
-        ])
-        self.assertIn(";1;", csv_text)
+    def test_graph_export_is_not_accepted_as_measurement_input(self):
+        csv_text = rows_to_csv([{"datetime_local": "2026-06-16 10:00:00", "epoch": 1, "grid_power_w": 0, "mode": "HOLD"}])
+        self.assertIn("ZEC-GRAPH-EXPORT-V1", csv_text)
         with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False, encoding="utf-8") as f:
             f.write(csv_text)
             name = f.name
         try:
-            result = analyze_file(name)
-            self.assertEqual(result["data_quality"]["missing_soc_rows"], 0)
+            with self.assertRaises(ValueError):
+                analyze_file(name)
         finally:
             os.remove(name)
 
@@ -66,16 +53,16 @@ class V1292LoggingStorageTests(unittest.TestCase):
             logger = CsvRotatingLogger()
             try:
                 logger.log(cfg, {"datetime_local": "t1", "epoch": 1, "grid_power_w": 0, "norm_zendure_soc_percent": 75})
-                self.assertIsNotNone(logger._fh)
+                self.assertIsNotNone(logger._v4_logger._fh)
                 logger.log(cfg, {"datetime_local": "t2", "epoch": 2, "grid_power_w": 0, "norm_zendure_soc_percent": 75})
-                self.assertEqual(logger._rows_since_flush, 0)
+                self.assertEqual(logger._v4_logger._rows_since_flush, 0)
             finally:
                 logger.close()
 
     def test_small_selection_is_allowed_even_when_memavailable_is_tight(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "m.csv"
-            path.write_text(rows_to_csv([{"datetime_local": "2026-06-16 10:00:00", "epoch": 1, "dt_s": 3, "grid_power_w": 0, "norm_zendure_soc_percent": 75}]), encoding="utf-8")
+            path.write_text("schema;date;timestamp;grid_power_w;norm_zendure_soc_percent\nZEC-MEASUREMENT-V3;2026-06-16;10:00:00;0;75\n", encoding="utf-8")
             with patch("tools.replay_web._meminfo_available_mb", return_value=120):
                 profile = selection_profile([path], {})
             self.assertFalse(profile["rejected"])

@@ -69,10 +69,11 @@ class V1293UsbLoggingTests(unittest.TestCase):
                 finally:
                     logger.close()
             self.assertEqual(status["measurement_log_status"], "active_fallback_sd")
-            with (fallback_dir / "zendure_measurements.csv").open(encoding="utf-8", newline="") as f:
-                rows = list(csv.DictReader(f, delimiter=";"))
-            self.assertEqual(rows[0]["measurement_log_status"], "active_fallback_sd")
-            self.assertIn("SD-Fallback aktiv", rows[0]["measurement_log_status_reason"])
+            files = list(fallback_dir.glob("zendure_measurements_v4*.csv"))
+            self.assertEqual(1, len(files))
+            manifest = __import__("json").loads((fallback_dir / "zec_measurement_manifest.json").read_text(encoding="utf-8"))
+            entry = next(item for item in manifest["files"] if item["file_name"] == files[0].name)
+            self.assertEqual(entry["file_role"], "fallback_measurement")
 
     def test_usb_row_overrides_stale_previous_fallback_status(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -103,13 +104,13 @@ class V1293UsbLoggingTests(unittest.TestCase):
             finally:
                 logger.close()
             self.assertEqual(status["measurement_log_status"], "active")
-            usb_file = mount / "ZEC" / "logs" / "zendure_measurements.csv"
-            self.assertTrue(usb_file.exists())
-            self.assertFalse((Path(tmp) / "fallback" / "zendure_measurements.csv").exists())
-            with usb_file.open(encoding="utf-8", newline="") as f:
-                rows = list(csv.DictReader(f, delimiter=";"))
-            self.assertEqual(rows[0]["measurement_log_status"], "active")
-            self.assertEqual(rows[0]["measurement_log_status_reason"], "OK")
+            log_dir = mount / "ZEC" / "logs"
+            usb_files = list(log_dir.glob("zendure_measurements_v4*.csv"))
+            self.assertEqual(1, len(usb_files))
+            self.assertFalse(any((Path(tmp) / "fallback").glob("*.csv")))
+            manifest = __import__("json").loads((log_dir / "zec_measurement_manifest.json").read_text(encoding="utf-8"))
+            entry = next(item for item in manifest["files"] if item["file_name"] == usb_files[0].name)
+            self.assertEqual(entry["file_role"], "primary_measurement")
 
 
 if __name__ == "__main__":

@@ -119,7 +119,7 @@ class V12121HelpMobileQualityTests(unittest.TestCase):
         with zipfile.ZipFile(docx) as zf:
             xml = zf.read("word/document.xml").decode("utf-8", "ignore")
         for token in (
-            "Benutzerhandbuch V12.12.1",
+            "Benutzerhandbuch V12.13.0",
             "Begriffe und Abkürzungen",
             "SettingsRegistry",
             "hat nichts mit der Windows-Registry zu tun",
@@ -142,8 +142,8 @@ class V12121HelpMobileQualityTests(unittest.TestCase):
         self.assertIn('EXPECTED_SOURCE_V12120_VERSION="12.12.0"', script)
         self.assertIn('EXPECTED_SOURCE_V12120_BUILD_ID="v12.12.0-20260809"', script)
         self.assertIn('SOURCE_MODE="V12_12_0"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v12.12.2-20260810"', script)
-        self.assertIn('EXPECTED_VERSION="v12_12_2"', script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v12.13.0-20260811"', script)
+        self.assertIn('EXPECTED_VERSION="v12_13_0"', script)
 
 
 if __name__ == "__main__":

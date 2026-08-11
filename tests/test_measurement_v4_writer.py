@@ -103,9 +103,11 @@ def base_row():
 
 
 class MeasurementV4WriterTests(unittest.TestCase):
-    def test_schema_selector_defaults_legacy_without_explicit_key(self):
-        self.assertEqual("3", measurement_schema_version({}))
+    def test_schema_selector_is_fixed_v4_with_or_without_legacy_marker(self):
+        self.assertEqual("4", measurement_schema_version({}))
         self.assertEqual("4", measurement_schema_version({"MEASUREMENT_SCHEMA_VERSION": "4"}))
+        self.assertEqual("4", measurement_schema_version({"MEASUREMENT_SCHEMA_VERSION": "3"}))
+        self.assertEqual("4", measurement_schema_version({"MEASUREMENT_LOG_SCHEMA": "3"}))
 
     def test_standard_v4_writes_csv_manifest_snapshot_and_runtime(self):
         with tempfile.TemporaryDirectory() as tmp:

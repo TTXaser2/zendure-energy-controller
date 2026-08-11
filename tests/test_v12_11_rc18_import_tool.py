@@ -15,7 +15,7 @@ from tools.import_measurements_to_db import import_files
 
 class TestRC18MeasurementDbImportTool(unittest.TestCase):
     def test_version_label_rc18(self):
-        self.assertEqual(version.APP_VERSION_LABEL, "V12.12.2")
+        self.assertEqual(version.APP_VERSION_LABEL, "V12.13.0")
 
     def test_import_tool_imports_existing_measurement_csv(self):
         with tempfile.TemporaryDirectory() as tmp:

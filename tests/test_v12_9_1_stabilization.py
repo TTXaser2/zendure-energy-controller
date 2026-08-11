@@ -7,26 +7,25 @@ from csv_logger import CsvRotatingLogger
 from state import ControllerState
 from tools import replay_web
 from tools.replay_report import charts_html, mode_quality_table
-from version import CSV_SCHEMA
 from web_ui import build_settings_page, build_status_page
 
 
 class V1291StabilizationTests(unittest.TestCase):
-    def test_logger_pauses_once_when_existing_active_file_is_not_v3(self):
+    def test_v4_logger_pauses_when_existing_active_file_has_incompatible_header(self):
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "zendure_measurements.csv"
+            path = Path(tmp) / "custom_measurement.csv"
             path.write_text("schema;date;grid_power_w\nZEC-MEASUREMENT-V2;2026-06-15;0\n", encoding="utf-8")
             cfg = {
                 "MEASUREMENT_LOG_MODE": "standard",
                 "MEASUREMENT_LOG_DIR": tmp,
-                "MEASUREMENT_LOG_FILE": "zendure_measurements.csv",
+                "MEASUREMENT_LOG_FILE": path.name,
                 "MEASUREMENT_LOG_MIN_FREE_DISK_MB": 0,
             }
             logger = CsvRotatingLogger()
             self.addCleanup(logger.close)
-            status = logger.log(cfg, {"schema": CSV_SCHEMA})
+            status = logger.log(cfg, {"epoch": 1, "mode": "HOLD", "grid_power_w": 0})
             self.assertEqual(status["measurement_log_status"], "paused_invalid_schema")
-            self.assertIn("ZEC-MEASUREMENT-V3-Header", status["measurement_log_status_reason"])
+            self.assertIn("ZEC-MEASUREMENT-V4-Header", status["measurement_log_status_reason"])
             self.assertIn("ZEC-MEASUREMENT-V2", path.read_text(encoding="utf-8"))
 
     def test_zendure_mqtt_warning_auto_clears_when_live_topics_return(self):

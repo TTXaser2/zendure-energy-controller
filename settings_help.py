@@ -314,7 +314,7 @@ SHORT_HELP = {
     'MEASUREMENT_LOG_ALLOW_SD_FALLBACK': 'Wenn das externe Speicherziel nicht verfügbar ist, darf begrenzt auf die interne SD geschrieben werden. Der Fallback wird sichtbar markiert und enger rotiert.',
     'MEASUREMENT_LOG_FALLBACK_DIR': 'Begrenztes Fallback-Verzeichnis auf der internen SD, falls ein externes Logziel ausfällt.',
     'MEASUREMENT_LOG_FALLBACK_MAX_BYTES': 'Kleinere Rotationsgrenze für den SD-Fallback, damit ein USB-Ausfall die SD nicht unbegrenzt belastet.',
-    'MEASUREMENT_LOG_FILE': 'Dateiname der aktuellen Measurement-Datei. Bei V4 und Standardname schreibt der Controller automatisch zendure_measurements_v4.csv, damit V3 und V4 nicht gemischt werden.',
+    'MEASUREMENT_LOG_FILE': 'Dateiname der aktuellen Measurement-V4-Datei. Beim Standardnamen schreibt der Controller automatisch zendure_measurements_v4.csv; produktive Messdaten werden ausschließlich im V4-Vertrag erzeugt.',
     'MEASUREMENT_LOG_MODE': 'Aus: keine zyklischen Messdaten, schont die SD-Karte. Standard: vollständige Reglerdiagnose inklusive Datenaktualität, MQTT-Veraltet-Aggregat, Sollwertkaskade, Kommando und Szenario ohne Zendure. Erweitert: Standard plus Detaildaten für Simulation, What-if und tiefe MQTT-/Aktualitätsanalyse; erzeugt größere Dateien und sollte gezielt genutzt werden.',
     'MEASUREMENT_DB_ENABLED': 'Schreibt parallel zu CSV/V4 einen leichten SQLite-Store für schnelle Status- und Graphdaten. Läuft auch, wenn Messdaten-CSV deaktiviert ist; die Regelung wird bei DB-Fehlern nicht blockiert.',
     'MEASUREMENT_DB_PATH': 'Optionaler absoluter Pfad zur SQLite-Datei. Leer bedeutet: automatisch neben den Messdaten im aktiven Speicherziel.',

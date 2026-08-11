@@ -1,75 +1,84 @@
-# Zendure Energy Controller V12.12.2
+# Zendure Energy Controller V12.13.0
 
-**Build-ID:** `v12.12.2-20260810`
+**Build-ID:** `v12.13.0-20260811`
 
-V12.12.2 konsolidiert zwei bereits im Entwicklungschat bestätigte Status-/Graph-UX-Feldbefunde mit vier bestätigten Produktivbefunden aus der V12.12.0-Analyse. Schwerpunkt sind eine hostweit eindeutige produktive Controller-Ownership, reale monotone Harvest-Zeitsemantik mit frischen/distinkten Beobachtungen, konsistente Harvest-Diagnose, belastbare Measurement-Manifestdaten sowie zwei gezielte Status-/Graph-UI-Korrekturen.
+V12.13.0 trennt den produktiven Measurement-Vertrag vollständig von der historischen V3-Kompatibilität. Die produktive Runtime schreibt ausschließlich `ZEC-MEASUREMENT-V4`; historische V3-Dateien bleiben nur für Offline-Analyse, Replay und Import lesbar. Regler-, Command-, Cross-Charge-, NIGHT-, Harvest-Zielwert-, Single-Owner- und Measurement-Manifest-Verträge aus V12.12.2 werden nicht fachlich verändert.
 
-## 1. Single-Instance / Command Owner
+## 1. Produktive Runtime: ausschließlich Measurement V4
 
-Vor Config-Laden, MQTT-Start, Measurement-Writer, Webserver und Regelzyklus muss der Prozess einen absoluten hostweiten Kernel-Lock erwerben:
+- `CsvRotatingLogger` besitzt keinen produktiven V3-Schreibzweig mehr.
+- Ein fehlender oder historischer Schema-Marker kann den Runtime-Writer nicht auf V3 umschalten.
+- `MEASUREMENT_SCHEMA_VERSION` bleibt ausschließlich als versteckter Kompatibilitätsmarker mit festem Wert `4` erhalten.
+- Historische Konfigurationen mit Schema `3` werden idempotent auf den Marker `4` migriert.
+- Die frühere globale Runtime-Konstante `version.CSV_SCHEMA = "ZEC-MEASUREMENT-V3"` ist entfernt.
+
+Der V4-Feldvertrag bleibt unverändert:
 
 ```text
-/opt/zendure-controller/zendure_controller.instance.lock
+Standard: 246 Felder
+Extended: 249 Felder
 ```
 
-Der Pfad ist unabhängig vom aktuellen Working Directory. Ein zweiter Prozess endet fail closed mit Exit-Code `73`; er erzeugt weder produktiven Measurement-Stream noch Gerätekommandos. Die Datei selbst darf dauerhaft existieren: authoritative Ownership ist der Kernel-`flock`, der bei sauberem Close wie auch bei hartem Prozessende automatisch freigegeben wird.
+## 2. Interner Controller-Snapshot
 
-Owner-PID und Build-ID werden in `/health`, `/ready` und `Controller & Schnittstellen` diagnostisch ausgewiesen.
+Der interne Zyklus-/Graph-Snapshot ist schema-neutral. Er trägt keine künstliche `ZEC-MEASUREMENT-V3`- oder `schema_version=3.0`-Identität mehr. Erst der produktive Measurement-V4-Writer bildet aus Controllerzustand, Config- und Runtimekontext den persistierten V4-Datensatz.
 
-## 2. Harvest-Zeitsemantik
+## 3. Graph-CSV ist kein Measurement-Paket
 
-Entry-/Hold-Hysterese verwendet nicht mehr nominelle Sekunden aus gezählten Regelzyklen. Zeitfortschritt basiert auf `time.monotonic()` und wird nur bei einer neuen Quellbeobachtung berücksichtigt.
+`/graph-data.csv` ist ein kompakter UI-/Graph-Export und verwendet den eigenständigen Vertrag:
 
-- wiederholte identische Quellbeobachtungen zählen nicht erneut;
-- Wall-Clock-Sprünge beeinflussen die Zeitführung nicht;
-- nach einem langen Host-/Prozess-Stall wird nicht die gesamte Stallzeit als Folge vieler Beobachtungen gutgeschrieben;
-- bei normalem 3-s-Zyklus bleibt das bisherige nominelle Timing erhalten.
+```text
+ZEC-GRAPH-EXPORT-V1
+```
 
-Die Harvest-Leistungs-/Zielwertformeln bleiben unverändert.
+Der Export wird ausdrücklich weder als Measurement V3 noch als Measurement V4 ausgegeben. Dadurch kann er nicht mit einem vollständigen V4-Analysepaket verwechselt werden.
 
-## 3. Harvest-Diagnose
+## 4. Historische V3-Dateien bleiben lesbar
 
-`harvest_limiter_reason` ist wieder ein Current-State-Feld. Bei deaktiviertem/nicht anwendbarem bzw. zurückgesetztem Harvest wird kein alter Limitergrund als aktueller Zustand fortgeführt.
+V3-Unterstützung bleibt ausschließlich in Offline-Werkzeugen erhalten, insbesondere für:
 
-## 4. Measurement-Manifest
+- historische Analyse;
+- Replay;
+- kontrollierten Import alter Messdateien.
 
-Der V4-Writer pflegt den Manifest-Lifecycle nun aus seinem eigenen Writerzustand:
+Diese Pfade sind read-only in Bezug auf das historische Eingabeformat. Sie können keinen produktiven V3-Writer aktivieren.
 
-- tatsächlicher Rotationsgrund für neu eröffnete Dateien (`SIZE_LIMIT`, `HEADER_CHANGED`, Fallback-Wechsel usw.);
-- finaler `row_count` aus dem Writer-eigenen Zähler;
-- `closed_time_utc` bei sauber abgeschlossenem File;
-- bei hartem Prozessabbruch bleibt `closed_time_utc` leer und der offene Zustand ist erkennbar.
+## 5. Settings-/Config-Semantik
 
-Dafür wird **kein Dateivollscan im Live-Regelpfad** eingeführt. Measurement-V4-Header und Feldvertrag bleiben unverändert.
+`MEASUREMENT_SCHEMA_VERSION` ist keine Benutzerwahl mehr. Die Registry führt nur noch V4 und hält den Key verborgen als Rollback-/Migrationsmarker. `MEASUREMENT_LOG_MODE` hängt nicht mehr von einer Schemaauswahl ab.
 
-## 5. Status-/Graph-UX
+Bei bestehender historischer Konfiguration gilt:
 
-### Controller & Schnittstellen
+```text
+3 -> kontrollierte Migration auf 4
+4 -> no-op
+fehlend -> normalisiert auf 4
+```
 
-Desktop verwendet nun ein klickfixiertes Diagnosepanel statt eines Hover-Lebenszyklus. Mausrad und Scrollbar scrollen den Panelinhalt; `×`, Escape oder Klick außerhalb schließen es. Das mobile Panel aus V12.12.1 bleibt erhalten.
+## 6. Handbuch
 
-### Mobiler Speicher-SOC-Tagesgraph
+Das aktuelle Benutzerhandbuch ist auf V12.13.0 aktualisiert. Es beschreibt:
 
-Auf kleinen Viewports überdeckt die Messwertanzeige den untersuchten Plot nicht mehr. Auswahlmarkierung und Kurven bleiben im Canvas sichtbar; die Detailwerte werden darunter angedockt. Desktop behält den schwebenden Tooltip.
-
-## 6. Settings Help bleibt erhalten
-
-V12.12.1 Help-/Terminologie-/Glossar-, Such-, Default-/Profil-, Compound-Validation- und Mobile-Settings-Verträge bleiben unverändert. Das bestehende V12.12.1-Handbuch bleibt die aktuelle Settings-Hilfeedition dieses Bugfix-Releases.
+- V4 als einziges produktives Messschema;
+- V3 ausschließlich als historischen Offline-Lesepfad;
+- `ZEC-GRAPH-EXPORT-V1` als eigenständigen Graph-CSV-Vertrag.
 
 ## 7. No-Regression
 
 Explizit geschützt sind insbesondere:
 
 - AUTO_GRID_EXPORT / AUTO_GRID_IMPORT / HOLD und Totzonenkonvergenz;
-- Harvest `SMA_FULL_OR_IDLE`-/`SMA_NEAR_LIMIT`-Absolutzielbildung, High-SOC-Share/Export-Capture, Floor/Restart/Near-Limit und Primärspeicherpriorität;
+- Harvest-Zielwertbildung, High-SOC-Logik, monotone Entry-/Hold-Zeitsemantik und Primärspeicherpriorität;
 - proportionale/symmetrische Cross-Charge-Korrektur;
 - NIGHT_DISCHARGE, Reserve-SOC, aktive 0-W-Neutralisierung und Folgeübergang;
-- MAX_SOC als normaler Limiter/HOLD;
 - Command-Effect-/Readback-/Resync-/SmartMode-/Gegenlimitvertrag;
-- Measurement-V4-Header/Contract;
+- hostweite Single-Owner-/Command-Owner-Garantie;
+- Measurement-V4-Manifest-/Rotation-/Close-Semantik;
+- V4-Header und Feldvertrag 246/249;
+- SQLite-/Storage-Hotpath-Vertrag;
 - Excel-Lernsimulation.
 
-Der externe 14-Minuten-Raspberry-Backup-/Host-Freeze ist ausdrücklich kein ZEC-Fix-Scope. Ebenso werden keine zusätzliche Installed-Tree-Provenance und kein V3-Legacy-Cleanup eingeführt.
+Es gibt kein allgemeines Measurement-Schema-Redesign und keine Änderung der Live-Regelalgorithmen.
 
 ## 8. Releasebelege
 
@@ -77,10 +86,11 @@ Siehe:
 
 ```text
 README_INSTALLATION.md
-BUILD_VALIDATION_V12_12_2.md
-RELEASE_INFO_V12_12_2.md
-TECHNICAL_NOTES_V12_12_2.md
-ZEC_V12_12_2_RELEASE_REPORT.md
-SPEZIFIKATION_ZEC_V12_12_2_SINGLE_OWNER_HARVEST_MANIFEST_UI_FINAL.md
-V12_12_1_TO_V12_12_2_CHANGED_FILES.txt
+BUILD_VALIDATION_V12_13_0.md
+RELEASE_INFO_V12_13_0.md
+TECHNICAL_NOTES_V12_13_0.md
+ZEC_V12_13_0_RELEASE_REPORT.md
+SPEZIFIKATION_ZEC_V12_13_0_MEASUREMENT_V4_ONLY_LEGACY_V3_CLEANUP_V1.0.md
+V12_12_2_TO_V12_13_0_CHANGED_FILES.txt
+V12_13_0_TARGETED_PROTECTED_DIFF.md
 ```

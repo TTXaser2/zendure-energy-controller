@@ -3,7 +3,7 @@ import unittest
 
 from tests.test_operation_priority import base_cfg, fresh_state, make_controller, OkShelly
 from state import ControllerState
-from csv_logger import CSV_FIELDS
+from measurement_v4_contract import STANDARD_HEADER
 from mqtt_bridge import MqttBridge
 from mqtt_topic_filter import mqtt_topic_matches_filter
 
@@ -82,12 +82,12 @@ class V12811FlowContractTests(unittest.TestCase):
         self.assertEqual(state.control_data_quality, "missing_required_data")
 
     def test_csv_fields_include_freshness_contract_columns(self):
-        self.assertIn("grid_power_validity_reason", CSV_FIELDS)
-        self.assertIn("soc_validity_reason", CSV_FIELDS)
-        self.assertIn("mqtt_command_path_valid", CSV_FIELDS)
-        self.assertIn("control_required_sources", CSV_FIELDS)
-        self.assertIn("control_missing_required_sources", CSV_FIELDS)
-        self.assertIn("second_battery_validity_reason", CSV_FIELDS)
+        self.assertIn("grid_power_valid", STANDARD_HEADER)
+        self.assertIn("zendure_soc_valid", STANDARD_HEADER)
+        self.assertIn("command_mqtt_success", STANDARD_HEADER)
+        self.assertIn("control_missing_required_source_mask", STANDARD_HEADER)
+        self.assertIn("control_missing_required_source_count", STANDARD_HEADER)
+        self.assertIn("second_battery_power_valid", STANDARD_HEADER)
 
 
 class V12811MqttDiagnosticFilterTests(unittest.TestCase):
