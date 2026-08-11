@@ -13,7 +13,7 @@ from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple
 
 from settings_help import SettingHelpSpec, build_setting_help
 
-SCHEMA_VERSION = "1.23-s1.1"
+SCHEMA_VERSION = "1.24-v13.0"
 SOURCE_TARGET_SCHEMA_SHA256 = "f67b8d09ae9a433c4cb0d3a720a0961d5b2a824b120251a63f2b19885356274a"
 
 
@@ -55,6 +55,14 @@ class ApplyClass(Enum):
 class SecretPolicy(Enum):
     NONE = "none"
     SECRET = "secret"
+
+
+class PortabilityClass(Enum):
+    PORTABLE_PROFILE = "portable_profile"
+    SITE_SPECIFIC = "site_specific"
+    LOCAL_RUNTIME = "local_runtime"
+    SECRET = "secret"
+    NON_TRANSFERABLE = "non_transferable"
 
 
 class DefaultClass(Enum):
@@ -105,6 +113,7 @@ class SettingSpec:
     lifecycle: str
     secret_policy: SecretPolicy
     decision_status: Optional[str]
+    portability_class: PortabilityClass
     default_class: DefaultClass
     bootstrap_value: Any
     product_default: Any
@@ -6572,6 +6581,201 @@ def _default_metadata(row: Mapping[str, Any]) -> Dict[str, Any]:
     }
 
 
+PORTABILITY_BY_KEY: Mapping[str, PortabilityClass] = MappingProxyType({
+    'ANALYSIS_EXTENDED_MAX_FILES': PortabilityClass.LOCAL_RUNTIME,
+    'ANALYSIS_EXTENDED_MAX_ROWS': PortabilityClass.LOCAL_RUNTIME,
+    'ANALYSIS_EXTENDED_MAX_TOTAL_BYTES': PortabilityClass.LOCAL_RUNTIME,
+    'ANALYSIS_EXTENDED_WORKER_MEMORY_LIMIT_MB': PortabilityClass.LOCAL_RUNTIME,
+    'ANALYSIS_EXTENDED_WORKER_TIMEOUT_SECONDS': PortabilityClass.LOCAL_RUNTIME,
+    'ANALYSIS_MAX_FILES': PortabilityClass.LOCAL_RUNTIME,
+    'ANALYSIS_MAX_ROWS': PortabilityClass.LOCAL_RUNTIME,
+    'ANALYSIS_MAX_TOTAL_BYTES': PortabilityClass.LOCAL_RUNTIME,
+    'ANALYSIS_WORKER_MEMORY_LIMIT_MB': PortabilityClass.LOCAL_RUNTIME,
+    'ANALYSIS_WORKER_TIMEOUT_SECONDS': PortabilityClass.LOCAL_RUNTIME,
+    'COMMAND_EFFECT_FORCE_RESEND_SECONDS': PortabilityClass.PORTABLE_PROFILE,
+    'COMMAND_EFFECT_MIN_TARGET_W': PortabilityClass.PORTABLE_PROFILE,
+    'COMMAND_EFFECT_MIN_W': PortabilityClass.PORTABLE_PROFILE,
+    'COMMAND_EFFECT_TIMEOUT_SECONDS': PortabilityClass.PORTABLE_PROFILE,
+    'COMMAND_EFFECT_TOLERANCE_PERCENT': PortabilityClass.PORTABLE_PROFILE,
+    'COMMAND_EFFECT_TOLERANCE_W': PortabilityClass.PORTABLE_PROFILE,
+    'COMMAND_NEUTRALIZATION_TIMEOUT_SECONDS': PortabilityClass.PORTABLE_PROFILE,
+    'COMMAND_RESYNC_COOLDOWN_SECONDS': PortabilityClass.PORTABLE_PROFILE,
+    'COMMAND_RESYNC_ON_MQTT_RECOVERY_ALWAYS': PortabilityClass.PORTABLE_PROFILE,
+    'COMMAND_RESYNC_STALE_MIN_SECONDS': PortabilityClass.PORTABLE_PROFILE,
+    'CONTROL_GAIN': PortabilityClass.PORTABLE_PROFILE,
+    'CROSS_CHARGE_ENABLED': PortabilityClass.PORTABLE_PROFILE,
+    'CROSS_CHARGE_SIGNIFICANT_W': PortabilityClass.SITE_SPECIFIC,
+    'DEADBAND_W': PortabilityClass.PORTABLE_PROFILE,
+    'DEBUG': PortabilityClass.LOCAL_RUNTIME,
+    'DEVICE_ID': PortabilityClass.SITE_SPECIFIC,
+    'FILE_LOG_BACKUP_COUNT': PortabilityClass.LOCAL_RUNTIME,
+    'FILE_LOG_DIR': PortabilityClass.LOCAL_RUNTIME,
+    'FILE_LOG_ENABLED': PortabilityClass.LOCAL_RUNTIME,
+    'FILE_LOG_FILE': PortabilityClass.LOCAL_RUNTIME,
+    'FILE_LOG_MAX_BYTES': PortabilityClass.LOCAL_RUNTIME,
+    'GRAPH_HISTORY_LIMIT': PortabilityClass.LOCAL_RUNTIME,
+    'GRID_METER_SOURCE': PortabilityClass.SITE_SPECIFIC,
+    'GRID_POWER_PLAUSIBILITY_MAX_ABS_W': PortabilityClass.SITE_SPECIFIC,
+    'HARVEST_HIGH_SMA_SOC_ENABLED': PortabilityClass.PORTABLE_PROFILE,
+    'HARVEST_HIGH_SMA_SOC_ENTER_PERCENT': PortabilityClass.PORTABLE_PROFILE,
+    'HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_AFTERNOON_SECONDS': PortabilityClass.PORTABLE_PROFILE,
+    'HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_MIDDAY_SECONDS': PortabilityClass.PORTABLE_PROFILE,
+    'HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_MORNING_SECONDS': PortabilityClass.PORTABLE_PROFILE,
+    'HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS': PortabilityClass.PORTABLE_PROFILE,
+    'HARVEST_HIGH_SMA_SOC_EXIT_PERCENT': PortabilityClass.PORTABLE_PROFILE,
+    'HARVEST_HIGH_SMA_SOC_HOLD_SECONDS': PortabilityClass.PORTABLE_PROFILE,
+    'HARVEST_HIGH_SMA_SOC_MIN_EXPORT_W': PortabilityClass.SITE_SPECIFIC,
+    'HARVEST_HIGH_SMA_SOC_PROFILE_AFTERNOON_START_TIME': PortabilityClass.PORTABLE_PROFILE,
+    'HARVEST_HIGH_SMA_SOC_PROFILE_END_TIME': PortabilityClass.PORTABLE_PROFILE,
+    'HARVEST_HIGH_SMA_SOC_PROFILE_MIDDAY_START_TIME': PortabilityClass.PORTABLE_PROFILE,
+    'HARVEST_HIGH_SMA_SOC_PROFILE_START_TIME': PortabilityClass.PORTABLE_PROFILE,
+    'HARVEST_PRIMARY_CHARGE_FLOOR_RATIO': PortabilityClass.PORTABLE_PROFILE,
+    'HARVEST_PRIMARY_CHARGE_FLOOR_W': PortabilityClass.SITE_SPECIFIC,
+    'HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_RATIO': PortabilityClass.PORTABLE_PROFILE,
+    'HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_W': PortabilityClass.SITE_SPECIFIC,
+    'HARVEST_PRIMARY_CHARGE_RESTART_RATIO': PortabilityClass.PORTABLE_PROFILE,
+    'HARVEST_PRIMARY_CHARGE_RESTART_W': PortabilityClass.SITE_SPECIFIC,
+    'HARVEST_PRIMARY_CHARGE_TARGET_SHARE_AFTERNOON': PortabilityClass.PORTABLE_PROFILE,
+    'HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY': PortabilityClass.PORTABLE_PROFILE,
+    'HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MORNING': PortabilityClass.PORTABLE_PROFILE,
+    'HARVEST_SEASON_MODE': PortabilityClass.PORTABLE_PROFILE,
+    'HARVEST_SEASON_PARALLEL_END_MM_DD': PortabilityClass.PORTABLE_PROFILE,
+    'HARVEST_SEASON_PARALLEL_START_MM_DD': PortabilityClass.PORTABLE_PROFILE,
+    'HARVEST_SMA_FULL_SOC_PERCENT': PortabilityClass.PORTABLE_PROFILE,
+    'HEADLESS_MODE': PortabilityClass.LOCAL_RUNTIME,
+    'INTERVAL_SECONDS': PortabilityClass.LOCAL_RUNTIME,
+    'LOG_CONTROL': PortabilityClass.LOCAL_RUNTIME,
+    'LOG_MANUAL': PortabilityClass.LOCAL_RUNTIME,
+    'LOG_MQTT': PortabilityClass.LOCAL_RUNTIME,
+    'LOG_RAW_RESPONSE': PortabilityClass.LOCAL_RUNTIME,
+    'LOG_SOC': PortabilityClass.LOCAL_RUNTIME,
+    'LOG_VALUES': PortabilityClass.LOCAL_RUNTIME,
+    'MANUAL_CHARGE_AFTER_TARGET': PortabilityClass.NON_TRANSFERABLE,
+    'MANUAL_DISCHARGE_AFTER_TARGET': PortabilityClass.NON_TRANSFERABLE,
+    'MANUAL_FIXED_CHARGE_POWER_W': PortabilityClass.NON_TRANSFERABLE,
+    'MANUAL_FIXED_CHARGE_TARGET_SOC': PortabilityClass.NON_TRANSFERABLE,
+    'MANUAL_FIXED_DISCHARGE_POWER_W': PortabilityClass.NON_TRANSFERABLE,
+    'MANUAL_FIXED_DISCHARGE_TARGET_SOC': PortabilityClass.NON_TRANSFERABLE,
+    'MANUAL_MODE': PortabilityClass.NON_TRANSFERABLE,
+    'MAX_CHARGE_POWER_W': PortabilityClass.SITE_SPECIFIC,
+    'MAX_CONSECUTIVE_ERRORS': PortabilityClass.LOCAL_RUNTIME,
+    'MAX_DISCHARGE_POWER_W': PortabilityClass.SITE_SPECIFIC,
+    'MAX_POWER_STEP_W': PortabilityClass.PORTABLE_PROFILE,
+    'MAX_SOC_PERCENT': PortabilityClass.PORTABLE_PROFILE,
+    'MEASUREMENT_DB_1MIN_RETENTION_DAYS': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_DB_1MIN_RETENTION_MODE': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_DB_ENABLED': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_DB_MAINTENANCE_MODE': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_DB_RAW_RETENTION_DAYS': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_DB_RAW_RETENTION_MODE': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_LOG_ALLOW_SD_FALLBACK': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_LOG_COMPRESSION_MIN_AGE_MINUTES': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_LOG_DIR': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_LOG_FALLBACK_DIR': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_LOG_FALLBACK_MAX_BYTES': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_LOG_FILE': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_LOG_FLUSH_EVERY_ROWS': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_LOG_FLUSH_EVERY_SECONDS': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_LOG_MAINTENANCE_MODE': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_LOG_MAX_BYTES': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_LOG_MIN_FREE_DISK_MB': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_LOG_MODE': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_LOG_MOUNTPOINT': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_LOG_RETENTION_MODE': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_LOG_RETENTION_MAX_AGE_DAYS': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_LOG_RETENTION_MAX_TOTAL_BYTES': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_LOG_RETENTION_PROTECT_HOURS': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_LOG_STORAGE_TARGET': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_V4_MANIFEST_UPDATE_EVERY_ROWS': PortabilityClass.LOCAL_RUNTIME,
+    'MEASUREMENT_V4_MANIFEST_UPDATE_EVERY_SECONDS': PortabilityClass.LOCAL_RUNTIME,
+    'MIN_COMMAND_CHANGE_W': PortabilityClass.PORTABLE_PROFILE,
+    'MIN_EFFECTIVE_SURPLUS_FOR_CHARGE_W': PortabilityClass.PORTABLE_PROFILE,
+    'MIN_SOC_PERCENT': PortabilityClass.PORTABLE_PROFILE,
+    'MOVING_AVERAGE_SAMPLES': PortabilityClass.PORTABLE_PROFILE,
+    'MQTT_BROKER': PortabilityClass.SITE_SPECIFIC,
+    'MQTT_DISCONNECTED_SAFE_STATE': PortabilityClass.LOCAL_RUNTIME,
+    'MQTT_PASSWORD': PortabilityClass.SECRET,
+    'MQTT_PORT': PortabilityClass.SITE_SPECIFIC,
+    'MQTT_TOPIC_DIAGNOSTIC_ENABLED': PortabilityClass.SITE_SPECIFIC,
+    'MQTT_TOPIC_DIAGNOSTIC_FILTER': PortabilityClass.SITE_SPECIFIC,
+    'MQTT_TOPIC_DIAGNOSTIC_HISTORY_LIMIT': PortabilityClass.SITE_SPECIFIC,
+    'MQTT_TOPIC_DIAGNOSTIC_VIEW_MODE': PortabilityClass.SITE_SPECIFIC,
+    'MQTT_USER': PortabilityClass.SITE_SPECIFIC,
+    'NIGHT_DISCHARGE_ENABLED': PortabilityClass.PORTABLE_PROFILE,
+    'NIGHT_DISCHARGE_POWER_W': PortabilityClass.SITE_SPECIFIC,
+    'NIGHT_DISCHARGE_STOP_SOC_PERCENT': PortabilityClass.PORTABLE_PROFILE,
+    'NIGHT_END_HOUR': PortabilityClass.PORTABLE_PROFILE,
+    'NIGHT_END_MINUTE': PortabilityClass.PORTABLE_PROFILE,
+    'NIGHT_START_HOUR': PortabilityClass.PORTABLE_PROFILE,
+    'NIGHT_START_MINUTE': PortabilityClass.PORTABLE_PROFILE,
+    'REST_SURPLUS_ENTRY_CONFIRM_SECONDS': PortabilityClass.PORTABLE_PROFILE,
+    'REST_SURPLUS_HARVEST_ENABLED': PortabilityClass.PORTABLE_PROFILE,
+    'REST_SURPLUS_MIN_EXPORT_W': PortabilityClass.SITE_SPECIFIC,
+    'SAFE_STATE_ON_SHELLY_ERROR': PortabilityClass.LOCAL_RUNTIME,
+    'SECOND_BATTERY_CAPACITY_JSON_PATH': PortabilityClass.SITE_SPECIFIC,
+    'SECOND_BATTERY_CAPACITY_PAYLOAD_TYPE': PortabilityClass.SITE_SPECIFIC,
+    'SECOND_BATTERY_CAPACITY_TOPIC': PortabilityClass.SITE_SPECIFIC,
+    'SECOND_BATTERY_CAPACITY_UNIT': PortabilityClass.SITE_SPECIFIC,
+    'SECOND_BATTERY_DISCHARGE_SIGN': PortabilityClass.SITE_SPECIFIC,
+    'SECOND_BATTERY_DISPLAY_NAME': PortabilityClass.SITE_SPECIFIC,
+    'SECOND_BATTERY_EVCC_BASE_TOPIC': PortabilityClass.SITE_SPECIFIC,
+    'SECOND_BATTERY_INTEGRATION_ENABLED': PortabilityClass.SITE_SPECIFIC,
+    'SECOND_BATTERY_MAX_CHARGE_POWER_W': PortabilityClass.SITE_SPECIFIC,
+    'SECOND_BATTERY_POWER_JSON_PATH': PortabilityClass.SITE_SPECIFIC,
+    'SECOND_BATTERY_POWER_PAYLOAD_TYPE': PortabilityClass.SITE_SPECIFIC,
+    'SECOND_BATTERY_POWER_TOPIC': PortabilityClass.SITE_SPECIFIC,
+    'SECOND_BATTERY_POWER_UNIT': PortabilityClass.SITE_SPECIFIC,
+    'SECOND_BATTERY_SOC_JSON_PATH': PortabilityClass.SITE_SPECIFIC,
+    'SECOND_BATTERY_SOC_PAYLOAD_TYPE': PortabilityClass.SITE_SPECIFIC,
+    'SECOND_BATTERY_SOC_TOPIC': PortabilityClass.SITE_SPECIFIC,
+    'SECOND_BATTERY_SOURCE_PROFILE': PortabilityClass.SITE_SPECIFIC,
+    'SECOND_BATTERY_STALE_BLOCK_CHARGE': PortabilityClass.PORTABLE_PROFILE,
+    'SECOND_BATTERY_STALE_TIMEOUT_SECONDS': PortabilityClass.SITE_SPECIFIC,
+    'SHELLY_IP': PortabilityClass.SITE_SPECIFIC,
+    'SHELLY_STALE_TIMEOUT_SECONDS': PortabilityClass.SITE_SPECIFIC,
+    'SLOW_CYCLE_WARN_MS': PortabilityClass.LOCAL_RUNTIME,
+    'SMA_ENERGY_METER_GROUP': PortabilityClass.SITE_SPECIFIC,
+    'SMA_ENERGY_METER_INTERFACE': PortabilityClass.SITE_SPECIFIC,
+    'SMA_ENERGY_METER_LOG_DIAGNOSTICS': PortabilityClass.SITE_SPECIFIC,
+    'SMA_ENERGY_METER_LOG_INTERVAL_SECONDS': PortabilityClass.SITE_SPECIFIC,
+    'SMA_ENERGY_METER_PACKET_GAP_WARN_SECONDS': PortabilityClass.SITE_SPECIFIC,
+    'SMA_ENERGY_METER_PASSIVE_ENABLED': PortabilityClass.SITE_SPECIFIC,
+    'SMA_ENERGY_METER_PORT': PortabilityClass.SITE_SPECIFIC,
+    'SMA_ENERGY_METER_SERIAL': PortabilityClass.SITE_SPECIFIC,
+    'SMA_ENERGY_METER_SOCKET_MODE': PortabilityClass.SITE_SPECIFIC,
+    'SMA_ENERGY_METER_STALE_TIMEOUT_SECONDS': PortabilityClass.SITE_SPECIFIC,
+    'SMA_ENERGY_METER_SUSY_ID': PortabilityClass.SITE_SPECIFIC,
+    'SMA_GUARD_RAMP_DOWN_W': PortabilityClass.PORTABLE_PROFILE,
+    'SMOOTHING_FACTOR': PortabilityClass.PORTABLE_PROFILE,
+    'SOC_DAY_GRAPH_BOOTSTRAP_CACHE_SECONDS': PortabilityClass.LOCAL_RUNTIME,
+    'SOC_DAY_GRAPH_BOOTSTRAP_FROM_MEASUREMENTS': PortabilityClass.LOCAL_RUNTIME,
+    'SOC_DAY_GRAPH_ENABLED': PortabilityClass.LOCAL_RUNTIME,
+    'SOC_DAY_GRAPH_SAMPLE_SECONDS': PortabilityClass.LOCAL_RUNTIME,
+    'SOC_STALE_TIMEOUT_SECONDS': PortabilityClass.LOCAL_RUNTIME,
+    'UI_DARK_MODE': PortabilityClass.LOCAL_RUNTIME,
+    'UI_MODE': PortabilityClass.LOCAL_RUNTIME,
+    'WEB_HOST': PortabilityClass.LOCAL_RUNTIME,
+    'WEB_PORT': PortabilityClass.LOCAL_RUNTIME,
+    'WEB_SERVICE_RESTART_ENABLED': PortabilityClass.LOCAL_RUNTIME,
+    'ZENDURE_BATTERY_CAPACITY_WH': PortabilityClass.SITE_SPECIFIC,
+    'ZENDURE_COMMAND_STATE_FRESH_SECONDS': PortabilityClass.PORTABLE_PROFILE,
+    'ZENDURE_COMMAND_STATE_RETRY_SECONDS': PortabilityClass.PORTABLE_PROFILE,
+    'ZENDURE_LOCAL_API_CONTROL_TIMEOUT_CAP_SECONDS': PortabilityClass.SITE_SPECIFIC,
+    'ZENDURE_LOCAL_API_ENABLED': PortabilityClass.SITE_SPECIFIC,
+    'ZENDURE_LOCAL_API_ERROR_BACKOFF_SECONDS': PortabilityClass.SITE_SPECIFIC,
+    'ZENDURE_LOCAL_API_POLL_INTERVAL_SECONDS': PortabilityClass.SITE_SPECIFIC,
+    'ZENDURE_LOCAL_API_SOC_PRIORITY': PortabilityClass.SITE_SPECIFIC,
+    'ZENDURE_LOCAL_API_TELEMETRY_FALLBACK_ONLY': PortabilityClass.SITE_SPECIFIC,
+    'ZENDURE_LOCAL_API_TIMEOUT_SECONDS': PortabilityClass.SITE_SPECIFIC,
+    'ZENDURE_LOCAL_API_USE_FOR_TELEMETRY': PortabilityClass.SITE_SPECIFIC,
+    'ZENDURE_LOCAL_IP': PortabilityClass.SITE_SPECIFIC,
+    'ZENDURE_MQTT_AFTER_RESTART_GRACE_SECONDS': PortabilityClass.LOCAL_RUNTIME,
+    'ZENDURE_MQTT_CRITICAL_GROUP_STALE_SECONDS': PortabilityClass.LOCAL_RUNTIME,
+    'ZENDURE_POWER_STALE_TIMEOUT_SECONDS': PortabilityClass.LOCAL_RUNTIME,
+    'ZENDURE_SMART_MODE_RETRY_SECONDS': PortabilityClass.PORTABLE_PROFILE,
+})
+
+
 def _build_spec(row: Mapping[str, Any]) -> SettingSpec:
     return SettingSpec(
         key=row["key"], order=row["order"], origin=row["origin"], category=row["category"],
@@ -6586,6 +6790,7 @@ def _build_spec(row: Mapping[str, Any]) -> SettingSpec:
         migration_text=row["migration_text"], risk=row["risk"], release_stage=row["release_stage"],
         release_text=row["release_text"], lifecycle=row["lifecycle"],
         secret_policy=SecretPolicy[row["secret_policy"]], decision_status=row["decision_status"],
+        portability_class=PORTABILITY_BY_KEY.get(row["key"], PortabilityClass.NON_TRANSFERABLE),
         **_default_metadata(row),
         help=build_setting_help(row),
     )
@@ -6596,6 +6801,16 @@ SETTINGS_BY_KEY: Mapping[str, SettingSpec] = MappingProxyType({spec.key: spec fo
 
 if len(SETTINGS_BY_KEY) != len(SETTINGS):
     raise RuntimeError("duplicate setting key in SettingsRegistry")
+
+_MANAGED_APPLY_CLASSES = {ApplyClass.LIVE_NEXT_CYCLE, ApplyClass.RESTART_REQUIRED}
+_unclassified_managed = tuple(
+    spec.key for spec in SETTINGS
+    if spec.editability is Editability.EDITABLE
+    and spec.apply_class in _MANAGED_APPLY_CLASSES
+    and spec.key not in PORTABILITY_BY_KEY
+)
+if _unclassified_managed:
+    raise RuntimeError("managed settings without explicit portability class: " + ",".join(_unclassified_managed))
 
 
 def get_setting(key: str) -> SettingSpec:
@@ -6608,6 +6823,19 @@ def iter_settings() -> Iterator[SettingSpec]:
 
 def category_names() -> Tuple[str, ...]:
     return tuple(dict.fromkeys(spec.category for spec in SETTINGS))
+
+
+def managed_settings() -> Tuple[SettingSpec, ...]:
+    """Settings eligible for named states/import/export in V13."""
+    return tuple(
+        spec for spec in SETTINGS
+        if spec.editability is Editability.EDITABLE
+        and spec.apply_class in _MANAGED_APPLY_CLASSES
+    )
+
+
+def portable_profile_settings() -> Tuple[SettingSpec, ...]:
+    return tuple(spec for spec in managed_settings() if spec.portability_class is PortabilityClass.PORTABLE_PROFILE)
 
 
 def registry_snapshot() -> Dict[str, Any]:
@@ -6626,6 +6854,7 @@ def registry_snapshot() -> Dict[str, Any]:
             "release_stage": spec.release_stage, "release_text": spec.release_text,
             "lifecycle": spec.lifecycle, "secret_policy": spec.secret_policy.value,
             "decision_status": spec.decision_status,
+            "portability_class": spec.portability_class.value,
             "default_class": spec.default_class.value,
             "bootstrap_value": None if spec.is_secret else spec.bootstrap_value,
             "product_default": None if spec.is_secret else spec.product_default,
@@ -6664,3 +6893,14 @@ def registry_snapshot() -> Dict[str, Any]:
         "categories": list(category_names()),
         "settings": safe_settings,
     }
+
+
+def registry_contract_sha256() -> str:
+    """Hash of the current public registry contract (not the historical RC20 source hash)."""
+    import hashlib as _hashlib
+    import json as _json
+    payload = registry_snapshot()
+    payload = dict(payload)
+    payload.pop("source_target_schema_sha256", None)
+    data = (_json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    return _hashlib.sha256(data).hexdigest()

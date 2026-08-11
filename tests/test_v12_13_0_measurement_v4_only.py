@@ -70,14 +70,16 @@ class V12130MeasurementV4OnlyTests(unittest.TestCase):
         self.assertEqual((), steps2)
 
 
-    def test_installer_directly_accepts_v12_12_2_and_targets_v12_13_0(self):
+    def test_installer_accepts_v12_13_0_and_targets_v13_0_0_without_v3_runtime(self):
         script = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_VERSION="v12_13_0"', script)
-        self.assertIn('EXPECTED_SOURCE_V12122_VERSION="12.12.2"', script)
-        self.assertIn('EXPECTED_SOURCE_V12122_BUILD_ID="v12.12.2-20260810"', script)
-        self.assertIn('SOURCE_MODE="V12_12_2"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v12.13.0-20260811"', script)
-        self.assertIn('V12_13_0_SOURCE_MANIFEST.sha256', script)
+        self.assertIn('EXPECTED_VERSION="v13_0_0"', script)
+        self.assertIn('EXPECTED_SOURCE_VERSION="12.13.0"', script)
+        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v12.13.0-20260811"', script)
+        self.assertIn('SOURCE_MODE="V12_13_0"', script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v13.0.0-20260811"', script)
+        self.assertIn('V13_0_0_SOURCE_MANIFEST.sha256', script)
+        self.assertIn('backfill_graph_config_timeline.py', script)
+        self.assertNotIn('SOURCE_MODE="V12_12_2"', script)
 
     def test_release_migration_cli_moves_schema_3_to_4_and_then_noops(self):
         with tempfile.TemporaryDirectory() as td:

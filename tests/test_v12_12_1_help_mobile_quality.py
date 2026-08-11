@@ -114,12 +114,12 @@ class V12121HelpMobileQualityTests(unittest.TestCase):
     def test_manual_contains_glossary_and_no_old_unexplained_terms(self):
         pdf = ROOT / "docs" / "Zendure_Energy_Controller_Handbuch.pdf"
         pages = len(re.findall(rb"/Type\s*/Page\b", pdf.read_bytes()))
-        self.assertEqual(17, pages)
+        self.assertEqual(20, pages)
         docx = ROOT / "docs" / "Zendure_Energy_Controller_Handbuch.docx"
         with zipfile.ZipFile(docx) as zf:
             xml = zf.read("word/document.xml").decode("utf-8", "ignore")
         for token in (
-            "Benutzerhandbuch V12.13.0",
+            "Benutzerhandbuch V13.0.0",
             "Begriffe und Abkürzungen",
             "SettingsRegistry",
             "hat nichts mit der Windows-Registry zu tun",
@@ -134,16 +134,14 @@ class V12121HelpMobileQualityTests(unittest.TestCase):
         self.assertNotIn("Registry-Risikoklasse", xml)
         self.assertNotIn("Serververtrag", xml)
 
-    def test_updater_accepts_v12_12_0_as_primary_source(self):
+    def test_updater_requires_v12_13_0_as_primary_source(self):
         script = (ROOT / "tools" / "update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_SOURCE_V12121_VERSION="12.12.1"', script)
-        self.assertIn('EXPECTED_SOURCE_V12121_BUILD_ID="v12.12.1-20260810"', script)
-        self.assertIn('SOURCE_MODE="V12_12_1"', script)
-        self.assertIn('EXPECTED_SOURCE_V12120_VERSION="12.12.0"', script)
-        self.assertIn('EXPECTED_SOURCE_V12120_BUILD_ID="v12.12.0-20260809"', script)
-        self.assertIn('SOURCE_MODE="V12_12_0"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v12.13.0-20260811"', script)
-        self.assertIn('EXPECTED_VERSION="v12_13_0"', script)
+        self.assertIn('EXPECTED_SOURCE_VERSION="12.13.0"', script)
+        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v12.13.0-20260811"', script)
+        self.assertIn('SOURCE_MODE="V12_13_0"', script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v13.0.0-20260811"', script)
+        self.assertIn('EXPECTED_VERSION="v13_0_0"', script)
+        self.assertNotIn('SOURCE_MODE="V12_12_0"', script)
 
 
 if __name__ == "__main__":

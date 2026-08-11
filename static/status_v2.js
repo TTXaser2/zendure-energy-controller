@@ -401,16 +401,27 @@
       if(p.primary_storage_present!==false)defs.push({key:'primary_soc',label:'Primärspeicher',color:colors[2]});
       return defs;
     }
+    configSegments(){
+      const p=this.payload||{};
+      if(Array.isArray(p.config_segments)&&p.config_segments.length)return p.config_segments;
+      const t=p.thresholds||{},n=p.night_window||{};
+      return [{start_minute:0,end_minute:1440,known:true,min_soc:t.min_soc,max_soc:t.max_soc,reserve_soc:t.reserve_soc,night_start:n.start||'',night_end:n.end||''}];
+    }
+    configAt(minute){return this.configSegments().find(s=>Number(minute)>=Number(s.start_minute||0)&&Number(minute)<Number(s.end_minute??1440))||null;}
     drawLegend(){
       const legend=$('#storageSocLegend');if(!legend)return;
-      const p=this.payload||{}, thresholds=p.thresholds||{}, night=p.night_window||{};
+      const p=this.payload||{},segments=this.configSegments();
       const entries=this.series().map(s=>`<span class="zec-legend-item"><i class="zec-legend-line" style="background:${s.color}"></i>${escapeHtml(s.label)}</span>`);
+      const uniqueValues=key=>[...new Set(segments.filter(s=>s.known!==false).map(s=>number(s[key])).filter(v=>v!==null))];
       [['max_soc','Max-SOC'],['reserve_soc','Nachtreserve'],['min_soc','Min-SOC']].forEach(([key,label])=>{
-        const value=number(thresholds[key]);if(value===null)return;
+        const values=uniqueValues(key);if(!values.length)return;
         const tone=key==='reserve_soc'?'is-reserve':'is-threshold';
-        entries.push(`<span class="zec-legend-item"><i class="zec-legend-line is-dashed ${tone}"></i>${escapeHtml(label)} ${escapeHtml(fmtSoc(value))}</span>`);
+        const text=values.map(v=>fmtSoc(v)).join(' → ');
+        entries.push(`<span class="zec-legend-item"><i class="zec-legend-line is-dashed ${tone}"></i>${escapeHtml(label)} ${escapeHtml(text)}</span>`);
       });
-      if(night.start&&night.end)entries.push(`<span class="zec-legend-item"><i class="zec-legend-area"></i>Nachtfenster ${escapeHtml(night.start)}–${escapeHtml(night.end)}</span>`);
+      const windows=[...new Set(segments.filter(s=>s.known!==false&&s.night_start&&s.night_end).map(s=>`${s.night_start}–${s.night_end}`))];
+      if(windows.length)entries.push(`<span class="zec-legend-item"><i class="zec-legend-area"></i>Nachtfenster ${escapeHtml(windows.join(' → '))}</span>`);
+      if(segments.some(s=>s.known===false))entries.push('<span class="zec-legend-item">Historische Konfiguration teilweise nicht verfügbar</span>');
       if(p.is_today)entries.push('<span class="zec-legend-item"><i class="zec-legend-line is-now"></i>Jetzt</span>');
       legend.innerHTML=entries.join('');
     }
@@ -480,17 +491,23 @@
       const {ctx,w,h}=this.prepare(); const p=this.payload||{}; const points=p.points||[]; const pad={l:42,r:12,t:10,b:28};const pw=w-pad.l-pad.r,ph=h-pad.t-pad.b;
       const x=m=>pad.l+(Number(m)/1440)*pw; const y=v=>pad.t+(1-Number(v)/100)*ph;
       ctx.fillStyle=css('--zec-card-bg');ctx.fillRect(0,0,w,h);
-      const nw=p.night_window||{}; const toMin=t=>{const m=String(t||'').match(/^(\d+):(\d+)/);return m?Number(m[1])*60+Number(m[2]):null;};const ns=toMin(nw.start),ne=toMin(nw.end);
-      if(ns!==null&&ne!==null){ctx.fillStyle=css('--zec-blue-soft'); if(ns>ne){ctx.fillRect(x(0),pad.t,x(ne)-x(0),ph);ctx.fillRect(x(ns),pad.t,x(1440)-x(ns),ph);}else ctx.fillRect(x(ns),pad.t,x(ne)-x(ns),ph);}
+      const configSegments=this.configSegments(); const toMin=t=>{const m=String(t||'').match(/^(\d+):(\d+)/);return m?Number(m[1])*60+Number(m[2]):null;};
+      ctx.fillStyle=css('--zec-blue-soft');
+      configSegments.filter(s=>s.known!==false).forEach(seg=>{
+        const ns=toMin(seg.night_start),ne=toMin(seg.night_end),a=Math.max(0,Number(seg.start_minute||0)),b=Math.min(1440,Number(seg.end_minute??1440));
+        if(ns===null||ne===null||b<=a)return;
+        const intervals=ns>ne?[[0,ne],[ns,1440]]:[[ns,ne]];
+        intervals.forEach(([ia,ib])=>{const left=Math.max(a,ia),right=Math.min(b,ib);if(right>left)ctx.fillRect(x(left),pad.t,x(right)-x(left),ph);});
+      });
       ctx.strokeStyle=css('--zec-card-border');ctx.lineWidth=1;ctx.fillStyle=css('--zec-muted');ctx.font='10px sans-serif';
       for(let v=0;v<=100;v+=20){const py=y(v);ctx.beginPath();ctx.moveTo(pad.l,py);ctx.lineTo(w-pad.r,py);ctx.stroke();ctx.textAlign='right';ctx.fillText(`${v} %`,pad.l-7,py+3);}
       [0,360,720,1080,1440].forEach(m=>{const px=x(m);ctx.beginPath();ctx.moveTo(px,pad.t);ctx.lineTo(px,h-pad.b);ctx.stroke();ctx.textAlign=m===0?'left':m===1440?'right':'center';ctx.fillText(`${String(Math.floor(m/60)).padStart(2,'0')}:00`,px,h-8);});ctx.textAlign='left';
-      const thresholds=p.thresholds||{}; [['min_soc','Min-SOC'],['max_soc','Max-SOC'],['reserve_soc','Reserve']].forEach(([key,label])=>{const v=number(thresholds[key]);if(v===null)return;ctx.strokeStyle=key==='reserve_soc'?css('--zec-amber'):css('--zec-subtle');ctx.setLineDash([5,4]);ctx.beginPath();ctx.moveTo(pad.l,y(v));ctx.lineTo(w-pad.r,y(v));ctx.stroke();ctx.setLineDash([]);});
+      configSegments.filter(s=>s.known!==false).forEach(seg=>{[['min_soc','Min-SOC'],['max_soc','Max-SOC'],['reserve_soc','Reserve']].forEach(([key,label])=>{const v=number(seg[key]);if(v===null)return;ctx.strokeStyle=key==='reserve_soc'?css('--zec-amber'):css('--zec-subtle');ctx.setLineDash([5,4]);ctx.beginPath();ctx.moveTo(x(Math.max(0,Number(seg.start_minute||0))),y(v));ctx.lineTo(x(Math.min(1440,Number(seg.end_minute??1440))),y(v));ctx.stroke();ctx.setLineDash([]);});});
       const series=this.series();
-      const protectedLevels=[thresholds.min_soc,thresholds.max_soc,thresholds.reserve_soc,0,100];
+      const protectedLevels=configSegments.flatMap(s=>[s.min_soc,s.max_soc,s.reserve_soc]).concat([0,100]);
       series.forEach(s=>{const raw=points.map(pt=>({minute:number(pt.minute),value:number(pt[s.key])}));this.drawQuantizedSocLine(ctx,raw,s.color,x,y,protectedLevels);});
       if(p.is_today){const now=new Date();const minute=now.getHours()*60+now.getMinutes();ctx.strokeStyle=css('--zec-blue');ctx.setLineDash([2,4]);ctx.beginPath();ctx.moveTo(x(minute),pad.t);ctx.lineTo(x(minute),h-pad.b);ctx.stroke();ctx.setLineDash([]);}
-      if(this.hoverX!==null&&points.length){const minute=Math.max(0,Math.min(1440,Math.round((this.hoverX-pad.l)/pw*1440)));let nearest=points[0],dist=Infinity;points.forEach(pt=>{const d=Math.abs(Number(pt.minute)-minute);if(d<dist){dist=d;nearest=pt;}});const px=x(nearest.minute);ctx.strokeStyle=css('--zec-blue');ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px,pad.t);ctx.lineTo(px,h-pad.b);ctx.stroke();series.forEach(s=>{const v=number(nearest[s.key]);if(v===null)return;ctx.fillStyle=s.color;ctx.beginPath();ctx.arc(px,y(v),3.5,0,Math.PI*2);ctx.fill();});const rows=series.map(s=>`<div class="zec-chart-tooltip-row"><span>${escapeHtml(s.label)}</span><b>${escapeHtml(fmtSoc(nearest[s.key]))}</b></div>`).join('');const reason=fmtReason(nearest.reason);const reasonRow=reason?`<div class="zec-chart-tooltip-row"><span>Grund</span><b>${escapeHtml(reason)}</b></div>`:'';const primaryPowerRow=p.primary_storage_present!==false?`<div class="zec-chart-tooltip-row"><span>Primärspeicher</span><b>${escapeHtml(fmtPower(nearest.primary_power_w))}</b></div>`:'';this.showSocDetails(`<strong>${escapeHtml(p.date||'')} ${escapeHtml(nearest.time||'')}</strong>${rows}<div class="zec-chart-tooltip-row"><span>Zendure-Leistung</span><b>${escapeHtml(fmtPower(nearest.zendure_power_w))}</b></div>${primaryPowerRow}<div class="zec-chart-tooltip-row"><span>Modus</span><b>${escapeHtml(nearest.mode||'—')}</b></div>${reasonRow}`,px,pad.t+ph*.55);}
+      if(this.hoverX!==null&&points.length){const minute=Math.max(0,Math.min(1440,Math.round((this.hoverX-pad.l)/pw*1440)));let nearest=points[0],dist=Infinity;points.forEach(pt=>{const d=Math.abs(Number(pt.minute)-minute);if(d<dist){dist=d;nearest=pt;}});const px=x(nearest.minute);ctx.strokeStyle=css('--zec-blue');ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px,pad.t);ctx.lineTo(px,h-pad.b);ctx.stroke();series.forEach(s=>{const v=number(nearest[s.key]);if(v===null)return;ctx.fillStyle=s.color;ctx.beginPath();ctx.arc(px,y(v),3.5,0,Math.PI*2);ctx.fill();});const rows=series.map(s=>`<div class="zec-chart-tooltip-row"><span>${escapeHtml(s.label)}</span><b>${escapeHtml(fmtSoc(nearest[s.key]))}</b></div>`).join('');const reason=fmtReason(nearest.reason);const reasonRow=reason?`<div class="zec-chart-tooltip-row"><span>Grund</span><b>${escapeHtml(reason)}</b></div>`:'';const primaryPowerRow=p.primary_storage_present!==false?`<div class="zec-chart-tooltip-row"><span>Primärspeicher</span><b>${escapeHtml(fmtPower(nearest.primary_power_w))}</b></div>`:'';const cfgSeg=this.configAt(Number(nearest.minute));const cfgRow=cfgSeg&&cfgSeg.known!==false?`<div class="zec-chart-tooltip-row"><span>Grenzen</span><b>${escapeHtml(`Min ${fmtSoc(cfgSeg.min_soc)} · Max ${fmtSoc(cfgSeg.max_soc)} · Reserve ${fmtSoc(cfgSeg.reserve_soc)}`)}</b></div><div class="zec-chart-tooltip-row"><span>Nachtfenster</span><b>${escapeHtml(`${cfgSeg.night_start||'—'}–${cfgSeg.night_end||'—'}`)}</b></div>`:`<div class="zec-chart-tooltip-row"><span>Historische Konfiguration</span><b>nicht verfügbar</b></div>`;this.showSocDetails(`<strong>${escapeHtml(p.date||'')} ${escapeHtml(nearest.time||'')}</strong>${rows}<div class="zec-chart-tooltip-row"><span>Zendure-Leistung</span><b>${escapeHtml(fmtPower(nearest.zendure_power_w))}</b></div>${primaryPowerRow}${cfgRow}<div class="zec-chart-tooltip-row"><span>Modus</span><b>${escapeHtml(nearest.mode||'—')}</b></div>${reasonRow}`,px,pad.t+ph*.55);}
     }
   }
 

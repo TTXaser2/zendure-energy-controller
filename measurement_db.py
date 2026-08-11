@@ -121,6 +121,7 @@ def extract_measurement_point(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         "cross_charge_limited": 1 if _boolish(_first(row, "cross_charge_guard_limited", "control_cross_charge_limited")) else 0,
         "night_window_active": 1 if (_boolish(_first(row, "night_discharge_window_active", "night_window_active")) or mode == "NIGHT_DISCHARGE") else 0,
         "night_reserve_active": 1 if _boolish(_first(row, "night_discharge_reserve_active", "control_night_reserve_active")) else 0,
+        "config_control_hash": str(_first(row, "config_control_hash") or "").strip(),
     }
 
 
@@ -256,6 +257,10 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         """
     )
     conn.execute("INSERT OR REPLACE INTO measurement_meta(key,value) VALUES('schema_version','2')")
+    # V13 graph overlay history is a separate, lightweight schema extension;
+    # Measurement V4 and the 1-minute measurement schema remain unchanged.
+    from graph_config_timeline import ensure_graph_config_schema
+    ensure_graph_config_schema(conn)
     conn.commit()
 
 
@@ -284,6 +289,12 @@ def _max_update(old: Optional[float], value: Optional[float]) -> Optional[float]
 
 
 def write_points(conn: sqlite3.Connection, points: List[Dict[str, Any]]) -> int:
+    from graph_config_timeline import ensure_graph_config_schema, upsert_timeline_entry
+    ensure_graph_config_schema(conn)
+    latest_timeline = conn.execute(
+        "SELECT config_control_hash FROM graph_config_timeline ORDER BY effective_from_ms DESC LIMIT 1"
+    ).fetchone()
+    last_timeline_hash = str(latest_timeline[0]) if latest_timeline and latest_timeline[0] else ""
     written = 0
     for p in points:
         conn.execute(
@@ -357,6 +368,13 @@ def write_points(conn: sqlite3.Connection, points: List[Dict[str, Any]]) -> int:
                     bucket,
                 ),
             )
+        config_hash = str(p.get("config_control_hash") or "")
+        overlay = p.get("_graph_config_overlay")
+        if config_hash and isinstance(overlay, dict) and config_hash != last_timeline_hash:
+            upsert_timeline_entry(
+                conn, int(p["ts_ms"]), config_hash, overlay=overlay, source="runtime_effective", known=True, ensure_schema=False
+            )
+            last_timeline_hash = config_hash
         written += 1
     if points:
         conn.execute("INSERT OR REPLACE INTO measurement_meta(key,value) VALUES('last_write_epoch_s',?)", (str(time.time()),))
@@ -392,6 +410,9 @@ class MeasurementDbWriter:
         point = extract_measurement_point(row)
         if point is None:
             return self._set_status("skipped", "Row ohne auswertbare Zeitbasis", config=config)
+        if point.get("config_control_hash"):
+            from graph_config_timeline import overlay_from_config
+            point["_graph_config_overlay"] = overlay_from_config(config)
         path = resolve_measurement_db_path(config)
         try:
             self._ensure_thread()

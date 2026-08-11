@@ -153,3 +153,22 @@ body.help-open{position:fixed;left:0;right:0;width:100%;overflow:hidden;touch-ac
 
 /* V12.12.1 handbook + glossary links. */
 .help-handbook-links{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+
+/* V13 Konfigurationsstände / Import / Export */
+.config-states-modal{width:min(980px,calc(100vw - 28px));max-height:min(88vh,900px)}
+.config-states-body{display:grid;gap:18px}
+.config-state-section{border:1px solid var(--zec-card-border);border-radius:12px;padding:14px;background:var(--zec-card-bg)}
+.config-state-section h3{margin:0 0 10px;font-size:1rem}
+.config-state-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.config-state-grid .full{grid-column:1/-1}
+.config-state-grid input,.config-state-grid textarea,.config-state-grid select{width:100%;box-sizing:border-box}
+.config-state-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.config-state-actions button{min-height:36px}
+.config-state-list{display:grid;gap:10px}
+.config-state-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px;border:1px solid var(--zec-card-border);border-radius:10px}
+.config-state-item.corrupt{border-style:dashed}
+.config-state-meta{font-size:.82rem;color:var(--zec-muted);margin-top:3px}
+.config-state-item-actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.config-state-warning{font-size:.88rem;color:var(--zec-muted)}
+.config-import-options{display:flex;flex-wrap:wrap;gap:14px;margin-top:8px}
+@media(max-width:700px){.config-state-grid{grid-template-columns:1fr}.config-state-grid .full{grid-column:auto}.config-state-item{grid-template-columns:1fr}.config-state-item-actions{justify-content:flex-start}.config-states-modal{width:calc(100vw - 12px);max-height:94vh}}

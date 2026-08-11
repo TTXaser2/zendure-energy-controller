@@ -173,30 +173,14 @@ def typed_revision(value: Mapping[str, Any]) -> str:
 
 
 
-# S1.7 legacy authority matrix. Keys marked ``remove_*`` in the generated
-# registry are not silently retained as active runtime settings. Four values
-# still consumed by RC19 production code remain explicit compatibility inputs
-# for RC20 and are scheduled for a later, separately tested removal.
-LEGACY_RUNTIME_COMPAT_KEYS = frozenset({
-    "HARVEST_CAPACITY_WEIGHTING_MODE",
-    "MEASUREMENT_LOG_BACKUP_COUNT",
-    "MEASUREMENT_LOG_ESTIMATED_ROW_BYTES",
-    "MEASUREMENT_LOG_FALLBACK_BACKUP_COUNT",
-})
-LEGACY_REMOVE_NO_EFFECT_KEYS = frozenset({
-    "HARVEST_IMPORT_EXIT_CONFIRM_SECONDS",
-    "HARVEST_IMPORT_REDUCE_CONFIRM_SECONDS",
-    "HARVEST_PRIMARY_BELOW_FLOOR_CONFIRM_SECONDS",
-    "HARVEST_PRIMARY_RESTART_CONFIRM_SECONDS",
-    "CROSS_CHARGE_RESERVE_W",
-    "MEASUREMENT_DB_MAX_QUEUE_ROWS",
-})
-LEGACY_MIGRATION_MATRIX = {
-    "ZENDURE_BATTERY_CAPACITY_KWH": "transform_to_ZENDURE_BATTERY_CAPACITY_WH_then_remove",
-    "SMA_DISCHARGE_BLOCK_W": "transform_to_CROSS_CHARGE_SIGNIFICANT_W_then_remove",
-    **{key: "remove_no_runtime_effect" for key in LEGACY_REMOVE_NO_EFFECT_KEYS},
-    **{key: "preserve_runtime_compatibility_until_S2" for key in LEGACY_RUNTIME_COMPAT_KEYS},
-}
+# Shared V13 migration authority.  Re-exporting migrate_rc19_to_rc20 keeps the
+# established public/test API stable while importer and CLI use the same code.
+from config_migration import (
+    LEGACY_MIGRATION_MATRIX,
+    LEGACY_REMOVE_NO_EFFECT_KEYS,
+    LEGACY_RUNTIME_COMPAT_KEYS,
+    migrate_rc19_to_rc20,
+)
 
 
 def _active_registry_specs():
@@ -249,100 +233,6 @@ def _expected_pi_owner() -> Tuple[int, int]:
     except KeyError:
         gid = int(os.getegid())
     return uid, gid
-
-
-def migrate_rc19_to_rc20(raw: Mapping[str, Any]) -> Tuple[Dict[str, Any], Tuple[str, ...]]:
-    """Exact and idempotent RC19 -> RC20 config migration.
-
-    RC20 keeps all productive RC19 values and unknown extension keys. It does
-    not materialise defaults and does not introduce target-only settings from
-    later release stages. The unsafe free-form restart command is removed, two
-    legacy authorities are transformed only when valid and conflict-free, and
-    keys proven to have no runtime effect are removed explicitly.
-    """
-    if not isinstance(raw, Mapping):
-        raise ValueError("RC19 config root must be a JSON object")
-    result = dict(raw)
-    steps = []
-
-    # V12.13: Measurement runtime is V4-only. Keep the marker for rollback
-    # compatibility, but migrate every historical selector value to the fixed 4.
-    schema_marker = str(result.get("MEASUREMENT_SCHEMA_VERSION", "") or "").strip().lower()
-    legacy_schema_marker = str(result.get("MEASUREMENT_LOG_SCHEMA", "") or "").strip().lower()
-    if schema_marker in {"3", "v3", "zec3", "zec-measurement-v3"} or (not schema_marker and legacy_schema_marker in {"3", "v3", "zec3", "zec-measurement-v3"}):
-        result["MEASUREMENT_SCHEMA_VERSION"] = "4"
-        steps.append("MIG-V12.13-MEASUREMENT-SCHEMA-3-TO-4")
-    elif schema_marker and schema_marker not in {"4", "v4", "zec4", "zec-measurement-v4"}:
-        raise ValueError("MEASUREMENT_SCHEMA_VERSION_INVALID")
-    elif schema_marker in {"v4", "zec4", "zec-measurement-v4"}:
-        result["MEASUREMENT_SCHEMA_VERSION"] = "4"
-        steps.append("MIG-V12.13-NORMALIZE-MEASUREMENT-SCHEMA-4")
-
-    if "SERVICE_RESTART_COMMAND" in result:
-        result.pop("SERVICE_RESTART_COMMAND", None)
-        steps.append("MIG-RC20-REMOVE-FREE-RESTART-COMMAND")
-
-    # WH is the canonical capacity key. Transform-and-remove is performed only
-    # when the legacy value is valid and non-conflicting. A conflict remains
-    # visible to strict validation and is never silently repaired.
-    if "ZENDURE_BATTERY_CAPACITY_KWH" in result:
-        kwh = result.get("ZENDURE_BATTERY_CAPACITY_KWH")
-
-        # RC19 carried this compatibility key in normal configs even when it
-        # was unset (JSON null) and its runtime float codec also accepted
-        # numeric strings. Preserve that exact source contract: null and blank
-        # mean "unset", while finite positive JSON numbers and numeric strings
-        # are transformed. Other values remain a fail-closed migration error.
-        legacy_unset = kwh is None or (isinstance(kwh, str) and kwh.strip() == "")
-        if not legacy_unset:
-            if isinstance(kwh, bool):
-                raise ValueError("ZENDURE_BATTERY_CAPACITY_KWH_INVALID")
-            try:
-                parsed_kwh = float(kwh)
-            except (TypeError, ValueError, OverflowError):
-                raise ValueError("ZENDURE_BATTERY_CAPACITY_KWH_INVALID") from None
-            if not math.isfinite(parsed_kwh) or parsed_kwh <= 0:
-                raise ValueError("ZENDURE_BATTERY_CAPACITY_KWH_INVALID")
-
-            derived_wh = int(round(parsed_kwh * 1000.0))
-            current_wh = result.get("ZENDURE_BATTERY_CAPACITY_WH")
-            if current_wh in (None, ""):
-                result["ZENDURE_BATTERY_CAPACITY_WH"] = derived_wh
-                steps.append("MIG-RC20-CAPACITY-KWH-TO-WH")
-            else:
-                try:
-                    parsed_wh = float(current_wh)
-                    agrees = math.isfinite(parsed_wh) and int(round(parsed_wh)) == derived_wh
-                except (TypeError, ValueError, OverflowError):
-                    agrees = False
-                if not agrees:
-                    raise ValueError("ZENDURE_BATTERY_CAPACITY_CONFLICT")
-
-        result.pop("ZENDURE_BATTERY_CAPACITY_KWH", None)
-        steps.append("MIG-RC20-REMOVE-CAPACITY-KWH")
-
-    if "SMA_DISCHARGE_BLOCK_W" in result:
-        legacy_threshold = result.get("SMA_DISCHARGE_BLOCK_W")
-        canonical_threshold = result.get("CROSS_CHARGE_SIGNIFICANT_W")
-        if canonical_threshold in (None, ""):
-            result["CROSS_CHARGE_SIGNIFICANT_W"] = legacy_threshold
-            steps.append("MIG-RC20-CROSS-CHARGE-ALIAS")
-        else:
-            try:
-                agrees = int(float(canonical_threshold)) == int(float(legacy_threshold))
-            except Exception:
-                agrees = False
-            if not agrees:
-                raise ValueError("CROSS_CHARGE_SIGNIFICANT_W_CONFLICT")
-        result.pop("SMA_DISCHARGE_BLOCK_W", None)
-        steps.append("MIG-RC20-REMOVE-SMA-DISCHARGE-BLOCK")
-
-    for key in sorted(LEGACY_REMOVE_NO_EFFECT_KEYS):
-        if key in result:
-            result.pop(key, None)
-            steps.append("MIG-RC20-REMOVE-" + key)
-
-    return result, tuple(steps)
 
 
 def parse_full_candidate(
@@ -928,6 +818,18 @@ class SettingsRuntimeManager:
                 )
             )
 
+    def pending_restart_keys_for(self, configured: Mapping[str, Any]) -> Tuple[str, ...]:
+        """Predict pending-restart keys for a validated configured candidate."""
+        with self._lock:
+            return tuple(
+                sorted(
+                    spec.key
+                    for spec in _active_registry_specs()
+                    if spec.apply_class is ApplyClass.RESTART_REQUIRED
+                    and configured.get(spec.key) != self._effective.get(spec.key)
+                )
+            )
+
     def pending_restart(self) -> bool:
         return bool(self.pending_restart_keys())
 
@@ -1158,9 +1060,41 @@ class SettingsRuntimeManager:
             if not result.valid:
                 raise ValueError("CONFIG_CANDIDATE_INVALID")
             data = pretty_json_bytes(result.persisted)
+            old_data = current_file.data if current_file.status == "ok" else None
             atomic_write(self.path, data, mode=0o600)
             reread = stable_read(self.path)
             if reread.status != "ok" or reread.data != data:
+                # A failed post-write verification must never be adopted by runtime.
+                # Restore the exact bytes observed by the final CAS reread. First
+                # install has no old bytes, so remove the failed artifact instead.
+                rollback_ok = False
+                try:
+                    if old_data is not None:
+                        atomic_write(self.path, old_data, mode=0o600)
+                        restored = stable_read(self.path)
+                        rollback_ok = restored.status == "ok" and restored.data == old_data
+                    else:
+                        try:
+                            os.unlink(self.path)
+                        except FileNotFoundError:
+                            pass
+                        parent_fd = os.open(os.path.dirname(self.path) or ".", os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+                        try:
+                            os.fsync(parent_fd)
+                        finally:
+                            os.close(parent_fd)
+                        restored = stable_read(self.path)
+                        rollback_ok = restored.status == "missing"
+                except Exception:
+                    rollback_ok = False
+                if not rollback_ok:
+                    # Re-read actual state and fail closed. No successful runtime
+                    # adoption is possible from this path.
+                    actual = stable_read(self.path)
+                    self._config_health = CONFIG_HEALTH_INVALID_RUNTIME
+                    self._primary_valid = False
+                    self._invalid_file_revision = actual.revision or ""
+                    raise RuntimeError("CONFIG_COMMIT_ROLLBACK_FAILED")
                 raise RuntimeError("CONFIG_POST_WRITE_VERIFY_FAILED")
             before_effective = dict(self._effective)
             self._set_valid_primary(result, reread, startup=False, source="commit")

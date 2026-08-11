@@ -15,8 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class Rc20ReleaseIntegrationTests(unittest.TestCase):
     def test_version_is_rc20_without_measurement_schema_change(self):
-        self.assertEqual("12.13.0", version.APP_VERSION)
-        self.assertEqual("V12.13.0", version.APP_VERSION_LABEL)
+        self.assertEqual("13.0.0", version.APP_VERSION)
+        self.assertEqual("V13.0.0", version.APP_VERSION_LABEL)
         self.assertFalse(hasattr(version, "CSV_SCHEMA"))
 
     def test_migration_cli_check_apply_and_idempotence(self):
@@ -100,24 +100,24 @@ class Rc20ReleaseIntegrationTests(unittest.TestCase):
 
     def test_updater_is_exact_sequential_atomic_and_rollback_capable(self):
         script = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_VERSION="v12_13_0"', script)
-        self.assertIn('EXPECTED_SOURCE_RC19="12.11.2-rc19"', script)
-        self.assertIn('EXPECTED_SOURCE_V12114_VERSION="12.11.4"', script)
-        self.assertIn('EXPECTED_SOURCE_V12114_BUILD_ID="v12.11.4-20260807"', script)
-        self.assertIn('EXPECTED_SOURCE_V12116_VERSION="12.11.6"', script)
-        self.assertIn('EXPECTED_SOURCE_V12116_BUILD_ID="v12.11.6-20260808"', script)
-        self.assertIn('EXPECTED_SOURCE_FIX5_BUILD_ID="rc20-audit-fix5-20260806"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v12.13.0-20260811"', script)
-        self.assertIn('TARGET_PACKAGE_VERSION" = "12.13.0"', script)
-        self.assertIn("migrate_rc19_to_rc20.py", script)
+        self.assertIn('EXPECTED_VERSION="v13_0_0"', script)
+        self.assertIn('EXPECTED_SOURCE_VERSION="12.13.0"', script)
+        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v12.13.0-20260811"', script)
+        self.assertIn('EXPECTED_TARGET_VERSION="13.0.0"', script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v13.0.0-20260811"', script)
+        self.assertIn('SOURCE_MODE="V12_13_0"', script)
+        self.assertIn('EXPECTED_TARGET_VERSION" ]', script)
+        self.assertIn("migrate_config_to_current.py", script)
+        self.assertIn("backfill_graph_config_timeline.py", script)
         self.assertIn("--check-only", script)
         self.assertIn("recover_on_error", script)
         self.assertIn('sudo tar -xzf "$BACKUP" -C /opt', script)
         self.assertIn("evaluate_installation_readiness.py", script)
         self.assertIn("weder ready=true noch einen stabilen sicheren Übergangszustand", script)
-        self.assertIn('EXPECTED_SOURCE_FIX6_BUILD_ID="rc20-audit-fix6-20260806"', script)
         self.assertIn("zendure-controller-restart", script)
         self.assertIn("visudo -cf", script)
+        self.assertIn("config-states/", script)
+        self.assertNotIn("EXPECTED_SOURCE_V12122_VERSION", script)
         self.assertNotIn("SERVICE_RESTART_COMMAND", script)
 
     def test_updater_has_no_mandatory_node_runtime_dependency(self):
@@ -156,7 +156,7 @@ class Rc20ReleaseIntegrationTests(unittest.TestCase):
         self.assertIn('os.environ.get("ZEC_INSTALLER_PREFLIGHT") == "1"', web_ui)
 
     def test_release_manifest_must_not_ship_runtime_logs(self):
-        manifest = (ROOT / "V12_13_0_SOURCE_MANIFEST.sha256").read_text(encoding="utf-8")
+        manifest = (ROOT / "V13_0_0_SOURCE_MANIFEST.sha256").read_text(encoding="utf-8")
         self.assertNotIn("./logs/", manifest)
         self.assertNotIn(".sqlite3", manifest)
 

@@ -1,27 +1,33 @@
-# Installation - Zendure Energy Controller V12.13.0
+# Installation - Zendure Energy Controller V13.0.0
 
-**Ziel-Build-ID:** `v12.13.0-20260811`
+**Ziel-Build-ID:** `v13.0.0-20260811`
 
-## 1. Normaler Ausgangsstand
+## 1. Verbindlicher Ausgangsstand
 
-Der reguläre Updatepfad ist:
+Der reguläre und einzige direkte Updatepfad dieses Installers ist:
 
 ```text
-V12.12.2
-APP_VERSION  = 12.12.2
-APP_BUILD_ID = v12.12.2-20260810
+V12.13.0
+APP_VERSION  = 12.13.0
+APP_BUILD_ID = v12.13.0-20260811
 ```
 
-Der Installer akzeptiert zusätzlich die bereits dokumentierten kompatiblen Recovery-Ausgangsstände. Ein unbekannter Stand wird vor jeder Produktivänderung abgelehnt.
+Ältere V12.12.x-/RC-Stände werden vor jeder Produktivänderung abgewiesen. Es gibt keinen Rücksprung auf eine ältere Entwicklungsbasis.
 
-Eine vorhandene `config.json`, Last-Good-Slots und Laufzeitdaten bleiben erhalten.
+Erhalten bleiben insbesondere:
+
+- `/opt/zendure-controller/config.json`;
+- Last-Good-A/B-Store und Current-Pointer;
+- Measurement-/SQLite-Laufzeitdaten;
+- Operational Events;
+- vorhandene `/opt/zendure-controller/config-states/`.
 
 ## 2. Paket prüfen
 
 ```bash
 cd /home/pi/Downloads
-sha256sum zendure_controller_v12_13_0.zip
-unzip -t zendure_controller_v12_13_0.zip
+sha256sum zendure_controller_v13_0_0.zip
+unzip -t zendure_controller_v13_0_0.zip
 ```
 
 Der SHA256 muss exakt dem Wert der Releaseübergabe entsprechen.
@@ -30,39 +36,60 @@ Der SHA256 muss exakt dem Wert der Releaseübergabe entsprechen.
 
 ```bash
 cd /home/pi/Downloads
-rm -rf zendure_controller_v12_13_0
-unzip -q zendure_controller_v12_13_0.zip
-chmod +x zendure_controller_v12_13_0/tools/update_zendure_controller.sh
-bash zendure_controller_v12_13_0/tools/update_zendure_controller.sh v12_13_0
+rm -rf zendure_controller_v13_0_0
+unzip -q zendure_controller_v13_0_0.zip
+chmod +x zendure_controller_v13_0_0/tools/update_zendure_controller.sh
+bash zendure_controller_v13_0_0/tools/update_zendure_controller.sh v13_0_0
 ```
 
-Node.js ist keine Produktivvoraussetzung. JavaScript wird ohne Node.js über das buildseitig geprüfte Source-Manifest abgesichert.
+Der Installer entpackt und verifiziert das Release-ZIP vor dem Dienststopp noch einmal selbst. Node.js ist keine Produktivvoraussetzung; wenn Node lokal vorhanden ist, wird die JavaScript-Syntax zusätzlich geprüft.
 
-## 4. Config-Migration
+## 4. Preflight und Config-Migration
 
-Für bestehende V12.12.2-Installationen mit dem normalen Marker `MEASUREMENT_SCHEMA_VERSION=4` ist die Migration ein No-op.
+Vor dem Stoppen des Controllers prüft der Installer unter anderem:
 
-Falls eine historische Konfiguration noch den alten Marker `3` enthält, wird ausschließlich dieser Kompatibilitätsmarker kontrolliert auf `4` migriert. Das aktiviert keine neue Loggingfunktion und ändert keine Reglerparameter.
+- exakt V12.13.0 / `v12.13.0-20260811` als installierte Quelle;
+- Paketversion und Build-ID;
+- `V13_0_0_SOURCE_MANIFEST.sha256`;
+- Python-, Bash- und, falls verfügbar, JavaScript-Syntax;
+- Runtime-/Readiness-Smoke;
+- vollständige Config-Migration im `--check-only`-Modus;
+- vollständige Unit-Test-Suite mit `ResourceWarning` als Fehler.
 
-Nach der Installation kann geprüft werden:
+Die gemeinsame V13-Migrationsautorität übernimmt weiterhin die bestehenden historischen Config-Migrationen. `MEASUREMENT_SCHEMA_VERSION` bleibt produktiv auf `4` festgelegt.
 
-```bash
-python3 - <<'PY'
-import json
-p='/opt/zendure-controller/config.json'
-with open(p, encoding='utf-8') as f:
-    cfg=json.load(f)
-print('MEASUREMENT_SCHEMA_VERSION =', cfg.get('MEASUREMENT_SCHEMA_VERSION'))
-PY
-```
+## 5. Backups und atomische Installation
 
-Erwartet:
+Nach bestandenem Preflight und vor dem Ersetzen produktiver Dateien legt der Installer Rollback-Sicherungen an, unter anderem:
 
 ```text
-MEASUREMENT_SCHEMA_VERSION = 4
+/home/pi/zendure-controller-backup-<Zeitstempel>.tar.gz
+/home/pi/config.pre-v13.0.0.<Zeitstempel>.json
+/var/backups/zec-v13.0.0-root-artifacts-<Zeitstempel>
 ```
 
-## 5. Unmittelbare Verifikation
+Bei einem echten Installationsfehler nach Beginn der Produktivtransaktion wird automatisch auf den gesicherten Stand zurückgerollt.
+
+## 6. Einmaliger historischer Graph-Backfill
+
+Nach erfolgreichem Controllerstart führt der Installer einmalig und idempotent aus:
+
+```text
+tools/backfill_graph_config_timeline.py
+```
+
+Das Werkzeug liest ausschließlich historische Measurement-V4-Dateien und `zec_config_snapshots.json`, rekonstruiert `config_control_hash`-Wechsel und ergänzt die kleine SQLite-Config-Zeitachse.
+
+Wichtig:
+
+- historische V3-Dateien werden nicht als Runtimequelle aktiviert;
+- Config, Last-Good und Gerätezustand werden vom Backfill nicht verändert;
+- fehlende alte Config-Snapshots werden als unbekannt markiert;
+- ein Backfill-Fehler macht einen ansonsten gesunden V13-Controller nicht unready und löst keinen Installationsrollback aus.
+
+Neue Configwechsel werden anschließend automatisch inkrementell durch die Runtime erfasst.
+
+## 7. Unmittelbare Verifikation
 
 ```bash
 grep -E 'APP_VERSION|APP_VERSION_LABEL|APP_BUILD_ID' \
@@ -75,67 +102,66 @@ curl -fsS http://127.0.0.1:8080/ready  | python3 -m json.tool
 Erwartet:
 
 ```text
-APP_VERSION = "12.13.0"
-APP_VERSION_LABEL = "V12.13.0"
-APP_BUILD_ID = "v12.13.0-20260811"
+APP_VERSION = "13.0.0"
+APP_VERSION_LABEL = "V13.0.0"
+APP_BUILD_ID = "v13.0.0-20260811"
 Dienst = active
 /ready ready = true   (bevorzugter Normalfall)
 ```
 
-Die Single-Owner-Diagnostik aus V12.12.2 bleibt erhalten.
+Der Installer akzeptiert nur die ausdrücklich definierten sicheren transienten Readbackzustände; echte Daten-, Command- oder Guardfehler werden nicht weichgezeichnet.
 
-## 6. Measurement-V4-Abnahme
+## 8. Konfigurationsstände / Import / Export prüfen
 
-Bei aktiviertem Measurement-Logging gilt:
+In den Settings steht `Konfigurationsstände` zur Verfügung. Empfohlener Smoke:
 
-- neu geschriebene produktive CSV-Dateien sind V4;
-- Standardprofil hat 246 Felder, Extended 249;
-- ein historischer Schema-3-Marker kann keinen V3-Writer aktivieren;
-- Manifest-/Rotation-/Rowcount-/Close-Semantik aus V12.12.2 bleibt erhalten.
+1. benannten Stand ohne Secrets anlegen;
+2. Stand öffnen und Preview/Diff prüfen, ohne ihn sofort zu aktivieren;
+3. vollständigen Export erzeugen;
+4. teilbares Regelprofil erzeugen und kontrollieren, dass nur portable Parameter enthalten sind;
+5. optional Export erneut importieren und Preview abbrechen;
+6. prüfen, dass `config.json` bis zum bestätigten Commit unverändert bleibt.
 
-Es ist keine künstliche Dateirotation für die Installation erforderlich.
+Bei Restart-Settings muss `configured` den neuen Wert zeigen, während `effective` bis zum Neustart alt bleibt und `pending_restart` gesetzt ist.
 
-## 7. Graph-CSV
+## 9. Historischen SOC-Graph prüfen
 
-Der UI-Graph-Export ist bewusst kein Measurement-Paket. Optional prüfen:
+Nach einer Settingsänderung an Max-/Min-SOC, Nachtreserve oder Nachtzeit gilt:
 
-```bash
-curl -fsS http://127.0.0.1:8080/graph-data.csv | head -n 2
+- heutiger Graph: Overlay aktualisiert sich auch bei gecachten historischen Tagespunkten;
+- vergangener Tag: damalige Grenzwerte und Nachtfenster bleiben historisch erhalten;
+- Configwechsel innerhalb eines Tages: getrennte zeitliche Segmente;
+- fehlender historischer Snapshot: keine rückwirkende Verwendung der aktuellen Config.
+
+## 10. Measurement V4
+
+Der produktive Messvertrag bleibt:
+
+```text
+ZEC-MEASUREMENT-V4
+Standard: 246 Felder
+Extended: 249 Felder
 ```
 
-Der Export verwendet `ZEC-GRAPH-EXPORT-V1` und darf nicht als `ZEC-MEASUREMENT-V3` oder `ZEC-MEASUREMENT-V4` gekennzeichnet sein.
+Historische V3-Dateien bleiben offline/read-only. Es wird kein V3-Runtimewriter eingeführt.
 
-## 8. Historische V3-Dateien
-
-Alte V3-Dateien werden nicht gelöscht oder umgeschrieben. Replay-, Analyse- und Importwerkzeuge können historische V3-Daten weiterhin offline lesen. Es gibt jedoch keinen produktiven V3-Runtimewriter mehr.
-
-## 9. Handbuch
-
-Aktuelles Handbuch:
+## 11. Handbuch
 
 ```text
 /opt/zendure-controller/docs/Zendure_Energy_Controller_Handbuch.pdf
 ```
 
-Es ist als Benutzerhandbuch V12.13.0 gekennzeichnet und beschreibt V4-only Runtime sowie den historischen V3-Lesepfad.
+Das Handbuch ist als Benutzerhandbuch V13.0.0 gekennzeichnet und erläutert zusätzlich Konfigurationsstände, Scope, Import/Export, teilbare Regelprofile, Secrets, Preview/CAS, Last-Good-Abgrenzung und historisch korrekte Graph-Overlays.
 
-## 10. Backups und Rollback
+## 12. Rollbackhinweis
 
-Nach Beginn der Produktivtransaktion legt der Installer unter anderem an:
+Ein fehlgeschlagener produktiver Installationsschritt wird vom Installer automatisch zurückgerollt. Die ausgegebenen Backup-Pfade bis zur abgeschlossenen Feldabnahme nicht löschen.
 
-```text
-/home/pi/zendure-controller-backup-<Zeitstempel>.tar.gz
-/home/pi/config.pre-v12.13.0.<Zeitstempel>.json
-/var/backups/zec-v12.13.0-root-artifacts-<Zeitstempel>
-```
+Ein manueller Rollback soll nur auf Basis des konkret vom Installer ausgegebenen Backups erfolgen; dabei bleiben historische Measurement-V4-Dateien unangetastet. Die zusätzliche `graph_config_timeline` wird von V12.13.0 ignoriert und ändert den Measurement-V4-Vertrag nicht.
 
-Diese Sicherungen bis zum Abschluss der Feldabnahme nicht löschen. Bei einem echten Fehler nach dem Dienststopp verwendet das Update-Skript den vorhandenen automatischen Rollbackpfad.
-
-Der feste Marker `MEASUREMENT_SCHEMA_VERSION=4` bleibt bewusst in der Config erhalten, damit auch ein Rollback auf V12.12.2 weiterhin den V4-Pfad auswählt.
-
-## 11. Git-Übernahme
+## 13. Git-Übernahme
 
 ```text
-Commit: Release V12.13.0
-Tag:    v12.13.0
+Commit: feat: release ZEC V13.0.0 config states and historical graph overlays
+Tag:    v13.0.0
 ```

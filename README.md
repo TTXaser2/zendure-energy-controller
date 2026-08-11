@@ -1,96 +1,118 @@
-# Zendure Energy Controller V12.13.0
+# Zendure Energy Controller V13.0.0
 
-**Build-ID:** `v12.13.0-20260811`
+**Build-ID:** `v13.0.0-20260811`
 
-V12.13.0 trennt den produktiven Measurement-Vertrag vollständig von der historischen V3-Kompatibilität. Die produktive Runtime schreibt ausschließlich `ZEC-MEASUREMENT-V4`; historische V3-Dateien bleiben nur für Offline-Analyse, Replay und Import lesbar. Regler-, Command-, Cross-Charge-, NIGHT-, Harvest-Zielwert-, Single-Owner- und Measurement-Manifest-Verträge aus V12.12.2 werden nicht fachlich verändert.
+V13.0.0 führt den neuen Entwicklungsblock **Konfigurationsstände / Import / Export** ein und korrigiert gleichzeitig die historische Darstellung der SOC-Grenzen und Nachtfenster im Speicher-SOC-Tagesgraphen. Die produktive Regelung selbst bleibt fachlich unverändert: AUTO, Harvest-Zielwertbildung, Cross-Charge, NIGHT, Command Lifecycle/Resync, Single-Owner und Measurement V4 sind No-Regression-Bereiche.
 
-## 1. Produktive Runtime: ausschließlich Measurement V4
+## 1. Benannte Konfigurationsstände
 
-- `CsvRotatingLogger` besitzt keinen produktiven V3-Schreibzweig mehr.
-- Ein fehlender oder historischer Schema-Marker kann den Runtime-Writer nicht auf V3 umschalten.
-- `MEASUREMENT_SCHEMA_VERSION` bleibt ausschließlich als versteckter Kompatibilitätsmarker mit festem Wert `4` erhalten.
-- Historische Konfigurationen mit Schema `3` werden idempotent auf den Marker `4` migriert.
-- Die frühere globale Runtime-Konstante `version.CSV_SCHEMA = "ZEC-MEASUREMENT-V3"` ist entfernt.
+- ZEC kann benannte Konfigurationsstände mit Name, Beschreibung, Erstellzeit, Quellversion, Registry-/Config-Schema, Scope und Integritätshash speichern.
+- Lokaler Store: `/opt/zendure-controller/config-states/` mit restriktiven Rechten.
+- Ein gespeicherter Stand wird **niemals direkt aktiviert**. Laden führt immer über Migration, vollständige Servervalidierung, Preview/Diff, explizite Bestätigung, CAS und atomischen Commit.
+- Geerbte Defaults bleiben geerbt. Ein Stand materialisiert nicht still alte Defaults; Default-Abweichungen werden im Preview sichtbar.
+- Konfigurationsstände sind strikt vom Last-Good-A/B-Recoverystore getrennt und niemals selbst Recoverycandidate.
 
-Der V4-Feldvertrag bleibt unverändert:
+## 2. Import und Export
 
-```text
-Standard: 246 Felder
-Extended: 249 Felder
-```
+Das neue Format ist `ZEC-CONFIG-BUNDLE`, Formatversion 1.
 
-## 2. Interner Controller-Snapshot
+Unterstützt werden:
 
-Der interne Zyklus-/Graph-Snapshot ist schema-neutral. Er trägt keine künstliche `ZEC-MEASUREMENT-V3`- oder `schema_version=3.0`-Identität mehr. Erst der produktive Measurement-V4-Writer bildet aus Controllerzustand, Config- und Runtimekontext den persistierten V4-Datensatz.
+- vollständiger Export zur Sicherung bzw. kontrollierten Systemmigration;
+- benannte lokale Konfigurationsstände;
+- **teilbares Regelprofil** für den Austausch ausdrücklich portabler Regelparameter zwischen ZEC-Installationen;
+- Expert-Import einer historischen rohen `config.json`, weiterhin nur über Migration/Preview/Validation/Commit.
 
-## 3. Graph-CSV ist kein Measurement-Paket
+Die Bundle-Integritätsprüfung verwendet kanonisches JSON und SHA-256. Der Hash bestätigt **Integrität**, nicht Herkunft oder Authentizität. Unbekannte Registry-/Schema-Abweichungen werden ohne expliziten Migrationsvertrag fail closed abgewiesen.
 
-`/graph-data.csv` ist ein kompakter UI-/Graph-Export und verwendet den eigenständigen Vertrag:
+## 3. Scope und Portabilität
 
-```text
-ZEC-GRAPH-EXPORT-V1
-```
+Die SettingsRegistry bleibt Schemaautorität. In V13.0.0 sind alle 191 aktiven editierbaren LIVE/RESTART-Settings ausdrücklich einer Portabilitätsklasse zugeordnet.
 
-Der Export wird ausdrücklich weder als Measurement V3 noch als Measurement V4 ausgegeben. Dadurch kann er nicht mit einem vollständigen V4-Analysepaket verwechselt werden.
+Ein teilbares Regelprofil enthält ausschließlich `portable_profile`-Settings. Insbesondere Secrets, lokale Runtime-/Pfadangaben und anlagen-/standortspezifische Einstellungen werden nicht automatisch als Regelprofil transportiert.
 
-## 4. Historische V3-Dateien bleiben lesbar
+Auch ein teilbares Profil wird auf dem Zielsystem vollständig validiert und niemals blind angewendet.
 
-V3-Unterstützung bleibt ausschließlich in Offline-Werkzeugen erhalten, insbesondere für:
+## 4. Secrets
 
-- historische Analyse;
-- Replay;
-- kontrollierten Import alter Messdateien.
+- Benannte lokale Stände enthalten keinen Secret-Klartext.
+- Normaler Export enthält standardmäßig keinen Secret-Klartext.
+- Ein Secret-Klartextexport ist nur im Expertenmodus und nach separater ausdrücklicher Bestätigung möglich.
+- Beim Import bleibt ein vorhandenes Zielsecret standardmäßig erhalten (`keep`).
+- `replace` und `clear` sind explizite Expert-Operationen; `clear` benötigt zusätzlich eine Commit-Bestätigung.
+- Preview, Diff, Audit und API-Antworten geben keine Secret-Klartexte zurück.
 
-Diese Pfade sind read-only in Bezug auf das historische Eingabeformat. Sie können keinen produktiven V3-Writer aktivieren.
+## 5. Config-Commit und Recovery
 
-## 5. Settings-/Config-Semantik
+Der bestehende Whole-File-/CAS-Vertrag bleibt erhalten und wurde für V13 zusätzlich gehärtet:
 
-`MEASUREMENT_SCHEMA_VERSION` ist keine Benutzerwahl mehr. Die Registry führt nur noch V4 und hält den Key verborgen als Rollback-/Migrationsmarker. `MEASUREMENT_LOG_MODE` hängt nicht mehr von einer Schemaauswahl ab.
+1. finale revisionsgebundene Reread-/CAS-Prüfung;
+2. vollständige Servervalidierung des Whole Candidate;
+3. atomischer Write;
+4. exakte Post-Write-Reread-Prüfung;
+5. bei Mismatch atomische Wiederherstellung der exakt zuvor gelesenen Bytes;
+6. Runtime-Adoption erst nach erfolgreicher Endverifikation.
 
-Bei bestehender historischer Konfiguration gilt:
+Schlägt auch die Rollback-Verifikation fehl, wird der Configzustand fail closed als invalid behandelt. Last-Good-Promotion bleibt an den bestehenden Stable-Ready-/Eligibility-Vertrag gebunden.
 
-```text
-3 -> kontrollierte Migration auf 4
-4 -> no-op
-fehlend -> normalisiert auf 4
-```
+## 6. `configured`, `effective`, `pending_restart`
 
-## 6. Handbuch
+Die bisherige Semantik bleibt unverändert:
 
-Das aktuelle Benutzerhandbuch ist auf V12.13.0 aktualisiert. Es beschreibt:
+- `configured`: persistierter Nutzerstand;
+- `effective`: aktuell laufender Wert;
+- `pending_restart`: konfigurierte Änderung benötigt einen Dienstneustart, bevor sie wirksam wird.
 
-- V4 als einziges produktives Messschema;
-- V3 ausschließlich als historischen Offline-Lesepfad;
-- `ZEC-GRAPH-EXPORT-V1` als eigenständigen Graph-CSV-Vertrag.
+Konfigurationsstände und Imports umgehen diesen Vertrag nicht.
 
-## 7. No-Regression
+## 7. Historisch korrekte SOC-Graph-Overlays
+
+V12.13.0 konnte historische Messpunkte korrekt cachen, aber dabei Max-/Min-SOC, Nachtreserve und Nachtfenster als Teil desselben Payloads veralten lassen. V13.0.0 trennt deshalb historische Messpunkte und Config-Overlays.
+
+- Measurement V4 selbst bleibt unverändert und führt weiterhin `config_control_hash`.
+- V13 nutzt daraus eine kleine separate `graph_config_timeline` im SQLite-Graphstore.
+- Ein Configwechsel innerhalb eines Tages erzeugt ein neues zeitliches Overlaysegment.
+- Historische Tage werden mit der damals wirksamen Config dargestellt, nicht mit der heutigen.
+- Fehlt ein historischer Snapshot, wird der Abschnitt als „historische Konfiguration nicht verfügbar“ behandelt; aktuelle Werte werden nicht rückwirkend eingesetzt.
+- Für vorhandene V4-Historie existiert ein einmaliger, idempotenter Backfill. Danach pflegt die Runtime die Timeline bei Hashwechseln inkrementell weiter.
+
+Der Backfill ist ein historisches Graph-Enrichment. Ein Fehler dabei macht einen ansonsten gesunden Controller nicht `ready=false` und löst keinen Release-Rollback aus.
+
+## 8. Measurement V4 bleibt produktiver Vertrag
+
+- Produktive Runtime schreibt ausschließlich `ZEC-MEASUREMENT-V4`.
+- Standardprofil: 246 Felder; Extended: 249 Felder.
+- Historische V3-Dateien bleiben ausschließlich offline/read-only für Analyse, Replay oder kontrollierten Import.
+- Es wird kein V3-Runtimepfad wieder eingeführt.
+- `/graph-data.csv` bleibt der eigenständige Vertrag `ZEC-GRAPH-EXPORT-V1`.
+
+## 9. No-Regression
 
 Explizit geschützt sind insbesondere:
 
 - AUTO_GRID_EXPORT / AUTO_GRID_IMPORT / HOLD und Totzonenkonvergenz;
-- Harvest-Zielwertbildung, High-SOC-Logik, monotone Entry-/Hold-Zeitsemantik und Primärspeicherpriorität;
+- Harvest-Zielwertbildung, High-SOC-Logik und Primärspeicherpriorität;
 - proportionale/symmetrische Cross-Charge-Korrektur;
 - NIGHT_DISCHARGE, Reserve-SOC, aktive 0-W-Neutralisierung und Folgeübergang;
 - Command-Effect-/Readback-/Resync-/SmartMode-/Gegenlimitvertrag;
 - hostweite Single-Owner-/Command-Owner-Garantie;
-- Measurement-V4-Manifest-/Rotation-/Close-Semantik;
-- V4-Header und Feldvertrag 246/249;
-- SQLite-/Storage-Hotpath-Vertrag;
-- Excel-Lernsimulation.
+- Measurement-V4-Header 246/249 und V4-Runtimevertrag;
+- historische V3-Offlinenutzung ohne produktiven V3-Writer.
 
-Es gibt kein allgemeines Measurement-Schema-Redesign und keine Änderung der Live-Regelalgorithmen.
+## 10. Handbuch und Releasebelege
 
-## 8. Releasebelege
+Aktuelles Benutzerhandbuch:
 
-Siehe:
+```text
+docs/Zendure_Energy_Controller_Handbuch.pdf
+```
+
+Releasebelege:
 
 ```text
 README_INSTALLATION.md
-BUILD_VALIDATION_V12_13_0.md
-RELEASE_INFO_V12_13_0.md
-TECHNICAL_NOTES_V12_13_0.md
-ZEC_V12_13_0_RELEASE_REPORT.md
-SPEZIFIKATION_ZEC_V12_13_0_MEASUREMENT_V4_ONLY_LEGACY_V3_CLEANUP_V1.0.md
-V12_12_2_TO_V12_13_0_CHANGED_FILES.txt
-V12_13_0_TARGETED_PROTECTED_DIFF.md
+RELEASE_INFO_V13_0_0.md
+V13_0_0_FINAL_VALIDATION.md
+SPEZIFIKATION_ZEC_V13_0_0_KONFIGURATIONSSTAENDE_IMPORT_EXPORT_UND_SOC_GRAPH_HISTORIE_V1_1.md
+V13_0_0_SOURCE_MANIFEST.sha256
 ```

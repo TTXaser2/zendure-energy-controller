@@ -204,6 +204,8 @@ def build_settings_model(
             "release_stage": spec.release_stage,
             "ui_order": SETTING_ORDER_OVERRIDES.get(spec.key, 10000 + spec.order),
             "lifecycle": spec.lifecycle,
+            "portability_class": spec.portability_class.value,
+            "portable_profile": spec.portability_class.value == "portable_profile",
         }
         section["settings"].append(entry)
         category["setting_count"] += 1
@@ -239,6 +241,9 @@ def build_settings_model(
             "restart_action": bool(effective.get("WEB_SERVICE_RESTART_ENABLED", False)),
             "storage_probe": True,
             "last_good_pointer_repair": bool(status.get("last_good_store_repair_required")),
+            "config_states": True,
+            "config_import_export": True,
+            "portable_profiles": True,
         },
         "runtime": {
             "current_mode": (state_snapshot or {}).get("current_mode"),

@@ -7,7 +7,7 @@ import secrets
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Tuple
 
 from settings_apply_policy import ApplyPlan, build_apply_plan
 from settings_registry import SETTINGS_BY_KEY, ApplyClass, Editability, ResetPolicy
@@ -91,6 +91,8 @@ class PreviewRecord:
     confirmations: Tuple[str, ...]
     session_token: str
     validation_context: ValidationContext
+    metadata: Mapping[str, Any] = None
+    source_revalidator: Optional[Callable[[], None]] = None
     consumed: bool = False
 
 
@@ -179,6 +181,126 @@ class SettingsService:
             return str(method())
         return self.manager.configured_revision()
 
+    def _validation_context(
+        self, candidate: Mapping[str, Any], current: Mapping[str, Any], current_persisted: Mapping[str, Any],
+        state_snapshot: Optional[Mapping[str, Any]], *, explicit_keys: Optional[Sequence[str]] = None,
+    ) -> ValidationContext:
+        grid_changed = candidate.get("GRID_METER_SOURCE") != current.get("GRID_METER_SOURCE")
+        grid_ready = True
+        if grid_changed:
+            source = candidate.get("GRID_METER_SOURCE")
+            if source == "sma_energy_meter_udp":
+                grid_ready = bool(candidate.get("SMA_ENERGY_METER_GROUP") and candidate.get("SMA_ENERGY_METER_PORT"))
+            elif source == "shelly_http":
+                grid_ready = bool(candidate.get("SHELLY_IP"))
+            else:
+                grid_ready = False
+        return ValidationContext(
+            previous=current,
+            grid_source_candidate_ready=grid_ready,
+            sma_multiple_devices_detected=bool((state_snapshot or {}).get("sma_energy_meter_multiple_devices_detected")),
+            secret_contract_ok=True,
+            unknown_keys_preserved=all(key in candidate for key in current_persisted if key not in SETTINGS_BY_KEY),
+            first_install=self.manager.is_first_install(),
+            explicit_keys=tuple(explicit_keys if explicit_keys is not None else candidate.keys()),
+        )
+
+    def _finalize_preview(
+        self, *, candidate: Mapping[str, Any], current: Mapping[str, Any], current_persisted: Mapping[str, Any],
+        base_revision: str, session_token: str, context: ValidationContext,
+        patch_issues: Sequence[Mapping[str, Any]] = (), metadata: Optional[Mapping[str, Any]] = None,
+        source_revalidator: Optional[Callable[[], None]] = None, origin_by_key: Optional[Mapping[str, str]] = None,
+    ) -> Dict[str, Any]:
+        result: CandidateResult = self.manager.validate_candidate(candidate, previous=current, context=context)
+        issues = [dict(item) for item in patch_issues] + [self._issue_dict(issue) for issue in result.issues]
+        blocking = any(bool(issue.get("blocking")) for issue in issues) or not result.valid
+        apply_plan = build_apply_plan(result.configured if result.valid else candidate, self.manager.get())
+        if apply_plan.blocking_keys:
+            for key in apply_plan.blocking_keys:
+                issues.append(self._synthetic_issue("PROTECTED_ACTION_REQUIRED", key))
+            blocking = True
+
+        diff = []
+        if result.valid:
+            keys = sorted(set(current) | set(result.configured))
+            for key in keys:
+                before = current.get(key)
+                after = result.configured.get(key)
+                if before == after:
+                    continue
+                spec = SETTINGS_BY_KEY.get(key)
+                diff.append({
+                    "key": key,
+                    "label": spec.label if spec else key,
+                    "category": spec.category if spec else "Unbekannt",
+                    "old": self._safe_value(key, before),
+                    "new": self._safe_value(key, after),
+                    "old_origin": "explicit" if key in current_persisted else "inherited",
+                    "new_origin": (origin_by_key or {}).get(key, "explicit" if key in result.persisted else "inherited"),
+                    "apply_class": spec.apply_class.value if spec else "unknown",
+                    "apply_text": spec.apply_text if spec else "Unknown key preserved",
+                    "risk": spec.risk if spec else None,
+                    "secret": bool(spec and spec.is_secret),
+                })
+
+        confirmations = tuple(sorted({
+            issue["code"] for issue in issues
+            if issue.get("severity") in ("confirm", "warning") and not issue.get("blocking")
+        }))
+        now = time.monotonic()
+        preview_id = ""
+        expires_at_epoch = None
+        if not blocking and result.valid:
+            preview_id = secrets.token_urlsafe(24)
+            record = PreviewRecord(
+                preview_id=preview_id, created_monotonic=now, expires_monotonic=now + PREVIEW_TTL_SECONDS,
+                base_revision=base_revision, candidate=dict(result.persisted), candidate_typed_revision=result.typed_revision,
+                diff=tuple(diff), issues=tuple(issues), apply_plan=apply_plan, confirmations=confirmations,
+                session_token=session_token, validation_context=context, metadata=dict(metadata or {}),
+                source_revalidator=source_revalidator,
+            )
+            self.previews.put(record)
+            expires_at_epoch = time.time() + PREVIEW_TTL_SECONDS
+
+        pending_after = list(self.manager.pending_restart_keys_for(result.configured)) if result.valid else list(self.manager.pending_restart_keys())
+        response = {
+            "status": "blocked" if blocking else "ready",
+            "preview_id": preview_id or None,
+            "expires_at_epoch": expires_at_epoch,
+            "base_revision": base_revision,
+            "candidate_typed_revision": result.typed_revision or None,
+            "diff": diff,
+            "issues": issues,
+            "confirmations_required": list(confirmations),
+            "apply_plan": {
+                "live_next_cycle": list(apply_plan.live_keys), "restart_required": list(apply_plan.restart_keys),
+                "protected_actions": list(apply_plan.protected_action_keys), "read_only": list(apply_plan.read_only_keys),
+                "migration_only": list(apply_plan.migration_only_keys),
+            },
+            "pending_restart_after_commit": bool(pending_after),
+            "pending_restart_keys_after_commit": pending_after,
+        }
+        response.update(dict(metadata or {}))
+        return response
+
+    def preview_candidate(
+        self, candidate: Mapping[str, Any], *, base_revision: str, session_token: str,
+        state_snapshot: Optional[Mapping[str, Any]] = None, patch_issues: Sequence[Mapping[str, Any]] = (),
+        metadata: Optional[Mapping[str, Any]] = None, source_revalidator: Optional[Callable[[], None]] = None,
+        explicit_keys: Optional[Sequence[str]] = None, origin_by_key: Optional[Mapping[str, str]] = None,
+    ) -> Dict[str, Any]:
+        current_revision = self._base_revision()
+        if str(base_revision or "") != current_revision:
+            raise RuntimeError("CONFIG_REVISION_CONFLICT")
+        current_persisted = self._base_config()
+        current = self.manager.get_configured()
+        context = self._validation_context(candidate, current, current_persisted, state_snapshot, explicit_keys=explicit_keys)
+        return self._finalize_preview(
+            candidate=candidate, current=current, current_persisted=current_persisted, base_revision=current_revision,
+            session_token=session_token, context=context, patch_issues=patch_issues, metadata=metadata,
+            source_revalidator=source_revalidator, origin_by_key=origin_by_key,
+        )
+
     def preview(self, payload: Mapping[str, Any], session_token: str, state_snapshot: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
         base_revision = str(payload.get("base_revision") or "")
         current_revision = self._base_revision()
@@ -246,109 +368,18 @@ class SettingsService:
                 continue
             patch_issues.append(self._synthetic_issue("SECRET_OPERATION_INVALID", spec.key))
 
-        # Read-only capability context. A changed grid source is accepted only if
-        # its required static parameters are complete; live source preflight remains
-        # visible in the restart/apply phase.
-        grid_changed = candidate.get("GRID_METER_SOURCE") != current.get("GRID_METER_SOURCE")
-        grid_ready = True
-        if grid_changed:
-            source = candidate.get("GRID_METER_SOURCE")
-            if source == "sma_energy_meter_udp":
-                grid_ready = bool(candidate.get("SMA_ENERGY_METER_GROUP") and candidate.get("SMA_ENERGY_METER_PORT"))
-            elif source == "shelly_http":
-                grid_ready = bool(candidate.get("SHELLY_IP"))
-            else:
-                grid_ready = False
-        context = ValidationContext(
-            previous=current,
-            grid_source_candidate_ready=grid_ready,
-            sma_multiple_devices_detected=bool((state_snapshot or {}).get("sma_energy_meter_multiple_devices_detected")),
-            secret_contract_ok=True,
-            unknown_keys_preserved=all(key in candidate for key in current_persisted if key not in SETTINGS_BY_KEY),
-            first_install=self.manager.is_first_install(),
-            explicit_keys=tuple(candidate.keys()),
+        context = self._validation_context(candidate, current, current_persisted, state_snapshot)
+        return self._finalize_preview(
+            candidate=candidate, current=current, current_persisted=current_persisted, base_revision=base_revision,
+            session_token=session_token, context=context, patch_issues=patch_issues,
         )
-        result: CandidateResult = self.manager.validate_candidate(candidate, previous=current, context=context)
-        issues = list(patch_issues) + [self._issue_dict(issue) for issue in result.issues]
-
-        blocking = any(bool(issue.get("blocking")) for issue in issues)
-        if not result.valid:
-            blocking = True
-        apply_plan = build_apply_plan(result.configured if result.valid else candidate, self.manager.get())
-        if apply_plan.blocking_keys:
-            for key in apply_plan.blocking_keys:
-                issues.append(self._synthetic_issue("PROTECTED_ACTION_REQUIRED", key))
-            blocking = True
-
-        diff = []
-        if result.valid:
-            keys = sorted(set(current) | set(result.configured))
-            for key in keys:
-                before = current.get(key)
-                after = result.configured.get(key)
-                if before == after:
-                    continue
-                spec = SETTINGS_BY_KEY.get(key)
-                diff.append({
-                    "key": key,
-                    "label": spec.label if spec else key,
-                    "old": self._safe_value(key, before),
-                    "new": self._safe_value(key, after),
-                    "apply_class": spec.apply_class.value if spec else "unknown",
-                    "apply_text": spec.apply_text if spec else "Unknown key preserved",
-                    "risk": spec.risk if spec else None,
-                    "secret": bool(spec and spec.is_secret),
-                })
-
-        confirmations = tuple(sorted({
-            issue["code"] for issue in issues
-            if issue.get("severity") in ("confirm", "warning") and not issue.get("blocking")
-        }))
-        now = time.monotonic()
-        preview_id = ""
-        expires_at_epoch = None
-        if not blocking and result.valid:
-            preview_id = secrets.token_urlsafe(24)
-            record = PreviewRecord(
-                preview_id=preview_id,
-                created_monotonic=now,
-                expires_monotonic=now + PREVIEW_TTL_SECONDS,
-                base_revision=base_revision,
-                candidate=dict(result.persisted),
-                candidate_typed_revision=result.typed_revision,
-                diff=tuple(diff),
-                issues=tuple(issues),
-                apply_plan=apply_plan,
-                confirmations=confirmations,
-                session_token=session_token,
-                validation_context=context,
-            )
-            self.previews.put(record)
-            expires_at_epoch = time.time() + PREVIEW_TTL_SECONDS
-
-        return {
-            "status": "blocked" if blocking else "ready",
-            "preview_id": preview_id or None,
-            "expires_at_epoch": expires_at_epoch,
-            "base_revision": base_revision,
-            "candidate_typed_revision": result.typed_revision or None,
-            "diff": diff,
-            "issues": issues,
-            "confirmations_required": list(confirmations),
-            "apply_plan": {
-                "live_next_cycle": list(apply_plan.live_keys),
-                "restart_required": list(apply_plan.restart_keys),
-                "protected_actions": list(apply_plan.protected_action_keys),
-                "read_only": list(apply_plan.read_only_keys),
-                "migration_only": list(apply_plan.migration_only_keys),
-            },
-            "pending_restart_after_commit": bool(apply_plan.restart_keys or self.manager.pending_restart()),
-        }
 
     def commit(self, payload: Mapping[str, Any], session_token: str) -> Dict[str, Any]:
         preview_id = str(payload.get("preview_id") or "")
         confirmations = set(str(value) for value in (payload.get("confirmations") or []))
         record = self.previews.consume(preview_id, session_token)
+        if record.source_revalidator is not None:
+            record.source_revalidator()
         if self._base_revision() != record.base_revision:
             raise RuntimeError("CONFIG_REVISION_CONFLICT")
         missing = set(record.confirmations) - confirmations
@@ -356,6 +387,20 @@ class SettingsService:
             raise PermissionError("CONFIRMATIONS_MISSING:" + ",".join(sorted(missing)))
         result = self.manager.commit_candidate(record.candidate, record.base_revision, context=record.validation_context)
         plan: ApplyPlan = result["apply_plan"]
+        metadata = dict(record.metadata or {})
+        operation = str(metadata.get("operation") or "settings_edit")
+        audit = {
+            "operation": operation,
+            "source_id": str(metadata.get("artifact_id") or ""),
+            "source_payload_sha256": str(metadata.get("artifact_sha256") or ""),
+            "old_config_revision": record.base_revision,
+            "new_config_revision": result["configured_revision"],
+            "typed_revision": result["typed_revision"],
+            "changed_keys": list(plan.changed_keys),
+            "migration_steps": list(metadata.get("migration_steps") or []),
+            "apply_plan": {"live_keys": list(plan.live_keys), "restart_keys": list(plan.restart_keys)},
+            "pending_restart": bool(result["pending_restart_keys"]),
+        }
         return {
             "status": "committed",
             "configured_revision": result["configured_revision"],
@@ -365,4 +410,5 @@ class SettingsService:
             "live_applied_keys": list(plan.live_keys),
             "restart_required_keys": list(result["pending_restart_keys"]),
             "pending_restart": bool(result["pending_restart_keys"]),
+            "audit": audit,
         }

@@ -23,11 +23,14 @@ from urllib.parse import urlsplit
 import requests
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, JSONResponse, Response
 
 from config_manager import CONFIG_SCHEMA, ConfigManager, validate_config
 from settings_model import build_settings_model
 from settings_service import SettingsService
+from config_bundle import BUNDLE_MAX_BYTES, BundleError, build_bundle
+from config_states import ConfigStateError, ConfigStateStore
+from config_artifacts import ConfigArtifactCoordinator
 from config_validator import ValidationIssue, restart_relevant_changes, split_issues, validate_config_semantics
 from cross_charge import cross_charge_enabled
 from csv_logger import rows_to_csv, estimate_retention_hours, measurement_log_mode, detected_log_mounts, resolve_log_path
@@ -1326,6 +1329,8 @@ def analysis_service_url(cfg: Dict[str, Any]) -> str:
 def create_app(config_manager: ConfigManager, state: ControllerState, on_config_saved=None) -> FastAPI:
     event_journal = OperationalEventJournal(config_manager.get, state)
     settings_service = SettingsService(config_manager)
+    config_state_store = ConfigStateStore(config_manager.path)
+    config_artifacts = ConfigArtifactCoordinator(config_manager, settings_service, config_state_store)
     storage_inventory = StorageInventory(lambda: measurement_availability(config_manager.get()))
     csrf_cookie_name = "zec_settings_csrf"
     restart_lock = threading.Lock()
@@ -1593,6 +1598,181 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
         response.headers["Cache-Control"] = "no-store"
         return response
 
+    def _config_artifact_error(exc: Exception):
+        code = getattr(exc, "code", None) or str(exc)
+        if isinstance(exc, PermissionError):
+            status = 403
+        elif isinstance(exc, KeyError):
+            status = 410
+        elif "CONFLICT" in code:
+            status = 409
+        elif isinstance(exc, (BundleError, ConfigStateError, ValueError)):
+            status = 422
+        else:
+            status = 500
+        response = JSONResponse({"error": code}, status_code=status)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @app.get("/config-states")
+    def config_states_list(request: Request):
+        if config_manager.get().get("HEADLESS_MODE", False):
+            return JSONResponse({"status": "disabled", "reason": "headless"}, status_code=403)
+        try:
+            response = JSONResponse(config_state_store.list())
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        except Exception as exc:
+            return _config_artifact_error(exc)
+
+    @app.post("/config-states/create")
+    async def config_states_create(request: Request):
+        try:
+            verify_admin_request(request)
+            payload = await request.json()
+            item = config_state_store.create(
+                config_manager,
+                name=payload.get("name", ""), description=payload.get("description", ""),
+                scope_mode=payload.get("scope_mode", "full_managed"),
+                categories=payload.get("categories") or (), keys=payload.get("keys") or (),
+            )
+            response = JSONResponse({"status": "created", "item": item})
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        except Exception as exc:
+            return _config_artifact_error(exc)
+
+    @app.patch("/config-states/{state_id}")
+    async def config_states_patch(state_id: str, request: Request):
+        try:
+            verify_admin_request(request)
+            payload = await request.json()
+            item = config_state_store.patch(
+                state_id, expected_revision=payload.get("state_revision", ""),
+                name=payload.get("name") if "name" in payload else None,
+                description=payload.get("description") if "description" in payload else None,
+            )
+            response = JSONResponse({"status": "updated", "item": item})
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        except Exception as exc:
+            return _config_artifact_error(exc)
+
+    @app.delete("/config-states/{state_id}")
+    async def config_states_delete(state_id: str, request: Request):
+        try:
+            verify_admin_request(request)
+            payload = await request.json()
+            response = JSONResponse(config_state_store.delete(state_id, expected_revision=payload.get("state_revision", "")))
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        except Exception as exc:
+            return _config_artifact_error(exc)
+
+    @app.post("/config-states/{state_id}/preview")
+    async def config_states_preview(state_id: str, request: Request):
+        try:
+            session_token = verify_admin_request(request)
+            payload = await request.json()
+            result = config_artifacts.preview_state(
+                state_id, state_revision=payload.get("state_revision", ""),
+                base_revision=payload.get("base_revision", ""), session_token=session_token,
+                state_snapshot=state.snapshot(), expert=bool(payload.get("expert")),
+                secret_operations=payload.get("secrets") or {},
+            )
+            response = JSONResponse(result)
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        except Exception as exc:
+            return _config_artifact_error(exc)
+
+    @app.post("/config-states/{state_id}/export")
+    async def config_states_export(state_id: str, request: Request):
+        try:
+            verify_admin_request(request)
+            payload = await request.json()
+            data = config_state_store.export_bytes(state_id, expected_revision=payload.get("state_revision"))
+            response = Response(data, media_type="application/vnd.zec.config+json")
+            response.headers["Content-Disposition"] = f'attachment; filename="zec-config-state-{state_id}.zec-config.json"'
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        except Exception as exc:
+            return _config_artifact_error(exc)
+
+    @app.post("/config-export")
+    async def config_export(request: Request):
+        try:
+            verify_admin_request(request)
+            payload = await request.json()
+            include_secrets = bool(payload.get("include_secrets"))
+            if include_secrets and (not bool(payload.get("expert")) or not bool(payload.get("confirm_secret_export"))):
+                raise PermissionError("SECRET_EXPORT_CONFIRMATION_REQUIRED")
+            data = build_bundle(
+                config_manager, artifact_kind="export",
+                scope_mode=payload.get("scope_mode", "full_managed"),
+                categories=payload.get("categories") or (), keys=payload.get("keys") or (),
+                name=payload.get("name", "ZEC Konfiguration"), description=payload.get("description", ""),
+                include_secrets=include_secrets,
+            )
+            response = Response(data, media_type="application/vnd.zec.config+json")
+            response.headers["Content-Disposition"] = 'attachment; filename="zec-config-export.zec-config.json"'
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        except Exception as exc:
+            return _config_artifact_error(exc)
+
+    @app.post("/config-profile-export")
+    async def config_profile_export(request: Request):
+        try:
+            verify_admin_request(request)
+            payload = await request.json()
+            data = build_bundle(
+                config_manager, artifact_kind="portable_profile", scope_mode="portable_profile",
+                name=payload.get("name", "ZEC Regelprofil"), description=payload.get("description", ""),
+                include_secrets=False,
+            )
+            response = Response(data, media_type="application/vnd.zec.config+json")
+            response.headers["Content-Disposition"] = 'attachment; filename="zec-regelprofil.zec-config.json"'
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        except Exception as exc:
+            return _config_artifact_error(exc)
+
+    @app.post("/config-import/inspect")
+    async def config_import_inspect(request: Request):
+        try:
+            session_token = verify_admin_request(request)
+            content_length = int(request.headers.get("content-length") or 0)
+            if content_length > BUNDLE_MAX_BYTES:
+                raise BundleError("BUNDLE_TOO_LARGE")
+            data = await request.body()
+            if len(data) > BUNDLE_MAX_BYTES:
+                raise BundleError("BUNDLE_TOO_LARGE")
+            legacy = str(request.query_params.get("legacy") or "").lower() in ("1", "true", "yes")
+            expert = str(request.query_params.get("expert") or "").lower() in ("1", "true", "yes")
+            result = config_artifacts.inspect_legacy_raw(data, expert=expert, session_token=session_token) if legacy else config_artifacts.inspect_bundle(data, session_token=session_token)
+            response = JSONResponse(result)
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        except Exception as exc:
+            return _config_artifact_error(exc)
+
+    @app.post("/config-import/{token}/preview")
+    async def config_import_preview(token: str, request: Request):
+        try:
+            session_token = verify_admin_request(request)
+            payload = await request.json()
+            result = config_artifacts.preview_import(
+                token, base_revision=payload.get("base_revision", ""), session_token=session_token,
+                state_snapshot=state.snapshot(), expert=bool(payload.get("expert")),
+                skip_unknown=bool(payload.get("skip_unknown")), secret_operations=payload.get("secrets") or {},
+            )
+            response = JSONResponse(result)
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        except Exception as exc:
+            return _config_artifact_error(exc)
+
     @app.get("/settings/model")
     def settings_model(request: Request):
         cfg = config_manager.get()
@@ -1647,6 +1827,13 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
             result = settings_service.commit(payload, session_token)
             if on_config_saved and result.get("live_applied_keys"):
                 on_config_saved()
+            audit = dict(result.get("audit") or {})
+            if audit:
+                event_journal.record_admin_action(
+                    "ZEC_CONFIG_COMMIT",
+                    str(audit.get("operation") or "settings_edit"),
+                    values=audit,
+                )
             response = JSONResponse(result)
             response.headers["Cache-Control"] = "no-store"
             return response
@@ -4757,6 +4944,38 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
         day_start = datetime.combine(today, datetime.min.time())
         day_end = day_start + timedelta(days=1)
     is_today = day_start.date() == today
+
+    def _decorate_with_historical_config(base_payload: Dict[str, Any]) -> Dict[str, Any]:
+        from graph_config_timeline import build_day_segments
+        decorated = dict(base_payload)
+        try:
+            segments, timeline_meta = build_day_segments(
+                cfg, day_start, day_end,
+                current_effective_config=cfg if is_today else None,
+            )
+        except Exception as exc:
+            segments = [{
+                "start_minute": 0, "end_minute": 1440, "known": False,
+                "config_control_hash": "", "min_soc": None, "max_soc": None,
+                "reserve_soc": None, "night_start": "", "night_end": "", "source": "timeline_error",
+            }]
+            timeline_meta = {"timeline_status": "error", "timeline_error": str(exc), "unknown_segments": 1}
+        decorated["config_segments"] = segments
+        decorated["config_timeline"] = timeline_meta
+        decorated["overlay_semantics"] = "historical_effective_segmented_v1"
+        decorated["historical_config_complete"] = not any(not bool(item.get("known")) for item in segments)
+        # Compatibility fields contain only a single unambiguous day-wide overlay.
+        known = [item for item in segments if item.get("known")]
+        signatures = {(item.get("min_soc"), item.get("max_soc"), item.get("reserve_soc"), item.get("night_start"), item.get("night_end")) for item in known}
+        if len(signatures) == 1 and known:
+            item = known[0]
+            decorated["thresholds"] = {"min_soc": item.get("min_soc"), "max_soc": item.get("max_soc"), "reserve_soc": item.get("reserve_soc")}
+            decorated["night_window"] = {"start": item.get("night_start"), "end": item.get("night_end")}
+        else:
+            decorated["thresholds"] = {"min_soc": None, "max_soc": None, "reserve_soc": None}
+            decorated["night_window"] = {"start": "", "end": ""}
+        return decorated
+
     primary_present = _primary_storage_present(cfg, snap)
     status_units = _status_units(cfg, snap, snap.get("zendure_target_signed_power"), snap.get("zendure_system_signed_power"))
     unit_count = min(2, max(1, len(status_units)))
@@ -4768,7 +4987,7 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
             payload = dict(_storage_day_cache["payload"])
             payload["cache_status"] = "hit"
             payload["cache_age_s"] = int(now_epoch - float(_storage_day_cache.get("built_epoch") or 0))
-            return payload
+            return _decorate_with_historical_config(payload)
     points: List[Dict[str, Any]] = []
     source = "measurement_db_1min"
     error = ""
@@ -4836,12 +5055,10 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
         "last_point_at": points[-1]["time"] if points else "",
         "available_from": date_range.get("available_from") or day_start.date().isoformat(),
         "available_to": today.isoformat(),
-        "thresholds": {"min_soc": cfg.get("MIN_SOC_PERCENT"), "max_soc": cfg.get("MAX_SOC_PERCENT"), "reserve_soc": cfg.get("NIGHT_DISCHARGE_STOP_SOC_PERCENT")},
-        "night_window": {"start": format_hhmm(cfg.get("NIGHT_START_HOUR", 21), cfg.get("NIGHT_START_MINUTE", 30)), "end": format_hhmm(cfg.get("NIGHT_END_HOUR", 5), cfg.get("NIGHT_END_MINUTE", 30))},
     }
     with _storage_day_lock:
         _storage_day_cache.update({"key": cache_key, "payload": payload, "built_epoch": now_epoch})
-    return payload
+    return _decorate_with_historical_config(payload)
 
 def _status_info(title: str, text: str) -> str:
     return f'<button class="info-dot" data-tooltip="{html.escape(text, quote=True)}" aria-label="Info {html.escape(title)}">i</button>'
@@ -5478,6 +5695,7 @@ def build_settings_page(
     <span id="headerReady" class="header-pill"><span class="health-dot"></span> Ready: …</span>
   </div>
   <div class="header-spacer"></div>
+  <button id="openConfigStates" class="toolbar-button" type="button">▣ Konfigurationsstände</button>
   <button id="openSearch" class="toolbar-button" type="button">⌕ Suche</button>
   <div class="mode-toggle" role="group" aria-label="Ansicht"><button type="button" data-mode="standard">Standard</button><button type="button" data-mode="expert">Experte</button></div>
   <div class="config-health"><span id="healthDot" class="health-dot"></span><span id="healthText">Konfiguration wird geprüft</span></div>
@@ -5498,6 +5716,7 @@ def build_settings_page(
 <div id="drawerBackdrop" class="drawer-backdrop"></div>
 <div id="previewModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="previewTitle"><div class="modal"><div class="modal-head"><h2 id="previewTitle">Änderungen prüfen</h2><button id="previewClose" class="modal-close" type="button">×</button></div><div id="previewBody" class="modal-body"></div><div class="modal-actions"><button id="previewBack" class="back-btn" type="button">Zurück</button><button id="commitChanges" class="commit-btn" type="button">Speichern</button></div></div></div>
 <div id="helpModal" class="modal-backdrop help-backdrop" role="dialog" aria-modal="true" aria-labelledby="helpTitle"><div class="modal help-modal"><div class="modal-head"><h2 id="helpTitle">Einstellungshilfe</h2><button id="helpClose" class="modal-close" type="button" aria-label="Hilfe schließen">×</button></div><div id="helpBody" class="modal-body help-body"></div><div class="modal-actions help-actions"><button id="helpDone" class="back-btn" type="button">Schließen</button></div></div></div>
+<div id="configStatesModal" class="modal-backdrop config-states-backdrop" role="dialog" aria-modal="true" aria-labelledby="configStatesTitle"><div class="modal config-states-modal"><div class="modal-head"><h2 id="configStatesTitle">Konfigurationsstände · Import · Export</h2><button id="configStatesClose" class="modal-close" type="button" aria-label="Konfigurationsstände schließen">×</button></div><div id="configStatesBody" class="modal-body config-states-body"></div><div class="modal-actions"><button id="configStatesDone" class="back-btn" type="button">Schließen</button></div></div></div>
 <div id="settingsToast" class="toast" role="status"></div>
 <script>window.ZEC_SETTINGS_BOOTSTRAP={{system:{json.dumps(system_payload or {}, ensure_ascii=False)},server_time:{json.dumps(server_time, ensure_ascii=False)}}};</script>
 <script src="/static/settings_v2.js?v={html.escape(APP_VERSION_LABEL)}" defer></script>
