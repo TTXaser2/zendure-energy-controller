@@ -1,0 +1,64 @@
+# V13.0.1 → V13.0.2 – Dateiinventar
+
+Automatisch gegen die verifizierte V13.0.1-Ausgangsbasis ermittelt. Cache-/Bytecode- und Runtime-Logartefakte sind ausgeschlossen.
+
+NEW 9
+NEW      BUILD_VALIDATION_V13_0_2.md
+NEW      RELEASE_INFO_V13_0_2.md
+NEW      SPEZIFIKATION_ZEC_V13_0_2_HOTFIX_CONFIG_STATES_CSRF_SQLITE_HARDENING_UI_CLEANUP_V1_1.md
+NEW      V13_0_1_TO_V13_0_2_CHANGED_FILES.txt
+NEW      V13_0_2_SOURCE_MANIFEST.sha256
+NEW      V13_0_2_TARGETED_PROTECTED_DIFF.md
+NEW      V13_0_2_USER_TEXT_AUDIT.md
+NEW      measurement_db_maintenance.py
+NEW      tests/test_v13_0_2_hotfix.py
+
+CHANGED 46
+CHANGED  README.md
+CHANGED  README_INSTALLATION.md
+CHANGED  config_artifacts.py
+CHANGED  config_bundle.py
+CHANGED  config_manager.py
+CHANGED  config_states.py
+CHANGED  docs/Zendure_Energy_Controller_Handbuch.docx
+CHANGED  docs/Zendure_Energy_Controller_Handbuch.pdf
+CHANGED  generated/SETTINGS_REGISTRY_SNAPSHOT.json
+CHANGED  graph_config_timeline.py
+CHANGED  measurement_db.py
+CHANGED  settings_help.py
+CHANGED  settings_registry.py
+CHANGED  settings_service.py
+CHANGED  state.py
+CHANGED  static/settings_v2.css
+CHANGED  static/settings_v2.js
+CHANGED  static/status_v2.js
+CHANGED  tests/test_v12_11_2_rc10_status_preview.py
+CHANGED  tests/test_v12_11_2_rc19_status_diagnostics_stabilization.py
+CHANGED  tests/test_v12_11_2_rc20_fix5_runtime_readiness.py
+CHANGED  tests/test_v12_11_2_rc20_release_integration.py
+CHANGED  tests/test_v12_11_2_rc2_ui_polish.py
+CHANGED  tests/test_v12_11_2_rc4_ui_polish.py
+CHANGED  tests/test_v12_11_2_rc5_operations_dashboard.py
+CHANGED  tests/test_v12_11_2_rc6_ui_diagnostics_hotfix.py
+CHANGED  tests/test_v12_11_2_rc7_backlog_release.py
+CHANGED  tests/test_v12_11_2_rc8_backlog_completion.py
+CHANGED  tests/test_v12_11_2_rc9_ui_semantics.py
+CHANGED  tests/test_v12_11_5_settings_bugfix.py
+CHANGED  tests/test_v12_11_rc13_support_tools.py
+CHANGED  tests/test_v12_11_rc14_ui_polish.py
+CHANGED  tests/test_v12_11_rc15_ui_graph.py
+CHANGED  tests/test_v12_11_rc16_performance.py
+CHANGED  tests/test_v12_11_rc17_sqlite_store.py
+CHANGED  tests/test_v12_11_rc18_import_tool.py
+CHANGED  tests/test_v12_12_0_settings_help_guided_configuration.py
+CHANGED  tests/test_v12_12_1_help_mobile_quality.py
+CHANGED  tests/test_v12_12_2_productive_findings.py
+CHANGED  tests/test_v12_13_0_measurement_v4_only.py
+CHANGED  tests/test_v13_0_1_installer_identity_hotfix.py
+CHANGED  tests/test_v13_config_states_import_export.py
+CHANGED  tools/backfill_graph_config_timeline.py
+CHANGED  tools/update_zendure_controller.sh
+CHANGED  version.py
+CHANGED  web_ui.py
+
+DELETED 0

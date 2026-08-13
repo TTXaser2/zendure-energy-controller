@@ -13,7 +13,7 @@ from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple
 
 from settings_help import SettingHelpSpec, build_setting_help
 
-SCHEMA_VERSION = "1.24-v13.0"
+SCHEMA_VERSION = "1.25-v13.0"
 SOURCE_TARGET_SCHEMA_SHA256 = "f67b8d09ae9a433c4cb0d3a720a0961d5b2a824b120251a63f2b19885356274a"
 
 
@@ -2714,7 +2714,7 @@ _ROWS = [{'key': 'MANUAL_MODE',
   'options': (),
   'apply_class': 'LIVE_NEXT_CYCLE',
   'editability': 'EDITABLE',
-  'apply_text': 'Wirksam im nächsten Regelzyklus; RC19-Subscription-Kopplung kann Neustart erfordern',
+  'apply_text': 'Wirksam im nächsten Regelzyklus; bei Änderung der Subscription-Konfiguration kann ein Dienstneustart erforderlich sein',
   'dependency_keys': ('SECOND_BATTERY_SOURCE_PROFILE',
                       'SECOND_BATTERY_POWER_TOPIC',
                       'SECOND_BATTERY_DISCHARGE_SIGN',
@@ -3012,7 +3012,7 @@ _ROWS = [{'key': 'MANUAL_MODE',
   'options': (),
   'apply_class': 'MIGRATION_ONLY',
   'editability': 'MIGRATION_ONLY',
-  'apply_text': 'Aktiv in RC19, aber nicht normal editierbar',
+  'apply_text': 'Aktiver Kompatibilitätsparameter; nicht normal editierbar',
   'dependency_keys': ('COMMAND_RESYNC_STALE_MIN_SECONDS', 'INTERVAL_SECONDS'),
   'dependency_text': 'COMMAND_RESYNC_STALE_MIN_SECONDS; INTERVAL_SECONDS',
   'validator_ids': (),
@@ -4874,7 +4874,7 @@ _ROWS = [{'key': 'MANUAL_MODE',
   'maximum': None,
   'unit': None,
   'options': (('group_bind', 'Empfohlen: Bind auf Multicast-Gruppe'),
-              ('rc3_compatible', 'Diagnose: RC3-kompatibel / SO_REUSEPORT best-effort'),
+              ('rc3_compatible', 'Diagnose: Wildcard-Bind + SO_REUSEPORT best-effort'),
               ('reuseaddr_only', 'Diagnose: nur SO_REUSEADDR'),
               ('unimeter_like', 'Diagnose: UniMeter-naher Join ohne IP_MULTICAST_IF')),
   'apply_class': 'LIVE_NEXT_CYCLE',

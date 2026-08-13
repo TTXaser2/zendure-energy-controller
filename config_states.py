@@ -72,7 +72,9 @@ class ConfigStateStore:
         state_id = self._validate_id(state_id)
         return os.path.join(self.root, state_id + ".zec-config.json")
 
-    def _read(self, state_id: str) -> StateRead:
+
+    def _read_raw_safe(self, state_id: str) -> tuple[str, bytes, str]:
+        """Read a state file without requiring semantic bundle validity."""
         self.ensure_root()
         path = self._path(state_id)
         try:
@@ -87,13 +89,19 @@ class ConfigStateStore:
             raise ConfigStateError("CONFIG_STATE_FILE_TOO_LARGE")
         with open(path, "rb") as handle:
             data = handle.read(1024 * 1024 + 1)
+        if len(data) > 1024 * 1024:
+            raise ConfigStateError("CONFIG_STATE_FILE_TOO_LARGE")
+        return path, data, _sha(data)
+
+    def _read(self, state_id: str) -> StateRead:
+        path, data, revision = self._read_raw_safe(state_id)
         try:
             bundle = parse_bundle(data)
         except Exception as exc:
             raise ConfigStateError("CONFIG_STATE_CORRUPT") from exc
         if bundle.payload.get("artifact_kind") != "named_state":
             raise ConfigStateError("CONFIG_STATE_KIND_INVALID")
-        return StateRead(state_id, path, data, _sha(data), bundle)
+        return StateRead(state_id, path, data, revision, bundle)
 
     def get(self, state_id: str) -> StateRead:
         with self._lock:
@@ -178,6 +186,7 @@ class ConfigStateStore:
             "scope_mode": scope.get("mode"),
             "scope_key_count": len(scope.get("keys") or []),
             "secrets_included": False,
+            "safe_deletable": True,
         }
 
     def list(self) -> Dict[str, Any]:
@@ -193,18 +202,20 @@ class ConfigStateStore:
                 try:
                     items.append(self._summary(self._read(state_id)))
                 except Exception:
-                    path = self._path(state_id)
+                    revision = ""
+                    safe_deletable = False
                     try:
-                        with open(path, "rb") as handle:
-                            revision = _sha(handle.read(1024 * 1024 + 1))
+                        _path, _data, revision = self._read_raw_safe(state_id)
+                        safe_deletable = True
                     except Exception:
-                        revision = ""
+                        pass
                     items.append({
                         "state_id": state_id,
                         "state_revision": revision,
                         "status": "corrupt",
                         "name": "Beschädigter Konfigurationsstand",
                         "description": "",
+                        "safe_deletable": safe_deletable,
                     })
         return {"status": "ok", "count": len(items), "limit": MAX_NAMED_STATES, "items": items}
 
@@ -224,10 +235,10 @@ class ConfigStateStore:
 
     def delete(self, state_id: str, *, expected_revision: str) -> Dict[str, Any]:
         with self._lock:
-            item = self._read(state_id)
-            if item.revision != str(expected_revision or ""):
+            path, _data, revision = self._read_raw_safe(state_id)
+            if revision != str(expected_revision or ""):
                 raise ConfigStateError("CONFIG_STATE_REVISION_CONFLICT")
-            os.unlink(item.path)
+            os.unlink(path)
             dirfd = os.open(self.root, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
             try:
                 os.fsync(dirfd)

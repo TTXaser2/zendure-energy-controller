@@ -372,7 +372,7 @@ def write_points(conn: sqlite3.Connection, points: List[Dict[str, Any]]) -> int:
         overlay = p.get("_graph_config_overlay")
         if config_hash and isinstance(overlay, dict) and config_hash != last_timeline_hash:
             upsert_timeline_entry(
-                conn, int(p["ts_ms"]), config_hash, overlay=overlay, source="runtime_effective", known=True, ensure_schema=False
+                conn, int(p["ts_ms"]), config_hash, overlay=overlay, source="runtime_effective", known=True, ensure_schema=False, commit=False
             )
             last_timeline_hash = config_hash
         written += 1
@@ -383,6 +383,9 @@ def write_points(conn: sqlite3.Connection, points: List[Dict[str, Any]]) -> int:
 
 
 class MeasurementDbWriter:
+    WRITE_STALE_SECONDS = 120.0
+    RETRY_DELAY_SECONDS = 0.5
+
     def __init__(self, max_queue: int = 5000) -> None:
         self._queue: "queue.Queue[Tuple[str, Dict[str, Any]]]" = queue.Queue(maxsize=max_queue)
         self._thread: Optional[threading.Thread] = None
@@ -399,10 +402,48 @@ class MeasurementDbWriter:
             "measurement_db_last_write_epoch_s": "",
             "measurement_db_last_write_duration_ms": None,
             "measurement_db_error": "",
+            "measurement_db_last_error": "",
+            "measurement_db_last_error_epoch_s": "",
+            "measurement_db_consecutive_failures": 0,
+            "measurement_db_last_success_epoch_s": "",
+            "measurement_db_write_stale": False,
+            "measurement_db_first_enqueue_epoch_s": "",
+            "measurement_db_last_enqueue_epoch_s": "",
             "measurement_db_rows_written": 0,
             "measurement_db_rows_dropped": 0,
             "measurement_db_size_bytes": 0,
         }
+
+    def _refresh_stale_locked(self, now: Optional[float] = None) -> None:
+        now = float(now if now is not None else time.time())
+        first = self._last_status.get("measurement_db_first_enqueue_epoch_s")
+        last_enqueue = self._last_status.get("measurement_db_last_enqueue_epoch_s")
+        last_success = self._last_status.get("measurement_db_last_success_epoch_s")
+        try:
+            first_f = float(first) if first not in (None, "") else 0.0
+        except Exception:
+            first_f = 0.0
+        try:
+            enqueue_f = float(last_enqueue) if last_enqueue not in (None, "") else 0.0
+        except Exception:
+            enqueue_f = 0.0
+        try:
+            success_f = float(last_success) if last_success not in (None, "") else 0.0
+        except Exception:
+            success_f = 0.0
+        reference = success_f or first_f
+        stale = bool(enqueue_f and reference and enqueue_f > success_f and (now - reference) >= self.WRITE_STALE_SECONDS)
+        self._last_status["measurement_db_write_stale"] = stale
+        failures = int(self._last_status.get("measurement_db_consecutive_failures") or 0)
+        if stale and failures <= 0:
+            self._last_status["measurement_db_status"] = "stale"
+            self._last_status["measurement_db_reason"] = "Seit mindestens 120 s kein erfolgreicher DB-Schreibvorgang trotz neuer Messpunkte."
+
+    def _snapshot_locked(self) -> Dict[str, Any]:
+        self._refresh_stale_locked()
+        data = dict(self._last_status)
+        data["measurement_db_queue_depth"] = self._queue.qsize()
+        return data
 
     def enqueue(self, config: Dict[str, Any], row: Dict[str, Any]) -> Dict[str, Any]:
         if not bool(config.get("MEASUREMENT_DB_ENABLED", True)):
@@ -414,15 +455,29 @@ class MeasurementDbWriter:
             from graph_config_timeline import overlay_from_config
             point["_graph_config_overlay"] = overlay_from_config(config)
         path = resolve_measurement_db_path(config)
+        now = time.time()
         try:
             self._ensure_thread()
             self._queue.put_nowait((path, point))
-            return self._set_status("queued", "DB-Schreibvorgang gepuffert", path=path, config=config)
+            with self._lock:
+                if not self._last_status.get("measurement_db_first_enqueue_epoch_s"):
+                    self._last_status["measurement_db_first_enqueue_epoch_s"] = now
+                self._last_status["measurement_db_last_enqueue_epoch_s"] = now
+                self._last_status["measurement_db_path"] = path
+                failures = int(self._last_status.get("measurement_db_consecutive_failures") or 0)
+                if failures <= 0 and not self._last_status.get("measurement_db_write_stale"):
+                    self._last_status["measurement_db_status"] = "queued"
+                    self._last_status["measurement_db_reason"] = "DB-Schreibvorgang gepuffert"
+                self._refresh_stale_locked(now)
+                return self._snapshot_locked()
         except queue.Full:
             with self._lock:
                 dropped = int(self._last_status.get("measurement_db_rows_dropped") or 0) + 1
                 self._last_status["measurement_db_rows_dropped"] = dropped
-            return self._set_status("queue_full", "DB-Queue voll; Messpunkt verworfen", path=path, config=config)
+                self._last_status["measurement_db_status"] = "queue_full"
+                self._last_status["measurement_db_reason"] = "DB-Queue voll; Messpunkt verworfen"
+                self._last_status["measurement_db_path"] = path
+                return self._snapshot_locked()
         except Exception as exc:
             return self._set_status("error", str(exc), path=path, config=config, error=str(exc))
 
@@ -436,56 +491,91 @@ class MeasurementDbWriter:
     def _worker(self) -> None:
         batch: List[Dict[str, Any]] = []
         current_path = ""
+        deferred: Optional[Tuple[str, Dict[str, Any]]] = None
+        retry_pending = False
         try:
-            while not self._stop.is_set() or not self._queue.empty():
-                try:
-                    path, point = self._queue.get(timeout=0.5)
-                except queue.Empty:
-                    if batch and current_path:
-                        self._flush(current_path, batch)
+            while not self._stop.is_set() or not self._queue.empty() or batch or deferred is not None:
+                if batch and retry_pending:
+                    if self._flush(current_path, batch):
                         batch = []
-                    continue
+                        retry_pending = False
+                    else:
+                        time.sleep(self.RETRY_DELAY_SECONDS)
+                        continue
+
+                if deferred is not None:
+                    path, point = deferred
+                    deferred = None
+                    from_queue = True
+                else:
+                    try:
+                        path, point = self._queue.get(timeout=0.5)
+                        from_queue = True
+                    except queue.Empty:
+                        if batch and current_path:
+                            if self._flush(current_path, batch):
+                                batch = []
+                            else:
+                                retry_pending = True
+                        continue
+
                 if current_path and path != current_path and batch:
-                    self._flush(current_path, batch)
-                    batch = []
+                    deferred = (path, point)
+                    if self._flush(current_path, batch):
+                        batch = []
+                        current_path = ""
+                    else:
+                        retry_pending = True
+                    continue
+
                 current_path = path
                 batch.append(point)
-                self._queue.task_done()
+                if from_queue:
+                    self._queue.task_done()
                 if len(batch) >= 50:
-                    self._flush(current_path, batch)
-                    batch = []
+                    if self._flush(current_path, batch):
+                        batch = []
+                    else:
+                        retry_pending = True
+
             if batch and current_path:
+                # Best effort at orderly shutdown. A failure remains visible in
+                # diagnostics; the normal runtime path retains failed batches and
+                # retries indefinitely while the process is running.
                 self._flush(current_path, batch)
         finally:
-            # sqlite3 connections are thread-affine by default. The worker that
-            # created the connection must also close it.
-            conn = self._conn
-            self._conn = None
-            self._conn_thread_id = None
-            self._path = ""
-            if conn is not None:
+            self._reset_connection(rollback=False)
+
+    def _reset_connection(self, *, rollback: bool) -> None:
+        conn = self._conn
+        self._conn = None
+        self._conn_thread_id = None
+        self._path = ""
+        if conn is not None:
+            if rollback:
                 try:
-                    conn.close()
+                    conn.rollback()
                 except Exception:
                     pass
+            try:
+                conn.close()
+            except Exception:
+                pass
 
-    def _flush(self, path: str, batch: List[Dict[str, Any]]) -> None:
+    def _flush(self, path: str, batch: List[Dict[str, Any]]) -> bool:
         if not batch:
-            return
+            return True
         started_ns = time.perf_counter_ns()
         try:
-            if self._conn is None or self._path != path:
-                if self._conn is not None:
-                    try:
-                        self._conn.close()
-                    except Exception:
-                        pass
-                    self._conn = None
-                    self._conn_thread_id = None
-                self._conn = _connect(path)
-                self._conn_thread_id = threading.get_ident()
-                self._path = path
-            count = write_points(self._conn, batch)
+            from measurement_db_maintenance import measurement_db_maintenance_lock
+            with measurement_db_maintenance_lock(path, timeout_s=5.0):
+                if self._conn is None or self._path != path:
+                    self._reset_connection(rollback=False)
+                    self._conn = _connect(path)
+                    self._conn_thread_id = threading.get_ident()
+                    self._path = path
+                count = write_points(self._conn, batch)
+            now = time.time()
             with self._lock:
                 total = int(self._last_status.get("measurement_db_rows_written") or 0) + count
                 self._last_status.update({
@@ -493,21 +583,34 @@ class MeasurementDbWriter:
                     "measurement_db_reason": "OK",
                     "measurement_db_path": path,
                     "measurement_db_queue_depth": self._queue.qsize(),
-                    "measurement_db_last_write_epoch_s": time.time(),
+                    "measurement_db_last_write_epoch_s": now,
+                    "measurement_db_last_success_epoch_s": now,
                     "measurement_db_last_write_duration_ms": round((time.perf_counter_ns() - started_ns) / 1_000_000.0, 3),
                     "measurement_db_error": "",
+                    "measurement_db_consecutive_failures": 0,
+                    "measurement_db_write_stale": False,
                     "measurement_db_rows_written": total,
                     "measurement_db_size_bytes": os.path.getsize(path) if os.path.exists(path) else 0,
                 })
+            return True
         except Exception as exc:
+            self._reset_connection(rollback=True)
+            now = time.time()
+            message = str(exc)
             with self._lock:
+                failures = int(self._last_status.get("measurement_db_consecutive_failures") or 0) + 1
                 self._last_status.update({
                     "measurement_db_status": "error",
-                    "measurement_db_reason": str(exc),
+                    "measurement_db_reason": message,
                     "measurement_db_path": path,
                     "measurement_db_queue_depth": self._queue.qsize(),
-                    "measurement_db_error": str(exc),
+                    "measurement_db_error": message,
+                    "measurement_db_last_error": message,
+                    "measurement_db_last_error_epoch_s": now,
+                    "measurement_db_consecutive_failures": failures,
                 })
+                self._refresh_stale_locked(now)
+            return False
 
     def _set_status(self, status: str, reason: str, *, path: str = "", config: Optional[Dict[str, Any]] = None, error: str = "") -> Dict[str, Any]:
         if config is not None and not path:
@@ -516,25 +619,31 @@ class MeasurementDbWriter:
             except Exception:
                 path = ""
         with self._lock:
+            failures = int(self._last_status.get("measurement_db_consecutive_failures") or 0)
+            if failures > 0 and status == "queued":
+                status = "error"
+                reason = str(self._last_status.get("measurement_db_reason") or reason)
             self._last_status.update({
                 "measurement_db_status": status,
                 "measurement_db_reason": reason,
                 "measurement_db_path": path or self._last_status.get("measurement_db_path", ""),
                 "measurement_db_queue_depth": self._queue.qsize(),
-                "measurement_db_error": error,
             })
+            if error:
+                now = time.time()
+                self._last_status["measurement_db_error"] = error
+                self._last_status["measurement_db_last_error"] = error
+                self._last_status["measurement_db_last_error_epoch_s"] = now
             if path and os.path.exists(path):
                 try:
                     self._last_status["measurement_db_size_bytes"] = os.path.getsize(path)
                 except Exception:
                     pass
-            return dict(self._last_status)
+            return self._snapshot_locked()
 
     def status(self) -> Dict[str, Any]:
         with self._lock:
-            data = dict(self._last_status)
-        data["measurement_db_queue_depth"] = self._queue.qsize()
-        return data
+            return self._snapshot_locked()
 
     def __del__(self):
         try:
@@ -552,18 +661,8 @@ class MeasurementDbWriter:
                 pass
             if not thread.is_alive():
                 self._thread = None
-        # The worker owns and closes its thread-affine sqlite3 connection.
-        # Direct synchronous test/tool use of _flush() creates the connection in
-        # the caller thread, so that owner may close it here safely.
         if self._conn is not None and self._conn_thread_id in (None, threading.get_ident()):
-            try:
-                self._conn.close()
-            except Exception:
-                pass
-            self._conn = None
-            self._conn_thread_id = None
-            self._path = ""
-
+            self._reset_connection(rollback=False)
 
 def db_status_for_config(config: Dict[str, Any]) -> Dict[str, Any]:
     path = resolve_measurement_db_path(config)

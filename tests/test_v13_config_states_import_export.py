@@ -83,10 +83,19 @@ class V13ConfigStateTests(unittest.TestCase):
 
     def test_state_revision_is_rechecked_at_commit(self):
         state = self.store.create(self.manager, name="Before")
+        # Make the target differ so the state preview is commit-capable; a pure
+        # no-op intentionally has no preview token in V13.0.2.
+        changed = self.service.preview({
+            "base_revision": self.manager.cas_revision(),
+            "changes": {"DEADBAND_W": {"op": "set", "value": 91}},
+            "secrets": {},
+        }, self.session, {})
+        self.service.commit({"preview_id": changed["preview_id"], "confirmations": changed["confirmations_required"]}, self.session)
         loaded = self.coordinator.preview_state(
             state["state_id"], state_revision=state["state_revision"], base_revision=self.manager.cas_revision(),
             session_token=self.session, state_snapshot={},
         )
+        self.assertEqual("ready", loaded["status"])
         self.store.patch(state["state_id"], expected_revision=state["state_revision"], name="After")
         with self.assertRaisesRegex(RuntimeError, "CONFIG_STATE_REVISION_CONFLICT"):
             self.service.commit({"preview_id": loaded["preview_id"], "confirmations": loaded["confirmations_required"]}, self.session)
@@ -98,7 +107,9 @@ class V13ConfigStateTests(unittest.TestCase):
             inspected["import_token"], base_revision=self.manager.cas_revision(), session_token=self.session,
             state_snapshot={}, expert=False,
         )
-        self.assertEqual("ready", preview["status"])
+        self.assertEqual("no_changes", preview["status"])
+        self.assertIsNone(preview["preview_id"])
+        self.assertFalse(preview["commit_allowed"])
         self.assertNotIn("super-secret", json.dumps(preview))
 
     def test_bundle_integrity_and_duplicate_keys_fail_closed(self):

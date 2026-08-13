@@ -8,7 +8,7 @@ from tools.evaluate_installation_readiness import EXPECTED_BUILD_ID, EXPECTED_VE
 ROOT = Path(__file__).resolve().parents[1]
 
 
-class V1301InstallerIdentityHotfixTests(unittest.TestCase):
+class V1302InstallerIdentityHotfixTests(unittest.TestCase):
     def _fully_ready_payload(self):
         return {
             "status": "ok",
@@ -20,28 +20,28 @@ class V1301InstallerIdentityHotfixTests(unittest.TestCase):
         }
 
     def test_evaluator_identity_is_single_sourced_from_release_version(self):
-        self.assertEqual("13.0.1", version.APP_VERSION)
-        self.assertEqual("v13.0.1-20260811", version.APP_BUILD_ID)
+        self.assertEqual("13.0.2", version.APP_VERSION)
+        self.assertEqual("v13.0.2-20260812", version.APP_BUILD_ID)
         self.assertEqual(version.APP_VERSION, EXPECTED_VERSION)
         self.assertEqual(version.APP_BUILD_ID, EXPECTED_BUILD_ID)
 
     def test_fully_ready_current_release_cannot_be_rejected_as_identity(self):
         self.assertEqual(("READY", "FULL_READY"), classify(self._fully_ready_payload()))
 
-    def test_previous_v13_0_0_identity_is_rejected(self):
+    def test_previous_v13_0_1_identity_is_rejected(self):
         payload = self._fully_ready_payload()
-        payload["version"] = "13.0.0"
-        payload["build_id"] = "v13.0.0-20260811"
+        payload["version"] = "13.0.1"
+        payload["build_id"] = "v13.0.1-20260811"
         self.assertEqual(("REJECT", "IDENTITY"), classify(payload))
 
-    def test_installer_targets_hotfix_and_keeps_v12_13_0_as_only_source(self):
+    def test_installer_targets_hotfix_and_keeps_v13_0_1_as_only_source(self):
         script = (ROOT / "tools" / "update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_VERSION="v13_0_1"', script)
-        self.assertIn('EXPECTED_SOURCE_VERSION="12.13.0"', script)
-        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v12.13.0-20260811"', script)
-        self.assertIn('EXPECTED_TARGET_VERSION="13.0.1"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v13.0.1-20260811"', script)
-        self.assertIn('V13_0_1_SOURCE_MANIFEST.sha256', script)
+        self.assertIn('EXPECTED_VERSION="v13_0_2"', script)
+        self.assertIn('EXPECTED_SOURCE_VERSION="13.0.1"', script)
+        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v13.0.1-20260811"', script)
+        self.assertIn('EXPECTED_TARGET_VERSION="13.0.2"', script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v13.0.2-20260812"', script)
+        self.assertIn('V13_0_2_SOURCE_MANIFEST.sha256', script)
 
     def test_backfill_remains_after_successful_readiness_acceptance(self):
         script = (ROOT / "tools" / "update_zendure_controller.sh").read_text(encoding="utf-8")

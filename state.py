@@ -487,6 +487,11 @@ class ControllerState:
     measurement_db_last_write_epoch_s: Any = ""
     measurement_db_last_write_duration_ms: Any = None
     measurement_db_error: str = ""
+    measurement_db_last_error: str = ""
+    measurement_db_last_error_epoch_s: Any = ""
+    measurement_db_consecutive_failures: int = 0
+    measurement_db_last_success_epoch_s: Any = ""
+    measurement_db_write_stale: bool = False
     measurement_db_rows_written: int = 0
     measurement_db_rows_dropped: int = 0
     measurement_db_size_bytes: int = 0
@@ -780,6 +785,14 @@ class ControllerState:
             self.measurement_db_last_write_epoch_s = status.get("measurement_db_last_write_epoch_s", self.measurement_db_last_write_epoch_s)
             self.measurement_db_last_write_duration_ms = status.get("measurement_db_last_write_duration_ms", self.measurement_db_last_write_duration_ms)
             self.measurement_db_error = str(status.get("measurement_db_error", self.measurement_db_error) or "")
+            self.measurement_db_last_error = str(status.get("measurement_db_last_error", self.measurement_db_last_error) or "")
+            self.measurement_db_last_error_epoch_s = status.get("measurement_db_last_error_epoch_s", self.measurement_db_last_error_epoch_s)
+            self.measurement_db_last_success_epoch_s = status.get("measurement_db_last_success_epoch_s", self.measurement_db_last_success_epoch_s)
+            self.measurement_db_write_stale = bool(status.get("measurement_db_write_stale", self.measurement_db_write_stale))
+            try:
+                self.measurement_db_consecutive_failures = int(status.get("measurement_db_consecutive_failures", self.measurement_db_consecutive_failures) or 0)
+            except Exception:
+                pass
             try:
                 self.measurement_db_rows_written = int(status.get("measurement_db_rows_written", self.measurement_db_rows_written) or 0)
             except Exception:
@@ -1841,6 +1854,11 @@ class ControllerState:
                 "measurement_db_last_write_epoch_s": self.measurement_db_last_write_epoch_s,
                 "measurement_db_last_write_duration_ms": self.measurement_db_last_write_duration_ms,
                 "measurement_db_error": self.measurement_db_error,
+                "measurement_db_last_error": self.measurement_db_last_error,
+                "measurement_db_last_error_epoch_s": self.measurement_db_last_error_epoch_s,
+                "measurement_db_consecutive_failures": self.measurement_db_consecutive_failures,
+                "measurement_db_last_success_epoch_s": self.measurement_db_last_success_epoch_s,
+                "measurement_db_write_stale": self.measurement_db_write_stale,
                 "measurement_db_rows_written": self.measurement_db_rows_written,
                 "measurement_db_rows_dropped": self.measurement_db_rows_dropped,
                 "measurement_db_size_bytes": self.measurement_db_size_bytes,
@@ -2135,6 +2153,11 @@ class ControllerState:
                 "measurement_db_last_write_epoch_s": self.measurement_db_last_write_epoch_s,
                 "measurement_db_last_write_duration_ms": self.measurement_db_last_write_duration_ms,
                 "measurement_db_error": self.measurement_db_error,
+                "measurement_db_last_error": self.measurement_db_last_error,
+                "measurement_db_last_error_epoch_s": self.measurement_db_last_error_epoch_s,
+                "measurement_db_consecutive_failures": self.measurement_db_consecutive_failures,
+                "measurement_db_last_success_epoch_s": self.measurement_db_last_success_epoch_s,
+                "measurement_db_write_stale": self.measurement_db_write_stale,
                 "measurement_db_rows_written": self.measurement_db_rows_written,
                 "measurement_db_rows_dropped": self.measurement_db_rows_dropped,
                 "measurement_db_size_bytes": self.measurement_db_size_bytes,

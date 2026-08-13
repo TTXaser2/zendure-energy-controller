@@ -412,14 +412,15 @@
       const legend=$('#storageSocLegend');if(!legend)return;
       const p=this.payload||{},segments=this.configSegments();
       const entries=this.series().map(s=>`<span class="zec-legend-item"><i class="zec-legend-line" style="background:${s.color}"></i>${escapeHtml(s.label)}</span>`);
-      const uniqueValues=key=>[...new Set(segments.filter(s=>s.known!==false).map(s=>number(s[key])).filter(v=>v!==null))];
+      const adjacentValues=values=>values.filter((value,index)=>index===0||value!==values[index-1]);
+      const uniqueValues=key=>adjacentValues(segments.filter(s=>s.known!==false).map(s=>number(s[key])).filter(v=>v!==null));
       [['max_soc','Max-SOC'],['reserve_soc','Nachtreserve'],['min_soc','Min-SOC']].forEach(([key,label])=>{
         const values=uniqueValues(key);if(!values.length)return;
         const tone=key==='reserve_soc'?'is-reserve':'is-threshold';
         const text=values.map(v=>fmtSoc(v)).join(' → ');
         entries.push(`<span class="zec-legend-item"><i class="zec-legend-line is-dashed ${tone}"></i>${escapeHtml(label)} ${escapeHtml(text)}</span>`);
       });
-      const windows=[...new Set(segments.filter(s=>s.known!==false&&s.night_start&&s.night_end).map(s=>`${s.night_start}–${s.night_end}`))];
+      const windows=adjacentValues(segments.filter(s=>s.known!==false&&s.night_start&&s.night_end).map(s=>`${s.night_start}–${s.night_end}`));
       if(windows.length)entries.push(`<span class="zec-legend-item"><i class="zec-legend-area"></i>Nachtfenster ${escapeHtml(windows.join(' → '))}</span>`);
       if(segments.some(s=>s.known===false))entries.push('<span class="zec-legend-item">Historische Konfiguration teilweise nicht verfügbar</span>');
       if(p.is_today)entries.push('<span class="zec-legend-item"><i class="zec-legend-line is-now"></i>Jetzt</span>');

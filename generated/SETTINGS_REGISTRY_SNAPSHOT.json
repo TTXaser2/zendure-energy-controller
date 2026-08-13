@@ -14,7 +14,7 @@
     "System & Diagnose"
   ],
   "schema_name": "ZEC SettingsRegistry snapshot",
-  "schema_version": "1.24-v13.0",
+  "schema_version": "1.25-v13.0",
   "setting_count": 212,
   "settings": [
     {
@@ -5704,7 +5704,7 @@
     },
     {
       "apply_class": "live_next_cycle",
-      "apply_text": "Wirksam im nächsten Regelzyklus; RC19-Subscription-Kopplung kann Neustart erfordern",
+      "apply_text": "Wirksam im nächsten Regelzyklus; bei Änderung der Subscription-Konfiguration kann ein Dienstneustart erforderlich sein",
       "bootstrap_value": false,
       "category": "Cross-Charge-Schutz",
       "codec_id": "bool",
@@ -6348,7 +6348,7 @@
     },
     {
       "apply_class": "migration_only",
-      "apply_text": "Aktiv in RC19, aber nicht normal editierbar",
+      "apply_text": "Aktiver Kompatibilitätsparameter; nicht normal editierbar",
       "bootstrap_value": 3,
       "category": "Kommandowirkung & Resync",
       "codec_id": "int",
@@ -6363,7 +6363,7 @@
       ],
       "editability": "migration_only",
       "help": {
-        "extended": "Konfiguration für Resync ab Stale-Zyklen. Wirksamkeit nach Speichern: Aktiv in RC19, aber nicht normal editierbar. Die Einstellung steht in Beziehung zu: COMMAND_RESYNC_STALE_MIN_SECONDS, INTERVAL_SECONDS.",
+        "extended": "Konfiguration für Resync ab Stale-Zyklen. Wirksamkeit nach Speichern: Aktiver Kompatibilitätsparameter; nicht normal editierbar. Die Einstellung steht in Beziehung zu: COMMAND_RESYNC_STALE_MIN_SECONDS, INTERVAL_SECONDS.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 11,
@@ -6447,7 +6447,7 @@
           "RECOVERY",
           "ALWAYS"
         ],
-        "short": "Notfall-/Legacy-Schalter: erzwingt Resync bei jeder Zendure-MQTT-Recovery. Standard in V12.11.2-RC1 ist aus, damit kurze STALE-Phasen keinen Resync-Sturm auslösen.",
+        "short": "Notfall-/Legacy-Schalter: erzwingt Resync bei jeder Zendure-MQTT-Recovery. Standardmäßig ist die Option deaktiviert, damit kurze STALE-Phasen keinen unnötigen Resync-Sturm auslösen.",
         "when": "Die Legacy-/Notfalloption wird beim Wiederkehren der MQTT-Verbindung ausgewertet. Aktiv erzwingt sie aggressiver einen vollständigen Wiederabgleich und kann dadurch zusätzliche Publishes verursachen."
       },
       "key": "COMMAND_RESYNC_ON_MQTT_RECOVERY_ALWAYS",
@@ -10441,7 +10441,7 @@
           "value": "group_bind"
         },
         {
-          "label": "Diagnose: RC3-kompatibel / SO_REUSEPORT best-effort",
+          "label": "Diagnose: Wildcard-Bind + SO_REUSEPORT best-effort",
           "value": "rc3_compatible"
         },
         {
@@ -11250,7 +11250,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Begrenzt den Hintergrundrequest unabhängig vom höheren allgemeinen API-Timeout. Seit RC18 blockiert die lokale API den Regelzyklus nicht mehr. Wirksamkeit nach Speichern: Live. Die Einstellung steht in Beziehung zu: INTERVAL_SECONDS.",
+        "extended": "Begrenzt den Hintergrundrequest unabhängig vom höheren allgemeinen API-Timeout. Die lokale API arbeitet asynchron und blockiert den Regelzyklus nicht. Wirksamkeit nach Speichern: Live. Die Einstellung steht in Beziehung zu: INTERVAL_SECONDS.",
         "guidance_rule_ids": [
           "GUIDE-LOCAL-API-TIMEOUT"
         ],
@@ -11273,7 +11273,7 @@
           "CAP",
           "SECONDS"
         ],
-        "short": "Begrenzt den Hintergrundrequest unabhängig vom höheren allgemeinen API-Timeout. Seit RC18 blockiert die lokale API den Regelzyklus nicht mehr.",
+        "short": "Begrenzt den Hintergrundrequest unabhängig vom höheren allgemeinen API-Timeout. Die lokale API arbeitet asynchron und blockiert den Regelzyklus nicht.",
         "when": null
       },
       "key": "ZENDURE_LOCAL_API_CONTROL_TIMEOUT_CAP_SECONDS",
@@ -12284,7 +12284,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Schreibt einen Runtime-Hinweis, wenn ein Reglerzyklus ohne Sleep länger dauert. Dient der RC3-Timingdiagnose. Wirksamkeit nach Speichern: Live.",
+        "extended": "Schreibt einen Runtime-Hinweis, wenn ein Reglerzyklus ohne Sleep länger dauert. Dient der Laufzeit- und Timingdiagnose. Wirksamkeit nach Speichern: Live.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -12301,7 +12301,7 @@
           "CYCLE",
           "WARN"
         ],
-        "short": "Schreibt einen Runtime-Hinweis, wenn ein Reglerzyklus ohne Sleep länger dauert. Dient der RC3-Timingdiagnose.",
+        "short": "Schreibt einen Runtime-Hinweis, wenn ein Reglerzyklus ohne Sleep länger dauert. Dient der Laufzeit- und Timingdiagnose.",
         "when": null
       },
       "key": "SLOW_CYCLE_WARN_MS",

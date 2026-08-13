@@ -53,8 +53,8 @@ def _snapshot():
 
 class V12112Rc10TopologyTests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual("13.0.1", version.APP_VERSION)
-        self.assertEqual("V13.0.1", version.APP_VERSION_LABEL)
+        self.assertEqual("13.0.2", version.APP_VERSION)
+        self.assertEqual("V13.0.2", version.APP_VERSION_LABEL)
 
     def test_existing_primary_storage_topology_remains_present(self):
         snap = _snapshot()

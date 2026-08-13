@@ -28,6 +28,8 @@
     helpReturnFocus: null,
     pendingHelpTarget: null,
     helpScrollY: 0,
+    previewReturnToConfigStates: false,
+    configStatesBanner: null,
   };
   const $ = (s, root = document) => root.querySelector(s);
   const $$ = (s, root = document) => Array.from(root.querySelectorAll(s));
@@ -75,17 +77,34 @@
     if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
     return {hour, minute, text:`${match[1]}:${match[2]}`};
   }
-  function csrf() { return $('meta[name="zec-csrf"]')?.content || app.model?.csrf_token || ''; }
+  function csrf() { return app.model?.csrf_token || $('meta[name="zec-csrf"]')?.content || ''; }
+  async function refreshCsrfToken() {
+    const response = await fetch('/settings/model', {cache:'no-store', credentials:'same-origin', headers:{'Accept':'application/json'}});
+    let data={};try{data=await response.json();}catch(_){}
+    if(!response.ok||!data.csrf_token)throw new Error(data.detail||data.error||`HTTP ${response.status}`);
+    if(!app.model)app.model={};
+    app.model.csrf_token=data.csrf_token;
+    return data.csrf_token;
+  }
+  async function fetchWithCsrfRetry(url,opt={},retry=true){
+    const method=String(opt.method||'GET').toUpperCase();
+    const headers=Object.assign({'Accept':'application/json'},opt.headers||{});
+    if(method!=='GET'){headers['X-CSRF-Token']=csrf();}
+    const response=await fetch(url,Object.assign({cache:'no-store',credentials:'same-origin'},opt,{headers}));
+    if(method!=='GET'&&retry&&response.status===403){
+      let data={};try{data=await response.clone().json();}catch(_){}
+      const code=String(data.error||data.detail||data.message||'');
+      if(code.includes('CSRF_TOKEN_INVALID')){await refreshCsrfToken();return fetchWithCsrfRetry(url,opt,false);}
+    }
+    return response;
+  }
   async function api(url, opt = {}) {
     const headers = Object.assign({'Accept':'application/json'}, opt.headers || {});
-    if (opt.method && opt.method !== 'GET') {
-      headers['Content-Type'] = 'application/json';
-      headers['X-CSRF-Token'] = csrf();
-    }
-    const response = await fetch(url, Object.assign({cache:'no-store', credentials:'same-origin'}, opt, {headers}));
+    if (opt.method && String(opt.method).toUpperCase() !== 'GET') headers['Content-Type'] = 'application/json';
+    const response = await fetchWithCsrfRetry(url, Object.assign({}, opt, {headers}));
     let data = {};
     try { data = await response.json(); }
-    catch (_) { data = {message: await response.text()}; }
+    catch (_) { try{data = {message: await response.text()};}catch(__){data={};} }
     if (!response.ok) {
       const error = new Error(data.detail || data.error || data.message || `HTTP ${response.status}`);
       error.status = response.status;
@@ -1007,20 +1026,35 @@
     $('#previewBack').textContent = 'Zurück';
     app.modalMode = 'preview';
     lockPreviewScroll();
+    $('#previewModal').classList.toggle('modal-child', Boolean(app.previewReturnToConfigStates));
     $('#previewModal').classList.add('open');
     $('#previewClose')?.focus({preventScroll:true});
   }
   function closePreview() {
-    $('#previewModal').classList.remove('open');
+    const returnToConfigStates=Boolean(app.previewReturnToConfigStates&&$('#configStatesModal')?.classList.contains('open'));
+    $('#previewModal').classList.remove('open','modal-child');
     $('#previewBody').innerHTML = '';
     app.preview = null;
     app.modalMode = 'preview';
     app.adminAction = null;
+    app.previewReturnToConfigStates=false;
+    if(returnToConfigStates){$('#configStatesClose')?.focus({preventScroll:true});updateBar();return;}
     unlockPreviewScroll();
     updateBar();
   }
+  function previewInlineError(prefix,error){
+    const body=$('#previewBody');if(!body)return;
+    body.querySelector('.modal-inline-error')?.remove();
+    body.insertAdjacentHTML('afterbegin',`<div class="notice error modal-inline-error"><b>${esc(prefix)}</b>: ${esc(error?.message||error||'Unbekannter Fehler')}</div>`);
+  }
+  function setConfigStatesBanner(kind,text){
+    app.configStatesBanner={kind,text};
+    const el=$('#configStatesBanner');if(el){el.className=`notice ${kind||'info'}`;el.textContent=text||'';el.hidden=!text;}
+  }
   async function commit() {
+    const returnToConfigStates=Boolean(app.previewReturnToConfigStates);
     try {
+      if(!app.preview?.preview_id||app.preview?.commit_allowed===false)throw new Error('Keine wirksame Änderung zum Speichern vorhanden.');
       const confirmations = $$('[data-confirm]:checked').map(x => x.dataset.confirm);
       const result = await api('/settings/commit', {method:'POST', body:JSON.stringify({preview_id:app.preview.preview_id, confirmations})});
       closePreview();
@@ -1028,9 +1062,10 @@
       app.compoundDraft.clear();
       app.secretOps.clear();
       clearValidationIssues();
-      toast(result.pending_restart ? 'Gespeichert. Dienstneustart erforderlich.' : 'Änderungen gespeichert und live übernommen.');
       await load();
-    } catch (error) { toast(`Speichern fehlgeschlagen: ${error.message}`); }
+      const message=result.pending_restart ? 'Gespeichert. Dienstneustart erforderlich.' : 'Änderungen gespeichert und live übernommen.';
+      if(returnToConfigStates&&$('#configStatesModal')?.classList.contains('open')){await renderConfigStates();setConfigStatesBanner('info',message);}else toast(message);
+    } catch (error) { previewInlineError('Speichern fehlgeschlagen',error); toast(`Speichern fehlgeschlagen: ${error.message}`); }
   }
   function discard() { app.draft.clear(); app.compoundDraft.clear(); app.secretOps.clear(); app.preview = null; clearValidationIssues(); render(); }
   function toast(text, ms = 5000) {
@@ -1064,6 +1099,7 @@
     $('#commitChanges').textContent = primaryLabel;
     $('#commitChanges').disabled = false;
     lockPreviewScroll();
+    $('#previewModal').classList.toggle('modal-child', Boolean(app.previewReturnToConfigStates));
     $('#previewModal').classList.add('open');
     $('#previewClose')?.focus({preventScroll:true});
   }
@@ -1110,36 +1146,41 @@
         return;
       }
       if (action.kind === 'custom' && typeof action.run === 'function') {
+        const message=action.successMessage||'Aktion erfolgreich ausgeführt.';
         await action.run();
+        const returnToConfigStates=Boolean(app.previewReturnToConfigStates);
         closePreview();
+        if(returnToConfigStates&&$('#configStatesModal')?.classList.contains('open')){await renderConfigStates();setConfigStatesBanner('info',message);}else toast(message);
         return;
       }
     } catch (error) {
       $('#commitChanges').disabled = false;
-      toast(`${action.errorLabel || (action.kind === 'restart' ? 'Neustart' : 'Pointer-Reparatur')} fehlgeschlagen: ${error.message}`);
+      const label=action.errorLabel || (action.kind === 'restart' ? 'Neustart' : 'Pointer-Reparatur');
+      previewInlineError(`${label} fehlgeschlagen`,error);
+      toast(`${label} fehlgeschlagen: ${error.message}`);
     }
   }
   async function modalPrimaryAction() {
     if (app.modalMode === 'preview') return commit();
     return runAdminAction();
   }
-  function requestZecConfirmation({title, bodyHtml, primaryLabel, action, errorLabel}) {
-    closeConfigStates();
-    openAdminModal({title, bodyHtml, primaryLabel, mode:'custom', action:{kind:'custom', run:action, errorLabel}});
+  function requestZecConfirmation({title, bodyHtml, primaryLabel, action, errorLabel, successMessage}) {
+    app.previewReturnToConfigStates=Boolean($('#configStatesModal')?.classList.contains('open'));
+    openAdminModal({title, bodyHtml, primaryLabel, mode:'custom', action:{kind:'custom', run:action, errorLabel, successMessage}});
   }
   function closeConfigStates() {
     const modal=$('#configStatesModal');if(!modal?.classList.contains('open'))return;
-    modal.classList.remove('open');$('#configStatesBody').innerHTML='';unlockPreviewScroll();
+    modal.classList.remove('open');$('#configStatesBody').innerHTML='';app.configStatesBanner=null;app.configImportInspection=null;unlockPreviewScroll();
   }
   async function downloadConfigArtifact(url, body, fallbackName) {
-    const response=await fetch(url,{method:'POST',cache:'no-store',credentials:'same-origin',headers:{'Accept':'application/vnd.zec.config+json','Content-Type':'application/json','X-CSRF-Token':csrf()},body:JSON.stringify(body||{})});
+    const response=await fetchWithCsrfRetry(url,{method:'POST',headers:{'Accept':'application/vnd.zec.config+json','Content-Type':'application/json'},body:JSON.stringify(body||{})});
     if(!response.ok){let message=`HTTP ${response.status}`;try{const data=await response.json();message=data.error||data.detail||message;}catch(_){}throw new Error(message);}
     const blob=await response.blob();const cd=response.headers.get('content-disposition')||'';const match=/filename="?([^";]+)"?/i.exec(cd);const name=match?.[1]||fallbackName;
     const href=URL.createObjectURL(blob);const a=document.createElement('a');a.href=href;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(href),1000);
   }
   async function inspectConfigFile(file, legacy) {
     const url=`/config-import/inspect${legacy?`?legacy=1&expert=${app.mode==='expert'?'1':'0'}`:''}`;
-    const response=await fetch(url,{method:'POST',cache:'no-store',credentials:'same-origin',headers:{'Accept':'application/json','Content-Type':'application/octet-stream','X-CSRF-Token':csrf()},body:file});
+    const response=await fetchWithCsrfRetry(url,{method:'POST',headers:{'Accept':'application/json','Content-Type':'application/octet-stream'},body:file});
     let data={};try{data=await response.json();}catch(_){}
     if(!response.ok){const err=new Error(data.error||data.detail||`HTTP ${response.status}`);err.status=response.status;err.data=data;throw err;}return data;
   }
@@ -1147,31 +1188,33 @@
     if(dirtyCount()>0){toast('Vor dem Laden eines Konfigurationsstands bitte den aktuellen Browserentwurf speichern oder verwerfen.');return;}
     try{
       const result=await api(`/config-states/${encodeURIComponent(state.state_id)}/preview`,{method:'POST',body:JSON.stringify({state_revision:state.state_revision,base_revision:app.model.base_revision,expert:app.mode==='expert',secrets:{}})});
-      app.preview=result;app.validationIssues=result.issues||[];closeConfigStates();openPreview();
-    }catch(error){toast(`Konfigurationsstand konnte nicht geprüft werden: ${error.message}`);}
+      app.preview=result;app.validationIssues=result.issues||[];app.previewReturnToConfigStates=true;openPreview();
+    }catch(error){setConfigStatesBanner('error',`Konfigurationsstand konnte nicht geprüft werden: ${error.message}`);toast(`Konfigurationsstand konnte nicht geprüft werden: ${error.message}`);}
   }
   async function renderConfigStates() {
     const body=$('#configStatesBody');body.innerHTML='<div class="empty-state">Konfigurationsstände werden geladen …</div>';
     try{
       const result=await api('/config-states');const states=result.items||[];const expert=app.mode==='expert';
-      const scopeOptions=expert?'<option value="full_managed">Alle verwalteten Einstellungen</option><option value="portable_profile">Teilbares Regelprofil</option><option value="categories">Ausgewählte Kategorien (Experte)</option><option value="keys">Ausgewählte Keys (Experte)</option>':'<option value="full_managed">Alle verwalteten Einstellungen</option><option value="portable_profile">Teilbares Regelprofil</option>';
-      const list=states.length?states.map(st=>`<div class="config-state-item ${st.status==='corrupt'?'corrupt':''}" data-state-id="${esc(st.state_id)}"><div><b>${esc(st.name||'Konfigurationsstand')}</b><div>${esc(st.description||'')}</div><div class="config-state-meta">${esc(st.created_at||'—')} · ${esc(st.source_app_version||'—')} · ${esc(st.scope_mode||'—')} · ${esc(st.scope_key_count??'—')} Keys</div></div><div class="config-state-item-actions">${st.status==='valid'?`<button type="button" data-state-load="${esc(st.state_id)}">Prüfen & laden</button><button type="button" data-state-export="${esc(st.state_id)}">Export</button><button type="button" data-state-rename="${esc(st.state_id)}">Umbenennen</button><button type="button" data-state-delete="${esc(st.state_id)}">Löschen</button>`:'<span class="config-state-warning">Beschädigt – Laden gesperrt</span>'}</div></div>`).join(''):'<div class="empty-state">Noch keine benannten Konfigurationsstände vorhanden.</div>';
+      const scopeOptions=expert?'<option value="full_managed">Alle verwalteten Einstellungen</option><option value="portable_profile">Nur verteilbare Einstellungen</option><option value="categories">Ausgewählte Kategorien (Experte)</option><option value="keys">Ausgewählte Keys (Experte)</option>':'<option value="full_managed">Alle verwalteten Einstellungen</option><option value="portable_profile">Nur verteilbare Einstellungen</option>';
+      const list=states.length?states.map(st=>`<div class="config-state-item ${st.status==='corrupt'?'corrupt':''}" data-state-id="${esc(st.state_id)}"><div><b>${esc(st.name||'Konfigurationsstand')}</b><div>${esc(st.description||'')}</div><div class="config-state-meta">${esc(st.created_at||'—')} · ${esc(st.source_app_version||'—')} · ${esc(st.scope_mode||'—')} · ${esc(st.scope_key_count??'—')} Keys</div></div><div class="config-state-item-actions">${st.status==='valid'?`<button type="button" data-state-load="${esc(st.state_id)}">Prüfen & laden</button><button type="button" data-state-export="${esc(st.state_id)}">Export</button><button type="button" data-state-rename="${esc(st.state_id)}">Umbenennen</button><button type="button" data-state-delete="${esc(st.state_id)}">Löschen</button>`:`<span class="config-state-warning">Beschädigt – Laden gesperrt</span>${st.safe_deletable?`<button type="button" data-state-delete="${esc(st.state_id)}">Löschen</button>`:''}`}</div></div>`).join(''):'<div class="empty-state">Noch keine benannten Konfigurationsstände vorhanden.</div>';
+      const banner=app.configStatesBanner;
       body.innerHTML=`
+        <div id="configStatesBanner" class="notice ${esc(banner?.kind||'info')}" ${banner?.text?'':'hidden'}>${esc(banner?.text||'')}</div>
         <section class="config-state-section"><div class="config-state-warning"><b>Getrennter Benutzerstand:</b> Ein benannter Stand ist kein Last-Good-Recoveryslot und wird beim Laden nie sofort aktiv. Laden/Import führen immer über Migration, Servervalidierung, Diff, Bestätigung und revisionsgebundenen Commit.</div></section>
         <section class="config-state-section"><h3>Benannten Stand anlegen</h3><div class="config-state-grid"><label>Name<input id="stateName" maxlength="80" placeholder="z. B. Sommer optimiert"></label><label>Scope<select id="stateScope">${scopeOptions}</select></label><label class="full">Beschreibung<textarea id="stateDescription" maxlength="500" rows="2"></textarea></label>${expert?'<label class="full" id="stateScopeDetails" hidden>Auswahl (Komma-getrennte Kategorien oder Config-Keys)<input id="stateScopeSelection" autocomplete="off"></label>':''}</div><div class="config-state-actions"><button id="createState" type="button">Aktuellen Stand speichern</button></div></section>
         <section class="config-state-section"><h3>Gespeicherte Stände</h3><div class="config-state-list">${list}</div></section>
-        <section class="config-state-section"><h3>Export</h3><p class="config-state-warning">Vollständige Exporte dienen Backup/Migration. Teilbare Regelprofile enthalten ausschließlich als portabel klassifizierte Regelparameter. Der SHA-256-Prüfwert des ZEC-CONFIG-BUNDLE bestätigt Integrität, nicht Urheber oder vertrauenswürdige Herkunft.</p><div class="config-state-actions"><button id="exportFull" type="button">Vollständigen Export erstellen</button><button id="exportProfile" type="button">Teilbares Regelprofil exportieren</button>${expert?'<button id="exportWithSecrets" type="button">Vollständiger Export inkl. Secrets (Experte)</button>':''}</div></section>
+        <section class="config-state-section"><h3>Export</h3><p class="config-state-warning">Vollständige Exporte dienen Backup/Migration. Verteilbare Regelprofile enthalten ausschließlich als portabel klassifizierte Regelparameter. Der SHA-256-Prüfwert des ZEC-CONFIG-BUNDLE bestätigt Integrität, nicht Urheber oder vertrauenswürdige Herkunft.</p><div class="config-state-actions"><button id="exportFull" type="button">Vollständigen Export erstellen</button><button id="exportProfile" type="button">Verteilbares Regelprofil exportieren</button>${expert?'<button id="exportWithSecrets" type="button">Vollständiger Export inkl. Secrets (Experte)</button>':''}</div></section>
         <section class="config-state-section"><h3>Import</h3><input id="configImportFile" type="file" accept=".json,.zec-config.json,application/json"><div class="config-import-options">${expert?'<label><input id="legacyConfigImport" type="checkbox"> Legacy config.json (ohne Bundle-Integrität)</label>':''}<label id="skipUnknownImportWrap" hidden><input id="skipUnknownImport" type="checkbox"> Unbekannte Quellschlüssel ausdrücklich überspringen</label><label id="importSecretOperationWrap" hidden>Secrets<select id="importSecretOperation"><option value="keep">Vorhandene Secrets behalten</option><option value="replace">Im Bundle enthaltene Secrets übernehmen</option><option value="clear">Betroffene Secrets ausdrücklich löschen</option></select></label></div><div id="configImportInfo" class="config-state-warning">Import lädt nie direkt: zuerst Integritäts-/Kompatibilitätsprüfung, Migration, vollständige Servervalidierung und Diff.</div><div class="config-state-actions"><button id="inspectConfigImport" type="button">Datei prüfen</button></div></section>`;
       const byId=id=>states.find(x=>x.state_id===id);
       $$('[data-state-load]',body).forEach(btn=>btn.onclick=()=>loadConfigStatePreview(byId(btn.dataset.stateLoad)));
-      $$('[data-state-export]',body).forEach(btn=>btn.onclick=async()=>{const st=byId(btn.dataset.stateExport);try{await downloadConfigArtifact(`/config-states/${encodeURIComponent(st.state_id)}/export`,{state_revision:st.state_revision},`zec-config-state-${st.state_id}.zec-config.json`);}catch(e){toast(`Export fehlgeschlagen: ${e.message}`);}});
-      $$('[data-state-rename]',body).forEach(btn=>btn.onclick=()=>{const st=byId(btn.dataset.stateRename);requestZecConfirmation({title:'Konfigurationsstand umbenennen',primaryLabel:'Umbenennen',errorLabel:'Umbenennen',bodyHtml:`<label class="admin-confirm-copy">Neuer Name<input id="stateRenameValue" maxlength="80" value="${esc(st.name||'')}"></label>`,action:async()=>{const name=String($('#stateRenameValue')?.value||'').trim();await api(`/config-states/${encodeURIComponent(st.state_id)}`,{method:'PATCH',body:JSON.stringify({state_revision:st.state_revision,name})});toast('Konfigurationsstand umbenannt.');}});});
-      $$('[data-state-delete]',body).forEach(btn=>btn.onclick=()=>{const st=byId(btn.dataset.stateDelete);requestZecConfirmation({title:'Konfigurationsstand löschen',primaryLabel:'Endgültig löschen',errorLabel:'Löschen',bodyHtml:`<div class="notice warning"><b>${esc(st.name||st.state_id)}</b> wird gelöscht. Die aktive Konfiguration und Last-Good werden dadurch nicht verändert.</div>`,action:async()=>{await api(`/config-states/${encodeURIComponent(st.state_id)}`,{method:'DELETE',body:JSON.stringify({state_revision:st.state_revision})});toast('Konfigurationsstand gelöscht.');}});});
+      $$('[data-state-export]',body).forEach(btn=>btn.onclick=async()=>{const st=byId(btn.dataset.stateExport);try{await downloadConfigArtifact(`/config-states/${encodeURIComponent(st.state_id)}/export`,{state_revision:st.state_revision},`zec-config-state-${st.state_id}.zec-config.json`);setConfigStatesBanner('info','Konfigurationsstand exportiert.');}catch(e){setConfigStatesBanner('error',`Export fehlgeschlagen: ${e.message}`);toast(`Export fehlgeschlagen: ${e.message}`);}});
+      $$('[data-state-rename]',body).forEach(btn=>btn.onclick=()=>{const st=byId(btn.dataset.stateRename);requestZecConfirmation({title:'Konfigurationsstand umbenennen',primaryLabel:'Umbenennen',errorLabel:'Umbenennen',successMessage:'Konfigurationsstand umbenannt.',bodyHtml:`<label class="admin-confirm-copy">Neuer Name<input id="stateRenameValue" maxlength="80" value="${esc(st.name||'')}"></label>`,action:async()=>{const name=String($('#stateRenameValue')?.value||'').trim();await api(`/config-states/${encodeURIComponent(st.state_id)}`,{method:'PATCH',body:JSON.stringify({state_revision:st.state_revision,name})});}});});
+      $$('[data-state-delete]',body).forEach(btn=>btn.onclick=()=>{const st=byId(btn.dataset.stateDelete);requestZecConfirmation({title:'Konfigurationsstand löschen',primaryLabel:'Endgültig löschen',errorLabel:'Löschen',successMessage:'Konfigurationsstand gelöscht.',bodyHtml:`<div class="notice warning"><b>${esc(st.name||st.state_id)}</b> wird gelöscht. Die aktive Konfiguration und Last-Good werden dadurch nicht verändert.</div>`,action:async()=>{await api(`/config-states/${encodeURIComponent(st.state_id)}`,{method:'DELETE',body:JSON.stringify({state_revision:st.state_revision})});}});});
       $('#stateScope')?.addEventListener('change',()=>{const details=$('#stateScopeDetails');if(details)details.hidden=!['categories','keys'].includes($('#stateScope').value);});
-      $('#createState').onclick=async()=>{try{const mode=$('#stateScope').value;const selection=String($('#stateScopeSelection')?.value||'').split(',').map(x=>x.trim()).filter(Boolean);const payload={name:$('#stateName').value,description:$('#stateDescription').value,scope_mode:mode};if(mode==='categories')payload.categories=selection;if(mode==='keys')payload.keys=selection;await api('/config-states/create',{method:'POST',body:JSON.stringify(payload)});toast('Konfigurationsstand gespeichert.');await renderConfigStates();}catch(e){toast(`Stand konnte nicht gespeichert werden: ${e.message}`);}};
-      $('#exportFull').onclick=async()=>{try{await downloadConfigArtifact('/config-export',{scope_mode:'full_managed',name:'ZEC Konfiguration'},'zec-config-export.zec-config.json');}catch(e){toast(`Export fehlgeschlagen: ${e.message}`);}};
-      $('#exportProfile').onclick=async()=>{try{await downloadConfigArtifact('/config-profile-export',{name:'ZEC Regelprofil'},'zec-regelprofil.zec-config.json');}catch(e){toast(`Profil-Export fehlgeschlagen: ${e.message}`);}};
-      if(expert)$('#exportWithSecrets').onclick=()=>requestZecConfirmation({title:'Export inklusive Secrets',primaryLabel:'Secret-Export erstellen',errorLabel:'Secret-Export',bodyHtml:'<div class="notice warning"><b>Dieser Export enthält Secret-Klartext.</b> Die Datei darf nur geschützt gespeichert und gezielt weitergegeben werden.</div>',action:async()=>{await downloadConfigArtifact('/config-export',{scope_mode:'full_managed',name:'ZEC Konfiguration inkl. Secrets',include_secrets:true,expert:true,confirm_secret_export:true},'zec-config-export-mit-secrets.zec-config.json');toast('Secret-Export erstellt.');}});
+      $('#createState').onclick=async()=>{try{const mode=$('#stateScope').value;const selection=String($('#stateScopeSelection')?.value||'').split(',').map(x=>x.trim()).filter(Boolean);const payload={name:$('#stateName').value,description:$('#stateDescription').value,scope_mode:mode};if(mode==='categories')payload.categories=selection;if(mode==='keys')payload.keys=selection;await api('/config-states/create',{method:'POST',body:JSON.stringify(payload)});app.configStatesBanner={kind:'info',text:'Konfigurationsstand gespeichert.'};await renderConfigStates();}catch(e){setConfigStatesBanner('error',`Stand konnte nicht gespeichert werden: ${e.message}`);toast(`Stand konnte nicht gespeichert werden: ${e.message}`);}};
+      $('#exportFull').onclick=async()=>{try{await downloadConfigArtifact('/config-export',{scope_mode:'full_managed',name:'ZEC Konfiguration'},'zec-config-export.zec-config.json');setConfigStatesBanner('info','Vollständiger Export erstellt.');}catch(e){setConfigStatesBanner('error',`Export fehlgeschlagen: ${e.message}`);toast(`Export fehlgeschlagen: ${e.message}`);}};
+      $('#exportProfile').onclick=async()=>{try{await downloadConfigArtifact('/config-profile-export',{name:'ZEC Regelprofil'},'zec-regelprofil.zec-config.json');setConfigStatesBanner('info','Verteilbares Regelprofil exportiert.');}catch(e){setConfigStatesBanner('error',`Profil-Export fehlgeschlagen: ${e.message}`);toast(`Profil-Export fehlgeschlagen: ${e.message}`);}};
+      if(expert)$('#exportWithSecrets').onclick=()=>requestZecConfirmation({title:'Export inklusive Secrets',primaryLabel:'Secret-Export erstellen',errorLabel:'Secret-Export',bodyHtml:'<div class="notice warning"><b>Dieser Export enthält Secret-Klartext.</b> Die Datei darf nur geschützt gespeichert und gezielt weitergegeben werden.</div>',successMessage:'Secret-Export erstellt.',action:async()=>{await downloadConfigArtifact('/config-export',{scope_mode:'full_managed',name:'ZEC Konfiguration inkl. Secrets',include_secrets:true,expert:true,confirm_secret_export:true},'zec-config-export-mit-secrets.zec-config.json');}});
       $('#configImportFile')?.addEventListener('change',()=>{app.configImportInspection=null;const button=$('#inspectConfigImport');if(button)button.textContent='Datei prüfen';});
       $('#inspectConfigImport').onclick=async()=>{
         if(dirtyCount()>0){toast('Vor einem Import bitte den aktuellen Browserentwurf speichern oder verwerfen.');return;}
@@ -1194,8 +1237,8 @@
           const secrets={};
           if(expert&&secretAvailable.length){const op=$('#importSecretOperation')?.value||'keep';secretAvailable.forEach(key=>secrets[key]={op});}
           const preview=await api(`/config-import/${encodeURIComponent(inspected.import_token)}/preview`,{method:'POST',body:JSON.stringify({base_revision:app.model.base_revision,expert,skip_unknown:skipUnknown,secrets})});
-          app.configImportInspection=null;app.preview=preview;app.validationIssues=preview.issues||[];closeConfigStates();openPreview();
-        }catch(e){toast(`Importprüfung fehlgeschlagen: ${e.message}`);}
+          app.preview=preview;app.validationIssues=preview.issues||[];app.previewReturnToConfigStates=true;openPreview();
+        }catch(e){setConfigStatesBanner('error',`Importprüfung fehlgeschlagen: ${e.message}`);toast(`Importprüfung fehlgeschlagen: ${e.message}`);}
       }
     }catch(error){body.innerHTML=`<div class="notice error">Konfigurationsstände konnten nicht geladen werden: ${esc(error.message)}</div>`;}
   }
@@ -1309,8 +1352,8 @@
     document.addEventListener('keydown', event => {
       if (event.key !== 'Escape') return;
       if ($('#helpModal')?.classList.contains('open')) closeHelpModal();
-      else if ($('#configStatesModal')?.classList.contains('open')) closeConfigStates();
       else if ($('#previewModal')?.classList.contains('open')) closePreview();
+      else if ($('#configStatesModal')?.classList.contains('open')) closeConfigStates();
       else if ($('.settings-sidebar')?.classList.contains('open')) setCategoryDrawerOpen(false);
       else if (document.body.classList.contains('search-open')) closeSearch();
     });

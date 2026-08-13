@@ -250,7 +250,8 @@ class SettingsService:
         now = time.monotonic()
         preview_id = ""
         expires_at_epoch = None
-        if not blocking and result.valid:
+        commit_allowed = bool(not blocking and result.valid and diff)
+        if commit_allowed:
             preview_id = secrets.token_urlsafe(24)
             record = PreviewRecord(
                 preview_id=preview_id, created_monotonic=now, expires_monotonic=now + PREVIEW_TTL_SECONDS,
@@ -264,8 +265,9 @@ class SettingsService:
 
         pending_after = list(self.manager.pending_restart_keys_for(result.configured)) if result.valid else list(self.manager.pending_restart_keys())
         response = {
-            "status": "blocked" if blocking else "ready",
+            "status": "blocked" if blocking else ("ready" if diff else "no_changes"),
             "preview_id": preview_id or None,
+            "commit_allowed": commit_allowed,
             "expires_at_epoch": expires_at_epoch,
             "base_revision": base_revision,
             "candidate_typed_revision": result.typed_revision or None,
@@ -376,8 +378,12 @@ class SettingsService:
 
     def commit(self, payload: Mapping[str, Any], session_token: str) -> Dict[str, Any]:
         preview_id = str(payload.get("preview_id") or "")
+        if not preview_id:
+            raise PermissionError("PREVIEW_NOT_COMMITTABLE")
         confirmations = set(str(value) for value in (payload.get("confirmations") or []))
         record = self.previews.consume(preview_id, session_token)
+        if not record.diff:
+            raise PermissionError("PREVIEW_NOT_COMMITTABLE")
         if record.source_revalidator is not None:
             record.source_revalidator()
         if self._base_revision() != record.base_revision:

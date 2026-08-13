@@ -34,6 +34,13 @@ BUNDLE_MAX_BYTES = 1024 * 1024
 ARTIFACT_KINDS = frozenset(("named_state", "export", "portable_profile"))
 SCOPE_MODES = frozenset(("full_managed", "categories", "keys", "portable_profile"))
 
+# V13.0.2 changes only public display/help metadata in the registry contract.
+# Exact prior V13.0.1 bundles remain safely interpretable because setting keys,
+# types, codecs, portability, apply semantics and defaults are unchanged.
+_DISPLAY_ONLY_REGISTRY_COMPATIBILITY = {
+    ("1.24-v13.0", "c1e13a7a1fd2968545bcf49073dc7b1d9e9dd7c71e0d002a45f50610d0780440"): "REGISTRY_DISPLAY_METADATA_V13_0_2",
+}
+
 
 class BundleError(ValueError):
     def __init__(self, code: str, detail: str = "") -> None:
@@ -179,8 +186,14 @@ def build_bundle_payload(
     if artifact_kind not in ARTIFACT_KINDS:
         raise BundleError("ARTIFACT_KIND_INVALID", artifact_kind)
     mode, cats, concrete = materialize_scope(scope_mode, categories=categories, keys=keys)
-    if artifact_kind == "portable_profile" or mode == "portable_profile":
-        artifact_kind = "portable_profile"
+    if artifact_kind == "portable_profile":
+        mode, cats, concrete = materialize_scope("portable_profile")
+        _validate_portable_scope(concrete)
+        include_secrets = False
+    elif mode == "portable_profile":
+        # Scope and artifact type are independent dimensions. A local named
+        # state may intentionally contain only portable settings without
+        # becoming an exchange artifact itself.
         mode, cats, concrete = materialize_scope("portable_profile")
         _validate_portable_scope(concrete)
         include_secrets = False
@@ -275,13 +288,15 @@ def _compatibility(source: Mapping[str, Any]) -> Dict[str, Any]:
             "target": CONFIG_RUNTIME_SCHEMA_VERSION,
         }
     current_hash = registry_contract_sha256()
+    compatibility_step = ""
     if registry_hash == current_hash and registry_schema == SETTINGS_REGISTRY_SCHEMA_VERSION:
         status = "direct"
+    elif (registry_schema, registry_hash) in _DISPLAY_ONLY_REGISTRY_COMPATIBILITY:
+        status = "compatible"
+        compatibility_step = _DISPLAY_ONLY_REGISTRY_COMPATIBILITY[(registry_schema, registry_hash)]
     else:
-        # Bundle format v1 is introduced with V13.0.0. Unlike legacy raw config.json,
-        # there is no implicit Registry migration contract for arbitrary bundle
-        # schemas/hashes. Unknown Registry drift therefore fails closed until an
-        # explicit bundle migration path is implemented and tested.
+        # Arbitrary Registry drift remains fail closed. Only exact, explicitly
+        # reviewed compatibility transitions may pass this boundary.
         return {
             "status": "incompatible",
             "code": "SETTINGS_REGISTRY_COMPATIBILITY_UNSUPPORTED",
@@ -300,6 +315,8 @@ def _compatibility(source: Mapping[str, Any]) -> Dict[str, Any]:
             warnings.append("SOURCE_APP_NEWER_SAME_CONFIG_SCHEMA")
     except Exception:
         pass
+    if compatibility_step:
+        warnings.append(compatibility_step)
     return {
         "status": status,
         "source_registry_schema_version": registry_schema,
@@ -307,6 +324,7 @@ def _compatibility(source: Mapping[str, Any]) -> Dict[str, Any]:
         "source_registry_sha256": registry_hash,
         "target_registry_sha256": current_hash,
         "warnings": warnings,
+        "migration_steps": [compatibility_step] if compatibility_step else [],
     }
 
 
@@ -355,8 +373,9 @@ def parse_bundle(data: bytes) -> ParsedBundle:
     migrated_resolved = migrate_to_current(resolved, scope_keys=raw_keys)
     migrated_keys, scope_consumed, scope_removed = migrate_scope_keys(raw_keys)
     scope_steps = tuple(["MIG-SCOPE-CONSUME-" + key for key in scope_consumed] + ["MIG-SCOPE-REMOVE-" + key for key in scope_removed])
+    compatibility_steps = tuple(str(x) for x in (compatibility.get("migration_steps") or ()) if str(x))
     migration_steps = tuple(dict.fromkeys(
-        tuple(migrated_explicit.steps) + tuple(migrated_resolved.steps) + tuple(scope_steps)
+        compatibility_steps + tuple(migrated_explicit.steps) + tuple(migrated_resolved.steps) + tuple(scope_steps)
     ))
     if raw_mode == "portable_profile" or artifact_kind == "portable_profile":
         _validate_portable_scope(migrated_keys)
@@ -405,7 +424,7 @@ def parse_bundle(data: bytes) -> ParsedBundle:
     # A direct v1 bundle must carry the resolved source value for every current,
     # non-secret managed setting in scope. This is needed to detect inherited-default
     # drift without silently pinning the old default as an explicit target value.
-    if compatibility.get("status") == "direct":
+    if compatibility.get("status") in ("direct", "compatible"):
         missing_resolved = sorted(
             key for key in migrated_keys
             if key in managed and not managed[key].is_secret and key not in migrated_resolved.configured

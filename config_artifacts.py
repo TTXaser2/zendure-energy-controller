@@ -23,7 +23,6 @@ from config_bundle import (
 from config_migration import migrate_to_current
 from config_states import ConfigStateError, ConfigStateStore
 from settings_registry import SETTINGS_BY_KEY, managed_settings, PortabilityClass
-from settings_runtime import configured_view_from_raw
 from settings_service import SettingsService
 
 IMPORT_TOKEN_TTL_SECONDS = 300.0
@@ -250,9 +249,12 @@ class ConfigArtifactCoordinator:
                 continue
             issues.append(_issue("SECRET_OPERATION_INVALID", blocking=True, keys=(key,)))
 
-        # Compare source inherited values against current target defaults only after
-        # explicit overrides have been removed. This makes default drift visible.
-        target_view, _ = configured_view_from_raw(candidate)
+        # Resolve inherited values through the same canonical candidate parser as
+        # SettingsRuntime/SettingsManager. This includes compatibility-derived
+        # values such as SECOND_BATTERY_INTEGRATION_ENABLED and prevents a
+        # parallel, simplified default interpretation in the artifact path.
+        target_result = self.manager.validate_candidate(candidate, previous=self.manager.get_configured())
+        target_view = dict(target_result.configured)
         default_drift = []
         for key in known_scope:
             if key in parsed.explicit_values or key not in parsed.resolved_values:

@@ -99,7 +99,9 @@ class SingleInstanceOwnerTests(unittest.TestCase):
             """)
             p1=subprocess.Popen([sys.executable,"-c",script],cwd=tmp,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
             p2=subprocess.Popen([sys.executable,"-c",script],cwd=tmp,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-            out1,err1=p1.communicate(timeout=5); out2,err2=p2.communicate(timeout=5)
+            # The assertion is ownership exclusivity, not interpreter-start latency.
+            # Allow build/CI harness startup overhead without weakening the race contract.
+            out1,err1=p1.communicate(timeout=15); out2,err2=p2.communicate(timeout=15)
             owners=sum('OWNER' in out for out in (out1,out2))
             held=sum('HELD' in out for out in (out1,out2))
             self.assertEqual((1,1),(owners,held),(out1,err1,out2,err2))

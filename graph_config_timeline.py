@@ -75,6 +75,7 @@ def upsert_timeline_entry(
     source: str,
     known: bool = True,
     ensure_schema: bool = True,
+    commit: bool = True,
 ) -> bool:
     if ensure_schema:
         ensure_graph_config_schema(conn)
@@ -120,7 +121,8 @@ def upsert_timeline_entry(
         foll_tuple = (str(following[1]), int(following[2]), following[3], following[4], following[5], str(following[6] or ""), str(following[7] or ""))
         if foll_tuple == desired:
             conn.execute("DELETE FROM graph_config_timeline WHERE effective_from_ms=?", (int(following[0]),))
-    conn.commit()
+    if commit:
+        conn.commit()
     return True
 
 
@@ -157,6 +159,7 @@ def backfill_entries(
     *,
     source: str = "measurement_v4_backfill",
     presorted: bool = False,
+    commit: bool = True,
 ) -> Dict[str, int]:
     ensure_graph_config_schema(conn)
     inserted = 0
@@ -175,10 +178,12 @@ def backfill_entries(
             unknown += 1
         if upsert_timeline_entry(
             conn, ts_ms, digest,
-            overlay=overlay_from_parameters(params or {}), source=source, known=known, ensure_schema=False,
+            overlay=overlay_from_parameters(params or {}), source=source, known=known, ensure_schema=False, commit=False,
         ):
             inserted += 1
         last_hash = digest
+    if commit:
+        conn.commit()
     return {"hash_transitions_seen": seen, "entries_inserted": inserted, "unknown_snapshots": unknown}
 
 

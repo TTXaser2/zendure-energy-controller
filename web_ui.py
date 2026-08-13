@@ -1806,7 +1806,7 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
             session_token = verify_admin_request(request)
             payload = await request.json()
             result = settings_service.preview(payload, session_token, state.snapshot())
-            response = JSONResponse(result, status_code=200 if result.get("status") == "ready" else 422)
+            response = JSONResponse(result, status_code=200 if result.get("status") in ("ready", "no_changes") else 422)
             response.headers["Cache-Control"] = "no-store"
             return response
         except PermissionError as exc:
@@ -3464,7 +3464,7 @@ def build_status_page_legacy(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
     <div class="section">{heading_link('Diagnose', 'Sicherheit / Fallback', 2)}<div class="section-tools"><a href="#" onclick="expandSectionInfo('status-diagnostics'); return false;">Alle Infos auf- und zuklappen</a></div><div class="grid" id="status-diagnostics">
         {status_card('Aktive Betriebslogik', html.escape(path_human), html.escape(str(s['last_control_action'])), 'gray', 'Die aktive Betriebslogik beschreibt den aktuell verwendeten Entscheidungsweg des Controllers in verständlicher Form. Der technische Code bleibt darunter sichtbar, damit man Events, Graphdaten und Logausgaben eindeutig zuordnen kann.', path_code)}
         {status_card('Aktive Zykluszeit', f'{active_cycle_ms} ms', timing_details, 'gray', 'Die aktive Zykluszeit ist die Zeit, in der der Controller für einen Regelzyklus tatsächlich arbeitet: Datenquellen prüfen, Regelentscheidung berechnen, MQTT-Kommandopfad ausführen, Status aktualisieren und Messdaten schreiben. Nicht enthalten ist die geplante Wartezeit bis zum nächsten Regelintervall. Der langsamste Teil zeigt, welcher echte Abschnitt innerhalb des letzten Zyklus am meisten Zeit benötigt hat.')}
-        {status_card('Zendure Local API Timing', html.escape(local_api_mode), local_api_details, 'gray', 'Die HTTP-Abfrage läuft ab RC18 asynchron. Der Regelzyklus übernimmt nur den neuesten unveränderlichen Snapshot und wartet nie auf Netzwerk-I/O.', settings_group='Netzwerk')}
+        {status_card('Zendure Local API Timing', html.escape(local_api_mode), local_api_details, 'gray', 'Die HTTP-Abfrage läuft asynchron. Der Regelzyklus übernimmt nur den neuesten unveränderlichen Snapshot und wartet nie auf Netzwerk-I/O.', settings_group='Netzwerk')}
         {status_card('Fehler', str(s['consecutive_errors']), f'Letzter Fehler: {html.escape(str(s["last_error"]))}<br>Zeitpunkt: {html.escape(str(s.get("last_error_time", "-")))}<br>Safe-State: {s["safe_state_counter"]}x', 'red', 'Der Fehlerzähler zählt direkt aufeinanderfolgende Fehler. Safe-State bedeutet: Lade- und Entladeleistung werden auf 0 W gesetzt, um bei unsicheren Daten oder Kommunikationsproblemen keine unkontrollierte Energieverschiebung auszulösen.')}
         {status_card('Messdaten-Logging', measurement_mode, measurement_log_details, 'gray', 'Messdaten-Logging ist optional und nachgelagert. Standard speichert vollständige Reglerdiagnose inklusive MQTT-Stale-Aggregat und Szenario ohne Zendure. Erweitert ergänzt große Detaildaten für Simulation, What-if und tiefe MQTT-/Freshness-Analyse. USB-/SD-Fallback-Details sind Betriebsdiagnose und werden im Runtime-Log dokumentiert; die Regelung läuft weiter, auch wenn Logging pausiert oder fehlschlägt.', settings_group='Messdaten / Historie')}
         {status_card('Analyse-Weboberfläche', f'Port {replay_port}', analysis_link_html, 'gray', 'Die Analyse läuft bewusst getrennt vom Live-Regler. Der Dienst wird mitgeliefert, aber nicht automatisch aktiviert.')}
@@ -4156,6 +4156,8 @@ def _measurement_log_public_status(value: Any) -> str:
         "paused": "Pausiert",
         "fallback": "Fallback aktiv",
         "error": "Fehler",
+        "stale": "Warnung · Schreibstau",
+        "queue_full": "Warnung · Queue voll",
     }.get(raw, str(value or "—"))
 
 
@@ -4825,7 +4827,7 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "used_bytes": used_bytes,
             "total_bytes": total_bytes,
             "disk_used_percent": disk_used_pct,
-            "tone": "bad" if str(s.get("measurement_log_status") or "").lower() == "error" else ("warn" if bool(s.get("measurement_fallback_active")) else "ok"),
+            "tone": "bad" if (str(s.get("measurement_log_status") or "").lower() == "error" or str(s.get("measurement_db_status") or "").lower() == "error") else ("warn" if (bool(s.get("measurement_fallback_active")) or bool(s.get("measurement_db_write_stale")) or str(s.get("measurement_db_status") or "").lower() in ("stale", "queue_full")) else "ok"),
         },
         "resources": {
             "cpu_percent": metrics.get("cpu_percent"),
