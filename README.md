@@ -4,6 +4,8 @@
 
 V13.0.3 ist ein enger UI-/UX-Hotfix auf Basis der produktiven V13.0.2. Der Live-Regelalgorithmus und alle Runtime-/Storage-Sicherheitsverträge bleiben fachlich unverändert.
 
+<img width="1517" height="2318" alt="image" src="https://github.com/user-attachments/assets/2a53616d-e46f-44fa-b6cf-3dc890696053" />
+
 ## V13.0.3 Hotfix
 
 - Config-State-/Import-Preview verwendet kontextbezogene Titel.
