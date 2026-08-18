@@ -243,14 +243,16 @@ class SettingsService:
                     "secret": bool(spec and spec.is_secret),
                 })
 
+        commit_allowed = bool(not blocking and result.valid and diff)
+        # Confirmations only have meaning for a commit-capable preview. A blocked
+        # or no-op preview must never ask the user to confirm anything.
         confirmations = tuple(sorted({
             issue["code"] for issue in issues
-            if issue.get("severity") in ("confirm", "warning") and not issue.get("blocking")
+            if commit_allowed and issue.get("severity") in ("confirm", "warning") and not issue.get("blocking")
         }))
         now = time.monotonic()
         preview_id = ""
         expires_at_epoch = None
-        commit_allowed = bool(not blocking and result.valid and diff)
         if commit_allowed:
             preview_id = secrets.token_urlsafe(24)
             record = PreviewRecord(

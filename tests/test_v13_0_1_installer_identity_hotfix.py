@@ -20,8 +20,8 @@ class V1302InstallerIdentityHotfixTests(unittest.TestCase):
         }
 
     def test_evaluator_identity_is_single_sourced_from_release_version(self):
-        self.assertEqual("13.0.2", version.APP_VERSION)
-        self.assertEqual("v13.0.2-20260812", version.APP_BUILD_ID)
+        self.assertEqual("13.0.3", version.APP_VERSION)
+        self.assertEqual("v13.0.3-20260814", version.APP_BUILD_ID)
         self.assertEqual(version.APP_VERSION, EXPECTED_VERSION)
         self.assertEqual(version.APP_BUILD_ID, EXPECTED_BUILD_ID)
 
@@ -36,12 +36,12 @@ class V1302InstallerIdentityHotfixTests(unittest.TestCase):
 
     def test_installer_targets_hotfix_and_keeps_v13_0_1_as_only_source(self):
         script = (ROOT / "tools" / "update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_VERSION="v13_0_2"', script)
-        self.assertIn('EXPECTED_SOURCE_VERSION="13.0.1"', script)
-        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v13.0.1-20260811"', script)
-        self.assertIn('EXPECTED_TARGET_VERSION="13.0.2"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v13.0.2-20260812"', script)
-        self.assertIn('V13_0_2_SOURCE_MANIFEST.sha256', script)
+        self.assertIn('EXPECTED_VERSION="v13_0_3"', script)
+        self.assertIn('EXPECTED_SOURCE_VERSION="13.0.2"', script)
+        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v13.0.2-20260812"', script)
+        self.assertIn('EXPECTED_TARGET_VERSION="13.0.3"', script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v13.0.3-20260814"', script)
+        self.assertIn('V13_0_3_SOURCE_MANIFEST.sha256', script)
 
     def test_backfill_remains_after_successful_readiness_acceptance(self):
         script = (ROOT / "tools" / "update_zendure_controller.sh").read_text(encoding="utf-8")

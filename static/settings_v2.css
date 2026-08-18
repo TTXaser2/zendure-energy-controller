@@ -174,3 +174,8 @@ body.help-open{position:fixed;left:0;right:0;width:100%;overflow:hidden;touch-ac
 @media(max-width:700px){.config-state-grid{grid-template-columns:1fr}.config-state-grid .full{grid-column:auto}.config-state-item{grid-template-columns:1fr}.config-state-item-actions{justify-content:flex-start}.config-states-modal{width:calc(100vw - 12px);max-height:94vh}}
 /* V13.0.2: child confirmations/previews sit above the persistent config-state parent. */
 .modal-backdrop.modal-child{z-index:180}
+/* V13.0.3 config-preview UX: diagnostic details stay secondary and readable. */
+.technical-details{margin-top:14px;padding-top:10px;border-top:1px solid var(--line);color:var(--muted)}
+.technical-details summary{cursor:pointer;font-weight:700;color:var(--text)}
+.technical-details-body{display:grid;gap:6px;margin-top:10px;font-size:12px;overflow-wrap:anywhere}
+.technical-details-body code{white-space:normal;overflow-wrap:anywhere}

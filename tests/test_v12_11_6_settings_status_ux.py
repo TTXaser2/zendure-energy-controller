@@ -126,7 +126,7 @@ class V12116SettingsStatusUxTests(unittest.TestCase):
         self.assertIn("aria-invalid", SETTINGS_JS)
 
     def test_blocked_preview_has_visibly_disabled_save_button(self):
-        self.assertIn("Speichern nicht möglich", SETTINGS_JS)
+        self.assertNotIn("Speichern nicht möglich", SETTINGS_JS)
         self.assertIn(".modal-actions button:disabled", SETTINGS_CSS)
         self.assertIn("cursor:not-allowed", SETTINGS_CSS)
 

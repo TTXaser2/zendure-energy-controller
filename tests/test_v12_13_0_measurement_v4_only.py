@@ -72,12 +72,12 @@ class V12130MeasurementV4OnlyTests(unittest.TestCase):
 
     def test_installer_accepts_v12_13_0_and_targets_v13_0_2_without_v3_runtime(self):
         script = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_VERSION="v13_0_2"', script)
-        self.assertIn('EXPECTED_SOURCE_VERSION="13.0.1"', script)
-        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v13.0.1-20260811"', script)
-        self.assertIn('SOURCE_MODE="V13_0_1"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v13.0.2-20260812"', script)
-        self.assertIn('V13_0_2_SOURCE_MANIFEST.sha256', script)
+        self.assertIn('EXPECTED_VERSION="v13_0_3"', script)
+        self.assertIn('EXPECTED_SOURCE_VERSION="13.0.2"', script)
+        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v13.0.2-20260812"', script)
+        self.assertIn('SOURCE_MODE="V13_0_2"', script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v13.0.3-20260814"', script)
+        self.assertIn('V13_0_3_SOURCE_MANIFEST.sha256', script)
         self.assertIn('backfill_graph_config_timeline.py', script)
         self.assertNotIn('SOURCE_MODE="V12_12_2"', script)
 

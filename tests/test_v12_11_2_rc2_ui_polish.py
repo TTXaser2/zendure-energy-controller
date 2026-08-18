@@ -7,8 +7,8 @@ VER = (ROOT / 'version.py').read_text(encoding='utf-8')
 
 class TestV12112RC2UiPolish(unittest.TestCase):
     def test_version(self):
-        self.assertIn('13.0.2', VER)
-        self.assertIn('V13.0.2', VER)
+        self.assertIn('13.0.3', VER)
+        self.assertIn('V13.0.3', VER)
 
     def test_redundant_status_header_removed(self):
         self.assertNotIn('Live-Snapshot · Refresh ohne Seitenreload', WEB)

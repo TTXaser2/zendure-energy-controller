@@ -28,6 +28,27 @@ from settings_service import SettingsService
 IMPORT_TOKEN_TTL_SECONDS = 300.0
 MAX_IMPORT_TOKENS = 32
 
+# V13.0.3 UX classification: these steps are retained in raw diagnostics but
+# do not represent a user-relevant value/schema migration.
+TECHNICAL_COMPATIBILITY_TRANSITIONS = frozenset({
+    "REGISTRY_DISPLAY_METADATA_V13_0_2",
+})
+
+
+def _classify_migration_steps(steps: Sequence[str]) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
+    ordered = tuple(dict.fromkeys(str(step) for step in steps if str(step)))
+    technical = tuple(step for step in ordered if step in TECHNICAL_COMPATIBILITY_TRANSITIONS)
+    user_relevant = tuple(step for step in ordered if step not in TECHNICAL_COMPATIBILITY_TRANSITIONS)
+    return technical, user_relevant
+
+
+def _compatibility_warning_message(code: str) -> str:
+    if code == "SOURCE_APP_NEWER_SAME_CONFIG_SCHEMA":
+        return "Die Quelle stammt aus einer neueren ZEC-Version mit demselben Konfigurationsschema. Bitte Änderungen vor dem Speichern besonders sorgfältig prüfen."
+    if code == "LEGACY_RAW_CONFIG_NO_BUNDLE_INTEGRITY":
+        return "Diese ältere Konfigurationsdatei verwendet nicht das aktuelle ZEC-Exportformat. Herkunft und Vollständigkeit können deshalb nicht wie bei einem ZEC-Bundle geprüft werden. Bitte die Änderungen besonders sorgfältig prüfen."
+    return "Für diese Quelle ist ein zusätzlicher Kompatibilitäts- oder Migrationshinweis zu beachten. Bitte die Änderungen vor dem Speichern sorgfältig prüfen."
+
 
 def _issue(code: str, *, blocking: bool, keys: Sequence[str] = (), message: str = "", severity: str = "") -> Dict[str, Any]:
     return {
@@ -99,6 +120,7 @@ class ConfigArtifactCoordinator:
     def _inspect_response(item: ImportArtifact) -> Dict[str, Any]:
         p = item.parsed
         secret_items = p.secrets.get("items", {}) if isinstance(p.secrets, Mapping) else {}
+        technical_steps, user_migration_steps = _classify_migration_steps(p.migration_steps)
         return {
             "status": "inspected",
             "import_token": item.token,
@@ -110,6 +132,9 @@ class ConfigArtifactCoordinator:
             "source": dict(p.source_metadata),
             "compatibility": dict(p.compatibility),
             "migration_steps": list(p.migration_steps),
+            "technical_transition_steps": list(technical_steps),
+            "user_migration_steps": list(user_migration_steps),
+            "user_migration_count": len(user_migration_steps),
             "scope": dict(p.scope),
             "unknown_source_keys": list(p.scope.get("unknown_keys") or []),
             "secrets": {
@@ -271,15 +296,25 @@ class ConfigArtifactCoordinator:
                     message="Der geerbte Default der Quelle unterscheidet sich vom aktuellen Zieldefault; der Zieldefault bleibt geerbt.",
                 ))
 
+        technical_steps, user_migration_steps = _classify_migration_steps(parsed.migration_steps)
         for warning in parsed.compatibility.get("warnings", []) if isinstance(parsed.compatibility, Mapping) else []:
-            issues.append(_issue(str(warning), blocking=False))
-        if parsed.migration_steps:
-            issues.append(_issue("CONFIG_IMPORT_MIGRATED", blocking=False))
+            warning = str(warning)
+            if warning in TECHNICAL_COMPATIBILITY_TRANSITIONS:
+                continue
+            issues.append(_issue(warning, blocking=False, message=_compatibility_warning_message(warning)))
+        if user_migration_steps:
+            issues.append(_issue(
+                "CONFIG_IMPORT_MIGRATED", blocking=False,
+                message="Die Quelle enthält eine nutzerrelevante Konfigurationsmigration. Bitte die daraus resultierenden Änderungen vor dem Speichern prüfen.",
+            ))
 
         meta = {
             "source_metadata": dict(parsed.source_metadata),
             "compatibility": dict(parsed.compatibility),
             "migration_steps": list(parsed.migration_steps),
+            "technical_transition_steps": list(technical_steps),
+            "user_migration_steps": list(user_migration_steps),
+            "user_migration_count": len(user_migration_steps),
             "scope": {"mode": parsed.scope.get("mode"), "keys": list(known_scope)},
             "skipped_keys": list(unknown) if skip_unknown else [],
             "unknown_source_keys": list(unknown),

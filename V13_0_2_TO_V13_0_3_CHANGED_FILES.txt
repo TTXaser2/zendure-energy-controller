@@ -1,0 +1,44 @@
+ZEC V13.0.2 -> V13.0.3 changed files
+
+Status: A=new, M=modified, D=deleted
+
+A  BUILD_VALIDATION_V13_0_3.md
+M  README.md
+M  README_INSTALLATION.md
+A  RELEASE_INFO_V13_0_3.md
+A  SPEZIFIKATION_ZEC_V13_0_3_CONFIG_PREVIEW_UX_HOTFIX_V1_0.md
+A  V13_0_2_TO_V13_0_3_CHANGED_FILES.txt
+A  V13_0_3_SOURCE_MANIFEST.sha256
+A  V13_0_3_TARGETED_PROTECTED_DIFF.md
+M  config_artifacts.py
+M  settings_service.py
+M  static/settings_v2.css
+M  static/settings_v2.js
+M  tests/test_v12_11_2_rc10_status_preview.py
+M  tests/test_v12_11_2_rc19_status_diagnostics_stabilization.py
+M  tests/test_v12_11_2_rc20_fix5_runtime_readiness.py
+M  tests/test_v12_11_2_rc20_release_integration.py
+M  tests/test_v12_11_2_rc2_ui_polish.py
+M  tests/test_v12_11_2_rc4_ui_polish.py
+M  tests/test_v12_11_2_rc5_operations_dashboard.py
+M  tests/test_v12_11_2_rc6_ui_diagnostics_hotfix.py
+M  tests/test_v12_11_2_rc7_backlog_release.py
+M  tests/test_v12_11_2_rc8_backlog_completion.py
+M  tests/test_v12_11_2_rc9_ui_semantics.py
+M  tests/test_v12_11_5_settings_bugfix.py
+M  tests/test_v12_11_6_settings_status_ux.py
+M  tests/test_v12_11_rc13_support_tools.py
+M  tests/test_v12_11_rc14_ui_polish.py
+M  tests/test_v12_11_rc15_ui_graph.py
+M  tests/test_v12_11_rc16_performance.py
+M  tests/test_v12_11_rc17_sqlite_store.py
+M  tests/test_v12_11_rc18_import_tool.py
+M  tests/test_v12_12_1_help_mobile_quality.py
+M  tests/test_v12_13_0_measurement_v4_only.py
+M  tests/test_v13_0_1_installer_identity_hotfix.py
+M  tests/test_v13_0_2_hotfix.py
+A  tests/test_v13_0_3_preview_ux_hotfix.py
+M  tools/update_zendure_controller.sh
+M  version.py
+
+Changed/new/deleted entries: 38

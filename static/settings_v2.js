@@ -999,13 +999,70 @@
       target?.querySelector('input,select,button')?.focus({preventScroll:true});
     }, 50);
   }
+  function artifactPreviewContext(p) {
+    if (p?.operation === 'config_state_load') return 'state';
+    if (p?.operation === 'config_import') return p?.scope?.mode === 'portable_profile' ? 'profile' : 'import';
+    return '';
+  }
+  function previewTitleFor(p) {
+    if (p?.status === 'blocked') {
+      if (p?.operation === 'config_state_load') return 'Konfigurationsstand prüfen';
+      if (p?.operation === 'config_import') return 'Import prüfen';
+      return 'Änderungen können noch nicht gespeichert werden';
+    }
+    if (p?.operation === 'config_state_load') return 'Konfigurationsstand prüfen';
+    if (p?.operation === 'config_import') return 'Import prüfen';
+    return 'Änderungen prüfen';
+  }
+  function noChangeCopy(p) {
+    const context = artifactPreviewContext(p);
+    if (context === 'state') return '<div class="notice info"><b>Keine Änderungen erforderlich</b><div>Dieser Konfigurationsstand entspricht der aktuellen wirksamen Konfiguration. Es werden keine Einstellungen geändert.</div></div>';
+    if (context === 'profile') return '<div class="notice info"><b>Keine Änderungen erforderlich</b><div>Dieses Profil entspricht für die enthaltenen Einstellungen der aktuellen wirksamen Konfiguration. Es werden keine Einstellungen geändert.</div></div>';
+    if (context === 'import') return '<div class="notice info"><b>Keine Änderungen erforderlich</b><div>Diese Importdatei entspricht für die enthaltenen Einstellungen der aktuellen wirksamen Konfiguration. Es werden keine Einstellungen geändert.</div></div>';
+    return '<div class="notice info">Keine wirksame Änderung erkannt.</div>';
+  }
+  function compatibilityCopy(p) {
+    const technical = Array.isArray(p?.technical_transition_steps) ? p.technical_transition_steps : [];
+    if (!technical.length) return '';
+    const context = artifactPreviewContext(p);
+    if (context === 'state') return '<div class="notice info"><b>Kompatibel eingelesen</b><div>Dieser Konfigurationsstand stammt aus einer kompatiblen älteren ZEC-Version. Er wurde erfolgreich eingelesen. An den wirksamen Regelwerten sind keine Änderungen erforderlich.</div></div>';
+    if (context === 'profile') return '<div class="notice info"><b>Kompatibel eingelesen</b><div>Dieses Profil stammt aus einer kompatiblen älteren ZEC-Version und wurde erfolgreich eingelesen. Für die enthaltenen Einstellungen sind keine Änderungen erforderlich.</div></div>';
+    return '<div class="notice info"><b>Kompatibel eingelesen</b><div>Die Quelle stammt aus einer kompatiblen älteren ZEC-Version und wurde erfolgreich eingelesen.</div></div>';
+  }
+  function technicalPreviewDetails(p, issues) {
+    if (app.mode !== 'expert' || !artifactPreviewContext(p)) return '';
+    const source = p.source_metadata || {};
+    const compatibility = p.compatibility || {};
+    const migrationSteps = Array.isArray(p.migration_steps) ? p.migration_steps : [];
+    const technicalSteps = Array.isArray(p.technical_transition_steps) ? p.technical_transition_steps : [];
+    const userSteps = Array.isArray(p.user_migration_steps) ? p.user_migration_steps : [];
+    const codes = [...new Set((issues || []).map(i=>i?.code).filter(Boolean))];
+    const rows = [
+      ['Quellversion', source.app_version || '—'],
+      ['Registry-Schema Quelle', source.settings_registry_schema_version || compatibility.source_registry_schema_version || '—'],
+      ['Registry-Schema Ziel', compatibility.target_registry_schema_version || '—'],
+      ['Kompatibilitätsstatus', compatibility.status || '—'],
+      ['Technische Übergänge', technicalSteps.length ? technicalSteps.join(', ') : 'keine'],
+      ['Nutzerrelevante Migrationen', userSteps.length ? userSteps.join(', ') : 'keine'],
+      ['Alle Migrationsschritte', migrationSteps.length ? migrationSteps.join(', ') : 'keine'],
+      ['Issue-Codes', codes.length ? codes.join(', ') : 'keine'],
+    ];
+    return `<details class="technical-details"><summary>Technische Details</summary><div class="technical-details-body">${rows.map(([label,value])=>`<div><b>${esc(label)}:</b> <code>${esc(value)}</code></div>`).join('')}</div></details>`;
+  }
+  function confirmationCopy(code, issues) {
+    const issue=(issues||[]).find(i=>i?.code===code);
+    const message=issue?.message && issue.message !== code ? issue.message : 'Die zugehörige Warnung wurde geprüft.';
+    return `Ich habe den Hinweis geprüft und möchte die Änderung trotzdem speichern: ${message}`;
+  }
   function openPreview() {
     const p = app.preview || {};
     const issues = Array.isArray(p.issues) ? p.issues : [];
     const diff = normalizedPreviewDiff(p.diff);
     const confirmations = Array.isArray(p.confirmations_required) ? p.confirmations_required : [];
-    $('#previewTitle').textContent = p.status === 'blocked' ? 'Änderungen können noch nicht gespeichert werden' : 'Änderungen prüfen';
+    const noChanges = p.status === 'no_changes' || (!diff.length && p.commit_allowed === false && !issues.some(i=>i?.blocking));
+    $('#previewTitle').textContent = previewTitleFor(p);
     let out = '';
+    if (noChanges) out += noChangeCopy(p) + compatibilityCopy(p);
     if (issues.length) out += `<ul class="issue-list">${issues.map(i=>{
       const keys = (i.keys || []).filter(key => settingByKey(key));
       const targets = logicalIssueTargets(keys);
@@ -1016,19 +1073,26 @@
       return `<li class="${esc(i.severity || 'error')}"><div class="issue-copy"><span>${esc(i.message || 'Die Änderung ist nicht zulässig.')}</span>${source}${code}</div>${links}</li>`;
     }).join('')}</ul>`;
     if (diff.length) out += diff.map(d=>`<div class="diff-row"><div><b>${esc(d.label)}</b><div class="diff-values">${esc(fmt(d.old))} <span class="diff-arrow">→</span> ${esc(fmt(d.new))}</div></div><span class="meta-pill ${d.apply_class==='restart_required'?'restart':'live'}">${esc(d.apply_text)}</span></div>`).join('');
-    else if (!issues.length) out += '<div class="notice info">Keine wirksame Änderung erkannt.</div>';
-    if (confirmations.length) out += confirmations.map(c=>`<label class="confirmation"><input type="checkbox" data-confirm="${esc(c)}"><span>Hinweis <b>${esc(c)}</b> wurde geprüft und wird bewusst bestätigt.</span></label>`).join('');
+    else if (!issues.length && !noChanges) out += noChangeCopy(p);
+    if (confirmations.length && p.status === 'ready' && p.preview_id) out += confirmations.map(c=>`<label class="confirmation"><input type="checkbox" data-confirm="${esc(c)}"><span>${esc(confirmationCopy(c,issues))}</span></label>`).join('');
+    out += technicalPreviewDetails(p, issues);
     $('#previewBody').innerHTML = out;
     $$('[data-issue-key]').forEach(button => button.onclick = () => jumpToSetting(button.dataset.issueKey));
     $$('[data-issue-help]').forEach(button => button.onclick = () => openIssueHelp(button.dataset.issueHelp, button));
-    $('#commitChanges').disabled = p.status !== 'ready' || !p.preview_id;
-    $('#commitChanges').textContent = p.status === 'ready' && p.preview_id ? 'Speichern' : 'Speichern nicht möglich';
-    $('#previewBack').textContent = 'Zurück';
+    const commitButton=$('#commitChanges');
+    const backButton=$('#previewBack');
+    const closeButton=$('#previewClose');
+    const commitCapable=p.status === 'ready' && Boolean(p.preview_id) && p.commit_allowed !== false;
+    commitButton.hidden = noChanges;
+    commitButton.disabled = !commitCapable;
+    commitButton.textContent = 'Speichern';
+    backButton.textContent = noChanges && !app.previewReturnToConfigStates ? 'Schließen' : 'Zurück';
+    closeButton.hidden = noChanges;
     app.modalMode = 'preview';
     lockPreviewScroll();
     $('#previewModal').classList.toggle('modal-child', Boolean(app.previewReturnToConfigStates));
     $('#previewModal').classList.add('open');
-    $('#previewClose')?.focus({preventScroll:true});
+    (noChanges ? backButton : closeButton)?.focus({preventScroll:true});
   }
   function closePreview() {
     const returnToConfigStates=Boolean(app.previewReturnToConfigStates&&$('#configStatesModal')?.classList.contains('open'));
@@ -1096,6 +1160,8 @@
     $('#previewTitle').textContent = title;
     $('#previewBody').innerHTML = bodyHtml;
     $('#previewBack').textContent = 'Abbrechen';
+    $('#previewClose').hidden = false;
+    $('#commitChanges').hidden = false;
     $('#commitChanges').textContent = primaryLabel;
     $('#commitChanges').disabled = false;
     lockPreviewScroll();
@@ -1224,7 +1290,10 @@
             const inspected=await inspectConfigFile(file,expert&&$('#legacyConfigImport')?.checked);
             app.configImportInspection=inspected;
             const unknown=inspected.unknown_source_keys||[];const secretAvailable=inspected.secrets?.available||[];
-            $('#configImportInfo').textContent=`Quelle ${inspected.source?.app_version||'—'} · ${inspected.scope?.keys?.length||0} Scope-Keys · ${inspected.migration_steps?.length||0} Migrationen${unknown.length?` · ${unknown.length} unbekannte Keys`:''}${inspected.legacy_raw?' · Legacy ohne Bundle-Integrität':''}. Entscheidungen prüfen und anschließend Preview erstellen.`;
+            const userMigrations=inspected.user_migration_steps||[];const technicalTransitions=inspected.technical_transition_steps||[];
+            const migrationText=userMigrations.length?` · ${userMigrations.length} nutzerrelevante Migration${userMigrations.length===1?'':'en'}`:'';
+            const compatibilityText=!userMigrations.length&&technicalTransitions.length?' · kompatible ältere Quelle':'';
+            $('#configImportInfo').textContent=`Quelle ${inspected.source?.app_version||'—'} · ${inspected.scope?.keys?.length||0} Scope-Keys${migrationText}${compatibilityText}${unknown.length?` · ${unknown.length} unbekannte Keys`:''}${inspected.legacy_raw?' · Legacy ohne Bundle-Integrität':''}. Entscheidungen prüfen und anschließend Preview erstellen.`;
             const unknownWrap=$('#skipUnknownImportWrap');if(unknownWrap)unknownWrap.hidden=!(expert&&unknown.length);
             const secretWrap=$('#importSecretOperationWrap');if(secretWrap)secretWrap.hidden=!(expert&&secretAvailable.length);
             if(unknown.length&&!expert){toast('Import enthält unbekannte Schlüssel. Überspringen ist nur im Expertenmodus möglich.');return;}

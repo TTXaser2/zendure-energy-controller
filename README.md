@@ -1,10 +1,18 @@
-# Zendure Energy Controller V13.0.2
+# Zendure Energy Controller V13.0.3
 
-**Build-ID:** `v13.0.2-20260812`
+**Build-ID:** `v13.0.3-20260814`
 
-V13.0.2 ist ein gezielter Robustheits- und UI-Bugfix auf Basis von V13.0.1. Der Live-Regelalgorithmus bleibt fachlich unverändert. AUTO, Harvest-Zielwertbildung, Cross-Charge, NIGHT, Command Lifecycle/Resync, Single-Owner und Measurement V4 sind No-Regression-Bereiche.
+V13.0.3 ist ein enger UI-/UX-Hotfix auf Basis der produktiven V13.0.2. Der Live-Regelalgorithmus und alle Runtime-/Storage-Sicherheitsverträge bleiben fachlich unverändert.
 
-## V13.0.2 Hotfix
+## V13.0.3 Hotfix
+
+- Config-State-/Import-Preview verwendet kontextbezogene Titel.
+- No-op zeigt verständlich „Keine Änderungen erforderlich“, ohne Bestätigungscheckboxen oder toten Commitbutton.
+- Der bekannte V13.0.1-Registry-Display-Metadata-Übergang bleibt technisch diagnostizierbar, zählt aber nicht mehr als nutzerrelevante Migration.
+- Technische Codes erscheinen nur im Expertenbereich „Technische Details“.
+- Echte Diffs, Validation, CAS, Commit und echte Bestätigungen bleiben erhalten.
+
+## V13.0.2 Basisfunktionen
 
 Der Release härtet die in V13 eingeführten Konfigurationsstände/Import-/Exportpfade sowie den asynchronen SQLite-Graphstore:
 
