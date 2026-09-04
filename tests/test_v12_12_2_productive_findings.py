@@ -87,24 +87,52 @@ class SingleInstanceOwnerTests(unittest.TestCase):
     def test_nearly_simultaneous_starts_have_exactly_one_owner(self):
         with tempfile.TemporaryDirectory() as tmp:
             lock_path = os.path.join(tmp, "owner.lock")
+            go_path = os.path.join(tmp, "go")
+            release_path = os.path.join(tmp, "release")
+            ready_paths = [os.path.join(tmp, f"ready-{i}") for i in (1, 2)]
+            result_paths = [os.path.join(tmp, f"result-{i}") for i in (1, 2)]
             script = textwrap.dedent(f"""
-                import sys,time
+                import pathlib,sys,time
                 sys.path.insert(0,{str(Path(__file__).resolve().parents[1])!r})
                 from instance_owner import acquire_instance_lock, InstanceLockHeldError, INSTANCE_LOCK_EXIT_CODE
+                ready=pathlib.Path(sys.argv[1]); result=pathlib.Path(sys.argv[2])
+                go=pathlib.Path({go_path!r}); release=pathlib.Path({release_path!r})
+                ready.write_text('ready', encoding='utf-8')
+                deadline=time.monotonic()+10
+                while not go.exists():
+                    if time.monotonic()>deadline: raise SystemExit(90)
+                    time.sleep(0.005)
                 try:
                     owner=acquire_instance_lock({lock_path!r}, build_id='race')
                 except InstanceLockHeldError:
+                    result.write_text('HELD', encoding='utf-8')
                     print('HELD', flush=True); raise SystemExit(INSTANCE_LOCK_EXIT_CODE)
-                print('OWNER', flush=True); time.sleep(0.5); owner.close()
+                result.write_text('OWNER', encoding='utf-8')
+                print('OWNER', flush=True)
+                while not release.exists():
+                    if time.monotonic()>deadline: owner.close(); raise SystemExit(91)
+                    time.sleep(0.005)
+                owner.close()
             """)
-            p1=subprocess.Popen([sys.executable,"-c",script],cwd=tmp,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-            p2=subprocess.Popen([sys.executable,"-c",script],cwd=tmp,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-            # The assertion is ownership exclusivity, not interpreter-start latency.
-            # Allow build/CI harness startup overhead without weakening the race contract.
-            out1,err1=p1.communicate(timeout=15); out2,err2=p2.communicate(timeout=15)
-            owners=sum('OWNER' in out for out in (out1,out2))
-            held=sum('HELD' in out for out in (out1,out2))
-            self.assertEqual((1,1),(owners,held),(out1,err1,out2,err2))
+            procs=[
+                subprocess.Popen(
+                    [sys.executable, "-c", script, ready_paths[i], result_paths[i]],
+                    cwd=tmp, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                )
+                for i in range(2)
+            ]
+            deadline=time.monotonic()+10
+            while not all(os.path.exists(path) for path in ready_paths):
+                self.assertLess(time.monotonic(), deadline, "subprocess readiness barrier timed out")
+                time.sleep(0.005)
+            Path(go_path).write_text("go", encoding="utf-8")
+            while not all(os.path.exists(path) for path in result_paths):
+                self.assertLess(time.monotonic(), deadline, "subprocess race result timed out")
+                time.sleep(0.005)
+            results=[Path(path).read_text(encoding="utf-8") for path in result_paths]
+            Path(release_path).write_text("release", encoding="utf-8")
+            outputs=[proc.communicate(timeout=15) for proc in procs]
+            self.assertEqual(["HELD", "OWNER"], sorted(results), outputs)
 
     def test_hard_process_death_releases_kernel_lock(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -1,0 +1,2 @@
+Browser JavaScript syntax: 2/2 PASS via node --check over static/*.js.
+Node.js remains build-time validation only and is not a Pi runtime prerequisite.

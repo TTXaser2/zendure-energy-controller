@@ -1,0 +1,22 @@
+ZEC V14 WP1 Engineering Handoff – file delta versus verified V13.0.3
+
+NEW:
+graph_core_v3.py
+tools/rebuild_graph_core_v3.py
+tools/benchmark_graph_core_v3.py
+tests/test_v14_graph_core_v3_wp1.py
+validation/V14_WP1_REAL_VS_INTEGER_BENCHMARK.json
+validation/V14_WP1_SYNTHETIC_REBUILD_REPORT.json
+ZEC_V14_WP1_GRAPH_CORE_V3_IMPLEMENTATION_REPORT_20260902.md
+ZEC_V14_WP1_NOT_FOR_PRODUCTION_INSTALLATION.md
+V14_WP1_CHANGED_FILES.txt
+V14_WP1_SOURCE_MANIFEST.sha256
+
+MODIFIED EXISTING V13.0.3 FILES:
+none
+
+DELETED:
+none
+
+NO-REGRESSION:
+All 407 files covered by V13_0_3_SOURCE_MANIFEST.sha256 remain byte-identical.

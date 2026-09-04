@@ -1,0 +1,23 @@
+{
+  "integer_db_reduction_percent": 49.86,
+  "integer_selected_if_no_regression": true,
+  "real": {
+    "bytes_per_row": 144.097,
+    "db_bytes": 14409728,
+    "query_24h_median_ms": 33.694,
+    "query_48h_median_ms": 76.506,
+    "query_uses_integer_primary_key": 1,
+    "write_seconds": 1.44
+  },
+  "rows": 100000,
+  "scale": 10,
+  "scaled_integer": {
+    "bytes_per_row": 72.253,
+    "db_bytes": 7225344,
+    "query_24h_median_ms": 31.703,
+    "query_48h_median_ms": 73.444,
+    "query_uses_integer_primary_key": 1,
+    "write_seconds": 1.561
+  },
+  "workdir": "/tmp/wp2_storage_bench"
+}

@@ -1,0 +1,66 @@
+{
+  "hours": 48.0,
+  "incremental_bytes_per_entity_raw_sample": 49.458,
+  "incremental_physical_storage_bytes": 5697536,
+  "logical_only": {
+    "counts": {
+      "command_events": 1,
+      "entities": 2,
+      "entity_1min": 0,
+      "entity_raw": 0,
+      "system_1min": 2880,
+      "system_raw": 57600,
+      "topology": 2
+    },
+    "db_bytes": 5763072,
+    "duration_s": 7.751,
+    "end_ms": 1781272797000,
+    "integrity": "ok",
+    "queries": {
+      "controlled_48h_1min_median_ms": 7.602,
+      "controlled_points": 2880,
+      "coverage_entity_count": 2,
+      "coverage_median_ms": 31.802,
+      "entities_median_ms": 0.455,
+      "entity_count": 2,
+      "physical_unit_48h_1min_median_ms": null,
+      "physical_unit_48h_json_bytes": null,
+      "physical_unit_query_tracemalloc_peak_bytes": null,
+      "primary_48h_1min_median_ms": 5.357,
+      "primary_points": 2880
+    },
+    "start_ms": 1781100000000
+  },
+  "note": "Synthetic benchmark; incremental bytes include entity raw, 1min aggregates, coverage and topology metadata.",
+  "sample_interval_s": 3,
+  "samples": 57600,
+  "two_physical_units": {
+    "counts": {
+      "command_events": 1,
+      "entities": 4,
+      "entity_1min": 5760,
+      "entity_raw": 115200,
+      "system_1min": 2880,
+      "system_raw": 57600,
+      "topology": 4
+    },
+    "db_bytes": 11460608,
+    "duration_s": 15.11,
+    "end_ms": 1781272797000,
+    "integrity": "ok",
+    "queries": {
+      "controlled_48h_1min_median_ms": 7.621,
+      "controlled_points": 2880,
+      "coverage_entity_count": 4,
+      "coverage_median_ms": 32.916,
+      "entities_median_ms": 0.503,
+      "entity_count": 4,
+      "physical_unit_48h_1min_median_ms": 51.791,
+      "physical_unit_48h_json_bytes": 107863,
+      "physical_unit_query_tracemalloc_peak_bytes": 1841555,
+      "primary_48h_1min_median_ms": 5.495,
+      "primary_points": 2880
+    },
+    "start_ms": 1781100000000
+  }
+}

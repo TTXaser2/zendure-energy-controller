@@ -28,10 +28,10 @@ def operational_settings():
     return out
 
 
-class V12120SettingsHelpContractTests(unittest.TestCase):
+class V12110SettingsHelpContractTests(unittest.TestCase):
     def test_registry_help_coverage_and_depth(self):
         ops = operational_settings()
-        self.assertEqual(212, len(SETTINGS))
+        self.assertEqual(211, len(SETTINGS))
         self.assertEqual(171, len(ops))
         self.assertEqual(12, len({s.category for s in ops}))
         self.assertEqual(69, len({(s.category, s.section) for s in ops}))

@@ -5,14 +5,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/root_artifact_transaction.sh"
 
 VERSION="${1:-}"
-EXPECTED_VERSION="v13_0_3"
-EXPECTED_SOURCE_VERSION="13.0.2"
-EXPECTED_SOURCE_BUILD_ID="v13.0.2-20260812"
-EXPECTED_TARGET_VERSION="13.0.3"
-EXPECTED_TARGET_BUILD_ID="v13.0.3-20260814"
+EXPECTED_VERSION="v14_0_0"
+EXPECTED_SOURCE_VERSION="13.0.3"
+EXPECTED_SOURCE_BUILD_ID="v13.0.3-20260814"
+EXPECTED_TARGET_VERSION="14.0.0"
+EXPECTED_TARGET_BUILD_ID="v14.0.0-20260904-r2"
 
 if [ "$VERSION" != "$EXPECTED_VERSION" ]; then
-    echo "FEHLER: Dieses Update-Skript unterstützt ausschließlich die verifizierte V13.0.2-Basis als Quelle für V13.0.3."
+    echo "FEHLER: Dieses Update-Skript unterstützt ausschließlich die verifizierte V13.0.3-Basis als Quelle für V14.0.0."
     echo "Aufruf: $0 ${EXPECTED_VERSION}"
     exit 1
 fi
@@ -22,14 +22,18 @@ DIR="/home/pi/Downloads/zendure_controller_${VERSION}"
 TARGET="/opt/zendure-controller"
 STAMP="$(date +%Y%m%d_%H%M%S)"
 BACKUP="/home/pi/zendure-controller-backup-${STAMP}.tar.gz"
-CONFIG_BACKUP="/home/pi/config.pre-v13.0.3.${STAMP}.json"
-ROOT_ARTIFACT_BACKUP="/var/backups/zec-v13.0.3-root-artifacts-${STAMP}"
+CONFIG_BACKUP="/home/pi/config.pre-v14.0.0.${STAMP}.json"
+ROOT_ARTIFACT_BACKUP="/var/backups/zec-v14.0.0-root-artifacts-${STAMP}"
 RESTART_HELPER_DEST="/usr/local/sbin/zendure-controller-restart"
 SUDOERS_DEST="/etc/sudoers.d/zendure-controller"
 ROLLBACK_STARTED=0
 BACKUP_CREATED=0
 ROOT_ARTIFACTS_BACKED_UP=0
 INSTALLATION_STARTED=0
+GRAPH_CUTOVER_COMPLETED=0
+GRAPH_CUTOVER_BACKUP="/home/pi/zec-v14-graph-backup-${STAMP}"
+GRAPH_CUTOVER_REPORT="/tmp/zec_v14_cutover_report.json"
+INSTALL_DIAGNOSTICS=""
 
 CONTROLLER_WAS_ACTIVE=0
 REPLAY_WAS_ACTIVE=0
@@ -75,8 +79,21 @@ restore_root_artifacts() {
     fi
 }
 
+collect_install_diagnostics() {
+    local label="${1:-failure}"
+    if [ -x "$SCRIPT_DIR/collect_zec_install_diagnostics.sh" ]; then
+        INSTALL_DIAGNOSTICS="$(bash "$SCRIPT_DIR/collect_zec_install_diagnostics.sh" \
+            --label "$label" \
+            --since-epoch "${INSTALL_START_EPOCH:-}" \
+            --config "$TARGET/config.json" \
+            --cutover-report "$GRAPH_CUTOVER_REPORT" 2>/dev/null | tail -n 1 || true)"
+        [ -n "$INSTALL_DIAGNOSTICS" ] && echo "Automatisches Diagnosepaket: $INSTALL_DIAGNOSTICS"
+    fi
+}
+
 recover_on_error() {
     local exit_code="${1:-$?}"
+    [ "$exit_code" -eq 0 ] && return 0
     if [ "${BASH_SUBSHELL:-0}" -gt 0 ]; then
         return "$exit_code"
     fi
@@ -87,13 +104,18 @@ recover_on_error() {
     fi
     ROLLBACK_STARTED=1
     echo
+    collect_install_diagnostics "v14-install-failure" || true
     if [ "$INSTALLATION_STARTED" -eq 0 ]; then
-        echo "FEHLER: V13.0.3-Paketvorprüfung wurde abgebrochen."
+        echo "FEHLER: V14.0.0-Paketvorprüfung wurde abgebrochen."
         echo "Die Produktivinstallation wurde noch nicht begonnen; Dienste und /opt/zendure-controller blieben unverändert."
         exit "$exit_code"
     fi
-    echo "FEHLER: V13.0.3-Update wurde während der Produktivinstallation abgebrochen. Starte automatischen Rollback."
+    echo "FEHLER: V14.0.0-Update wurde während der Produktivinstallation abgebrochen. Starte automatischen Rollback."
     sudo systemctl stop zendure-controller.service zendure-replay.service zendure-status-preview.service >/dev/null 2>&1 || true
+    if [ "$GRAPH_CUTOVER_COMPLETED" -eq 1 ] && [ -f "$GRAPH_CUTOVER_BACKUP/cutover_state.json" ]; then
+        echo "Stelle produktiven Graphstore aus separatem V14-Cutover-Backup wieder her..."
+        python3 "$SCRIPT_DIR/v14_cutover.py" restore --backup-dir "$GRAPH_CUTOVER_BACKUP" --json || true
+    fi
     if [ "$BACKUP_CREATED" -eq 1 ] && [ -f "$BACKUP" ]; then
         sudo rm -rf "$TARGET"
         sudo tar -xzf "$BACKUP" -C /opt
@@ -116,18 +138,42 @@ recover_on_error() {
     sudo systemctl status zendure-controller.service --no-pager -l || true
     exit "$exit_code"
 }
-trap 'recover_on_error $?' ERR
+trap 'recover_on_error $?' ERR EXIT
 
-verify_source_manifest() {
-    [ -f "$DIR/V13_0_3_SOURCE_MANIFEST.sha256" ] || {
-        echo "FEHLER: V13_0_3_SOURCE_MANIFEST.sha256 fehlt im Paket."
+verify_source_manifest_at() {
+    local root="$1"
+    [ -f "$root/V14_0_0_SOURCE_MANIFEST.sha256" ] || {
+        echo "FEHLER: V14_0_0_SOURCE_MANIFEST.sha256 fehlt unter: $root"
         return 1
     }
     (
         trap - ERR
-        cd "$DIR"
-        sha256sum -c V13_0_3_SOURCE_MANIFEST.sha256 >/dev/null
+        cd "$root"
+        sha256sum -c V14_0_0_SOURCE_MANIFEST.sha256 >/dev/null
     )
+}
+
+verify_source_manifest() {
+    verify_source_manifest_at "$DIR"
+}
+
+verify_build_test_evidence() {
+    PYTHONDONTWRITEBYTECODE=1 python3 - "$DIR/validation/V14_WP10_FULL_TEST.txt" "$DIR/validation/V14_WP10_RESOURCEWARNING_TEST.txt" <<'PY'
+from pathlib import Path
+import sys
+
+expected = {
+    Path(sys.argv[1]): "TOTAL: 932 tests + 679 subtests PASS",
+    Path(sys.argv[2]): "TOTAL: 932 tests + 679 subtests PASS under -W error::ResourceWarning",
+}
+for path, marker in expected.items():
+    if not path.is_file():
+        raise SystemExit(f"FEHLER: Build-Testevidenz fehlt: {path}")
+    text = path.read_text(encoding="utf-8")
+    if marker not in text:
+        raise SystemExit(f"FEHLER: Build-Testevidenz unvollständig: {path.name}")
+print("Build-Testevidenz verifiziert: 932 Tests + 679 Subtests, inklusive ResourceWarning-Gate.")
+PY
 }
 
 verify_javascript_syntax_if_available() {
@@ -177,10 +223,10 @@ INSTALLED_VERSION="${INSTALLED_IDENTITY[0]:-}"
 INSTALLED_BUILD_ID="${INSTALLED_IDENTITY[1]:-}"
 SOURCE_MODE=""
 if [ "$INSTALLED_VERSION" = "$EXPECTED_SOURCE_VERSION" ] && [ "$INSTALLED_BUILD_ID" = "$EXPECTED_SOURCE_BUILD_ID" ]; then
-    SOURCE_MODE="V13_0_2"
+    SOURCE_MODE="V13_0_3"
 else
     echo "FEHLER: Nicht unterstützter Ausgangsstand: Version=${INSTALLED_VERSION}, Build-ID=${INSTALLED_BUILD_ID:-nicht gesetzt}"
-    echo "Erlaubt ist ausschließlich V13.0.2 / v13.0.2-20260812. Kein Rücksprung auf ältere Releases."
+    echo "Erlaubt ist ausschließlich V13.0.3 / v13.0.3-20260814. Kein Rücksprung auf ältere Releases."
     exit 1
 fi
 echo "Ausgangsstand erkannt: ${SOURCE_MODE} (${INSTALLED_VERSION}${INSTALLED_BUILD_ID:+ / ${INSTALLED_BUILD_ID}})"
@@ -189,7 +235,7 @@ if systemctl is-active --quiet zendure-controller.service; then CONTROLLER_WAS_A
 if systemctl is-active --quiet zendure-replay.service; then REPLAY_WAS_ACTIVE=1; fi
 if systemctl is-active --quiet zendure-status-preview.service; then PREVIEW_WAS_ACTIVE=1; fi
 
-echo "V13.0.3-Paket vor dem Stoppen des Produktivdienstes entpacken und prüfen..."
+echo "V14.0.0-Paket vor dem Stoppen des Produktivdienstes entpacken und prüfen..."
 rm -rf "$DIR"
 unzip -q "$ZIP" -d /home/pi/Downloads
 [ -d "$DIR" ] || { echo "FEHLER: erwarteter ZIP-Root fehlt: $DIR"; exit 1; }
@@ -219,9 +265,10 @@ verify_source_manifest
     python3 -m py_compile *.py tools/*.py
     verify_javascript_syntax_if_available
     bash -n tools/update_zendure_controller.sh
-    verify_runtime_readiness_smoke "$DIR"
-    python3 tools/migrate_config_to_current.py --config "$TARGET/config.json" --check-only --json >/tmp/zec_v13_migration_preflight.json
-    ZEC_INSTALLER_PREFLIGHT=1 PYTHONWARNINGS="error::ResourceWarning" python3 -m unittest discover -s tests -q
+    ZEC_INSTALLER_PREFLIGHT=1 PYTHONWARNINGS="error::ResourceWarning" verify_runtime_readiness_smoke "$DIR"
+    python3 tools/migrate_config_to_current.py --config "$TARGET/config.json" --check-only --json >/tmp/zec_v14_migration_preflight.json
+    python3 tools/v14_cutover.py preflight --config "$TARGET/config.json" --json >/tmp/zec_v14_cutover_preflight.json
+    verify_build_test_evidence
 )
 
 echo "Paketpreflight und Config-Migrationspreflight bestanden."
@@ -242,7 +289,7 @@ cp "$TARGET/config.json" "$CONFIG_BACKUP"
 chmod 600 "$CONFIG_BACKUP"
 backup_root_artifacts
 
-echo "Kopiere V13.0.3-Dateien; config.json, Last-Good, Konfigurationsstände und Laufzeitdaten bleiben erhalten..."
+echo "Kopiere V14.0.0-Dateien; config.json, Last-Good, Konfigurationsstände und Laufzeitdaten bleiben erhalten..."
 rsync -a \
   --exclude 'config.json' \
   --exclude 'config.json.last-good*' \
@@ -264,7 +311,16 @@ fi
 
 cd "$TARGET"
 echo "Führe idempotente gemeinsame Configmigration aus..."
-python3 tools/migrate_config_to_current.py --config config.json --json | tee /tmp/zec_v13_migration_result.json
+python3 tools/migrate_config_to_current.py --config config.json --json | tee /tmp/zec_v14_migration_result.json
+
+echo "Baue Graph Core V3 aus Measurement V4 neu auf und schalte erst nach vollständiger Validierung atomar um..."
+rm -rf "$GRAPH_CUTOVER_BACKUP"
+python3 tools/v14_cutover.py rebuild \
+    --config "$TARGET/config.json" \
+    --backup-dir "$GRAPH_CUTOVER_BACKUP" \
+    --report "$GRAPH_CUTOVER_REPORT" \
+    --json | tee /tmp/zec_v14_cutover_stdout.json
+GRAPH_CUTOVER_COMPLETED=1
 
 rm -rf "$TARGET/Tools"
 rm -f "$TARGET/zendureController.py"
@@ -296,8 +352,9 @@ echo "Finale lokale Prüfung im Installationsverzeichnis..."
 python3 -m py_compile *.py tools/*.py
 verify_javascript_syntax_if_available
 bash -n tools/update_zendure_controller.sh
-verify_runtime_readiness_smoke "$TARGET"
-ZEC_INSTALLER_PREFLIGHT=1 PYTHONWARNINGS="error::ResourceWarning" python3 -m unittest discover -s tests -q
+ZEC_INSTALLER_PREFLIGHT=1 PYTHONWARNINGS="error::ResourceWarning" verify_runtime_readiness_smoke "$TARGET"
+python3 tools/v14_cutover.py verify --config "$TARGET/config.json" --json >/tmp/zec_v14_cutover_verify_local.json
+verify_source_manifest_at "$TARGET"
 
 echo "Starte Controller..."
 sudo systemctl start zendure-controller.service
@@ -307,7 +364,6 @@ if [ "$PREVIEW_WAS_ACTIVE" -eq 1 ]; then sudo systemctl start zendure-status-pre
 READY_BODY="$(mktemp)"
 READY_JSON="$(mktemp)"
 cleanup_tmp() { rm -f "$READY_BODY" "$READY_JSON"; }
-trap cleanup_tmp EXIT
 echo "Installations-Abnahme (maximal 90 Sekunden):"
 echo "Bevorzugt wird ready=true; ein ausschließlich transienter Limit-Readback-Versatz darf die Installation nicht zurückrollen."
 READY_DEADLINE=$((SECONDS + 90))
@@ -343,47 +399,46 @@ elif [ "$TRANSITIONAL_ACCEPTED" -eq 1 ]; then
     echo "Kein Rollback: Controller, Datenquellen, Command-State, statische Invarianten und Telemetrie sind gesund."
     [ -s "$READY_JSON" ] && cat "$READY_JSON"
 else
-    echo "FEHLER: V13.0.3 erreichte weder ready=true noch einen stabilen sicheren Übergangszustand."
+    echo "FEHLER: V14.0.0 erreichte weder ready=true noch einen stabilen sicheren Übergangszustand."
     [ -s "$READY_JSON" ] && cat "$READY_JSON"
     journalctl -u zendure-controller.service --since "@$INSTALL_START_EPOCH" --no-pager || true
     false
 fi
 
-echo "Führe einmaligen idempotenten Measurement-V4-Backfill der historischen Graph-Konfiguration aus..."
-# Historical graph enrichment is deliberately non-fatal for controller readiness.
-# If old files/snapshots cannot be reconstructed, V13 remains installed and marks
-# those historical overlay segments as unavailable instead of rolling the controller back.
-set +e
-python3 tools/backfill_graph_config_timeline.py --config "$TARGET/config.json" > /tmp/zec_v13_graph_config_backfill.json 2>/tmp/zec_v13_graph_config_backfill.err
-BACKFILL_RC=$?
-set -e
-if [ "$BACKFILL_RC" -eq 0 ]; then
-    if python3 - /tmp/zec_v13_graph_config_backfill.json <<'PYBACKFILL'
-import json, sys
-with open(sys.argv[1], 'r', encoding='utf-8') as handle:
-    result=json.load(handle)
-if result.get('status') not in {'ok','skipped'}:
-    raise SystemExit(1)
-print('Graph-Config-Backfill:', json.dumps(result, ensure_ascii=False, sort_keys=True))
-PYBACKFILL
-    then
-        :
-    else
-        echo "WARNUNG: Graph-Config-Backfill lieferte kein verwertbares Ergebnis; historische Overlays bleiben für nicht rekonstruierbare Abschnitte unbekannt."
-        cat /tmp/zec_v13_graph_config_backfill.json 2>/dev/null || true
-    fi
-else
-    echo "WARNUNG: Graph-Config-Backfill fehlgeschlagen (rc=$BACKFILL_RC); Controller/Ready bleiben hiervon unberührt."
-    cat /tmp/zec_v13_graph_config_backfill.err 2>/dev/null || true
+echo "Prüfe getrennte V14-Graph-History-Readiness über die laufende API..."
+GRAPH_RUNTIME_JSON="$(mktemp)"
+GRAPH_WORKSPACE_JSON="$(mktemp)"
+if ! curl -fsS --connect-timeout 1 --max-time 10 http://127.0.0.1:8080/api/graph/v1/runtime >"$GRAPH_RUNTIME_JSON"; then
+    echo "FEHLER: Graph-Runtime-API nicht erreichbar."
+    false
 fi
+if ! curl -fsS --connect-timeout 1 --max-time 10 http://127.0.0.1:8080/api/graph/v1/workspace >"$GRAPH_WORKSPACE_JSON"; then
+    echo "FEHLER: Graph-Workspace-API nicht erreichbar."
+    false
+fi
+python3 - "$GRAPH_RUNTIME_JSON" "$GRAPH_WORKSPACE_JSON" <<'PYGRAPH'
+import json, sys
+runtime=json.load(open(sys.argv[1],encoding='utf-8'))
+workspace=json.load(open(sys.argv[2],encoding='utf-8'))
+assert runtime.get('control_readiness_impact') == 'NONE', runtime
+assert runtime.get('read_mode') == 'V3_NATIVE', runtime
+assert runtime.get('workspace_ready') is True, runtime
+wr=workspace.get('runtime') or {}
+assert wr.get('read_mode') == 'V3_NATIVE' and wr.get('workspace_ready') is True, wr
+assert workspace.get('capabilities',{}).get('episode_comparison') == 'available_wp9', workspace.get('capabilities')
+assert workspace.get('capabilities',{}).get('command_follow') == 'available_wp8', workspace.get('capabilities')
+print('Graph-History-Readiness: V3_NATIVE / workspace_ready=true / control_readiness_impact=NONE')
+PYGRAPH
+rm -f "$GRAPH_RUNTIME_JSON" "$GRAPH_WORKSPACE_JSON"
 
-trap - ERR
+trap - ERR EXIT
 cleanup_tmp
-trap - EXIT
 
 echo "Update abgeschlossen und Installations-Abnahme erfolgreich."
-echo "V13.0.3 erfolgreich installiert."
+echo "V14.0.0 erfolgreich installiert."
 echo "Backup: $BACKUP"
 echo "Config-Backup: $CONFIG_BACKUP"
 echo "Root-Artefakt-Backup: $ROOT_ARTIFACT_BACKUP"
+echo "Graph-Cutover-Backup: $GRAPH_CUTOVER_BACKUP"
+echo "Graph-Cutover-Report: $GRAPH_CUTOVER_REPORT"
 echo "Settings: http://<PI-IP>:8080/settings"

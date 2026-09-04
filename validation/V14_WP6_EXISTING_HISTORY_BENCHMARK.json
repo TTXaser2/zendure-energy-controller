@@ -1,0 +1,12 @@
+{
+  "coverage_series": 4,
+  "evidence_series": 4,
+  "max_ms": 78.784,
+  "median_ms": 72.353,
+  "min_ms": 70.739,
+  "points": 1440,
+  "read_mode": "V3_NATIVE",
+  "samples": 28800,
+  "source": "graph_core_v3_1min",
+  "span_hours": 24
+}

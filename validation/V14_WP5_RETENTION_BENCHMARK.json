@@ -1,0 +1,17 @@
+{
+  "db_bytes_after_delete": 6066176,
+  "db_bytes_before": 6066176,
+  "freelist_pages": 604,
+  "minute_rows_after": 2881,
+  "minute_rows_before": 2881,
+  "page_size": 4096,
+  "physical_reduction_percent": 41.05,
+  "purge_seconds": 0.1457,
+  "raw_rows_after": 28800,
+  "raw_rows_before": 57600,
+  "raw_rows_deleted": 28800,
+  "reusable_free_bytes": 2473984,
+  "samples": 57600,
+  "span_hours": 48,
+  "vacuum_compact_bytes": 3575808
+}

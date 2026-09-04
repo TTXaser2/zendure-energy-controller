@@ -1796,6 +1796,7 @@ class ZendureController:
                 self.state.command_publish_last_time = now_text
                 self.state.command_publish_event_id += 1
                 self.state.command_publish_epoch_s = now_epoch
+                self.state.command_publish_monotonic_ns = time.monotonic_ns()
             if physical_state_changed or (forced and published_fields):
                 self.state.command_effect_confirmed = False
 

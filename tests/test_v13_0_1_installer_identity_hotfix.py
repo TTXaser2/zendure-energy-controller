@@ -20,8 +20,8 @@ class V1302InstallerIdentityHotfixTests(unittest.TestCase):
         }
 
     def test_evaluator_identity_is_single_sourced_from_release_version(self):
-        self.assertEqual("13.0.3", version.APP_VERSION)
-        self.assertEqual("v13.0.3-20260814", version.APP_BUILD_ID)
+        self.assertEqual("14.0.0", version.APP_VERSION)
+        self.assertEqual("v14.0.0-20260904-r2", version.APP_BUILD_ID)
         self.assertEqual(version.APP_VERSION, EXPECTED_VERSION)
         self.assertEqual(version.APP_BUILD_ID, EXPECTED_BUILD_ID)
 
@@ -34,21 +34,27 @@ class V1302InstallerIdentityHotfixTests(unittest.TestCase):
         payload["build_id"] = "v13.0.1-20260811"
         self.assertEqual(("REJECT", "IDENTITY"), classify(payload))
 
-    def test_installer_targets_hotfix_and_keeps_v13_0_1_as_only_source(self):
+    def test_installer_targets_v14_and_keeps_v13_0_3_as_only_source(self):
         script = (ROOT / "tools" / "update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_VERSION="v13_0_3"', script)
-        self.assertIn('EXPECTED_SOURCE_VERSION="13.0.2"', script)
-        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v13.0.2-20260812"', script)
-        self.assertIn('EXPECTED_TARGET_VERSION="13.0.3"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v13.0.3-20260814"', script)
-        self.assertIn('V13_0_3_SOURCE_MANIFEST.sha256', script)
+        self.assertIn('EXPECTED_VERSION="v14_0_0"', script)
+        self.assertIn('EXPECTED_SOURCE_VERSION="13.0.3"', script)
+        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v13.0.3-20260814"', script)
+        self.assertIn('EXPECTED_TARGET_VERSION="14.0.0"', script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v14.0.0-20260904-r2"', script)
+        self.assertIn('V14_0_0_SOURCE_MANIFEST.sha256', script)
 
-    def test_backfill_remains_after_successful_readiness_acceptance(self):
+    def test_transactional_graph_cutover_precedes_controller_start_and_runtime_graph_gate_follows_readiness(self):
         script = (ROOT / "tools" / "update_zendure_controller.sh").read_text(encoding="utf-8")
+        rebuild_idx = script.index('python3 tools/v14_cutover.py rebuild')
+        normal_start_marker = script.index('echo "Starte Controller..."')
+        start_idx = script.index('sudo systemctl start zendure-controller.service', normal_start_marker)
         ready_idx = script.index('if [ "$READY_OK" -eq 1 ]')
-        backfill_idx = script.index('python3 tools/backfill_graph_config_timeline.py')
-        self.assertGreater(backfill_idx, ready_idx)
-        self.assertIn('Historical graph enrichment is deliberately non-fatal', script)
+        graph_gate_idx = script.index('Prüfe getrennte V14-Graph-History-Readiness')
+        self.assertLess(rebuild_idx, start_idx)
+        self.assertLess(ready_idx, graph_gate_idx)
+        self.assertIn('python3 tools/v14_cutover.py verify', script)
+        self.assertIn('control_readiness_impact', script)
+        self.assertNotIn('Historical graph enrichment is deliberately non-fatal', script)
 
 
 if __name__ == "__main__":

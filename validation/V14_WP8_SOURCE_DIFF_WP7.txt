@@ -1,0 +1,15 @@
+ADDED    V14_WP8_CHANGED_FILES.txt
+CHANGED  graph_query_service.py
+CHANGED  graph_workspace.py
+ADDED    tests/test_v14_graph_inspector_command_follow_wp8.py
+CHANGED  tests/test_v14_graph_workspace_wp7.py
+ADDED    tools/benchmark_graph_inspector_command_follow_wp8.py
+ADDED    validation/V14_WP8_BROWSER_JS_SYNTAX.txt
+ADDED    validation/V14_WP8_COMPILEALL.txt
+ADDED    validation/V14_WP8_CONTROLLER_LOGIC_SHA256.txt
+ADDED    validation/V14_WP8_FULL_TEST.txt
+ADDED    validation/V14_WP8_INSPECTOR_COMMAND_FOLLOW_BENCHMARK.json
+ADDED    validation/V14_WP8_QUERY_BENCHMARK.json
+ADDED    validation/V14_WP8_RESOURCEWARNING_TEST.txt
+ADDED    validation/V14_WP8_V4_HEADER_COUNTS.txt
+CHANGED  web_ui.py

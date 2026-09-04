@@ -1,0 +1,51 @@
+ZEC V14 WP2 – FINAL PACKAGE TEST-HARNESS GATE
+Date: 2026-09-02
+
+Finding
+-------
+A sporadic post-suite process hang was observed when running plain `python3 -m pytest -q`
+in the ChatGPT engineering container. In the affected run, pytest had already emitted the full
+100% result, but the Python interpreter remained alive.
+
+Evidence from the hung process
+------------------------------
+- pytest result output had reached 100%.
+- the still-live process had 14 threads.
+- one lingering thread was named `TelemetryWriter`.
+- this thread name belongs to the globally installed `ddtrace` package.
+- `ddtrace` is registered globally as a pytest11 entry-point plugin in the engineering container:
+  ddtrace = ddtrace.testing.internal.pytest.entry_point [ddtrace 4.4.0]
+- ddtrace is not a ZEC dependency and is not part of the ZEC source/package contract.
+
+Isolation test
+--------------
+The freshly extracted WP2 package was tested with only the unrelated globally auto-loaded
+Datadog pytest plugin disabled:
+
+    python3 -m pytest -q -p no:ddtrace
+
+Three sequential complete runs from the same fresh package all terminated normally:
+- run 1: rc=0, 829 passed, 679 subtests passed, 31.96 s pytest time, 34 s wall
+- run 2: rc=0, 829 passed, 679 subtests passed, 30.29 s pytest time, 32 s wall
+- run 3: rc=0, 829 passed, 679 subtests passed, 30.56 s pytest time, 32 s wall
+
+ResourceWarning gate from the same fresh package:
+
+    python3 -W error::ResourceWarning -m pytest -q -p no:ddtrace
+
+Result:
+- rc=0
+- 829 passed, 679 subtests passed
+- 31.75 s pytest time, 33 s wall
+
+Interpretation
+--------------
+The post-suite hang is classified as TEST_HARNESS_EXTERNAL_PLUGIN, not as a remaining WP2
+MeasurementDbWriter/Graph-Core lifecycle defect. Disabling only the globally injected ddtrace
+pytest plugin preserves the exact ZEC test/subtest count and produces repeated clean process exit.
+No ZEC production code change is justified by this environment-specific plugin behavior.
+
+Gate
+----
+FINAL_PACKAGE_PROCESS_EXIT_GATE=PASS_WITH_EXTERNAL_DDTRACE_PLUGIN_EXCLUDED
+WP2_ENGINEERING_EXIT_GATE=PASS

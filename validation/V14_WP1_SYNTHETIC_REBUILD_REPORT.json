@@ -1,0 +1,40 @@
+{
+  "config_timeline": {
+    "entries_inserted": 2,
+    "hash_transitions_seen": 2,
+    "unknown_snapshots": 2
+  },
+  "duplicate_or_out_of_order": 0,
+  "duration_s": 2.174,
+  "files": 1,
+  "files_ok": 1,
+  "footprint": {
+    "db_bytes": 4874240,
+    "shm_bytes": 32768,
+    "wal_bytes": 0
+  },
+  "invalid_numeric_fields": {},
+  "legacy_config_rows_copied": 0,
+  "output": "/mnt/data/zec_v14_wp1_e2e/v3.sqlite3",
+  "rows_imported": 50000,
+  "rows_seen": 50000,
+  "series_coverage_count": 15,
+  "snapshot_count": 0,
+  "source_errors": [],
+  "status": "ok",
+  "validation": {
+    "command_events": 3812,
+    "duplicate_raw_timestamps": 0,
+    "integrity_check": "ok",
+    "intervals": 3259,
+    "minute_first_ms": 1779999960000,
+    "minute_last_ms": 1780149960000,
+    "minute_rows": 2501,
+    "raw_first_ms": 1780000000000,
+    "raw_last_ms": 1780149997000,
+    "raw_rows": 50000,
+    "runs": 1,
+    "source_files": 1,
+    "trailing_nul_bytes": 307
+  }
+}

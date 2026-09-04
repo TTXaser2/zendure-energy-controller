@@ -44,9 +44,9 @@ class V1302ConfigArtifactHotfixTests(unittest.TestCase):
         self.session = "v1302-session"
 
     def test_release_and_registry_contract_are_v13_0_2(self):
-        self.assertEqual("13.0.3", version.APP_VERSION)
-        self.assertEqual("V13.0.3", version.APP_VERSION_LABEL)
-        self.assertEqual("v13.0.3-20260814", version.APP_BUILD_ID)
+        self.assertEqual("14.0.0", version.APP_VERSION)
+        self.assertEqual("V14.0.0", version.APP_VERSION_LABEL)
+        self.assertEqual("v14.0.0-20260904-r2", version.APP_BUILD_ID)
         self.assertEqual("1.25-v13.0", SCHEMA_VERSION)
         self.assertNotEqual(OLD_REGISTRY_HASH, registry_contract_sha256())
 
@@ -141,8 +141,14 @@ class V1302MeasurementWriterTests(unittest.TestCase):
     def test_failed_flush_batch_is_retried_with_fresh_connection_and_not_lost(self):
         with tempfile.TemporaryDirectory() as td:
             db = Path(td) / "measurements.sqlite3"
+            # WP2 defaults a missing DB to V3. This legacy regression explicitly
+            # exercises the compatibility writer, so pre-create a real V2 store.
+            measurement_db_module = __import__("measurement_db")
+            conn = sqlite3.connect(db)
+            measurement_db_module.ensure_schema(conn)
+            conn.close()
             writer = MeasurementDbWriter()
-            real_write = __import__("measurement_db").write_points
+            real_write = measurement_db_module.write_points
             calls = {"n": 0}
 
             def flaky(conn, points):
@@ -292,12 +298,12 @@ class V1302BackfillAndUiContractTests(unittest.TestCase):
 
     def test_installer_is_strict_v13_0_1_to_v13_0_2(self):
         script=(ROOT/"tools"/"update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_VERSION="v13_0_3"',script)
-        self.assertIn('EXPECTED_SOURCE_VERSION="13.0.2"',script)
-        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v13.0.2-20260812"',script)
-        self.assertIn('EXPECTED_TARGET_VERSION="13.0.3"',script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v13.0.3-20260814"',script)
-        self.assertIn('V13_0_3_SOURCE_MANIFEST.sha256',script)
+        self.assertIn('EXPECTED_VERSION="v14_0_0"',script)
+        self.assertIn('EXPECTED_SOURCE_VERSION="13.0.3"',script)
+        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v13.0.3-20260814"',script)
+        self.assertIn('EXPECTED_TARGET_VERSION="14.0.0"',script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v14.0.0-20260904-r2"',script)
+        self.assertIn('V14_0_0_SOURCE_MANIFEST.sha256',script)
 
 
 if __name__ == '__main__':

@@ -21,10 +21,10 @@ class V12117DefaultContractTests(unittest.TestCase):
         manager.load()
         return path, manager
 
-    def test_all_212_settings_have_explicit_default_provenance(self):
-        self.assertEqual(212, len(SETTINGS))
+    def test_all_211_settings_have_explicit_default_provenance(self):
+        self.assertEqual(211, len(SETTINGS))
         counts = Counter(spec.default_class.value for spec in SETTINGS)
-        self.assertEqual(212, sum(counts.values()))
+        self.assertEqual(211, sum(counts.values()))
         self.assertEqual({
             "product_default", "profile_preset", "safe_sentinel",
             "legacy_internal", "installation", "auto_or_unset",

@@ -1,0 +1,29 @@
+ZEC V14.0.0 WP10 – Installer Preflight R2 regression
+Build-ID: v14.0.0-20260904-r2
+Real-Pi finding on superseded candidate v14.0.0-20260904:
+- pre-install package check aborted safely before service stop
+- cause: python3 -m unittest discover imported V14 test modules that import optional development dependency pytest
+- pytest is not part of production requirements and must not be required on the Pi
+
+R2 contract:
+- no `python3 -m unittest discover` in productive installer
+- no `python3 -m pytest` in productive installer
+- pytest absent from requirements.txt
+- manifest-protected build evidence verified during package preflight
+- runtime readiness smoke before and after copy runs with ZEC_INSTALLER_PREFLIGHT=1
+- both runtime smokes run with PYTHONWARNINGS=error::ResourceWarning
+- config migration preflight and V14 cutover preflight remain before service stop
+- installed source is reverified against V14_0_0_SOURCE_MANIFEST.sha256 after copy
+- Node.js remains optional; JavaScript is manifest-protected when Node.js is absent
+
+Targeted installer/release regression:
+70 tests + 10 subtests PASS
+
+Full suite after R2 source fix:
+932 tests + 679 subtests PASS
+ResourceWarning suite after R2 source fix:
+932 tests + 679 subtests PASS
+
+Controller logic SHA256 unchanged:
+56f854bbe5bbecc9a7ce305af3915bd461615cc425e444b0c3e427c38e4184b1
+PASS

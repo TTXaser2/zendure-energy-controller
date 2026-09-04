@@ -382,25 +382,68 @@ def write_points(conn: sqlite3.Connection, points: List[Dict[str, Any]]) -> int:
     return written
 
 
+
+def detect_measurement_db_backend(path: str) -> Dict[str, Any]:
+    """Classify an existing SQLite store without mutating it."""
+    absolute = os.path.abspath(path)
+    if not os.path.exists(absolute) or os.path.getsize(absolute) == 0:
+        return {"backend": "missing", "schema_version": None, "path": absolute}
+    conn = None
+    try:
+        conn = sqlite3.connect(f"file:{absolute}?mode=ro", uri=True, timeout=1.0)
+        version = None
+        try:
+            row = conn.execute("SELECT value FROM measurement_meta WHERE key='schema_version'").fetchone()
+            version = str(row[0]) if row and row[0] not in (None, "") else None
+        except Exception:
+            version = None
+        if version == "3":
+            return {"backend": "v3", "schema_version": 3, "path": absolute}
+        if version == "2":
+            return {"backend": "v2", "schema_version": 2, "path": absolute}
+        # Historical V2 stores are also recognizable by their legacy raw fields.
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(measurement_raw)").fetchall()}
+        if {"ts_ms", "zendure_target_power_w", "mode", "control_reason"}.issubset(cols):
+            return {"backend": "v2", "schema_version": 2, "path": absolute}
+        return {"backend": "unknown", "schema_version": version, "path": absolute}
+    except Exception as exc:
+        return {"backend": "unknown", "schema_version": None, "path": absolute, "error": str(exc)}
+    finally:
+        if conn is not None:
+            conn.close()
+
+
 class MeasurementDbWriter:
     WRITE_STALE_SECONDS = 120.0
     RETRY_DELAY_SECONDS = 0.5
+    DEFAULT_MAX_QUEUE = 5000
+    _STOP_SENTINEL = object()
 
-    def __init__(self, max_queue: int = 5000) -> None:
-        self._queue: "queue.Queue[Tuple[str, Dict[str, Any]]]" = queue.Queue(maxsize=max_queue)
+    def __init__(self, max_queue: int = DEFAULT_MAX_QUEUE) -> None:
+        self._max_queue = int(max_queue)
+        self._queue: "queue.Queue[Any]" = queue.Queue(maxsize=self._max_queue)
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
         self._lock = threading.Lock()
         self._conn: Optional[sqlite3.Connection] = None
         self._conn_thread_id: Optional[int] = None
         self._path = ""
+        self._backend = ""
+        self._schema_version: Optional[int] = None
+        self._v3_session = None
         self._last_status: Dict[str, Any] = {
             "measurement_db_status": "idle",
             "measurement_db_reason": "Noch kein DB-Schreibversuch.",
             "measurement_db_path": "",
             "measurement_db_queue_depth": 0,
+            "measurement_db_queue_capacity": self._max_queue,
+            "measurement_db_backend": "",
+            "measurement_db_schema_version": None,
+            "measurement_db_storage_encoding": "",
+            "measurement_db_run_id": None,
             "measurement_db_last_write_epoch_s": "",
             "measurement_db_last_write_duration_ms": None,
+            "measurement_db_prepare_duration_ms": None,
             "measurement_db_error": "",
             "measurement_db_last_error": "",
             "measurement_db_last_error_epoch_s": "",
@@ -448,22 +491,38 @@ class MeasurementDbWriter:
     def enqueue(self, config: Dict[str, Any], row: Dict[str, Any]) -> Dict[str, Any]:
         if not bool(config.get("MEASUREMENT_DB_ENABLED", True)):
             return self._set_status("disabled", "MEASUREMENT_DB_ENABLED=false", config=config)
-        point = extract_measurement_point(row)
-        if point is None:
+        started_ns = time.perf_counter_ns()
+        if _parse_epoch_ms(row) is None:
             return self._set_status("skipped", "Row ohne auswertbare Zeitbasis", config=config)
-        if point.get("config_control_hash"):
+        payload = dict(row)
+        # Capture config evidence before the worker thread; no DB I/O occurs here.
+        try:
+            from csv_logger import compute_config_control_hash
             from graph_config_timeline import overlay_from_config
-            point["_graph_config_overlay"] = overlay_from_config(config)
+            payload["_graph_config_hash"] = compute_config_control_hash(config)
+            payload["_graph_config_overlay"] = overlay_from_config(config)
+            payload["_graph_entity_config"] = {
+                "zendure_device_id": str(config.get("DEVICE_ID") or "").strip(),
+                "primary_display_name": str(config.get("SECOND_BATTERY_DISPLAY_NAME") or "").strip(),
+                "primary_source_profile": str(config.get("SECOND_BATTERY_SOURCE_PROFILE") or "").strip(),
+                "primary_integration_enabled": bool(config.get("SECOND_BATTERY_INTEGRATION_ENABLED", False)),
+            }
+        except Exception:
+            pass
+        if payload.get("measurement_monotonic_ns") in (None, ""):
+            payload["measurement_monotonic_ns"] = time.monotonic_ns()
         path = resolve_measurement_db_path(config)
         now = time.time()
+        prepare_ms = round((time.perf_counter_ns() - started_ns) / 1_000_000.0, 3)
         try:
             self._ensure_thread()
-            self._queue.put_nowait((path, point))
+            self._queue.put_nowait((path, payload))
             with self._lock:
                 if not self._last_status.get("measurement_db_first_enqueue_epoch_s"):
                     self._last_status["measurement_db_first_enqueue_epoch_s"] = now
                 self._last_status["measurement_db_last_enqueue_epoch_s"] = now
                 self._last_status["measurement_db_path"] = path
+                self._last_status["measurement_db_prepare_duration_ms"] = prepare_ms
                 failures = int(self._last_status.get("measurement_db_consecutive_failures") or 0)
                 if failures <= 0 and not self._last_status.get("measurement_db_write_stale"):
                     self._last_status["measurement_db_status"] = "queued"
@@ -494,55 +553,68 @@ class MeasurementDbWriter:
         deferred: Optional[Tuple[str, Dict[str, Any]]] = None
         retry_pending = False
         try:
-            while not self._stop.is_set() or not self._queue.empty() or batch or deferred is not None:
+            while True:
                 if batch and retry_pending:
                     if self._flush(current_path, batch):
                         batch = []
                         retry_pending = False
+                    elif self._stop.is_set():
+                        break
                     else:
-                        time.sleep(self.RETRY_DELAY_SECONDS)
+                        self._stop.wait(self.RETRY_DELAY_SECONDS)
                         continue
 
                 if deferred is not None:
                     path, point = deferred
                     deferred = None
-                    from_queue = True
                 else:
                     try:
-                        path, point = self._queue.get(timeout=0.5)
-                        from_queue = True
+                        item = self._queue.get(timeout=0.25)
                     except queue.Empty:
                         if batch and current_path:
                             if self._flush(current_path, batch):
                                 batch = []
+                            elif self._stop.is_set():
+                                break
                             else:
                                 retry_pending = True
+                        if self._stop.is_set() and self._queue.empty() and not batch:
+                            break
                         continue
+                    if item is self._STOP_SENTINEL:
+                        self._queue.task_done()
+                        self._stop.set()
+                        if not batch:
+                            break
+                        continue
+                    path, point = item
+                    self._queue.task_done()
 
                 if current_path and path != current_path and batch:
                     deferred = (path, point)
                     if self._flush(current_path, batch):
                         batch = []
                         current_path = ""
+                    elif self._stop.is_set():
+                        break
                     else:
                         retry_pending = True
                     continue
 
                 current_path = path
                 batch.append(point)
-                if from_queue:
-                    self._queue.task_done()
                 if len(batch) >= 50:
                     if self._flush(current_path, batch):
                         batch = []
+                    elif self._stop.is_set():
+                        break
                     else:
                         retry_pending = True
 
-            if batch and current_path:
-                # Best effort at orderly shutdown. A failure remains visible in
-                # diagnostics; the normal runtime path retains failed batches and
-                # retries indefinitely while the process is running.
-                self._flush(current_path, batch)
+                if self._stop.is_set() and self._queue.empty() and batch:
+                    if self._flush(current_path, batch):
+                        batch = []
+                    break
         finally:
             self._reset_connection(rollback=False)
 
@@ -551,6 +623,8 @@ class MeasurementDbWriter:
         self._conn = None
         self._conn_thread_id = None
         self._path = ""
+        self._backend = ""
+        self._schema_version = None
         if conn is not None:
             if rollback:
                 try:
@@ -562,6 +636,33 @@ class MeasurementDbWriter:
             except Exception:
                 pass
 
+    @staticmethod
+    def _legacy_point(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        if "ts_ms" in row and "grid_power_w" in row:
+            return dict(row)
+        return extract_measurement_point(row)
+
+    def _open_backend(self, path: str) -> None:
+        detection = detect_measurement_db_backend(path)
+        backend = str(detection.get("backend") or "unknown")
+        if backend == "missing":
+            backend = "v3"
+        if backend == "v2":
+            self._conn = _connect(path)
+            self._schema_version = 2
+        elif backend == "v3":
+            from graph_core_v3_live import GraphCoreV3LiveSession, open_v3
+            self._conn = open_v3(path)
+            self._schema_version = 3
+            if self._v3_session is None:
+                self._v3_session = GraphCoreV3LiveSession()
+        else:
+            detail = detection.get("error") or detection.get("schema_version") or "unbekanntes Schema"
+            raise RuntimeError(f"MEASUREMENT_DB_UNKNOWN_SCHEMA:{detail}")
+        self._conn_thread_id = threading.get_ident()
+        self._path = path
+        self._backend = backend
+
     def _flush(self, path: str, batch: List[Dict[str, Any]]) -> bool:
         if not batch:
             return True
@@ -571,10 +672,15 @@ class MeasurementDbWriter:
             with measurement_db_maintenance_lock(path, timeout_s=5.0):
                 if self._conn is None or self._path != path:
                     self._reset_connection(rollback=False)
-                    self._conn = _connect(path)
-                    self._conn_thread_id = threading.get_ident()
-                    self._path = path
-                count = write_points(self._conn, batch)
+                    self._open_backend(path)
+                assert self._conn is not None
+                if self._backend == "v2":
+                    points = [p for p in (self._legacy_point(row) for row in batch) if p is not None]
+                    count = write_points(self._conn, points)
+                elif self._backend == "v3":
+                    count = self._v3_session.write_batch(self._conn, path, batch)
+                else:
+                    raise RuntimeError("MEASUREMENT_DB_BACKEND_NOT_READY")
             now = time.time()
             with self._lock:
                 total = int(self._last_status.get("measurement_db_rows_written") or 0) + count
@@ -583,6 +689,11 @@ class MeasurementDbWriter:
                     "measurement_db_reason": "OK",
                     "measurement_db_path": path,
                     "measurement_db_queue_depth": self._queue.qsize(),
+                    "measurement_db_queue_capacity": self._max_queue,
+                    "measurement_db_backend": self._backend,
+                    "measurement_db_schema_version": self._schema_version,
+                    "measurement_db_storage_encoding": "scaled_integer_v1" if self._backend == "v3" else "legacy_real_v2",
+                    "measurement_db_run_id": getattr(self._v3_session, "run_id", None) if self._backend == "v3" else None,
                     "measurement_db_last_write_epoch_s": now,
                     "measurement_db_last_success_epoch_s": now,
                     "measurement_db_last_write_duration_ms": round((time.perf_counter_ns() - started_ns) / 1_000_000.0, 3),
@@ -628,6 +739,7 @@ class MeasurementDbWriter:
                 "measurement_db_reason": reason,
                 "measurement_db_path": path or self._last_status.get("measurement_db_path", ""),
                 "measurement_db_queue_depth": self._queue.qsize(),
+                "measurement_db_queue_capacity": self._max_queue,
             })
             if error:
                 now = time.time()
@@ -646,31 +758,44 @@ class MeasurementDbWriter:
             return self._snapshot_locked()
 
     def __del__(self):
+        # Destructor must never block interpreter/test shutdown. Explicit owners
+        # call close(); daemon-thread/process exit remains a final safety net.
         try:
-            self.close()
+            self._stop.set()
         except Exception:
             pass
 
     def close(self) -> None:
         self._stop.set()
         thread = self._thread
-        if thread is not None and thread is not threading.current_thread():
+        if thread is not None and thread.is_alive() and thread is not threading.current_thread():
             try:
-                thread.join(timeout=2.0)
+                self._queue.put_nowait(self._STOP_SENTINEL)
             except Exception:
                 pass
+            thread.join(timeout=6.0)
             if not thread.is_alive():
                 self._thread = None
+            else:
+                with self._lock:
+                    self._last_status["measurement_db_status"] = "shutdown_timeout"
+                    self._last_status["measurement_db_reason"] = "DB-Writer konnte nicht innerhalb des Shutdown-Timeouts beendet werden"
         if self._conn is not None and self._conn_thread_id in (None, threading.get_ident()):
             self._reset_connection(rollback=False)
 
 def db_status_for_config(config: Dict[str, Any]) -> Dict[str, Any]:
     path = resolve_measurement_db_path(config)
-    status = "available" if os.path.exists(path) else "missing"
+    detection = detect_measurement_db_backend(path)
+    backend = str(detection.get("backend") or "unknown")
+    status = "available" if backend in {"v2", "v3"} else ("missing" if backend == "missing" else "error")
     return {
         "measurement_db_status": status,
         "measurement_db_path": path,
         "measurement_db_size_bytes": os.path.getsize(path) if os.path.exists(path) else 0,
+        "measurement_db_backend": backend,
+        "measurement_db_schema_version": detection.get("schema_version"),
+        "measurement_db_storage_encoding": "scaled_integer_v1" if backend == "v3" else ("legacy_real_v2" if backend == "v2" else ""),
+        "measurement_db_error": detection.get("error", "") if backend == "unknown" else "",
     }
 
 
@@ -704,10 +829,27 @@ def query_graph_points(config: Dict[str, Any], start_dt: datetime, end_dt: datet
     if not bool(config.get("MEASUREMENT_DB_ENABLED", True)):
         return [], {"db_status": "disabled", "db_path": ""}
     path = resolve_measurement_db_path(config)
-    if not os.path.exists(path):
+    detection = detect_measurement_db_backend(path)
+    backend = str(detection.get("backend") or "unknown")
+    if backend == "missing":
         return [], {"db_status": "missing", "db_path": path}
+    if backend == "unknown":
+        return [], {"db_status": "error", "db_path": path, "db_error": str(detection.get("error") or "UNKNOWN_DB_SCHEMA")}
     start_ms = int(start_dt.timestamp() * 1000)
     end_ms = int(end_dt.timestamp() * 1000)
+    if backend == "v3":
+        # V3 history has one canonical SQL/query implementation.  This adapter
+        # only restores the legacy V13 point shape for existing UI consumers.
+        from graph_query_service import GRAPH_QUERY_SERVICE
+        points, meta = GRAPH_QUERY_SERVICE.compatibility_points(path, start_ms, end_ms, limit=limit)
+        for point in points:
+            dt = datetime.fromtimestamp(int(point["epoch_ms"]) / 1000.0)
+            point["time"] = dt.strftime("%H:%M:%S")
+            point["datetime_local"] = dt.isoformat(sep=" ", timespec="seconds")
+        return points, meta
+
+    # Legacy V2 remains read-compatible and is never mutated by this path.
+    query_start_ms = (start_ms // 60000) * 60000
     conn: Optional[sqlite3.Connection] = None
     try:
         conn = sqlite3.connect(path, timeout=1.0)
@@ -719,42 +861,34 @@ def query_graph_points(config: Dict[str, Any], start_dt: datetime, end_dt: datet
             ORDER BY bucket_start_ms ASC
             LIMIT ?
             """,
-            (start_ms, end_ms, int(limit)),
+            (query_start_ms, end_ms, int(limit)),
         ).fetchall()
     except Exception as exc:
-        return [], {"db_status": "error", "db_path": path, "db_error": str(exc)}
+        return [], {"db_status": "error", "db_path": path, "db_error": str(exc), "db_backend": backend}
     finally:
         if conn is not None:
             conn.close()
+
     points: List[Dict[str, Any]] = []
     for row in rows:
         ts_ms = int(row["last_ts_ms"] or row["bucket_start_ms"])
         dt = datetime.fromtimestamp(ts_ms / 1000.0)
         mode = row["mode_last"] or ""
         points.append({
-            "time": dt.strftime("%H:%M:%S"),
-            "datetime_local": dt.isoformat(sep=" ", timespec="seconds"),
-            "epoch_ms": ts_ms,
-            "grid_power_w": row["grid_avg_w"],
-            "grid_power_min_w": row["grid_min_w"],
-            "grid_power_max_w": row["grid_max_w"],
-            "grid_power_raw_w": row["raw_grid_last_w"],
-            "zendure_target_power_w": row["zendure_target_last_w"],
-            "zendure_actual_power_w": row["zendure_actual_last_w"],
-            "pv_power_w": row["pv_avg_w"],
-            "house_power_w": row["house_avg_w"],
-            "soc": row["soc_last_percent"],
-            "primary_soc": row["primary_soc_last_percent"] if "primary_soc_last_percent" in row.keys() else None,
+            "time": dt.strftime("%H:%M:%S"), "datetime_local": dt.isoformat(sep=" ", timespec="seconds"), "epoch_ms": ts_ms,
+            "grid_power_w": row["grid_avg_w"], "grid_power_min_w": row["grid_min_w"], "grid_power_max_w": row["grid_max_w"],
+            "grid_power_raw_w": row["raw_grid_last_w"], "zendure_target_power_w": row["zendure_target_last_w"],
+            "zendure_actual_power_w": row["zendure_actual_last_w"], "pv_power_w": row["pv_avg_w"], "house_power_w": row["house_avg_w"],
+            "soc": row["soc_last_percent"], "primary_soc": row["primary_soc_last_percent"] if "primary_soc_last_percent" in row.keys() else None,
             "primary_power_w": row["primary_power_last_w"] if "primary_power_last_w" in row.keys() else None,
-            "mode": mode,
-            "mode_label": mode,
-            "control_reason": (row["control_reason_last"] if "control_reason_last" in row.keys() else "") or "",
-            "limit_reason": "",
-            "data_status": row["data_status_last"] or "gültig",
-            "cross_charge_limited": bool(row["cross_charge_limited"]),
-            "safe_state_active": bool(row["safe_state_active"]),
-            "night_window_active": bool(row["night_window_active"]),
-            "night_reserve_active": bool(row["night_reserve_active"]),
-            "sample_count": row["sample_count"],
+            "mode": mode, "mode_label": mode,
+            "control_reason": (row["control_reason_last"] if "control_reason_last" in row.keys() else "") or "", "limit_reason": "",
+            "data_status": row["data_status_last"] or "gültig", "cross_charge_limited": bool(row["cross_charge_limited"]),
+            "safe_state_active": bool(row["safe_state_active"]), "night_window_active": bool(row["night_window_active"]),
+            "night_reserve_active": bool(row["night_reserve_active"]), "sample_count": row["sample_count"],
         })
-    return points, {"db_status": "hit", "db_path": path, "db_rows": len(points), "db_size_bytes": os.path.getsize(path) if os.path.exists(path) else 0}
+    return points, {
+        "db_status": "hit", "db_path": path, "db_rows": len(points),
+        "db_size_bytes": os.path.getsize(path) if os.path.exists(path) else 0,
+        "db_backend": "v2", "db_schema_version": detection.get("schema_version"),
+    }

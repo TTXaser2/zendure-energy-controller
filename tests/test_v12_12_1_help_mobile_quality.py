@@ -134,13 +134,13 @@ class V12121HelpMobileQualityTests(unittest.TestCase):
         self.assertNotIn("Registry-Risikoklasse", xml)
         self.assertNotIn("Serververtrag", xml)
 
-    def test_updater_requires_v12_13_0_as_primary_source(self):
+    def test_updater_requires_v13_0_3_as_primary_source(self):
         script = (ROOT / "tools" / "update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_SOURCE_VERSION="13.0.2"', script)
-        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v13.0.2-20260812"', script)
-        self.assertIn('SOURCE_MODE="V13_0_2"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v13.0.3-20260814"', script)
-        self.assertIn('EXPECTED_VERSION="v13_0_3"', script)
+        self.assertIn('EXPECTED_SOURCE_VERSION="13.0.3"', script)
+        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v13.0.3-20260814"', script)
+        self.assertIn('SOURCE_MODE="V13_0_3"', script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v14.0.0-20260904-r2"', script)
+        self.assertIn('EXPECTED_VERSION="v14_0_0"', script)
         self.assertNotIn('SOURCE_MODE="V12_12_0"', script)
 
 

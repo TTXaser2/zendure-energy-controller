@@ -1,0 +1,17 @@
+{
+  "command_follow_contract_version": 1,
+  "command_follow_evidence_quality": "AVAILABLE",
+  "command_follow_median_ms": 1.43,
+  "command_follow_timeline_rows": 66,
+  "direction_is_effectiveness_proof": false,
+  "inspector_contract_version": 2,
+  "inspector_entity_count": 2,
+  "inspector_median_ms": 1.334,
+  "publish_is_effectiveness_proof": false,
+  "repetitions": 10,
+  "sample_interval_s": 3,
+  "samples": 57600,
+  "series_count": 17,
+  "span_hours": 48.0,
+  "system_effect_status": "NOT_EVALUABLE"
+}

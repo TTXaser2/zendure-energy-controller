@@ -1,0 +1,5 @@
+Fresh-package gate exposed one non-product flake in the historical single-owner race test: the former 0.5 s hold window could expire before the second Python interpreter attempted its non-blocking flock under I/O/load.
+
+Hardening: test-only synchronization barrier with two ready markers, common start marker, two result markers, and owner release only after both results exist. Productive instance_owner.py is unchanged.
+
+Verification after change: 10 consecutive isolated executions PASS. A requested 20-run loop was stopped by the external tool-call time ceiling after the 10th PASS; no failure occurred.

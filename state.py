@@ -226,6 +226,7 @@ class ControllerState:
     # publish batch. Follow-up measurement rows keep the same id/epoch.
     command_publish_event_id: int = 0
     command_publish_epoch_s: Optional[float] = None
+    command_publish_monotonic_ns: Optional[int] = None
     command_state_gate_state: str = "UNPROTECTED"
     command_state_retry_remaining_s: float = 0.0
     command_neutralization_episode_id: int = 0
@@ -484,8 +485,14 @@ class ControllerState:
     measurement_db_reason: str = "Noch kein DB-Schreibversuch."
     measurement_db_path: str = ""
     measurement_db_queue_depth: int = 0
+    measurement_db_queue_capacity: int = 5000
+    measurement_db_backend: str = ""
+    measurement_db_schema_version: Any = None
+    measurement_db_storage_encoding: str = ""
+    measurement_db_run_id: Any = None
     measurement_db_last_write_epoch_s: Any = ""
     measurement_db_last_write_duration_ms: Any = None
+    measurement_db_prepare_duration_ms: Any = None
     measurement_db_error: str = ""
     measurement_db_last_error: str = ""
     measurement_db_last_error_epoch_s: Any = ""
@@ -782,8 +789,17 @@ class ControllerState:
                 self.measurement_db_queue_depth = int(status.get("measurement_db_queue_depth", self.measurement_db_queue_depth) or 0)
             except Exception:
                 pass
+            try:
+                self.measurement_db_queue_capacity = int(status.get("measurement_db_queue_capacity", self.measurement_db_queue_capacity) or self.measurement_db_queue_capacity)
+            except Exception:
+                pass
+            self.measurement_db_backend = str(status.get("measurement_db_backend", self.measurement_db_backend) or "")
+            self.measurement_db_schema_version = status.get("measurement_db_schema_version", self.measurement_db_schema_version)
+            self.measurement_db_storage_encoding = str(status.get("measurement_db_storage_encoding", self.measurement_db_storage_encoding) or "")
+            self.measurement_db_run_id = status.get("measurement_db_run_id", self.measurement_db_run_id)
             self.measurement_db_last_write_epoch_s = status.get("measurement_db_last_write_epoch_s", self.measurement_db_last_write_epoch_s)
             self.measurement_db_last_write_duration_ms = status.get("measurement_db_last_write_duration_ms", self.measurement_db_last_write_duration_ms)
+            self.measurement_db_prepare_duration_ms = status.get("measurement_db_prepare_duration_ms", self.measurement_db_prepare_duration_ms)
             self.measurement_db_error = str(status.get("measurement_db_error", self.measurement_db_error) or "")
             self.measurement_db_last_error = str(status.get("measurement_db_last_error", self.measurement_db_last_error) or "")
             self.measurement_db_last_error_epoch_s = status.get("measurement_db_last_error_epoch_s", self.measurement_db_last_error_epoch_s)
@@ -1388,6 +1404,7 @@ class ControllerState:
             self.ensure_graph_limit(graph_limit)
             now_dt = datetime.now()
             now_epoch = time.time()
+            now_monotonic_ns = time.monotonic_ns()
             if self.last_record_epoch is None:
                 dt_s = 0.0
             else:
@@ -1470,6 +1487,7 @@ class ControllerState:
                 "controller_version_label": f"V{APP_VERSION}",
                 "cycle_id": self.loop_counter,
                 "epoch_s": round(now_epoch, 3),
+                "measurement_monotonic_ns": now_monotonic_ns,
 
                 # Messwerte / signierte Hauptwerte
                 "raw_grid_power_w": round(self.raw_grid_power, 1),
@@ -1760,6 +1778,7 @@ class ControllerState:
                 "command_publish_fields": self.command_publish_fields,
                 "command_publish_event_id": self.command_publish_event_id,
                 "command_publish_epoch_s": self.command_publish_epoch_s,
+                "command_publish_monotonic_ns": self.command_publish_monotonic_ns,
                 "command_state_gate_state": self.command_state_gate_state,
                 "command_state_retry_remaining_s": self.command_state_retry_remaining_s,
                 "command_neutralization_episode_id": self.command_neutralization_episode_id,
@@ -1851,8 +1870,14 @@ class ControllerState:
                 "measurement_db_reason": self.measurement_db_reason,
                 "measurement_db_path": self.measurement_db_path,
                 "measurement_db_queue_depth": self.measurement_db_queue_depth,
+                "measurement_db_queue_capacity": self.measurement_db_queue_capacity,
+                "measurement_db_backend": self.measurement_db_backend,
+                "measurement_db_schema_version": self.measurement_db_schema_version,
+                "measurement_db_storage_encoding": self.measurement_db_storage_encoding,
+                "measurement_db_run_id": self.measurement_db_run_id,
                 "measurement_db_last_write_epoch_s": self.measurement_db_last_write_epoch_s,
                 "measurement_db_last_write_duration_ms": self.measurement_db_last_write_duration_ms,
+                "measurement_db_prepare_duration_ms": self.measurement_db_prepare_duration_ms,
                 "measurement_db_error": self.measurement_db_error,
                 "measurement_db_last_error": self.measurement_db_last_error,
                 "measurement_db_last_error_epoch_s": self.measurement_db_last_error_epoch_s,
@@ -2085,6 +2110,7 @@ class ControllerState:
                 "command_publish_fields": self.command_publish_fields,
                 "command_publish_event_id": self.command_publish_event_id,
                 "command_publish_epoch_s": self.command_publish_epoch_s,
+                "command_publish_monotonic_ns": self.command_publish_monotonic_ns,
                 "command_state_gate_state": self.command_state_gate_state,
                 "command_state_retry_remaining_s": self.command_state_retry_remaining_s,
                 "command_neutralization_episode_id": self.command_neutralization_episode_id,
@@ -2150,8 +2176,14 @@ class ControllerState:
                 "measurement_db_reason": self.measurement_db_reason,
                 "measurement_db_path": self.measurement_db_path,
                 "measurement_db_queue_depth": self.measurement_db_queue_depth,
+                "measurement_db_queue_capacity": self.measurement_db_queue_capacity,
+                "measurement_db_backend": self.measurement_db_backend,
+                "measurement_db_schema_version": self.measurement_db_schema_version,
+                "measurement_db_storage_encoding": self.measurement_db_storage_encoding,
+                "measurement_db_run_id": self.measurement_db_run_id,
                 "measurement_db_last_write_epoch_s": self.measurement_db_last_write_epoch_s,
                 "measurement_db_last_write_duration_ms": self.measurement_db_last_write_duration_ms,
+                "measurement_db_prepare_duration_ms": self.measurement_db_prepare_duration_ms,
                 "measurement_db_error": self.measurement_db_error,
                 "measurement_db_last_error": self.measurement_db_last_error,
                 "measurement_db_last_error_epoch_s": self.measurement_db_last_error_epoch_s,

@@ -1,0 +1,24 @@
+{
+  "build_seconds": 8.413,
+  "cache_contract": {
+    "fingerprint": "db+wal",
+    "max_entries": 4,
+    "ttl_s": 15
+  },
+  "cache_hit_24h_median_ms": 8.126,
+  "coverage_median_ms": 17.318,
+  "db_bytes": 6066176,
+  "format": "columnar_v1",
+  "inspector_median_ms": 1.511,
+  "query_24h_median_ms": 17.443,
+  "query_30min_median_ms": 4.378,
+  "query_48h_median_ms": 170.048,
+  "query_48h_rows": 2881,
+  "query_48h_serialized_bytes": 812359,
+  "query_48h_tracemalloc_peak_bytes": 6720350,
+  "resolution_48h": "1min",
+  "sample_interval_s": 3,
+  "samples": 57600,
+  "series_count": 17,
+  "span_hours": 48.0
+}

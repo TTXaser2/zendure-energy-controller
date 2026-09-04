@@ -1,0 +1,7 @@
+{
+  "coverage_max_ms": 1.18,
+  "coverage_median_ms": 0.607,
+  "database": "50k_rebuild_with_persisted_series_coverage",
+  "repetitions": 10,
+  "series_count": 17
+}

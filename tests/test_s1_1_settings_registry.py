@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class TestS11SettingsRegistry(unittest.TestCase):
     def test_registry_has_all_target_settings_exactly_once(self):
-        self.assertEqual(212, len(SETTINGS))
+        self.assertEqual(211, len(SETTINGS))
         self.assertEqual(len(SETTINGS), len(SETTINGS_BY_KEY))
         self.assertEqual(list(range(len(SETTINGS))), [spec.order for spec in SETTINGS])
 
@@ -75,7 +75,7 @@ class TestS11SettingsRegistry(unittest.TestCase):
             counts[spec.apply_class] += 1
         self.assertEqual(183, counts[ApplyClass.LIVE_NEXT_CYCLE])
         self.assertEqual(8, counts[ApplyClass.RESTART_REQUIRED])
-        self.assertEqual(19, counts[ApplyClass.MIGRATION_ONLY])
+        self.assertEqual(18, counts[ApplyClass.MIGRATION_ONLY])
         self.assertEqual(1, counts[ApplyClass.PROTECTED_ACTION])
         self.assertEqual(1, counts[ApplyClass.READ_ONLY])
         self.assertEqual(ApplyClass.PROTECTED_ACTION, SETTINGS_BY_KEY["MEASUREMENT_DB_PATH"].apply_class)

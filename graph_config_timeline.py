@@ -233,20 +233,31 @@ def query_timeline_rows(config: Mapping[str, Any], start_dt: datetime, end_dt: d
             conn.close()
 
 
-def build_day_segments(
-    config: Mapping[str, Any], start_dt: datetime, end_dt: datetime,
-    *, current_effective_config: Optional[Mapping[str, Any]] = None, now_dt: Optional[datetime] = None,
+def build_segments_from_rows(
+    rows: Iterable[Mapping[str, Any]],
+    start_dt: datetime,
+    end_dt: datetime,
+    *,
+    current_effective_config: Optional[Mapping[str, Any]] = None,
+    now_dt: Optional[datetime] = None,
+    meta: Optional[Mapping[str, Any]] = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    rows, meta = query_timeline_rows(config, start_dt, end_dt)
+    """Normalize persisted config rows into display segments.
+
+    WP6 deliberately separates *reading* the timeline from interpreting it.
+    Graph Core V3 consumers can feed the rows already returned by the canonical
+    GraphQueryService; legacy V2 callers may still use ``build_day_segments``.
+    """
     start_ms = int(start_dt.timestamp() * 1000)
     end_ms = int(end_dt.timestamp() * 1000)
-    normalized = list(rows)
-    if not normalized or normalized[0]["effective_from_ms"] > start_ms:
+    normalized = [dict(row) for row in rows]
+    if not normalized or int(normalized[0].get("effective_from_ms") or 0) > start_ms:
         normalized.insert(0, {
             "effective_from_ms": start_ms, "config_control_hash": "", "known": False,
-            "min_soc": None, "max_soc": None, "reserve_soc": None, "night_start": "", "night_end": "", "source": "unknown",
+            "min_soc": None, "max_soc": None, "reserve_soc": None,
+            "night_start": "", "night_end": "", "source": "unknown",
         })
-    elif normalized[0]["effective_from_ms"] < start_ms:
+    elif int(normalized[0].get("effective_from_ms") or 0) < start_ms:
         normalized[0] = dict(normalized[0], effective_from_ms=start_ms)
 
     # Current effective config may have changed after the latest measurement write.
@@ -257,35 +268,96 @@ def build_day_segments(
         ov = overlay_from_config(current_effective_config)
         last = normalized[-1] if normalized else None
         desired = _semantic_tuple(digest, True, ov)
-        actual = None if last is None else _semantic_tuple(last.get("config_control_hash", ""), last.get("known", False), last)
+        actual = None if last is None else _semantic_tuple(
+            str(last.get("config_control_hash") or ""), bool(last.get("known")), last
+        )
         if desired != actual:
             normalized.append({
                 "effective_from_ms": now_ms, "config_control_hash": digest, "known": True,
                 **ov, "source": "runtime_effective_live",
             })
 
-    normalized.sort(key=lambda x: int(x["effective_from_ms"]))
-    # Merge identical overlay semantics for display while retaining a hash only as provenance.
+    normalized.sort(key=lambda x: int(x.get("effective_from_ms") or 0))
+
+    # Merge only adjacent identical overlay semantics. A later return to an
+    # earlier value (for example MAX_SOC 99 -> 80 -> 99) is a real transition.
     compact: List[Dict[str, Any]] = []
     for row in normalized:
-        display_tuple = (bool(row.get("known")), row.get("min_soc"), row.get("max_soc"), row.get("reserve_soc"), row.get("night_start"), row.get("night_end"))
+        display_tuple = (
+            bool(row.get("known")), row.get("min_soc"), row.get("max_soc"),
+            row.get("reserve_soc"), row.get("night_start"), row.get("night_end"),
+        )
         if compact:
             prev = compact[-1]
-            prev_tuple = (bool(prev.get("known")), prev.get("min_soc"), prev.get("max_soc"), prev.get("reserve_soc"), prev.get("night_start"), prev.get("night_end"))
+            prev_tuple = (
+                bool(prev.get("known")), prev.get("min_soc"), prev.get("max_soc"),
+                prev.get("reserve_soc"), prev.get("night_start"), prev.get("night_end"),
+            )
             if display_tuple == prev_tuple:
                 continue
         compact.append(dict(row))
+
     segments: List[Dict[str, Any]] = []
     for index, row in enumerate(compact):
-        seg_start = max(start_ms, int(row["effective_from_ms"]))
-        seg_end = end_ms if index + 1 >= len(compact) else min(end_ms, int(compact[index + 1]["effective_from_ms"]))
+        seg_start = max(start_ms, int(row.get("effective_from_ms") or start_ms))
+        seg_end = end_ms if index + 1 >= len(compact) else min(
+            end_ms, int(compact[index + 1].get("effective_from_ms") or end_ms)
+        )
         if seg_end <= seg_start:
             continue
         item = dict(row)
         item["start_minute"] = max(0, int((seg_start - start_ms) // 60000))
         item["end_minute"] = min(1440, int((seg_end - start_ms + 59999) // 60000))
         segments.append(item)
-    meta = dict(meta)
-    meta["segments"] = len(segments)
-    meta["unknown_segments"] = sum(1 for item in segments if not item.get("known"))
-    return segments, meta
+
+    result_meta = dict(meta or {})
+    result_meta["segments"] = len(segments)
+    result_meta["unknown_segments"] = sum(1 for item in segments if not item.get("known"))
+    return segments, result_meta
+
+
+def overlay_legend_transitions(segments: Iterable[Mapping[str, Any]]) -> Dict[str, List[Any]]:
+    """Return chronological, adjacent-deduplicated overlay values for legends."""
+    known = [dict(item) for item in segments if bool(item.get("known"))]
+
+    def transitions(key: str) -> List[Any]:
+        values: List[Any] = []
+        for item in known:
+            value = item.get(key)
+            if value in (None, ""):
+                continue
+            if not values or value != values[-1]:
+                values.append(value)
+        return values
+
+    windows: List[str] = []
+    for item in known:
+        start = str(item.get("night_start") or "")
+        end = str(item.get("night_end") or "")
+        if not start or not end:
+            continue
+        value = f"{start}–{end}"
+        if not windows or value != windows[-1]:
+            windows.append(value)
+
+    return {
+        "max_soc": transitions("max_soc"),
+        "reserve_soc": transitions("reserve_soc"),
+        "min_soc": transitions("min_soc"),
+        "night_window": windows,
+    }
+
+
+def build_day_segments(
+    config: Mapping[str, Any], start_dt: datetime, end_dt: datetime,
+    *, current_effective_config: Optional[Mapping[str, Any]] = None, now_dt: Optional[datetime] = None,
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    rows, meta = query_timeline_rows(config, start_dt, end_dt)
+    return build_segments_from_rows(
+        rows,
+        start_dt,
+        end_dt,
+        current_effective_config=current_effective_config,
+        now_dt=now_dt,
+        meta=meta,
+    )

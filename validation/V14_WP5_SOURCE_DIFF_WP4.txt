@@ -1,0 +1,28 @@
+WP5 vs WP4
+NEW=13
+CHANGED=5
+DELETED=0
+
+NEW FILES:
+V14_WP4_SOURCE_MANIFEST.sha256
+graph_evidence.py
+tests/test_v14_graph_evidence_retention_wp5.py
+validation/V14_WP5_COMPILEALL.txt
+validation/V14_WP5_CONTROLLER_LOGIC_SHA256.txt
+validation/V14_WP5_FULL_TEST.txt
+validation/V14_WP5_QUERY_BENCHMARK.json
+validation/V14_WP5_REAL_VS_INTEGER_BENCHMARK.json
+validation/V14_WP5_RESOURCEWARNING_TEST.txt
+validation/V14_WP5_RETENTION_BENCHMARK.json
+validation/V14_WP5_SOURCE_DIFF_WP4.txt
+validation/V14_WP5_SYNTHETIC_REBUILD_REPORT.json
+validation/V14_WP5_V4_HEADER_COUNTS.txt
+
+CHANGED FILES:
+graph_core_v3.py
+graph_core_v3_live.py
+graph_query_service.py
+tools/rebuild_graph_core_v3.py
+web_ui.py
+
+DELETED FILES:

@@ -1,0 +1,25 @@
+{
+  "backend": "v3",
+  "counts": {
+    "events": 500,
+    "intervals": 10,
+    "minute": 501,
+    "raw": 10000
+  },
+  "db_bytes": 1142784,
+  "effective_rows_per_second": 5350.3,
+  "elapsed_seconds": 1.869,
+  "enqueue_ms": {
+    "max": 3.8444,
+    "median": 0.0172,
+    "p95": 0.0442,
+    "p99": 0.1587
+  },
+  "integrity_check": "ok",
+  "rows_dropped": 0,
+  "rows_requested": 10000,
+  "rows_written": 10000,
+  "schema_version": 3,
+  "storage_encoding": "scaled_integer_v1",
+  "wal_bytes_after_close": 0
+}

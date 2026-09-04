@@ -70,15 +70,18 @@ class V12130MeasurementV4OnlyTests(unittest.TestCase):
         self.assertEqual((), steps2)
 
 
-    def test_installer_accepts_v12_13_0_and_targets_v13_0_2_without_v3_runtime(self):
+    def test_installer_accepts_v13_0_3_and_targets_v14_with_transactional_v3_cutover(self):
         script = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_VERSION="v13_0_3"', script)
-        self.assertIn('EXPECTED_SOURCE_VERSION="13.0.2"', script)
-        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v13.0.2-20260812"', script)
-        self.assertIn('SOURCE_MODE="V13_0_2"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v13.0.3-20260814"', script)
-        self.assertIn('V13_0_3_SOURCE_MANIFEST.sha256', script)
-        self.assertIn('backfill_graph_config_timeline.py', script)
+        self.assertIn('EXPECTED_VERSION="v14_0_0"', script)
+        self.assertIn('EXPECTED_SOURCE_VERSION="13.0.3"', script)
+        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v13.0.3-20260814"', script)
+        self.assertIn('SOURCE_MODE="V13_0_3"', script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v14.0.0-20260904-r2"', script)
+        self.assertIn('V14_0_0_SOURCE_MANIFEST.sha256', script)
+        self.assertIn('tools/v14_cutover.py preflight', script)
+        self.assertIn('tools/v14_cutover.py rebuild', script)
+        self.assertIn('tools/v14_cutover.py verify', script)
+        self.assertNotIn('python3 tools/backfill_graph_config_timeline.py', script)
         self.assertNotIn('SOURCE_MODE="V12_12_2"', script)
 
     def test_release_migration_cli_moves_schema_3_to_4_and_then_noops(self):

@@ -35,6 +35,9 @@ from config_validator import ValidationIssue, restart_relevant_changes, split_is
 from cross_charge import cross_charge_enabled
 from csv_logger import rows_to_csv, estimate_retention_hours, measurement_log_mode, detected_log_mounts, resolve_log_path
 from measurement_db import query_graph_points, query_measurement_date_range, resolve_measurement_db_path, db_status_for_config
+from graph_query_service import GRAPH_QUERY_SERVICE, GraphQueryError
+from graph_history_runtime import graph_history_runtime_status, query_storage_day_history
+from graph_workspace import resolve_guided_views, workspace_manifest
 from version import APP_BUILD_ID, APP_VERSION, APP_VERSION_LABEL
 from status_page_v2 import render_global_topbar, render_status_page_v2
 from system_metrics import get_system_metrics
@@ -1441,6 +1444,193 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
     @app.get("/graph-view-data")
     def graph_view_data(range: str = "live", resolution: str = "live"):
         return build_graph_view_payload(config_manager.get(), state.snapshot(), range_name=range, resolution=resolution)
+
+    @app.get("/api/graph/v1/catalog")
+    def graph_v1_catalog():
+        return GRAPH_QUERY_SERVICE.catalog()
+
+    @app.get("/api/graph/v1/workspace")
+    def graph_v1_workspace():
+        # Presentation/grouping metadata only. Actual values, entities,
+        # coverage and evidence remain authoritative V3 query-service reads.
+        payload = workspace_manifest(GRAPH_QUERY_SERVICE.catalog())
+        runtime = graph_history_runtime_status(config_manager.get())
+        payload["runtime"] = runtime
+        entity_rows: List[Dict[str, Any]] = []
+        if runtime.get("read_mode") == "V3_NATIVE" and runtime.get("workspace_ready"):
+            try:
+                entity_rows = list(GRAPH_QUERY_SERVICE.entities(_graph_v1_db_path()).get("entities") or [])
+            except GraphQueryError:
+                entity_rows = []
+        payload["entities"] = entity_rows
+        payload["guided_views"] = resolve_guided_views(payload.get("guided_views") or [], entity_rows)
+        return payload
+
+    def _graph_v1_db_path() -> str:
+        cfg = config_manager.get()
+        if not bool(cfg.get("MEASUREMENT_DB_ENABLED", True)):
+            raise GraphQueryError("GRAPH_DB_DISABLED")
+        return resolve_measurement_db_path(cfg)
+
+    @app.get("/api/graph/v1/runtime")
+    def graph_v1_runtime():
+        # Graph/history readiness is diagnostic only. It must never gate the
+        # controller /ready contract or command safety.
+        return graph_history_runtime_status(config_manager.get())
+
+    @app.get("/api/graph/v1/coverage")
+    def graph_v1_coverage(series: str = ""):
+        try:
+            series_ids = [item.strip() for item in series.split(",") if item.strip()] or None
+            return GRAPH_QUERY_SERVICE.coverage(_graph_v1_db_path(), series_ids=series_ids)
+        except GraphQueryError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=409)
+
+    @app.get("/api/graph/v1/evidence")
+    def graph_v1_evidence(
+        start_ms: Optional[int] = None,
+        end_ms: Optional[int] = None,
+        series: str = "",
+        resolution: str = "highres",
+    ):
+        try:
+            finish = int(end_ms if end_ms is not None else time.time() * 1000)
+            start = int(start_ms if start_ms is not None else finish - 24 * 60 * 60 * 1000)
+            series_ids = [item.strip() for item in series.split(",") if item.strip()] or None
+            return GRAPH_QUERY_SERVICE.evidence(
+                _graph_v1_db_path(), start, finish, series_ids=series_ids, resolution=resolution
+            )
+        except GraphQueryError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=409)
+
+    @app.get("/api/graph/v1/overview")
+    def graph_v1_overview(
+        start_ms: Optional[int] = None,
+        end_ms: Optional[int] = None,
+        series: str = "",
+        resolution: str = "auto",
+        include_context: bool = True,
+    ):
+        try:
+            finish = int(end_ms if end_ms is not None else time.time() * 1000)
+            start = int(start_ms if start_ms is not None else finish - 24 * 60 * 60 * 1000)
+            series_ids = [item.strip() for item in series.split(",") if item.strip()] or None
+            return GRAPH_QUERY_SERVICE.overview(
+                _graph_v1_db_path(), start, finish,
+                series_ids=series_ids, resolution=resolution,
+                include_context=bool(include_context),
+            )
+        except GraphQueryError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=409)
+
+    @app.get("/api/graph/v1/inspector")
+    def graph_v1_inspector(ts_ms: Optional[int] = None, series: str = "", tolerance_ms: int = 10000):
+        try:
+            target = int(ts_ms if ts_ms is not None else time.time() * 1000)
+            series_ids = [item.strip() for item in series.split(",") if item.strip()] or None
+            return GRAPH_QUERY_SERVICE.inspector(
+                _graph_v1_db_path(), target,
+                series_ids=series_ids, tolerance_ms=max(0, min(int(tolerance_ms), 60_000)),
+            )
+        except GraphQueryError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=409)
+
+    @app.get("/api/graph/v1/command-follow")
+    def graph_v1_command_follow(
+        event_id: Optional[int] = None,
+        ts_ms: Optional[int] = None,
+        tolerance_ms: int = 60_000,
+        before_ms: int = 15_000,
+        after_ms: int = 180_000,
+    ):
+        try:
+            return GRAPH_QUERY_SERVICE.command_follow(
+                _graph_v1_db_path(), event_id=event_id, ts_ms=ts_ms,
+                tolerance_ms=max(0, min(int(tolerance_ms), 10 * 60_000)),
+                before_ms=max(0, min(int(before_ms), 10 * 60_000)),
+                after_ms=max(1_000, min(int(after_ms), 10 * 60_000)),
+            )
+        except GraphQueryError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=409)
+
+    @app.get("/api/graph/v1/episode-triggers")
+    def graph_v1_episode_triggers(
+        start_ms: Optional[int] = None,
+        end_ms: Optional[int] = None,
+        limit: int = 500,
+    ):
+        try:
+            finish = int(end_ms if end_ms is not None else time.time() * 1000)
+            start = int(start_ms if start_ms is not None else finish - 24 * 60 * 60 * 1000)
+            return GRAPH_QUERY_SERVICE.episode_triggers(
+                _graph_v1_db_path(), start, finish, limit=max(1, min(int(limit), 2000))
+            )
+        except GraphQueryError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=409)
+
+    @app.get("/api/graph/v1/episode-comparison")
+    def graph_v1_episode_comparison(
+        trigger_a: str = "",
+        trigger_b: str = "",
+        before_ms: int = 15 * 60_000,
+        after_ms: int = 45 * 60_000,
+        series: str = "",
+        entities: str = "",
+        entity_series: str = "",
+        resolution: str = "auto",
+    ):
+        try:
+            series_ids = [item.strip() for item in series.split(",") if item.strip()] or None
+            stable_ids = [item.strip() for item in entities.split(",") if item.strip()] or None
+            entity_series_ids = [item.strip() for item in entity_series.split(",") if item.strip()] or None
+            return GRAPH_QUERY_SERVICE.episode_comparison(
+                _graph_v1_db_path(), trigger_a, trigger_b,
+                before_ms=max(0, int(before_ms)),
+                after_ms=max(1, int(after_ms)),
+                series_ids=series_ids, stable_ids=stable_ids,
+                entity_series_ids=entity_series_ids, resolution=resolution,
+            )
+        except GraphQueryError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=409)
+
+    @app.get("/api/graph/v1/entities")
+    def graph_v1_entities(entities: str = ""):
+        try:
+            stable_ids = [item.strip() for item in entities.split(",") if item.strip()] or None
+            return GRAPH_QUERY_SERVICE.entities(_graph_v1_db_path(), stable_ids=stable_ids)
+        except GraphQueryError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=409)
+
+    @app.get("/api/graph/v1/entity-overview")
+    def graph_v1_entity_overview(
+        start_ms: Optional[int] = None,
+        end_ms: Optional[int] = None,
+        entities: str = "",
+        series: str = "",
+        resolution: str = "auto",
+    ):
+        try:
+            finish = int(end_ms if end_ms is not None else time.time() * 1000)
+            start = int(start_ms if start_ms is not None else finish - 24 * 60 * 60 * 1000)
+            stable_ids = [item.strip() for item in entities.split(",") if item.strip()] or None
+            series_ids = [item.strip() for item in series.split(",") if item.strip()] or None
+            return GRAPH_QUERY_SERVICE.entity_overview(
+                _graph_v1_db_path(), start, finish,
+                stable_ids=stable_ids, series_ids=series_ids, resolution=resolution,
+            )
+        except GraphQueryError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=409)
+
+    @app.get("/api/graph/v1/entity-coverage")
+    def graph_v1_entity_coverage(entities: str = "", series: str = ""):
+        try:
+            stable_ids = [item.strip() for item in entities.split(",") if item.strip()] or None
+            series_ids = [item.strip() for item in series.split(",") if item.strip()] or None
+            return GRAPH_QUERY_SERVICE.entity_coverage(
+                _graph_v1_db_path(), stable_ids=stable_ids, series_ids=series_ids,
+            )
+        except GraphQueryError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=409)
 
     @app.get("/soc-day-data")
     def soc_day_data(date: Optional[str] = None):
@@ -4947,14 +5137,34 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
         day_end = day_start + timedelta(days=1)
     is_today = day_start.date() == today
 
+    history_runtime = graph_history_runtime_status(cfg)
+    history_mode = str(history_runtime.get("read_mode") or "UNAVAILABLE")
+
     def _decorate_with_historical_config(base_payload: Dict[str, Any]) -> Dict[str, Any]:
-        from graph_config_timeline import build_day_segments
+        from graph_config_timeline import build_day_segments, build_segments_from_rows, overlay_legend_transitions
         decorated = dict(base_payload)
         try:
-            segments, timeline_meta = build_day_segments(
-                cfg, day_start, day_end,
-                current_effective_config=cfg if is_today else None,
-            )
+            if history_mode == "V3_NATIVE":
+                config_payload = GRAPH_QUERY_SERVICE.config_timeline(
+                    resolve_measurement_db_path(cfg),
+                    int(day_start.timestamp() * 1000),
+                    int(day_end.timestamp() * 1000),
+                )
+                segments, timeline_meta = build_segments_from_rows(
+                    list(config_payload.get("items") or []), day_start, day_end,
+                    current_effective_config=cfg if is_today else None,
+                    meta={
+                        "timeline_status": "hit" if config_payload.get("items") else "empty",
+                        "query_source": "graph_query_service_v1",
+                        "query_meta": dict(config_payload.get("meta") or {}),
+                    },
+                )
+            else:
+                # V2/unknown remains an explicit legacy compatibility path.
+                segments, timeline_meta = build_day_segments(
+                    cfg, day_start, day_end,
+                    current_effective_config=cfg if is_today else None,
+                )
         except Exception as exc:
             segments = [{
                 "start_minute": 0, "end_minute": 1440, "known": False,
@@ -4964,7 +5174,8 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
             timeline_meta = {"timeline_status": "error", "timeline_error": str(exc), "unknown_segments": 1}
         decorated["config_segments"] = segments
         decorated["config_timeline"] = timeline_meta
-        decorated["overlay_semantics"] = "historical_effective_segmented_v1"
+        decorated["config_legend"] = overlay_legend_transitions(segments)
+        decorated["overlay_semantics"] = "historical_effective_segmented_v2"
         decorated["historical_config_complete"] = not any(not bool(item.get("known")) for item in segments)
         # Compatibility fields contain only a single unambiguous day-wide overlay.
         known = [item for item in segments if item.get("known")]
@@ -4978,10 +5189,10 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
             decorated["night_window"] = {"start": "", "end": ""}
         return decorated
 
-    primary_present = _primary_storage_present(cfg, snap)
+    snapshot_primary_present = _primary_storage_present(cfg, snap)
     status_units = _status_units(cfg, snap, snap.get("zendure_target_signed_power"), snap.get("zendure_system_signed_power"))
-    unit_count = min(2, max(1, len(status_units)))
-    cache_key = f"{day_start.date().isoformat()}|storage-v4|p{int(primary_present)}|u{unit_count}"
+    snapshot_unit_count = min(2, max(1, len(status_units)))
+    cache_key = f"{day_start.date().isoformat()}|storage-wp6|{history_mode}|p{int(snapshot_primary_present)}|u{snapshot_unit_count}"
     now_epoch = time.time()
     ttl = 60 if is_today else 3600
     with _storage_day_lock:
@@ -4990,73 +5201,97 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
             payload["cache_status"] = "hit"
             payload["cache_age_s"] = int(now_epoch - float(_storage_day_cache.get("built_epoch") or 0))
             return _decorate_with_historical_config(payload)
+
     points: List[Dict[str, Any]] = []
     source = "measurement_db_1min"
     error = ""
-    try:
-        db_points, db_meta = query_graph_points(cfg, day_start, day_end, limit=2000)
-        if db_points:
-            for pnt in db_points:
-                dt = datetime.fromtimestamp(int(pnt["epoch_ms"]) / 1000.0)
-                minute = int((dt - day_start).total_seconds() // 60)
-                points.append({
-                    "minute": minute,
-                    "time": dt.strftime("%H:%M"),
-                    "zendure_soc": pnt.get("soc"),
-                    "zendure_unit_1_soc": pnt.get("soc"),
-                    "zendure_unit_2_soc": pnt.get("zendure_unit_2_soc"),
-                    "primary_soc": pnt.get("primary_soc") if primary_present else None,
-                    "zendure_power_w": pnt.get("zendure_actual_power_w"),
-                    "primary_power_w": pnt.get("primary_power_w") if primary_present else None,
-                    "mode": pnt.get("mode"),
-                    "reason": pnt.get("control_reason") or pnt.get("limit_reason") or "",
-                    "safe_state": bool(pnt.get("safe_state_active")),
-                    "night_window": bool(pnt.get("night_window_active")),
-                })
-        else:
-            source = str(db_meta.get("db_status") or "measurement_db_empty")
-    except Exception as exc:
-        error = str(exc)
-        source = "error"
+    unit_count = snapshot_unit_count
+    primary_present = snapshot_primary_present
+    unit_labels = [str(u.get("name") or f"Zendure {idx+1}") for idx, u in enumerate(status_units[:2])]
+    available_from = day_start.date().isoformat()
+    available_to = today.isoformat()
+    history_details: Dict[str, Any] = {
+        "history_runtime": history_runtime,
+        "history_coverage": {"series": {}, "meta": {"status": "LEGACY_OR_UNAVAILABLE"}},
+        "history_evidence": {"series": {}, "meta": {"status": "LEGACY_OR_UNAVAILABLE"}},
+        "history_entities": {},
+    }
+
+    if history_mode == "V3_NATIVE":
+        history = query_storage_day_history(
+            cfg, day_start, day_end,
+            current_effective_config=cfg if is_today else None,
+        )
+        points = list(history.get("points") or [])
+        source = str(history.get("source") or "graph_core_v3_1min")
+        history_runtime = dict(history.get("runtime") or history_runtime)
+        error = str((history.get("meta") or {}).get("error") or history_runtime.get("query_error") or "")
+        unit_count = min(2, max(1, int(history.get("zendure_unit_count") or 1)))
+        primary_present = bool(history.get("primary_storage_present")) or (is_today and snapshot_primary_present)
+        unit_labels = list(history.get("unit_labels") or unit_labels or ["Zendure"])[:2]
+        available_from = str(history.get("available_from") or available_from)
+        available_to = str(history.get("available_to") or available_to)
+        history_details = {
+            "history_runtime": history_runtime,
+            "history_coverage": history.get("coverage") or {},
+            "history_evidence": history.get("evidence") or {},
+            "history_entities": history.get("entities") or {},
+            "controlled_storage_display_name": history.get("controlled_display_name") or "",
+            "primary_storage_display_name": history.get("primary_display_name") or "",
+        }
+    else:
+        try:
+            db_points, db_meta = query_graph_points(cfg, day_start, day_end, limit=2000)
+            if db_points:
+                for pnt in db_points:
+                    dt = datetime.fromtimestamp(int(pnt["epoch_ms"]) / 1000.0)
+                    minute = int((dt - day_start).total_seconds() // 60)
+                    points.append({
+                        "minute": minute, "time": dt.strftime("%H:%M"),
+                        "zendure_soc": pnt.get("soc"), "zendure_unit_1_soc": pnt.get("soc"),
+                        "zendure_unit_2_soc": pnt.get("zendure_unit_2_soc"),
+                        "primary_soc": pnt.get("primary_soc") if primary_present else None,
+                        "zendure_power_w": pnt.get("zendure_actual_power_w"),
+                        "primary_power_w": pnt.get("primary_power_w") if primary_present else None,
+                        "mode": pnt.get("mode"),
+                        "reason": pnt.get("control_reason") or pnt.get("limit_reason") or "",
+                        "safe_state": bool(pnt.get("safe_state_active")),
+                        "night_window": bool(pnt.get("night_window_active")),
+                    })
+            else:
+                source = str(db_meta.get("db_status") or "measurement_db_empty")
+        except Exception as exc:
+            error = str(exc)
+            source = "error"
+        date_range = query_measurement_date_range(cfg)
+        available_from = date_range.get("available_from") or available_from
+
     if is_today:
         now = datetime.now()
         minute = int((now - day_start).total_seconds() // 60)
         if 0 <= minute <= 1440:
             points.append({
-                "minute": minute,
-                "time": now.strftime("%H:%M"),
+                "minute": minute, "time": now.strftime("%H:%M"),
                 "zendure_soc": snap.get("battery_soc"),
                 "zendure_unit_1_soc": (status_units or [{}])[0].get("soc"),
                 "zendure_unit_2_soc": ((status_units + [{}, {}])[1].get("soc")),
                 "primary_soc": snap.get("sma_battery_soc", snap.get("second_battery_soc_percent", snap.get("second_battery_soc"))) if primary_present else None,
                 "zendure_power_w": snap.get("zendure_system_signed_power"),
                 "primary_power_w": snap.get("sma_battery_power", snap.get("second_battery_power_w", snap.get("second_battery_power"))) if primary_present else None,
-                "mode": snap.get("current_mode"),
-                "reason": snap.get("control_reason"),
+                "mode": snap.get("current_mode"), "reason": snap.get("control_reason"),
                 "safe_state": snap.get("current_mode") == "SAFE_STATE",
-                "night_window": snap.get("current_mode") == "NIGHT_DISCHARGE",
-                "live": True,
+                "night_window": snap.get("current_mode") == "NIGHT_DISCHARGE", "live": True,
             })
     points = sorted(points, key=lambda x: x.get("minute", 0))
     complete = bool(is_today or (points and int(points[-1].get("minute", 0)) >= 1430))
-    date_range = query_measurement_date_range(cfg)
     payload = {
-        "date": day_start.date().isoformat(),
-        "is_today": is_today,
-        "complete": complete,
-        "zendure_unit_count": unit_count,
-        "primary_storage_present": primary_present,
-        "unit_labels": [str(u.get("name") or f"Zendure {idx+1}") for idx, u in enumerate(status_units[:2])],
-        "axis_minute_start": 0,
-        "axis_minute_end": 1440,
-        "points": points,
-        "source": source,
-        "cache_status": "rebuilt",
-        "cache_age_s": 0,
-        "error": error,
-        "last_point_at": points[-1]["time"] if points else "",
-        "available_from": date_range.get("available_from") or day_start.date().isoformat(),
-        "available_to": today.isoformat(),
+        "date": day_start.date().isoformat(), "is_today": is_today, "complete": complete,
+        "zendure_unit_count": unit_count, "primary_storage_present": primary_present,
+        "unit_labels": unit_labels, "axis_minute_start": 0, "axis_minute_end": 1440,
+        "points": points, "source": source, "cache_status": "rebuilt", "cache_age_s": 0,
+        "error": error, "last_point_at": points[-1]["time"] if points else "",
+        "available_from": available_from, "available_to": available_to,
+        **history_details,
     }
     with _storage_day_lock:
         _storage_day_cache.update({"key": cache_key, "payload": payload, "built_epoch": now_epoch})
@@ -5324,102 +5559,261 @@ def build_graph_page(cfg: Dict[str, Any], s: Optional[Dict[str, Any]] = None) ->
         server_time=str(status_payload.get("server_time") or ""),
     )
     page += """
+    <style>
+      .zec-workspace-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 16px}
+      .zec-workspace-tab{border:1px solid rgba(148,163,184,.22);background:rgba(15,23,42,.62);color:#dbeafe;border-radius:11px;padding:9px 13px;font-weight:800;cursor:pointer}
+      .zec-workspace-tab.is-active{border-color:#2dd4bf;background:rgba(45,212,191,.10);color:#99f6e4}
+      .zec-workspace-tab small{display:block;font-weight:500;color:#94a9bd;margin-top:2px}
+      .zec-time-presets{display:flex;gap:6px;flex-wrap:wrap}
+      .zec-time-preset{border:1px solid rgba(148,163,184,.22);background:rgba(15,23,42,.62);color:#dbeafe;border-radius:9px;padding:7px 10px;font-weight:750;cursor:pointer}
+      .zec-time-preset.is-active{border-color:#38bdf8;color:#bae6fd;background:rgba(56,189,248,.10)}
+      .zec-workspace-layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;align-items:start}
+      .zec-series-picker{position:sticky;top:84px;max-height:calc(100vh - 106px);overflow:auto}
+      .zec-series-group{border-top:1px solid rgba(148,163,184,.14);padding:12px 0}.zec-series-group:first-child{border-top:0;padding-top:0}
+      .zec-series-group h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#94a9bd;margin:0 0 9px}
+      .zec-series-option{display:grid;grid-template-columns:20px minmax(0,1fr);gap:8px;align-items:start;padding:6px 0;color:#dbeafe;font-size:13px}
+      .zec-series-option small{display:block;color:#7f93aa;font-size:11px;margin-top:2px}
+      .zec-series-option input{margin-top:2px}
+      .zec-series-option.is-guided{opacity:.9}
+      .zec-workspace-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+      .zec-evidence-table{width:100%;border-collapse:collapse;font-size:12px}.zec-evidence-table th,.zec-evidence-table td{padding:9px 8px;border-bottom:1px solid rgba(148,163,184,.12);text-align:left;vertical-align:top}.zec-evidence-table th{color:#94a9bd}.zec-evidence-table td{color:#dbeafe}
+      .zec-evidence-state{display:inline-flex;border-radius:999px;padding:3px 7px;font-size:10px;font-weight:850;border:1px solid rgba(148,163,184,.22)}
+      .zec-evidence-state.ok{color:#86efac;border-color:rgba(34,197,94,.36)}.zec-evidence-state.warn{color:#fde68a;border-color:rgba(245,158,11,.42)}.zec-evidence-state.bad{color:#fecaca;border-color:rgba(248,113,113,.42)}
+      .zec-workspace-empty{padding:28px;text-align:center;color:#94a9bd;border:1px dashed rgba(148,163,184,.22);border-radius:14px}
+      .zec-custom-time{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.zec-custom-time input{background:transparent;color:#f8fafc;border:0;font:inherit;min-width:178px}
+      .zec-custom-time input::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.8}
+      .zec-workspace-note{font-size:12px;color:#94a9bd;line-height:1.45}
+      .zec-context-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+      .zec-context-card{border:1px solid rgba(148,163,184,.14);border-radius:12px;padding:12px;background:rgba(15,23,42,.35)}
+      .zec-context-card b{display:block;font-size:21px;color:#f8fafc}.zec-context-card span{font-size:11px;color:#94a9bd}
+      .zec-inspector-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+      .zec-inspector-block{border:1px solid rgba(148,163,184,.14);border-radius:12px;padding:12px;background:rgba(15,23,42,.35);min-width:0}
+      .zec-inspector-block h3{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#94a9bd;margin:0 0 9px}
+      .zec-inspector-value{display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-top:1px solid rgba(148,163,184,.08);font-size:12px}.zec-inspector-value:first-of-type{border-top:0}
+      .zec-inspector-value span{color:#94a9bd}.zec-inspector-value b{color:#f8fafc;text-align:right;overflow-wrap:anywhere}
+      .zec-inspector-status{display:inline-flex;border:1px solid rgba(148,163,184,.24);border-radius:999px;padding:3px 8px;font-size:10px;font-weight:850;margin:2px 4px 2px 0}
+      .zec-inspector-status.ok{color:#86efac;border-color:rgba(34,197,94,.36)}.zec-inspector-status.warn{color:#fde68a;border-color:rgba(245,158,11,.42)}.zec-inspector-status.bad{color:#fecaca;border-color:rgba(248,113,113,.42)}
+      .zec-follow-stage-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin-bottom:12px}
+      .zec-follow-stage{border:1px solid rgba(148,163,184,.14);border-radius:11px;padding:10px;background:rgba(15,23,42,.35)}.zec-follow-stage b{display:block;color:#f8fafc;font-size:12px}.zec-follow-stage small{color:#94a9bd;line-height:1.35}
+      .zec-follow-chart{height:300px;position:relative}
+      .zec-event-action{border:0;background:transparent;color:#93c5fd;padding:0;cursor:pointer;text-decoration:underline;font:inherit}
+      .zec-compare-toolbar{display:flex;flex-wrap:wrap;gap:9px;align-items:end;margin-bottom:12px}.zec-compare-toolbar label{display:flex;flex-direction:column;gap:4px;font-size:11px;color:#94a9bd}.zec-compare-toolbar select,.zec-compare-toolbar input{min-width:180px;border:1px solid rgba(148,163,184,.22);border-radius:9px;background:#0f172a;color:#e5edf6;padding:7px 9px}.zec-compare-toolbar input{min-width:90px;width:90px}
+      .zec-compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.zec-compare-chart{height:330px;position:relative}.zec-compare-card{border:1px solid rgba(148,163,184,.14);border-radius:12px;padding:11px;background:rgba(15,23,42,.35)}.zec-compare-card h3{margin:0 0 5px;font-size:13px}.zec-compare-card small{color:#94a9bd;line-height:1.4}.zec-compare-inspectors{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}.zec-compare-overlay{height:390px;position:relative}.zec-compare-note{font-size:11px;color:#94a9bd;margin-top:8px;line-height:1.45}
+      body.zec-modern-body.modern-light .zec-workspace-tab,body.zec-modern-body.modern-light .zec-time-preset{background:#fff;color:#334155;border-color:#dbe3ee}
+      body.zec-modern-body.modern-light .zec-workspace-tab.is-active{background:#eff6ff;color:#1d4ed8;border-color:#93c5fd}
+      body.zec-modern-body.modern-light .zec-time-preset.is-active{background:#eff6ff;color:#1d4ed8;border-color:#93c5fd}
+      body.zec-modern-body.modern-light .zec-series-option,body.zec-modern-body.modern-light .zec-evidence-table td{color:#0f172a}
+      body.zec-modern-body.modern-light .zec-custom-time input{color:#0f172a}
+      body.zec-modern-body.modern-light .zec-custom-time input::-webkit-calendar-picker-indicator{filter:none}
+      body.zec-modern-body.modern-light .zec-context-card{background:#f8fafc;border-color:#e5e7eb}.zec-context-card b{color:inherit}
+      body.zec-modern-body.modern-light .zec-inspector-block,body.zec-modern-body.modern-light .zec-follow-stage,body.zec-modern-body.modern-light .zec-compare-card{background:#f8fafc;border-color:#e5e7eb}.zec-inspector-block b,.zec-follow-stage b{color:inherit}
+      body.zec-modern-body.modern-light .zec-compare-toolbar select,body.zec-modern-body.modern-light .zec-compare-toolbar input{background:#fff;color:#0f172a;border-color:#dbe3ee}
+      @media(max-width:1100px){.zec-workspace-layout{grid-template-columns:1fr}.zec-series-picker{position:static;max-height:none}.zec-context-grid,.zec-inspector-grid,.zec-compare-grid,.zec-compare-inspectors{grid-template-columns:1fr}.zec-follow-stage-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    </style>
     <main class="modern-page zec-shell">
       <section class="zec-panel zec-panel-lg">
         <div class="zec-page-title">
-          <div><h1>Graph / Live-Verlauf</h1><div class="zec-page-note">Live-/Verlaufsdiagnose im Mock-up-Layout. Der Legacy-Graph bleibt im Expertenmenü verfügbar.</div></div>
-          <div class="zec-control-group"><span id="chartStatus" class="zec-status-badge ok">lädt…</span><span class="zec-status-badge">V{APP_VERSION}</span></div>
+          <div><h1>Graph / Live-Verlauf</h1><div class="zec-page-note">Graph-Workspace auf Graph Core V3: geführte Sichten und freie Kombinationen bis maximal 48 Stunden.</div></div>
+          <div class="zec-control-group"><span id="chartStatus" class="zec-status-badge">lädt…</span><span id="runtimeBadge" class="zec-status-badge">V3 wird geprüft</span><span class="zec-status-badge">V{APP_VERSION}</span></div>
         </div>
+        <div id="viewTabs" class="zec-workspace-tabs" aria-label="Graph-Sicht"></div>
         <div class="zec-graph-toolbar">
           <div class="zec-control-group">
-            <label class="zec-control">Zeitraum <select id="graphRange"><option value="live">Live/RAM</option><option value="15m">Letzte 15 Minuten</option><option value="1h">Letzte Stunde</option><option value="6h">Letzte 6 Stunden</option><option value="24h" selected>Letzte 24 Stunden</option><option value="today">Heute</option></select></label>
-            <label class="zec-control">Auflösung <select id="graphResolution"><option value="live">Live</option><option value="1min" selected>1 Minute</option><option value="5min">5 Minuten</option></select></label>
-            <label class="zec-control"><input type="checkbox" id="autoRefresh" checked> Auto-Refresh</label>
+            <div id="timePresets" class="zec-time-presets"></div>
+            <label class="zec-control zec-custom-time">Von <input id="rangeStart" type="datetime-local" step="60"> bis <input id="rangeEnd" type="datetime-local" step="60"><button id="applyCustomRange" type="button">Anwenden</button></label>
+            <label class="zec-control"><input type="checkbox" id="autoRefresh"> Auto-Refresh</label>
           </div>
-          <div class="zec-control-group"><button class="zec-btn" type="button" onclick="resetSeriesVisibility()">Linien zurücksetzen</button><a class="zec-btn" href="/graph-data.csv">Graph-Verlauf CSV</a><a class="zec-btn" href="/graph_old">Alter Graph</a></div>
+          <div class="zec-control-group"><button class="zec-btn" type="button" id="resetWorkspace">Ansicht zurücksetzen</button><span class="zec-workspace-note">„Graph-Verlauf CSV“ ist im alten Graph verfügbar.</span><a class="zec-btn" href="/graph_old">Alter Graph</a></div>
         </div>
-        <div class="zec-chart-card"><canvas id="powerChart" height="430"></canvas></div>
+        <div id="workspaceWarning" class="zec-alert-strip" hidden></div>
+        <div class="zec-workspace-meta"><span id="rangeBadge" class="zec-status-badge">Zeitraum —</span><span id="resolutionBadge" class="zec-status-badge">Auflösung —</span><span id="selectionBadge" class="zec-status-badge">0 Serien</span></div>
       </section>
 
-      <section class="zec-panel">
-        <div class="zec-panel-header"><div><h2>Kennzahlen im sichtbaren Zeitraum</h2><div class="zec-panel-desc">Aktuell, Minimum, Maximum und Durchschnitt; SOC mit Start/Ende.</div></div></div>
-        <div id="kpiGrid" class="zec-kpi-strip"></div>
-      </section>
+      <div class="zec-workspace-layout">
+        <div>
+          <section class="zec-panel">
+            <div class="zec-panel-header"><div><h2 id="workspaceViewTitle">Energiefluss</h2><div id="workspaceViewDescription" class="zec-panel-desc">lädt…</div></div></div>
+            <div class="zec-chart-card"><canvas id="powerChart" height="470"></canvas><div id="chartEmpty" class="zec-workspace-empty" hidden>Für die Auswahl sind im Zeitraum keine Daten verfügbar.</div></div>
+          </section>
 
-      <div class="zec-bottom-grid">
-        <section class="zec-panel"><h2>Leistungsflüsse aktuell</h2><div id="flowBox" class="zec-panel-desc">lädt…</div></section>
-        <section class="zec-panel"><h2>SOC & Modus</h2><div id="socModeBox" class="zec-panel-desc">lädt…</div><canvas id="socMiniChart" height="120"></canvas></section>
-        <section class="zec-panel"><h2>Ereignisse / Marker</h2><div id="eventBox" class="zec-panel-desc">lädt…</div></section>
+          <section class="zec-panel" id="inspectorPanel">
+            <div class="zec-panel-header"><div><h2>Regler-Inspector</h2><div class="zec-panel-desc">Klick in den Graphen: der nächste High-Res-Messpunkt wird mit Zielwertpipeline, Zuständen, historischer Config, Entities/Topologie und Evidence synchron angezeigt.</div></div><span id="inspectorTime" class="zec-status-badge">kein Cursor</span></div>
+            <div id="inspectorEmpty" class="zec-workspace-empty">Klicke auf einen Zeitpunkt im Graphen, um den Inspector zu laden.</div>
+            <div id="inspectorContent" hidden>
+              <div class="zec-inspector-grid"><div id="inspectorMeasurements" class="zec-inspector-block"></div><div id="inspectorPipeline" class="zec-inspector-block"></div><div id="inspectorStates" class="zec-inspector-block"></div></div>
+              <div class="zec-inspector-grid" style="margin-top:10px"><div id="inspectorConfig" class="zec-inspector-block"></div><div id="inspectorEntities" class="zec-inspector-block"></div><div id="inspectorEvidence" class="zec-inspector-block"></div></div>
+              <div id="inspectorCommandLink" style="margin-top:10px"></div>
+            </div>
+          </section>
+
+          <section class="zec-panel" id="commandFollowPanel">
+            <div class="zec-panel-header"><div><h2>Command-Follow / Ursache-Wirkung</h2><div class="zec-panel-desc">Publish, beobachtete Richtungsreaktion, Readback, Tracking und Systemwirkung werden getrennt ausgewiesen. Publish oder gleiche Richtung allein gelten nicht als Wirksamkeitsnachweis.</div></div><span id="commandFollowBadge" class="zec-status-badge">kein Command</span></div>
+            <div id="commandFollowEmpty" class="zec-workspace-empty">Wähle einen Command-Event im historischen Kontext oder über den Inspector.</div>
+            <div id="commandFollowContent" hidden><div id="commandFollowStages" class="zec-follow-stage-grid"></div><div class="zec-follow-chart"><canvas id="commandFollowChart"></canvas></div><div id="commandFollowDetails" class="zec-panel-desc" style="margin-top:10px"></div></div>
+          </section>
+
+          <section class="zec-panel" id="episodeComparisonPanel">
+            <div class="zec-panel-header"><div><h2>Episodenvergleich</h2><div class="zec-panel-desc">Zwei real persistierte Trigger als t=0 ausrichten. Serienauswahl und Cursor bleiben synchron; absolute Zeit, Coverage und Evidence werden je Episode getrennt ausgewiesen.</div></div><span id="comparisonBadge" class="zec-status-badge">kein Vergleich</span></div>
+            <div class="zec-compare-toolbar">
+              <label>Episode A<select id="episodeTriggerA"><option value="">Trigger laden…</option></select></label>
+              <label>Episode B<select id="episodeTriggerB"><option value="">Trigger laden…</option></select></label>
+              <label>Vor t=0 (min)<input id="episodeBeforeMin" type="number" min="0" max="2880" step="1" value="15"></label>
+              <label>Nach t=0 (min)<input id="episodeAfterMin" type="number" min="1" max="2880" step="1" value="45"></label>
+              <button class="zec-btn" type="button" id="loadEpisodeComparison">Vergleich laden</button>
+              <button class="zec-btn" type="button" id="comparisonSideBySide">Nebeneinander</button>
+              <button class="zec-btn" type="button" id="comparisonOverlay">Überlagern</button>
+            </div>
+            <div id="comparisonEmpty" class="zec-workspace-empty">Im sichtbaren Zeitraum zwei persistierte Trigger auswählen.</div>
+            <div id="comparisonContent" hidden>
+              <div id="comparisonSideView" class="zec-compare-grid">
+                <div class="zec-compare-card"><h3>Episode A</h3><small id="comparisonMetaA">—</small><div class="zec-compare-chart"><canvas id="comparisonChartA"></canvas></div><div id="comparisonCoverageA" class="zec-compare-note"></div></div>
+                <div class="zec-compare-card"><h3>Episode B</h3><small id="comparisonMetaB">—</small><div class="zec-compare-chart"><canvas id="comparisonChartB"></canvas></div><div id="comparisonCoverageB" class="zec-compare-note"></div></div>
+              </div>
+              <div id="comparisonOverlayView" hidden><div class="zec-compare-card"><h3>Überlagerung des aktiven Vergleichspaars</h3><small>Es werden ausschließlich Episode A und B überlagert.</small><div class="zec-compare-overlay"><canvas id="comparisonOverlayChart"></canvas></div></div></div>
+              <div class="zec-compare-inspectors"><div id="comparisonInspectorA" class="zec-inspector-block"><h3>Inspector A</h3><div class="zec-workspace-note">Cursor im Vergleich wählen.</div></div><div id="comparisonInspectorB" class="zec-inspector-block"><h3>Inspector B</h3><div class="zec-workspace-note">Cursor im Vergleich wählen.</div></div></div>
+              <div class="zec-compare-note">Der Vergleich ist deskriptiv. Eine visuelle Ähnlichkeit der Kurven ist kein statistischer oder kausaler Gleichheitsnachweis.</div>
+            </div>
+          </section>
+
+          <section class="zec-panel">
+            <div class="zec-panel-header"><div><h2>Kennzahlen im sichtbaren Zeitraum</h2><div class="zec-panel-desc">Start/Ende sowie Minimum, Maximum und Durchschnitt der aktuell gewählten Reihen.</div></div></div>
+            <div id="kpiGrid" class="zec-kpi-strip"></div>
+          </section>
+
+          <section class="zec-panel">
+            <div class="zec-panel-header"><div><h2>Coverage &amp; Evidence</h2><div class="zec-panel-desc">Fehlende Instrumentierung, echte Lücken und verfügbare Daten werden getrennt ausgewiesen. Measurement V4 ist keine Voraussetzung.</div></div></div>
+            <table class="zec-evidence-table"><thead><tr><th>Reihe</th><th>Coverage</th><th>Evidence im Zeitraum</th><th>Quelle</th></tr></thead><tbody id="evidenceRows"><tr><td colspan="4">lädt…</td></tr></tbody></table>
+          </section>
+
+          <section class="zec-panel">
+            <div class="zec-panel-header"><div><h2>Aktive Signale / Quellen</h2><div class="zec-panel-desc">Technische Reihe, Scope und Datenstatus der aktuellen Workspace-Auswahl.</div></div></div>
+            <table id="signalTable" class="zec-signal-table"></table>
+          </section>
+
+          <section class="zec-panel">
+            <div class="zec-panel-header"><div><h2>Historischer Kontext</h2><div class="zec-panel-desc">Sparse V3-Kontexte des sichtbaren Fensters. Command-Events können direkt in den WP8-Follow-Modus übernommen werden.</div></div></div>
+            <div class="zec-context-grid"><div class="zec-context-card"><b id="intervalCount">0</b><span>Intervalle</span></div><div class="zec-context-card"><b id="eventCount">0</b><span>Command-Events</span></div><div class="zec-context-card"><b id="configCount">0</b><span>Config-/Topologieänderungen</span></div></div>
+            <div id="eventBox" style="overflow-y: auto;max-height:240px;margin-top:10px" class="zec-panel-desc"></div>
+          </section>
+        </div>
+
+        <aside class="zec-panel zec-series-picker">
+          <div class="zec-panel-header"><div><h2>Serien</h2><div class="zec-panel-desc">Im freien Modus beliebig kombinierbar. Geführte Sichten verwenden einen definierten Satz.</div></div></div>
+          <div id="systemSeriesList"></div>
+          <div id="entitySeriesList"></div>
+          <p class="zec-workspace-note">Physische Zendure-Geräte erscheinen nur, wenn echte Einzelgerätetelemetrie in Graph Core V3 vorhanden ist. Fehlende Geräte oder Primärspeicher erzeugen keine Ersatzreihen.</p>
+        </aside>
       </div>
-
-      <section class="zec-panel">
-        <div class="zec-panel-header"><div><h2>Aktive Signale / Quellen</h2><div class="zec-panel-desc">Aktueller Datenstatus der im Graph verwendeten Signale.</div></div></div>
-        <table id="signalTable" class="zec-signal-table"></table>
-      </section>
     </main>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-    const GRAPH_VISIBILITY_KEY = 'zec-graph-visible-series-rc12';
-    let chart = null;
-    let socMini = null;
+    const WORKSPACE_STORAGE_KEY = 'zec-graph-workspace-v14-wp7';
     let graphRequestInFlight = false;
-    const SERIES_COLORS = {'Netzleistung':'#2f8cff','Zendure Soll':'#20d6d2','Zendure Ist':'#48c85a','Hausverbrauch':'#fb923c','PV-Leistung':'#facc15','Zendure SOC':'#a78bfa','Netz Rohwert':'#64748b'};
-    function fmt(v,u) { if(v===null || v===undefined || Number.isNaN(Number(v))) return '-'; const n=Number(v); if(u==='W') return Math.round(n)+' W'; if(u==='%') return Math.round(n)+' %'; return String(v); }
-    function loadVis() { try { return JSON.parse(localStorage.getItem(GRAPH_VISIBILITY_KEY)||'{}'); } catch(e) { return {}; } }
-    function saveVis() { if(!chart) return; const v={}; chart.data.datasets.forEach((d,i)=>v[d.label]=chart.isDatasetVisible(i)); try { localStorage.setItem(GRAPH_VISIBILITY_KEY, JSON.stringify(v)); } catch(e) {} }
-    function resetSeriesVisibility() { try { localStorage.removeItem(GRAPH_VISIBILITY_KEY); } catch(e) {} updateGraph(); }
-    function dataset(label, key, points, axis, hiddenDefault, dashed) {
-        const vis = loadVis(); let hidden = hiddenDefault; if (Object.prototype.hasOwnProperty.call(vis, label)) hidden = !vis[label]; const color = SERIES_COLORS[label] || '#38bdf8';
-        return { label: label, data: points.map(p => ({x:Number(p.epoch_ms||0), y:(p[key] === undefined ? null : p[key])})), parsing:false, borderColor:color, backgroundColor:color+'33', borderWidth:2.4, pointRadius:0, pointHitRadius:18, pointHoverRadius:4, yAxisID:axis || 'y', hidden:hidden, spanGaps:false, borderDash:dashed?[6,5]:undefined, tension:0.18 };
-    }
-    function buildDatasets(points, available) {
-        const ds = [dataset('Netzleistung','grid_power_w',points,'y',false,false), dataset('Zendure Soll','zendure_target_power_w',points,'y',false,true), dataset('Zendure Ist','zendure_actual_power_w',points,'y',false,false)];
-        if (available && available.house_power_w) ds.push(dataset('Hausverbrauch','house_power_w',points,'y',false,false));
-        if (available && available.pv_power_w) ds.push(dataset('PV-Leistung','pv_power_w',points,'y',false,false));
-        ds.push(dataset('Zendure SOC','soc',points,'y1',false,true)); return ds;
-    }
-    function renderKpis(kpis) {
-        const defs = [['Netzleistung','grid_power_w','W'], ['Zendure Soll','zendure_target_power_w','W'], ['Zendure Ist','zendure_actual_power_w','W'], ['PV-Leistung','pv_power_w','W'], ['Hausverbrauch','house_power_w','W'], ['SOC','soc','%']];
-        let html=''; defs.forEach(([label,key,unit]) => { const k=(kpis||{})[key]||{}; if(!k.available) return; if(key==='soc') html += `<div class="zec-kpi"><div class="k-label">${label}</div><div class="k-num">${fmt(k.current,unit)}</div><div class="k-sub">Start ${fmt(k.start,unit)} · Min ${fmt(k.min,unit)} · Max ${fmt(k.max,unit)} · Ende ${fmt(k.end,unit)}</div></div>`; else html += `<div class="zec-kpi"><div class="k-label">${label}</div><div class="k-num">${fmt(k.current,unit)}</div><div class="k-sub">Min ${fmt(k.min,unit)} · Max ${fmt(k.max,unit)} · Ø ${fmt(k.avg,unit)}</div></div>`; });
-        document.getElementById('kpiGrid').innerHTML = html || '<div class="zec-kpi"><div class="k-label">Keine Kennzahlen verfügbar.</div></div>';
-    }
-    function renderSignals(signals) { let html='<tr><th>Signal / Quelle</th><th>Wert</th><th>Quelle</th><th>Status</th></tr>'; (signals||[]).forEach(s => { const ok=(s.status||'').toLowerCase().includes('gültig')||(s.status||'').toLowerCase().includes('verbunden'); const badge='<span class="zec-status-badge '+(ok?'signal-ok':'signal-warn')+'">'+(s.status||'-')+'</span>'; html += `<tr><td>${s.signal||''}</td><td>${fmt(s.value,s.unit||'')}</td><td>${s.source||'-'}</td><td>${badge}</td></tr>`; }); document.getElementById('signalTable').innerHTML = html; }
-    function renderEvents(events) { if(!events || !events.length) { document.getElementById('eventBox').innerHTML='Keine relevanten Marker im sichtbaren Zeitraum.'; return; } document.getElementById('eventBox').innerHTML = events.slice(-35).map(e => `<span class="event-pill">${e.time||''} · ${e.label||e.type}</span>`).join(''); }
-    function renderFlow(points) { const p = points && points.length ? points[points.length-1] : {}; const grid = Number(p.grid_power_w||0), z = Number(p.zendure_actual_power_w||0); document.getElementById('flowBox').innerHTML = `<div class="zec-flow-line"><span class="name">Netz</span><span class="val">${fmt(grid,'W')}</span></div><div class="zec-flow-line"><span class="name">Zendure Batterie</span><span class="val">${fmt(z,'W')}</span></div><div class="zec-panel-desc">PV/Haus erscheinen, sobald valide Daten verfügbar sind.</div>`; document.getElementById('socModeBox').innerHTML = `<div class="soc-ring" style="--soc:${Math.max(0,Math.min(100,Number(p.soc||0)))}%"><span>${fmt(p.soc,'%')}</span></div><div class="zec-panel-desc">Modus: ${p.mode_label||p.mode||'-'}<br>Grund: ${p.control_reason||'-'}<br>Datenstatus: ${p.data_status||'-'}</div>`; }
-    function renderSocMini(points) { if (!window.Chart) return; const labels = points.map(p=>p.time); const values = points.map(p=>p.soc); const data = {labels:labels, datasets:[{label:'SOC', data:values, borderColor:'#a78bfa', backgroundColor:'rgba(167,139,250,.15)', borderWidth:2, pointRadius:0, pointHitRadius:14, pointHoverRadius:4, tension:.25}]}; const options = {animation:false, interaction:{mode:'nearest', axis:'x', intersect:false}, plugins:{legend:{display:false}, tooltip:{mode:'nearest', intersect:false}}, scales:{y:{min:0,max:100,ticks:{color:'#8191a6'},grid:{color:'rgba(148,163,184,.08)'}}, x:{display:false}}}; if(!socMini) socMini = new Chart(document.getElementById('socMiniChart').getContext('2d'), {type:'line',data:data,options:options}); else {socMini.data=data; socMini.update();} }
-    async function updateGraph(force) {
-        if (document.visibilityState === 'hidden') return;
-        if (graphRequestInFlight && !force) return;
-        graphRequestInFlight = true;
-        const range = document.getElementById('graphRange').value; const resolution = document.getElementById('graphResolution').value;
-        const ctrl = new AbortController(); const timer = setTimeout(function(){ ctrl.abort(); }, 30000);
-        try {
-          document.getElementById('chartStatus').innerText = 'Graphdaten werden geladen…';
-          const res = await fetch('/graph-view-data?range='+encodeURIComponent(range)+'&resolution='+encodeURIComponent(resolution), {signal: ctrl.signal, cache:'no-store'});
-          clearTimeout(timer);
-          const payload = await res.json(); const points = payload.points || []; const r = payload.range || {}; const axisMin = Number(r.axis_start_epoch_ms || (points[0] && points[0].epoch_ms) || Date.now()-3600000); const axisMax = Number(r.axis_end_epoch_ms || (points[points.length-1] && points[points.length-1].epoch_ms) || Date.now());
-          renderKpis(payload.kpis || {}); renderSignals(payload.signals || []); renderEvents(payload.events || []); renderFlow(points); renderSocMini(points); const rangeText = r.label ? (' · Zeitraum: ' + r.label) : ''; document.getElementById('chartStatus').innerText = 'Quelle: ' + (payload.source || '-') + ' · Punkte: ' + points.length + rangeText + ' · Cache: ' + (payload.cache_status || '-');
-        if (!window.Chart) { document.getElementById('chartStatus').innerText += ' · Chart.js nicht geladen.'; return; }
-        const datasets = buildDatasets(points, payload.series_available || {});
-        const options = { animation:false, responsive:true, maintainAspectRatio:false, interaction:{mode:'index', axis:'x', intersect:false}, plugins:{ legend:{labels:{color:'#cbd5e1', boxWidth:26}, onClick:function(e,item,legend){Chart.defaults.plugins.legend.onClick(e,item,legend); saveVis();}}, tooltip:{mode:'index', intersect:false, backgroundColor:'rgba(8,18,31,.96)', borderColor:'rgba(148,163,184,.22)', borderWidth:1, callbacks:{afterBody:function(items){ const p=points[items[0].dataIndex]||{}; return ['Modus: '+(p.mode_label||p.mode||'-'), 'Regelgrund: '+(p.control_reason||'-'), 'Limiter/Schutz: '+(p.limit_reason||'-'), 'Datenstatus: '+(p.data_status||'-')]; }}}}, scales:{ y:{title:{display:true,text:'Leistung (W)',color:'#94a3b8'}, ticks:{color:'#8191a6'}, grid:{color:'rgba(148,163,184,.10)'}}, y1:{position:'right', min:0, max:100, title:{display:true,text:'SOC (%)',color:'#94a3b8'}, ticks:{color:'#8191a6'}, grid:{drawOnChartArea:false}}, x:{type:'linear', min:axisMin, max:axisMax, ticks:{color:'#8191a6', maxRotation:0, autoSkip:true, maxTicksLimit:9, callback:function(v){try{ const d=new Date(Number(v)); const span=Math.abs(axisMax-axisMin); if(span >= 18*3600000) return d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}); return d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});}catch(e){return ''+v;}}}, grid:{color:'rgba(148,163,184,.06)'}} } };
-        if (!chart) chart = new Chart(document.getElementById('powerChart').getContext('2d'), {type:'line', data:{datasets:datasets}, options:options}); else { chart.data.datasets=datasets; chart.options=options; chart.update(); }
-        } catch(e) {
-          clearTimeout(timer);
-          document.getElementById('chartStatus').innerText = (e && e.name === 'AbortError') ? 'Graphdaten werden noch vorbereitet. Bitte in einigen Sekunden erneut laden.' : ('Graph konnte nicht geladen werden: '+e);
-        } finally {
-          graphRequestInFlight = false;
-        }
-    }
-    document.getElementById('graphRange').addEventListener('change', function(){ updateGraph(true); }); document.getElementById('graphResolution').addEventListener('change', function(){ updateGraph(true); });
-    setInterval(function(){ if(document.getElementById('autoRefresh').checked && document.visibilityState !== 'hidden') updateGraph(); }, 5000);
-    document.addEventListener('visibilitychange', function(){ if(document.visibilityState !== 'hidden') updateGraph(); });
-    updateGraph(true);
+    let chart = null;
+    let manifest = null;
+    let runtime = null;
+    let entities = [];
+    let currentViewId = 'energy_balance';
+    let selectedKeys = new Set();
+    let selectedPreset = '24h';
+    let customRange = null;
+    let lastOverview = null;
+    let lastEntityOverview = null;
+    let refreshTimer = null;
+    let inspectorRequestInFlight = false;
+    let selectedInspectorMs = null;
+    let commandFollowChart = null;
+    let episodeTriggers = [];
+    let comparisonPayload = null;
+    let comparisonMode = 'side';
+    let comparisonChartA = null;
+    let comparisonChartB = null;
+    let comparisonOverlayChart = null;
+    let comparisonCursorMs = null;
+    const PALETTE = ['#38bdf8','#2dd4bf','#facc15','#fb923c','#a78bfa','#f472b6','#22c55e','#e879f9','#94a3b8','#60a5fa','#f97316','#14b8a6','#eab308','#c084fc','#84cc16','#f43f5e','#06b6d4','#8b5cf6'];
+    const GROUP_LABEL_KEYS = {grid:'graph.group.grid',storage:'graph.group.storage',control:'graph.group.control',command:'graph.group.command'};
+    const q = (sel) => document.querySelector(sel);
+    const qa = (sel) => Array.from(document.querySelectorAll(sel));
+    function t(key,fallback){ return (manifest && manifest.terms && manifest.terms[key]) || fallback || key; }
+    function esc(v){ return String(v===undefined||v===null?'':v).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c])); }
+    function fmtValue(v,unit){ if(v===null||v===undefined||Number.isNaN(Number(v))) return '—'; const n=Number(v); if(unit==='W') return Math.round(n)+' W'; if(unit==='%') return Number(n.toFixed(1))+' %'; return Number(n.toFixed(2))+((unit&&unit!=='1')?' '+unit:''); }
+    function localInput(ms){ const d=new Date(ms); const pad=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes()); }
+    function loadSaved(){ try{return JSON.parse(localStorage.getItem(WORKSPACE_STORAGE_KEY)||'{}');}catch(e){return{};} }
+    function saveState(){ try{ localStorage.setItem(WORKSPACE_STORAGE_KEY,JSON.stringify({view_id:currentViewId,preset:selectedPreset,selected:Array.from(selectedKeys)})); }catch(e){} }
+    function viewDef(){ return (manifest.guided_views||[]).find(v=>v.view_id===currentViewId) || manifest.guided_views[0]; }
+    function seriesCatalog(){ return (manifest && manifest.catalog && manifest.catalog.series)||[]; }
+    function entitySeriesCatalog(){ return (manifest && manifest.catalog && manifest.catalog.entity_series)||[]; }
+    function systemKey(id){ return 's:'+id; }
+    function entityKey(stable,id){ return 'e:'+stable+':'+id; }
+    function parseKey(key){ if(key.startsWith('s:')) return {scope:'system',series_id:key.slice(2)}; const parts=key.split(':'); if(parts[0]==='e' && parts.length>=3) return {scope:'entity',stable_id:parts.slice(1,-1).join(':'),series_id:parts[parts.length-1]}; return {scope:'unknown'}; }
+    function entityLabel(stable){ const e=entities.find(x=>x.stable_id===stable); return e ? (e.display_name||e.source_identity||e.stable_id) : stable; }
+    function labelForKey(key){ const p=parseKey(key); if(p.scope==='system'){ const c=seriesCatalog().find(x=>x.series_id===p.series_id); let label=c?c.label:p.series_id; const primary=entities.find(x=>x.stable_id==='storage:primary'),controlled=entities.find(x=>x.stable_id==='storage:controlled'); if(primary&&primary.display_name&&p.series_id==='primary_power_w')label=primary.display_name+' · Leistung'; if(primary&&primary.display_name&&p.series_id==='primary_soc_percent')label=primary.display_name+' · SOC'; if(controlled&&controlled.display_name&&p.series_id==='zendure_actual_power_w')label=controlled.display_name+' · Istleistung'; if(controlled&&controlled.display_name&&p.series_id==='zendure_soc_percent')label=controlled.display_name+' · SOC'; return label; } const c=entitySeriesCatalog().find(x=>x.series_id===p.series_id); return entityLabel(p.stable_id)+' · '+(c?c.label:p.series_id); }
+    function unitForKey(key){ const p=parseKey(key); const cat=(p.scope==='system'?seriesCatalog():entitySeriesCatalog()).find(x=>x.series_id===p.series_id); return cat ? cat.unit : ''; }
+    function yAxisForKey(key){ return unitForKey(key)==='%' ? 'yPct' : 'yPower'; }
+    function applyGuidedSelection(){ const v=viewDef(); selectedKeys = new Set((v.system_series||[]).map(systemKey)); (v.resolved_entity_series||[]).forEach(item=>selectedKeys.add(entityKey(item.stable_id,item.series_id))); }
+    function renderTabs(){ q('#viewTabs').innerHTML=(manifest.guided_views||[]).map(v=>'<button type="button" class="zec-workspace-tab '+(v.view_id===currentViewId?'is-active':'')+'" data-view="'+esc(v.view_id)+'">'+esc(t(v.label_key,v.view_id))+'<small>'+esc(t(v.description_key,''))+'</small></button>').join(''); qa('[data-view]').forEach(b=>b.addEventListener('click',()=>{currentViewId=b.dataset.view; if(currentViewId!=='free') applyGuidedSelection(); renderAllControls(); saveState(); updateGraph(true);})); }
+    function renderPresets(){ q('#timePresets').innerHTML=(manifest.time_presets||[]).map(p=>'<button type="button" class="zec-time-preset '+(selectedPreset===p.preset_id&&!customRange?'is-active':'')+'" data-preset="'+p.preset_id+'">'+esc(p.label)+'</button>').join(''); qa('[data-preset]').forEach(b=>b.addEventListener('click',()=>{selectedPreset=b.dataset.preset;customRange=null;renderPresets();setRangeInputsFromCurrent();saveState();updateGraph(true);})); }
+    function renderSeriesPicker(){ const guided=currentViewId!=='free'; const groups={}; seriesCatalog().forEach(c=>(groups[c.group]||(groups[c.group]=[])).push(c)); q('#systemSeriesList').innerHTML=Object.entries(groups).map(([group,items])=>'<div class="zec-series-group"><h3>'+esc(t(GROUP_LABEL_KEYS[group]||'',group))+'</h3>'+items.map(c=>'<label class="zec-series-option '+(guided?'is-guided':'')+'"><input type="checkbox" data-series-key="'+systemKey(c.series_id)+'" '+(selectedKeys.has(systemKey(c.series_id))?'checked':'')+' '+(guided?'disabled':'')+'><span>'+esc(c.label)+'<small>'+esc(c.series_id)+' · '+esc(c.unit)+'</small></span></label>').join('')+'</div>').join('');
+      const usable=entities.filter(e=>Array.isArray(e.available_series)&&e.available_series.length); q('#entitySeriesList').innerHTML=usable.length?'<div class="zec-series-group"><h3>Geräte / Topologie</h3>'+usable.map(e=>'<div style="margin:9px 0 5px;font-weight:800;color:#dbeafe">'+esc(e.display_name||e.source_identity||e.stable_id)+' <small style="color:#7f93aa">'+esc(e.entity_type)+'</small></div>'+entitySeriesCatalog().filter(c=>e.available_series.includes(c.series_id)).map(c=>{const key=entityKey(e.stable_id,c.series_id);const locked=guided;return '<label class="zec-series-option '+(locked?'is-guided':'')+'"><input type="checkbox" data-series-key="'+esc(key)+'" '+(selectedKeys.has(key)?'checked':'')+' '+(locked?'disabled':'')+'><span>'+esc(c.label)+'<small>'+esc(e.stable_id)+' · '+esc(c.series_id)+'</small></span></label>';}).join('')).join('')+'</div>':'<div class="zec-series-group"><h3>Geräte / Topologie</h3><div class="zec-workspace-note">Keine zusätzlichen Entity-Reihen vorhanden.</div></div>';
+      qa('[data-series-key]').forEach(x=>x.addEventListener('change',()=>{ if(currentViewId!=='free') return; const key=x.dataset.seriesKey; if(x.checked){ if(selectedKeys.size>=Number(manifest.max_selected_series||18)){x.checked=false;showWarning('Maximal '+manifest.max_selected_series+' Reihen gleichzeitig.');return;} selectedKeys.add(key);} else selectedKeys.delete(key); saveState(); updateSelectionBadge(); updateGraph(true);})); }
+    function renderAllControls(){ const v=viewDef(); q('#workspaceViewTitle').textContent=t(v.label_key,v.view_id); q('#workspaceViewDescription').textContent=t(v.description_key,''); renderTabs();renderPresets();renderSeriesPicker();updateSelectionBadge(); }
+    function updateSelectionBadge(){q('#selectionBadge').textContent=selectedKeys.size+' Serien';}
+    function showWarning(text){ const box=q('#workspaceWarning'); box.hidden=!text; box.textContent=text||''; }
+    function currentRange(){ const end=customRange?customRange.end:Date.now(); if(customRange) return {start:customRange.start,end:end,label:'Benutzerdefiniert'}; const p=(manifest.time_presets||[]).find(x=>x.preset_id===selectedPreset)||manifest.time_presets[2]; return {start:end-Number(p.window_ms),end:end,label:p.label}; }
+    function setRangeInputsFromCurrent(){ const r=currentRange();q('#rangeStart').value=localInput(r.start);q('#rangeEnd').value=localInput(r.end); }
+    function systemSelection(){return Array.from(selectedKeys).map(parseKey).filter(x=>x.scope==='system').map(x=>x.series_id);}
+    function entitySelection(){return Array.from(selectedKeys).map(parseKey).filter(x=>x.scope==='entity');}
+    async function fetchJson(url,ctrl){ const r=await fetch(url,{signal:ctrl&&ctrl.signal,cache:'no-store'}); const p=await r.json(); if(!r.ok||p.error) throw new Error(p.error||('HTTP '+r.status)); return p; }
+    function buildDataset(key,timestamps,values,index){ const unit=unitForKey(key); const color=PALETTE[index%PALETTE.length]; const temporal=(parseKey(key).scope==='system'?seriesCatalog():entitySeriesCatalog()).find(x=>x.series_id===parseKey(key).series_id); return {label:labelForKey(key),data:timestamps.map((ts,i)=>({x:Number(ts),y:values[i]===undefined?null:values[i]})),parsing:false,borderColor:color,backgroundColor:color+'22',borderWidth:(temporal&&temporal.temporal_type==='target')?2:2.4,pointRadius:0,pointHitRadius:16,pointHoverRadius:3,spanGaps:false,tension:(temporal&&temporal.temporal_type==='target')?0:0.14,borderDash:(temporal&&temporal.temporal_type==='target')?[6,4]:undefined,yAxisID:unit==='%'?'yPct':'yPower'}; }
+    function collectDatasets(systemPayload,entityPayload){ const result=[]; systemSelection().forEach(sid=>{const key=systemKey(sid);result.push(buildDataset(key,systemPayload.timestamps_ms||[],(systemPayload.series||{})[sid]||[],result.length));}); entitySelection().forEach(sel=>{const ep=((entityPayload||{}).entities||{})[sel.stable_id]; if(!ep) return; result.push(buildDataset(entityKey(sel.stable_id,sel.series_id),ep.timestamps_ms||[],(ep.series||{})[sel.series_id]||[],result.length));}); return result; }
+    function datasetHasValue(ds){return (ds.data||[]).some(p=>p.y!==null&&p.y!==undefined&&!Number.isNaN(Number(p.y)));}
+    function renderChart(datasets,r){ const canvas=q('#powerChart'),empty=q('#chartEmpty'); const usable=datasets.filter(datasetHasValue); if(!usable.length){canvas.hidden=true;empty.hidden=false;if(chart){chart.destroy();chart=null;}return;} canvas.hidden=false;empty.hidden=true; const axisMin=r.start,axisMax=r.end; const options={animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'index', axis:'x', intersect:false},onClick:(evt)=>{if(!chart||!chart.scales||!chart.scales.x)return;const ts=chart.scales.x.getValueForPixel(evt.x);if(Number.isFinite(ts))loadInspector(Math.round(ts));},plugins:{legend:{position:'bottom',labels:{color:'#cbd5e1',boxWidth:24}},tooltip:{mode:'index', intersect:false,callbacks:{title:(items)=>items.length?new Date(items[0].parsed.x).toLocaleString('de-DE'):''}}},scales:{yPower:{position:'left',title:{display:true,text:'Leistung / Ziel (W)',color:'#94a3b8'},ticks:{color:'#8191a6'},grid:{color:'rgba(148,163,184,.08)'}},yPct:{position:'right',min:0,max:100,title:{display:true,text:'SOC (%)',color:'#94a3b8'},ticks:{color:'#8191a6'},grid:{drawOnChartArea:false}},x:{type:'linear',min:axisMin,max:axisMax,ticks:{color:'#8191a6',maxRotation:0,maxTicksLimit:10,callback:v=>{const d=new Date(Number(v));return d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});}},grid:{color:'rgba(148,163,184,.05)'}}}}; if(!chart) chart=new Chart(canvas.getContext('2d'),{type:'line',data:{datasets:usable},options:options}); else{chart.data.datasets=usable;chart.options=options;chart.update();} }
+    function stats(values){ const v=(values||[]).filter(x=>x!==null&&x!==undefined&&!Number.isNaN(Number(x))).map(Number); if(!v.length)return null; return {first:v[0],last:v[v.length-1],min:Math.min(...v),max:Math.max(...v),avg:v.reduce((a,b)=>a+b,0)/v.length}; }
+    function renderKpis(systemPayload,entityPayload){ const rows=[]; systemSelection().forEach(sid=>rows.push([systemKey(sid),(systemPayload.series||{})[sid]||[]])); entitySelection().forEach(sel=>{const ep=((entityPayload||{}).entities||{})[sel.stable_id]||{};rows.push([entityKey(sel.stable_id,sel.series_id),(ep.series||{})[sel.series_id]||[]]);}); q('#kpiGrid').innerHTML=rows.map(([key,vals])=>{const s=stats(vals),u=unitForKey(key);if(!s)return '';return '<div class="zec-kpi"><b>'+esc(labelForKey(key))+'</b><strong>'+esc(fmtValue(s.last,u))+'</strong><small>Start '+esc(fmtValue(s.first,u))+' · min '+esc(fmtValue(s.min,u))+' · max '+esc(fmtValue(s.max,u))+' · Ø '+esc(fmtValue(s.avg,u))+'</small></div>';}).join('')||'<div class="zec-workspace-empty" style="grid-column:1/-1">Keine Kennzahlen verfügbar.</div>'; }
+    function evidenceSummary(segments,r){ const relevant=(segments||[]).filter(x=>!r || (Number(x.to_ms)>=r.start && Number(x.from_ms)<=r.end)); const states=Array.from(new Set(relevant.map(x=>x.status))); if(states.length===1&&states[0]==='AVAILABLE') return {label:'verfügbar',cls:'ok'}; if(states.includes('GAP')||states.includes('UNKNOWN')) return {label:states.join(', '),cls:'warn'}; if(states.length) return {label:states.join(', '),cls:'warn'}; return {label:'keine Evidence',cls:'bad'}; }
+    function coverageSummary(cov){ if(cov&&cov.available) return {label:'vorhanden',cls:'ok'}; return {label:(cov&&cov.applicability)||'keine Coverage',cls:'warn'}; }
+    function renderEvidence(systemCoverage,systemEvidence,entityCoverage){ const r=currentRange(),rows=[]; systemSelection().forEach(sid=>{const key=systemKey(sid),cov=(systemCoverage.series||{})[sid]||{},ev=(systemEvidence.series||{})[sid]||[];rows.push([key,cov,ev,(cov.segments&&cov.segments[0]&&cov.segments[0].source)||'—']);}); entitySelection().forEach(sel=>{const key=entityKey(sel.stable_id,sel.series_id),e=((entityCoverage.entities||{})[sel.stable_id]||{}),cov=(e.series||{})[sel.series_id]||{},ev=cov.evidence_segments||[];rows.push([key,cov,ev,(cov.segments&&cov.segments[0]&&cov.segments[0].source)||e.storage_binding||'—']);}); q('#evidenceRows').innerHTML=rows.map(([key,cov,ev,source])=>{const c=coverageSummary(cov),e=evidenceSummary(ev,r);return '<tr><td>'+esc(labelForKey(key))+'<br><small>'+esc(key)+'</small></td><td><span class="zec-evidence-state '+c.cls+'">'+esc(c.label)+'</span></td><td><span class="zec-evidence-state '+e.cls+'">'+esc(e.label)+'</span></td><td>'+esc(source)+'</td></tr>';}).join('')||'<tr><td colspan="4">Keine Reihen ausgewählt.</td></tr>'; }
+    function renderSignals(systemPayload,entityPayload,systemCoverage,entityCoverage){ const rows=[]; systemSelection().forEach(sid=>{const key=systemKey(sid),vals=(systemPayload.series||{})[sid]||[],cov=(systemCoverage.series||{})[sid]||{};rows.push([labelForKey(key),sid,'System',vals.some(v=>v!==null&&v!==undefined)?'Daten':'keine Werte',cov.available?'Coverage':'keine Coverage']);}); entitySelection().forEach(sel=>{const ep=((entityPayload||{}).entities||{})[sel.stable_id]||{},ec=((entityCoverage.entities||{})[sel.stable_id]||{}),cov=(ec.series||{})[sel.series_id]||{},vals=(ep.series||{})[sel.series_id]||[];rows.push([labelForKey(entityKey(sel.stable_id,sel.series_id)),sel.series_id,sel.stable_id,vals.some(v=>v!==null&&v!==undefined)?'Daten':'keine Werte',cov.available?'Coverage':(cov.applicability||'keine Coverage')]);}); q('#signalTable').innerHTML='<thead><tr><th>Reihe</th><th>ID</th><th>Scope</th><th>Zeitraum</th><th>Coverage</th></tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(x=>'<td>'+esc(x)+'</td>').join('')+'</tr>').join('')+'</tbody>'; }
+    function renderContext(payload){ const intervals=(payload.intervals&&payload.intervals.items)||[],events=(payload.command_events&&payload.command_events.items)||[],configs=payload.config_timeline||[],topology=payload.topology_timeline||[];q('#intervalCount').textContent=intervals.length;q('#eventCount').textContent=events.length;q('#configCount').textContent=configs.length+topology.length;q('#eventBox').innerHTML=events.slice(-20).reverse().map(e=>{const type=String(e.event_type||e.kind||e.category||'Command'),ts=esc(e.ts_ms||0),time=esc(new Date(Number(e.ts_ms||e.epoch_ms||0)).toLocaleTimeString('de-DE'));if(type==='PUBLISHED')return '<div class="event-pill">'+time+' · <button type="button" class="zec-event-action" data-follow-event="'+esc(e.event_id)+'" data-follow-ts="'+ts+'">'+esc(type)+'</button></div>';return '<div class="event-pill">'+time+' · <button type="button" class="zec-event-action" data-inspect-event-ts="'+ts+'">'+esc(type)+'</button> <small>Inspector</small></div>';}).join('')||'Keine Command-Events im sichtbaren Zeitraum.'; qa('[data-follow-event]').forEach(b=>b.addEventListener('click',()=>{const id=Number(b.dataset.followEvent),ts=Number(b.dataset.followTs);if(Number.isFinite(ts))loadInspector(ts);if(Number.isFinite(id))loadCommandFollow(id);}));qa('[data-inspect-event-ts]').forEach(b=>b.addEventListener('click',()=>{const ts=Number(b.dataset.inspectEventTs);if(Number.isFinite(ts))loadInspector(ts);})); }
+    function stateCodes(payload,kind){return (((payload||{}).active_states||{})[kind]||[]).map(x=>String(x.value_code||'')).filter(Boolean);}
+    function evidenceAt(payload,sid,ts){const segs=(((payload||{}).evidence||{})[sid]||[]);const hit=segs.find(x=>Number(x.from_ms)<=ts&&Number(x.to_ms)>=ts);return hit?String(hit.status||'UNKNOWN'):'UNKNOWN';}
+    function valueRows(title,items){return '<h3>'+esc(title)+'</h3>'+items.map(x=>'<div class="zec-inspector-value"><span>'+esc(x[0])+'</span><b>'+esc(x[1])+'</b></div>').join('');}
+    function renderInspector(payload){const actual=Number(payload.actual_ms),values=payload.values||{},groups=payload.groups||{},fmt=(sid,v)=>fmtValue(v,(seriesCatalog().find(x=>x.series_id===sid)||{}).unit||'');q('#inspectorEmpty').hidden=true;q('#inspectorContent').hidden=false;q('#inspectorTime').textContent=Number.isFinite(actual)?new Date(actual).toLocaleString('de-DE')+' · Δ '+String(payload.delta_ms||0)+' ms':'kein Messpunkt';const measurementOrder=['grid_power_w','raw_grid_power_w','control_grid_power_w','control_grid_power_smoothed_w','zendure_actual_power_w','primary_power_w','zendure_soc_percent','primary_soc_percent'];q('#inspectorMeasurements').innerHTML=valueRows('Messwerte',measurementOrder.filter(s=>s in values).map(s=>[labelForKey(systemKey(s)),fmt(s,values[s])]));const pipeOrder=['target_raw_w','target_limited_w','target_filtered_w','target_step_limited_w','target_final_w','command_desired_target_w','command_readback_target_w'];q('#inspectorPipeline').innerHTML=valueRows('Zielwertpipeline',pipeOrder.filter(s=>s in values).map(s=>[labelForKey(systemKey(s)),fmt(s,values[s])]));const stateKinds=[['OPERATING_MODE','Modus'],['CONTROL_INTENT','Intent'],['CONTROL_REASON','Grund'],['LIMITER','Limiter'],['COMMAND_LIFECYCLE','Command Lifecycle'],['COMMAND_EFFECT','Command Effect'],['COMMAND_READBACK_MATCH','Readback Match'],['POWER_OBSERVATION_DIRECTION','Ist-Richtung'],['POWER_OBSERVATION_CONFIDENCE','Ist-Confidence']];q('#inspectorStates').innerHTML='<h3>Zustände</h3>'+stateKinds.map(([k,l])=>{const vals=stateCodes(payload,k);return '<div class="zec-inspector-value"><span>'+esc(l)+'</span><b>'+esc(vals.join(', ')||'—')+'</b></div>';}).join('');const c=payload.config||{};q('#inspectorConfig').innerHTML=valueRows('Historische Config',[["Gültig ab",c.effective_from_ms?new Date(Number(c.effective_from_ms)).toLocaleString('de-DE'):'—'],['MIN SOC',c.min_soc==null?'—':c.min_soc+' %'],['MAX SOC',c.max_soc==null?'—':c.max_soc+' %'],['Nachtreserve',c.reserve_soc==null?'—':c.reserve_soc+' %'],['Nachtfenster',(c.night_start||'—')+' – '+(c.night_end||'—')],['Scope','SOC-/Nacht-Overlay']]);const ents=payload.entities||[];q('#inspectorEntities').innerHTML='<h3>Entities / Topologie</h3>'+(ents.map(e=>{const vals=e.values||{};const brief=Object.entries(vals).filter(x=>x[1]!=null).slice(0,4).map(([sid,v])=>sid+'='+fmtValue(v,(entitySeriesCatalog().find(x=>x.series_id===sid)||{}).unit||'')).join(' · ');const topo=(e.topology||[]).map(x=>x.role+':'+x.state).join(', ');return '<div class="zec-inspector-value"><span>'+esc(e.display_name||e.source_identity||e.stable_id)+'</span><b>'+esc((brief||'keine Punktwerte')+(topo?' · '+topo:''))+'</b></div>';}).join('')||'<div class="zec-workspace-note">Keine Entity am Cursor.</div>');const evidenceIds=['grid_power_w','zendure_actual_power_w','target_final_w','command_desired_target_w','command_readback_target_w'];q('#inspectorEvidence').innerHTML='<h3>Evidence am Cursor</h3>'+evidenceIds.map(s=>'<div class="zec-inspector-value"><span>'+esc(labelForKey(systemKey(s)))+'</span><b>'+esc(evidenceAt(payload,s,actual))+'</b></div>').join('');const linked=payload.linked_command_event;q('#inspectorCommandLink').innerHTML=linked?'<button type="button" class="zec-btn" id="followLinkedCommand">Command #'+esc(linked.event_id)+' verfolgen · '+esc(linked.event_type||'PUBLISHED')+'</button><span class="zec-workspace-note" style="margin-left:8px">Publish-ID '+esc(linked.publish_event_id||'—')+' · Sequence '+esc(linked.desired_sequence_id||'—')+'</span>':'<span class="zec-workspace-note">Zu diesem Messpunkt ist kein persistierter Publish-Event direkt korreliert.</span>';const btn=q('#followLinkedCommand');if(btn)btn.addEventListener('click',()=>loadCommandFollow(Number(linked.event_id)));}
+    async function loadInspector(ts){if(!manifest||!runtime||runtime.read_mode!=='V3_NATIVE')return;if(inspectorRequestInFlight)return;inspectorRequestInFlight=true;selectedInspectorMs=ts;q('#inspectorTime').textContent='Inspector lädt…';try{const tol=Number((manifest.inspector||{}).default_tolerance_ms||10000);const payload=await fetchJson('/api/graph/v1/inspector?ts_ms='+encodeURIComponent(Math.round(ts))+'&tolerance_ms='+tol,null);renderInspector(payload);}catch(e){q('#inspectorEmpty').hidden=false;q('#inspectorContent').hidden=true;q('#inspectorEmpty').textContent='Inspector konnte nicht geladen werden: '+e.message;q('#inspectorTime').textContent='Fehler';}finally{inspectorRequestInFlight=false;}}
+    function stageClass(status){status=String(status||'');if(status.includes('OBSERVED')||status.includes('MATCH')||status.includes('TRACKING'))return 'ok';if(status.includes('MISMATCH')||status.includes('NO_'))return 'bad';return 'warn';}
+    function stageCard(title,payload){payload=payload||{};const latency=payload.latency_ms==null?'':(' · '+payload.latency_ms+' ms');return '<div class="zec-follow-stage"><b>'+esc(title)+'</b><span class="zec-inspector-status '+stageClass(payload.status)+'">'+esc(payload.status||'UNKNOWN')+'</span><small>'+esc((payload.reason||payload.source||'')+latency)+'</small></div>';}
+    function renderCommandFollowChart(payload){const canvas=q('#commandFollowChart'),tl=payload.timeline||{},ts=tl.timestamps_ms||[],s=tl.series||{};const defs=[['command_desired_target_w','Command Sollwert'],['command_readback_target_w','Readback'],['zendure_actual_power_w','Zendure Ist'],['grid_power_w','Netz']];const ds=defs.map((d,i)=>({label:d[1],data:ts.map((x,j)=>({x:Number(x),y:(s[d[0]]||[])[j]})),parsing:false,borderColor:PALETTE[i],backgroundColor:PALETTE[i]+'22',borderWidth:d[0].includes('target')?2:2.4,borderDash:d[0].includes('target')?[6,4]:undefined,pointRadius:0,spanGaps:false,tension:0}));const opts={animation:false,responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#cbd5e1'}}},scales:{x:{type:'linear',ticks:{color:'#8191a6',callback:v=>new Date(Number(v)).toLocaleTimeString('de-DE')},grid:{color:'rgba(148,163,184,.05)'}},y:{title:{display:true,text:'W',color:'#94a3b8'},ticks:{color:'#8191a6'},grid:{color:'rgba(148,163,184,.08)'}}}};if(commandFollowChart)commandFollowChart.destroy();commandFollowChart=new Chart(canvas.getContext('2d'),{type:'line',data:{datasets:ds},options:opts});}
+    function renderCommandFollow(payload){const stages=payload.stages||{},event=payload.event||{},win=payload.window||{};q('#commandFollowEmpty').hidden=true;q('#commandFollowContent').hidden=false;q('#commandFollowBadge').textContent='#'+(event.event_id||'—')+' · '+new Date(Number(event.ts_ms||0)).toLocaleTimeString('de-DE');q('#commandFollowStages').innerHTML=stageCard('Publish',stages.publish)+stageCard('Richtungsreaktion',stages.direction_reaction)+stageCard('Readback',stages.readback)+stageCard('Tracking',stages.tracking)+stageCard('Systemwirkung',stages.system_effect);renderCommandFollowChart(payload);const ca=stages.controller_assessment||{},sys=stages.system_effect||{},track=stages.tracking||{},censor=win.censored_by_next_publish?('<br><b>Kausalfenster:</b> am nächsten Publish #'+esc(win.next_publish_event_id||'—')+' um '+esc(new Date(Number(win.next_publish_ms||0)).toLocaleTimeString('de-DE'))+' zensiert; spätere Werte werden diesem Command nicht zugerechnet.'):'<br><b>Kausalfenster:</b> kein neuer Publish innerhalb des Follow-Fensters.';q('#commandFollowDetails').innerHTML='<b>Controller-Diagnose:</b> '+esc(ca.status||'UNKNOWN')+' · '+esc((ca.categories||[]).join(', ')||'keine persistierte Kategorie')+'<br><b>Quantitatives Tracking:</b> erster Fehler '+esc(fmtValue(track.first_abs_error_w,'W'))+' · bester Fehler '+esc(fmtValue(track.best_abs_error_w,'W'))+' · letzter Fehler '+esc(fmtValue(track.last_abs_error_w,'W'))+'<br><b>Systemwirkung:</b> '+esc(sys.status||'NOT_EVALUABLE')+' – '+esc(sys.reason||'')+'<br><b>Evidence:</b> '+esc(payload.evidence_quality||'UNKNOWN')+' · <b>Kausalität:</b> '+esc((payload.meta||{}).causal_attribution||'NOT_PROVEN')+censor;}
+    function fmtRelative(ms){const n=Math.round(Number(ms)||0),sign=n>0?'+':(n<0?'−':'');const a=Math.abs(n),m=Math.floor(a/60000),sec=Math.round((a%60000)/1000);return 't='+sign+(m?m+'m ':'')+sec+'s';}
+    function triggerText(item){const type=item.trigger_type==='PUBLISHED_EVENT'?'Publish #'+(item.event_id||'—'):(item.interval_kind||'Intervall')+' → '+(item.value_code||'—');return new Date(Number(item.trigger_ms||0)).toLocaleString('de-DE')+' · '+type;}
+    function renderTriggerOptions(){const a=q('#episodeTriggerA'),b=q('#episodeTriggerB');const oldA=a.value,oldB=b.value,opts='<option value="">Trigger wählen…</option>'+episodeTriggers.map(x=>'<option value="'+esc(x.trigger_id)+'">'+esc(triggerText(x))+'</option>').join('');a.innerHTML=opts;b.innerHTML=opts;if(episodeTriggers.some(x=>x.trigger_id===oldA))a.value=oldA;if(episodeTriggers.some(x=>x.trigger_id===oldB))b.value=oldB;if(!a.value&&episodeTriggers.length)a.value=episodeTriggers[0].trigger_id;if(!b.value&&episodeTriggers.length>1)b.value=episodeTriggers[episodeTriggers.length-1].trigger_id;}
+    async function loadEpisodeTriggers(r){try{const cfg=(manifest&&manifest.episode_comparison)||{};const url='/api/graph/v1/episode-triggers?start_ms='+encodeURIComponent(r.start)+'&end_ms='+encodeURIComponent(r.end)+'&limit='+encodeURIComponent(cfg.trigger_limit||500);const payload=await fetchJson(url,null);episodeTriggers=payload.items||[];renderTriggerOptions();q('#comparisonBadge').textContent=episodeTriggers.length+' Trigger';if(payload.truncated)q('#comparisonBadge').textContent+=' · begrenzt';}catch(e){episodeTriggers=[];renderTriggerOptions();q('#comparisonBadge').textContent='Triggerfehler';}}
+    function episodeDatasets(ep,episodeTag,overlay){const result=[],ov=ep.overview||{},rel=ov.relative_timestamps_ms||[];systemSelection().forEach(sid=>{const key=systemKey(sid),ds=buildDataset(key,rel,(ov.series||{})[sid]||[],result.length);if(overlay){ds.label='Episode '+episodeTag+' · '+ds.label;if(episodeTag==='B')ds.borderDash=[3,4];}result.push(ds);});entitySelection().forEach(sel=>{const data=((ep.entities||{}).entities||{})[sel.stable_id];if(!data||!(data.timestamps_ms||[]).length)return;const ds=buildDataset(entityKey(sel.stable_id,sel.series_id),data.relative_timestamps_ms||[],(data.series||{})[sel.series_id]||[],result.length);if(overlay){ds.label='Episode '+episodeTag+' · '+ds.label;if(episodeTag==='B')ds.borderDash=[3,4];}result.push(ds);});return result;}
+    const comparisonCursorPlugin={id:'zecComparisonCursor',afterDraw(ch){if(comparisonCursorMs===null||!String(ch.canvas.id||'').startsWith('comparison'))return;const scale=ch.scales&&ch.scales.x;if(!scale)return;const x=scale.getPixelForValue(comparisonCursorMs);if(!Number.isFinite(x)||x<scale.left||x>scale.right)return;const ctx=ch.ctx;ctx.save();ctx.beginPath();ctx.moveTo(x,scale.top);ctx.lineTo(x,scale.bottom);ctx.lineWidth=1;ctx.strokeStyle='rgba(226,232,240,.65)';ctx.stroke();ctx.restore();}};
+    if(window.Chart&&Chart.register)Chart.register(comparisonCursorPlugin);
+    function comparisonChartOptions(){return {responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:false},onClick:(evt,els,ch)=>{const rel=Math.round(ch.scales.x.getValueForPixel(evt.x));syncComparisonCursor(rel);},plugins:{legend:{labels:{color:'#aebed0',boxWidth:14}},tooltip:{callbacks:{title:(items)=>items.length?fmtRelative(items[0].parsed.x):''}}},scales:{x:{type:'linear',title:{display:true,text:'relative Zeit zu t=0',color:'#94a3b8'},ticks:{color:'#8191a6',callback:(v)=>fmtRelative(v)},grid:{color:'rgba(148,163,184,.05)'}},yPower:{position:'left',title:{display:true,text:'W',color:'#94a3b8'},ticks:{color:'#8191a6'},grid:{color:'rgba(148,163,184,.08)'}},yPct:{position:'right',min:0,max:100,title:{display:true,text:'%',color:'#94a3b8'},ticks:{color:'#8191a6'},grid:{drawOnChartArea:false}}}};}
+    function destroyComparisonCharts(){[comparisonChartA,comparisonChartB,comparisonOverlayChart].forEach(c=>{if(c)c.destroy();});comparisonChartA=comparisonChartB=comparisonOverlayChart=null;}
+    function evidenceSummary(ep){const cov=((ep.window_coverage||{}).system)||{},ev=((ep.evidence||{}).series)||{};let available=0,partial=0,no=0,gaps=0;systemSelection().forEach(sid=>{const st=(cov[sid]||{}).status;if(st==='AVAILABLE')available++;else if(st==='PARTIAL')partial++;else no++;const states=new Set((ev[sid]||[]).map(x=>x.status));if(states.has('GAP')||states.has('UNKNOWN')||states.has('PURGED'))gaps++;});return 'Coverage: '+available+' verfügbar · '+partial+' partiell · '+no+' ohne Daten · Evidence-Lücken/unklar: '+gaps;}
+    function renderComparison(){if(!comparisonPayload)return;destroyComparisonCharts();const a=comparisonPayload.episodes.a,b=comparisonPayload.episodes.b;const opts=comparisonChartOptions();q('#comparisonEmpty').hidden=true;q('#comparisonContent').hidden=false;q('#comparisonMetaA').innerHTML=esc(triggerText(a.trigger))+'<br>'+esc(new Date(a.window.absolute_from_ms).toLocaleString('de-DE'))+' – '+esc(new Date(a.window.absolute_to_ms).toLocaleString('de-DE'))+(a.trigger.trigger_type==='PUBLISHED_EVENT'?' · <button class="zec-event-action" data-compare-follow="'+esc(a.trigger.event_id)+'">Command-Follow</button>':'');q('#comparisonMetaB').innerHTML=esc(triggerText(b.trigger))+'<br>'+esc(new Date(b.window.absolute_from_ms).toLocaleString('de-DE'))+' – '+esc(new Date(b.window.absolute_to_ms).toLocaleString('de-DE'))+(b.trigger.trigger_type==='PUBLISHED_EVENT'?' · <button class="zec-event-action" data-compare-follow="'+esc(b.trigger.event_id)+'">Command-Follow</button>':'');q('#comparisonCoverageA').textContent=evidenceSummary(a);q('#comparisonCoverageB').textContent=evidenceSummary(b);qa('[data-compare-follow]').forEach(btn=>btn.addEventListener('click',()=>loadCommandFollow(Number(btn.dataset.compareFollow))));q('#comparisonSideView').hidden=comparisonMode!=='side';q('#comparisonOverlayView').hidden=comparisonMode!=='overlay';if(comparisonMode==='side'){comparisonChartA=new Chart(q('#comparisonChartA').getContext('2d'),{type:'line',data:{datasets:episodeDatasets(a,'A',false)},options:opts});comparisonChartB=new Chart(q('#comparisonChartB').getContext('2d'),{type:'line',data:{datasets:episodeDatasets(b,'B',false)},options:comparisonChartOptions()});}else{comparisonOverlayChart=new Chart(q('#comparisonOverlayChart').getContext('2d'),{type:'line',data:{datasets:[...episodeDatasets(a,'A',true),...episodeDatasets(b,'B',true)]},options:opts});}q('#comparisonBadge').textContent=(comparisonMode==='side'?'Nebeneinander':'Überlagert')+' · t=0 synchron';}
+    function compactInspectorHtml(tag,payload,absoluteMs,rel){const meas=(payload.groups||{}).measurement||{},pipe=(payload.groups||{}).target_pipeline||{},states=payload.active_states||{};const mode=((states.OPERATING_MODE||[])[0]||{}).value_code||'—',reason=((states.CONTROL_REASON||[])[0]||{}).value_code||'—',event=((payload.linked_command_event)||{});return '<h3>Inspector '+tag+' · '+esc(fmtRelative(rel))+'</h3><div class="zec-inspector-value"><span>Absolute Zeit</span><b>'+esc(new Date(absoluteMs).toLocaleString('de-DE'))+'</b></div><div class="zec-inspector-value"><span>Messpunkt</span><b>'+esc(new Date(Number(payload.actual_ms||absoluteMs)).toLocaleTimeString('de-DE'))+'</b></div><div class="zec-inspector-value"><span>Modus / Grund</span><b>'+esc(mode+' / '+reason)+'</b></div><div class="zec-inspector-value"><span>Netz / Zendure</span><b>'+esc(fmtValue(meas.grid_power_w,'W')+' / '+fmtValue(meas.zendure_actual_power_w,'W'))+'</b></div><div class="zec-inspector-value"><span>Reglerziel</span><b>'+esc(fmtValue(pipe.target_final_w,'W'))+'</b></div>'+(event&&event.event_id?'<button class="zec-event-action" data-compare-inspector-follow="'+esc(event.event_id)+'">Command-Follow #'+esc(event.event_id)+'</button>':'');}
+    async function syncComparisonCursor(rel){if(!comparisonPayload)return;comparisonCursorMs=Number(rel);[comparisonChartA,comparisonChartB,comparisonOverlayChart].forEach(c=>{if(c)c.draw();});const a=comparisonPayload.episodes.a,b=comparisonPayload.episodes.b,absA=a.window.t0_ms+comparisonCursorMs,absB=b.window.t0_ms+comparisonCursorMs,tol=Number((manifest.inspector||{}).default_tolerance_ms||10000);try{const [ia,ib]=await Promise.all([fetchJson('/api/graph/v1/inspector?ts_ms='+Math.round(absA)+'&tolerance_ms='+tol,null),fetchJson('/api/graph/v1/inspector?ts_ms='+Math.round(absB)+'&tolerance_ms='+tol,null)]);q('#comparisonInspectorA').innerHTML=compactInspectorHtml('A',ia,absA,comparisonCursorMs);q('#comparisonInspectorB').innerHTML=compactInspectorHtml('B',ib,absB,comparisonCursorMs);qa('[data-compare-inspector-follow]').forEach(btn=>btn.addEventListener('click',()=>loadCommandFollow(Number(btn.dataset.compareInspectorFollow))));}catch(e){q('#comparisonInspectorA').innerHTML='<h3>Inspector A</h3><div class="zec-workspace-note">'+esc(e.message)+'</div>';q('#comparisonInspectorB').innerHTML='<h3>Inspector B</h3><div class="zec-workspace-note">'+esc(e.message)+'</div>';}}
+    async function loadEpisodeComparison(){const a=q('#episodeTriggerA').value,b=q('#episodeTriggerB').value;if(!a||!b){showWarning('Für den Episodenvergleich bitte zwei persistierte Trigger auswählen.');return;}if(a===b){showWarning('Episode A und B müssen unterschiedliche persistierte Trigger verwenden.');return;}const before=Math.max(0,Number(q('#episodeBeforeMin').value||0))*60000,after=Math.max(1,Number(q('#episodeAfterMin').value||1))*60000,cfg=manifest.episode_comparison||{};if(before+after>Number(cfg.max_window_ms||manifest.max_window_ms)){showWarning('Das Episodenfenster darf insgesamt maximal 48 Stunden umfassen.');return;}const sys=systemSelection(),ent=entitySelection(),entityIds=Array.from(new Set(ent.map(x=>x.stable_id))),entitySeries=Array.from(new Set(ent.map(x=>x.series_id)));q('#comparisonBadge').textContent='Vergleich lädt…';try{const qs=new URLSearchParams({trigger_a:a,trigger_b:b,before_ms:String(before),after_ms:String(after),series:(sys.length?sys:['grid_power_w']).join(','),entities:entityIds.join(','),entity_series:entitySeries.join(','),resolution:'auto'});comparisonPayload=await fetchJson('/api/graph/v1/episode-comparison?'+qs.toString(),null);comparisonCursorMs=0;renderComparison();syncComparisonCursor(0);}catch(e){q('#comparisonEmpty').hidden=false;q('#comparisonContent').hidden=true;q('#comparisonEmpty').textContent='Episodenvergleich konnte nicht geladen werden: '+e.message;q('#comparisonBadge').textContent='Fehler';}}
+    async function loadCommandFollow(eventId){q('#commandFollowBadge').textContent='Command-Follow lädt…';try{const cfg=manifest.command_follow||{};const url='/api/graph/v1/command-follow?event_id='+encodeURIComponent(eventId)+'&before_ms='+encodeURIComponent(cfg.default_before_ms||15000)+'&after_ms='+encodeURIComponent(cfg.default_after_ms||180000);const payload=await fetchJson(url,null);renderCommandFollow(payload);}catch(e){q('#commandFollowEmpty').hidden=false;q('#commandFollowContent').hidden=true;q('#commandFollowEmpty').textContent='Command-Follow konnte nicht geladen werden: '+e.message;q('#commandFollowBadge').textContent='Fehler';}}
+    async function updateGraph(force){ if(document.visibilityState==='hidden')return;if(graphRequestInFlight&&!force)return;if(!manifest||!runtime)return; if(runtime.read_mode!=='V3_NATIVE'||!runtime.workspace_ready){showWarning('Der V14-Workspace benötigt Graph Core V3. Aktueller History-Modus: '+(runtime.read_mode||'UNAVAILABLE')+'. Der Legacy-Graph bleibt über „Alter Graph“ erreichbar.');q('#chartStatus').textContent='Workspace nicht verfügbar';return;} const r=currentRange(); if(r.end<=r.start||r.end-r.start>Number(manifest.max_window_ms)){showWarning('Ungültiger Zeitraum. Maximal 48 Stunden pro interaktivem Graph.');return;} showWarning(''); graphRequestInFlight=true; const ctrl=new AbortController();const timer=setTimeout(()=>ctrl.abort(),30000); try{q('#chartStatus').textContent='Graphdaten werden geladen…'; const sys=systemSelection(),ent=entitySelection(),entityIds=Array.from(new Set(ent.map(x=>x.stable_id))),entitySeries=Array.from(new Set(ent.map(x=>x.series_id))),overviewSystemIds=sys.length?sys:['grid_power_w'],evidenceResolution=(r.end-r.start<=2*60*60*1000?'highres':'1min'); const qs=new URLSearchParams({start_ms:String(r.start),end_ms:String(r.end),series:overviewSystemIds.join(','),resolution:'auto',include_context:'true'}); const overviewPromise=fetchJson('/api/graph/v1/overview?'+qs.toString(),ctrl); const coveragePromise=sys.length?fetchJson('/api/graph/v1/coverage?series='+encodeURIComponent(sys.join(',')),ctrl):Promise.resolve({series:{}}); const evidencePromise=sys.length?fetchJson('/api/graph/v1/evidence?start_ms='+r.start+'&end_ms='+r.end+'&resolution='+evidenceResolution+'&series='+encodeURIComponent(sys.join(',')),ctrl):Promise.resolve({series:{}}); const entityOverviewPromise=entityIds.length?fetchJson('/api/graph/v1/entity-overview?start_ms='+r.start+'&end_ms='+r.end+'&entities='+encodeURIComponent(entityIds.join(','))+'&series='+encodeURIComponent(entitySeries.join(','))+'&resolution=auto',ctrl):Promise.resolve({entities:{}}); const entityCoveragePromise=entityIds.length?fetchJson('/api/graph/v1/entity-coverage?entities='+encodeURIComponent(entityIds.join(','))+'&series='+encodeURIComponent(entitySeries.join(',')),ctrl):Promise.resolve({entities:{}}); const [payload,cov,evidence,entityPayload,entityCov]=await Promise.all([overviewPromise,coveragePromise,evidencePromise,entityOverviewPromise,entityCoveragePromise]); clearTimeout(timer); lastOverview=payload;lastEntityOverview=entityPayload; const datasets=collectDatasets(payload,entityPayload);renderChart(datasets,r);renderKpis(payload,entityPayload);renderEvidence(cov,evidence,entityCov);renderSignals(payload,entityPayload,cov,entityCov);renderContext(payload);loadEpisodeTriggers(r); const rangeText = r.label ? (' · Zeitraum: ' + r.label) : ''; const axis_start_epoch_ms = r.start; q('#rangeBadge').textContent='Zeitraum '+new Date(r.start).toLocaleString('de-DE')+' – '+new Date(r.end).toLocaleString('de-DE');q('#resolutionBadge').textContent='Auflösung '+(payload.resolution||'—'); const cache=(payload.cache_status || (payload.meta&&payload.meta.cache) || '—');q('#chartStatus').textContent='V3 · '+(payload.meta&&payload.meta.row_count||0)+' Punkte'+rangeText+' · Cache '+cache; }catch(e){clearTimeout(timer);q('#chartStatus').textContent=(e&&e.name==='AbortError')?'Graphdaten werden noch vorbereitet. Bitte in einigen Sekunden erneut laden.':'Graph konnte nicht geladen werden: '+e.message;}finally{graphRequestInFlight=false;} }
+    async function initWorkspace(){ const ctrl=new AbortController();const timer=setTimeout(()=>ctrl.abort(),15000); try{manifest=await fetchJson('/api/graph/v1/workspace',ctrl);runtime=manifest.runtime||{};q('#runtimeBadge').textContent=runtime.read_mode||'UNAVAILABLE';q('#runtimeBadge').className='zec-status-badge '+(runtime.read_mode==='V3_NATIVE'&&runtime.workspace_ready?'ok':'warn'); entities=manifest.entities||[]; const saved=loadSaved(); if(saved.view_id&&(manifest.guided_views||[]).some(v=>v.view_id===saved.view_id))currentViewId=saved.view_id;if(saved.preset&&(manifest.time_presets||[]).some(p=>p.preset_id===saved.preset))selectedPreset=saved.preset;if(currentViewId==='free'&&Array.isArray(saved.selected))selectedKeys=new Set(saved.selected);else applyGuidedSelection();renderAllControls();setRangeInputsFromCurrent();updateGraph(true);}catch(e){q('#chartStatus').textContent='Workspace konnte nicht initialisiert werden: '+e.message;showWarning('Graph-Workspace nicht verfügbar.');}finally{clearTimeout(timer);} }
+    q('#applyCustomRange').addEventListener('click',()=>{const start=new Date(q('#rangeStart').value).getTime(),end=new Date(q('#rangeEnd').value).getTime();if(!Number.isFinite(start)||!Number.isFinite(end)||end<=start){showWarning('Bitte einen gültigen Start- und Endzeitpunkt wählen.');return;}if(end-start>Number(manifest.max_window_ms)){showWarning('Der freie Zeitraum darf maximal 48 Stunden umfassen.');return;}customRange={start:start,end:end};renderPresets();updateGraph(true);});
+    q('#resetWorkspace').addEventListener('click',()=>{currentViewId=manifest.default_view_id||'energy_balance';selectedPreset=manifest.default_time_preset||'24h';customRange=null;applyGuidedSelection();renderAllControls();setRangeInputsFromCurrent();saveState();updateGraph(true);});
+    q('#autoRefresh').addEventListener('change',()=>{if(refreshTimer){clearInterval(refreshTimer);refreshTimer=null;}if(q('#autoRefresh').checked)refreshTimer=setInterval(()=>updateGraph(false),15000);});
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='hidden'&&q('#autoRefresh').checked)updateGraph(false);});
+    q('#loadEpisodeComparison').addEventListener('click',()=>loadEpisodeComparison());
+    q('#comparisonSideBySide').addEventListener('click',()=>{comparisonMode='side';if(comparisonPayload)renderComparison();});
+    q('#comparisonOverlay').addEventListener('click',()=>{comparisonMode='overlay';if(comparisonPayload)renderComparison();});
+    initWorkspace();
     </script>
     """
     page = page.replace("V{APP_VERSION}", "V" + APP_VERSION)
     page += build_footer()
     return page
-
 
 
 def _issue_list_html(issues: List[ValidationIssue]) -> str:

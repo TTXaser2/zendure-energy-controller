@@ -1,0 +1,17 @@
+{
+  "absolute_time_retained": true,
+  "comparison_60min_pair_median_ms": 20.947,
+  "episode_a_rows": 1201,
+  "episode_b_rows": 1201,
+  "missing_series_are_not_imputed": true,
+  "relative_t0_present_a": true,
+  "relative_t0_present_b": true,
+  "repetitions": 10,
+  "sample_interval_s": 3,
+  "samples": 57600,
+  "series_count": 17,
+  "span_hours": 48.0,
+  "trigger_query_2h_median_ms": 0.641,
+  "trigger_query_item_count": 33,
+  "visual_similarity_is_causality_proof": false
+}

@@ -1,0 +1,28 @@
+V14 WP1 validation summary
+
+Verified V13.0.3 input ZIP SHA256:
+15082a6651130848d4c4d1b339a549dde9ae77b984d3c4333f9d738b803b0698
+
+Baseline before WP1:
+808 passed, 681 subtests passed
+
+After WP1:
+819 passed, 681 subtests passed
+
+WP1-only suite with ResourceWarning-as-error:
+11 passed
+
+Full suite with ResourceWarning-as-error:
+819 passed, 681 subtests passed
+
+Python compileall:
+PASS for graph_core_v3.py, rebuild/benchmark tools and WP1 tests
+
+V13.0.3 source-manifest preservation:
+407/407 PASS after WP1
+
+REAL vs scaled INTEGER benchmark:
+PASS; scaled INTEGER selected; 49.86% smaller DB on 100,000-sample benchmark
+
+Synthetic V4 -> V3 end-to-end rebuild:
+PASS; 50,000 raw rows; integrity_check=ok; trailing NUL 307 bytes classified and preserved in provenance

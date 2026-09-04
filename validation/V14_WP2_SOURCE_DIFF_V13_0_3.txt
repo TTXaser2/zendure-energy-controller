@@ -1,0 +1,38 @@
+V13_0_3_MANIFEST_ENTRIES=407
+ORIGINAL_FILES_CHANGED=9
+ORIGINAL_FILES_MISSING=0
+
+CHANGED_ORIGINAL_FILES:
+- controller_logic.py
+- generated/SETTINGS_REGISTRY_SNAPSHOT.json
+- measurement_db.py
+- settings_registry.py
+- state.py
+- tests/test_s1_1_settings_registry.py
+- tests/test_v12_11_7_default_contract.py
+- tests/test_v12_12_0_settings_help_guided_configuration.py
+- tests/test_v13_0_2_hotfix.py
+
+MISSING_ORIGINAL_FILES:
+
+NEW_FILES_RELATIVE_TO_V13_0_3:
+- V13_0_3_SOURCE_MANIFEST.sha256
+- V14_WP1_CHANGED_FILES.txt
+- V14_WP1_SOURCE_MANIFEST.sha256
+- ZEC_V14_WP1_GRAPH_CORE_V3_IMPLEMENTATION_REPORT_20260902.md
+- ZEC_V14_WP1_NOT_FOR_PRODUCTION_INSTALLATION.md
+- graph_core_v3.py
+- graph_core_v3_live.py
+- tests/test_v14_graph_core_v3_wp1.py
+- tests/test_v14_graph_core_v3_wp2.py
+- tools/benchmark_graph_core_v3.py
+- tools/rebuild_graph_core_v3.py
+- validation/V14_WP1_REAL_VS_INTEGER_BENCHMARK.json
+- validation/V14_WP1_SYNTHETIC_REBUILD_REPORT.json
+- validation/V14_WP1_TEST_SUMMARY.txt
+- validation/V14_WP2_FULL_TEST.txt
+- validation/V14_WP2_LIVE_WRITER_BENCHMARK.json
+- validation/V14_WP2_REAL_VS_INTEGER_BENCHMARK.json
+- validation/V14_WP2_RESOURCEWARNING_TEST.txt
+- validation/V14_WP2_SYNTHETIC_REBUILD_REPORT.json
+- validation/V14_WP2_V4_HEADER_COUNTS.txt

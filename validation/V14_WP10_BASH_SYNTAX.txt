@@ -1,0 +1,1 @@
+Bash syntax: 10/10 PASS via bash -n over all *.sh files in the release tree.
