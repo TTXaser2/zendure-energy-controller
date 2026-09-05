@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from config_manager import DEFAULT_CONFIG
-from web_ui import build_nav_bar, build_graph_view_payload, measurement_availability, build_soc_day_payload
+from web_ui import build_nav_bar, measurement_availability, build_soc_day_payload
 from state import ControllerState
 
 
@@ -39,23 +39,12 @@ class TestRC7UiExport(unittest.TestCase):
             self.assertFalse(res["logging_active"])
             self.assertEqual(0, res["readable_file_count"])
 
-    def test_graph_view_payload_uses_ram_without_measurement_logs(self):
-        state = ControllerState()
-        state.graph_history.append({
-            "date": "2026-07-01",
-            "timestamp": "12:00:00",
-            "grid_power_w": -12.5,
-            "zendure_target_power_w": 100.0,
-            "zendure_actual_power_w": 95.0,
-            "soc": 78,
-            "mode": "AUTO",
-            "mode_label": "AUTO",
-            "control_reason": "test",
-        })
-        payload = build_graph_view_payload(dict(DEFAULT_CONFIG), state.snapshot(), range_name="live", resolution="live")
-        self.assertEqual("ram_graph_history", payload["source"])
-        self.assertEqual(1, len(payload["points"]))
-        self.assertTrue(payload["kpis"]["grid_power_w"]["available"])
+    def test_discarded_graph_export_and_view_routes_are_absent(self):
+        import web_ui
+        source = Path(web_ui.__file__).read_text(encoding="utf-8")
+        self.assertNotIn('@app.get("/graph-data")', source)
+        self.assertNotIn('@app.get("/graph-data.csv")', source)
+        self.assertNotIn('@app.get("/graph-view-data")', source)
 
     def test_soc_day_payload_is_nonfatal_without_logs(self):
         with tempfile.TemporaryDirectory() as td:

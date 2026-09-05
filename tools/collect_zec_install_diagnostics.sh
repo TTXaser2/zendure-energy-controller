@@ -68,6 +68,7 @@ run_shell installed_identity "grep -E 'APP_VERSION|APP_VERSION_LABEL|APP_BUILD_I
 run_shell package_identity "grep -E 'APP_VERSION|APP_VERSION_LABEL|APP_BUILD_ID' '$PACKAGE_ROOT/version.py' 2>/dev/null || true"
 
 if [ -f "$CONFIG" ]; then
+  RUNTIME_ROOT="$(cd "$(dirname "$CONFIG")" && pwd)"
   python3 - "$PACKAGE_ROOT" "$CONFIG" >"${WORK}/config.redacted.json" 2>"${WORK}/config_redaction_error.txt" <<'PY' || true
 import json, sys
 from pathlib import Path
@@ -84,8 +85,8 @@ for key,value in cfg.items():
         out[key]=value
 print(json.dumps(out,ensure_ascii=False,indent=2,sort_keys=True))
 PY
-  python3 "$PACKAGE_ROOT/tools/v14_cutover.py" preflight --config "$CONFIG" --json >"${WORK}/v14_cutover_preflight.json" 2>"${WORK}/v14_cutover_preflight.err" || true
-  python3 "$PACKAGE_ROOT/tools/v14_cutover.py" verify --config "$CONFIG" --json >"${WORK}/v14_cutover_verify.json" 2>"${WORK}/v14_cutover_verify.err" || true
+  python3 "$PACKAGE_ROOT/tools/v14_cutover.py" preflight --config "$CONFIG" --runtime-root "$RUNTIME_ROOT" --json >"${WORK}/v14_cutover_preflight.json" 2>"${WORK}/v14_cutover_preflight.err" || true
+  python3 "$PACKAGE_ROOT/tools/v14_cutover.py" verify --config "$CONFIG" --runtime-root "$RUNTIME_ROOT" --json >"${WORK}/v14_cutover_verify.json" 2>"${WORK}/v14_cutover_verify.err" || true
 fi
 
 for f in /tmp/zec_v14_*.json /tmp/zec_v14_*.err /tmp/zec_v14_*.txt; do

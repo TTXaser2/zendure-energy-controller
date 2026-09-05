@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Read-only productive field acceptance for ZEC V14.0.0.
+"""Read-only productive field acceptance for ZEC V14.1.2.
 
 This tool never publishes commands, changes configuration, mutates the graph
 store, or performs a rollback. It exercises the running HTTP/read-only graph
@@ -26,10 +26,10 @@ if str(ROOT) not in sys.path:
 
 from version import APP_BUILD_ID, APP_VERSION, APP_VERSION_LABEL  # noqa: E402
 
-EXPECTED_VERSION = "14.0.0"
-EXPECTED_LABEL = "V14.0.0"
-EXPECTED_BUILD_ID = "v14.0.0-20260904-r2"
-FORMAT = "ZEC_V14_FIELD_ACCEPTANCE_V1"
+EXPECTED_VERSION = "14.1.2"
+EXPECTED_LABEL = "V14.1.2"
+EXPECTED_BUILD_ID = "v14.1.2-20260905"
+FORMAT = "ZEC_V14_1_2_FIELD_ACCEPTANCE_V1"
 
 
 def _sha256(path: Path) -> str:
@@ -132,7 +132,7 @@ def _verify_rollback_backup(report: Mapping[str, Any]) -> Dict[str, Any]:
     return {"status": "ok", "reason": "ROLLBACK_ARTIFACTS_EXACT", "backup_dir": str(backup_dir), "artifacts": checked}
 
 
-def run_acceptance(base_url: str, cutover_report: Path) -> Dict[str, Any]:
+def run_acceptance(base_url: str, install_report: Path) -> Dict[str, Any]:
     checks: List[Dict[str, Any]] = []
     metrics: Dict[str, Any] = {}
     started = time.time()
@@ -198,10 +198,50 @@ def run_acceptance(base_url: str, cutover_report: Path) -> Dict[str, Any]:
         body, ms = _http(base_url, "/graph", timeout=15)
         metrics["graph_page_ms"] = round(ms, 3)
         text = body.decode("utf-8", errors="replace")
-        page_ok = "/api/graph/v1/workspace" in text and "/api/graph/v1/overview" in text and "episode-comparison" in text
+        page_ok = (
+            'data-greenfield-contract="v14.1.2"' in text
+            and '/static/graph_v14_1.js' in text
+            and '/static/graph_v14_1.css' in text
+            and '/graph_old' not in text
+        )
         _check(checks, "graph_page", page_ok, bytes=len(body))
     except Exception as exc:
         _check(checks, "graph_page", False, detail=f"{type(exc).__name__}: {exc}")
+
+    try:
+        js_body, js_ms = _http(base_url, "/static/graph_v14_1.js", timeout=10)
+        css_body, css_ms = _http(base_url, "/static/graph_v14_1.css", timeout=10)
+        metrics["graph_greenfield_js_ms"] = round(js_ms, 3)
+        metrics["graph_greenfield_css_ms"] = round(css_ms, 3)
+        js_text = js_body.decode("utf-8", errors="replace")
+        css_text = css_body.decode("utf-8", errors="replace")
+        asset_ok = (
+            "/api/graph/v1/workspace" in js_text
+            and "/api/graph/v1/overview" in js_text
+            and "/api/graph/v1/inspector" in js_text
+            and "/graph-view-data" not in js_text
+            and "/graph_old" not in js_text
+            and 'html[data-theme="dark"] .gf-page' in css_text
+            and "grid-template-columns:280px minmax(640px,1fr) 360px" in css_text
+        )
+        _check(checks, "graph_greenfield_assets", asset_ok, js_bytes=len(js_body), css_bytes=len(css_body))
+        interaction_ok = (
+            "gfSelectMode" in js_text
+            and "loadPeriodComparison" in js_text
+            and "episodeA.overview.relative_timestamps_ms" in js_text
+            and "Array.isArray(value)?value:[]" in js_text
+            and "tooltip:{enabled:false}" in js_text
+            and "gfPowerCursorCard" in text
+            and "gfSocCursorCard" in text
+            and "gfStateCursorCard" in text
+            and 'data-gf-context-tab="compare"' not in text
+            and ".gf-cursor-card" in css_text
+            and ".gf-selection-bar" in css_text
+        )
+        _check(checks, "graph_interaction_contract", interaction_ok)
+    except Exception as exc:
+        _check(checks, "graph_greenfield_assets", False, detail=f"{type(exc).__name__}: {exc}")
+        _check(checks, "graph_interaction_contract", False, detail=f"{type(exc).__name__}: {exc}")
 
     now_ms = int(time.time() * 1000)
     start_48h = now_ms - 48 * 60 * 60 * 1000
@@ -314,32 +354,31 @@ def run_acceptance(base_url: str, cutover_report: Path) -> Dict[str, Any]:
     else:
         _check(checks, "graph_db_integrity", False, detail="DB_PATH_MISSING_FROM_RUNTIME")
 
-    if cutover_report.is_file():
+    if install_report.is_file():
         try:
-            report = json.loads(cutover_report.read_text(encoding="utf-8"))
-            rebuild = dict(report.get("rebuild") or {})
-            report_ok = (
-                report.get("status") == "ok" and report.get("reason") == "CUTOVER_VERIFIED"
-                and int(rebuild.get("rows_imported") or 0) > 0
-                and not rebuild.get("source_errors")
-                and int(rebuild.get("files_ok") or 0) == int(rebuild.get("files") or 0)
+            report = json.loads(install_report.read_text(encoding="utf-8"))
+            backup = dict(report.get("release_backup") or {})
+            backup_path = Path(str(backup.get("path") or ""))
+            expected_size = int(backup.get("size") or 0)
+            expected_hash = str(backup.get("sha256") or "")
+            actual_size = backup_path.stat().st_size if backup_path.is_file() else -1
+            actual_hash = _sha256(backup_path) if backup_path.is_file() else ""
+            install_ok = (
+                report.get("status") == "ok"
+                and (report.get("source") or {}).get("version") == "14.1.1"
+                and (report.get("target") or {}).get("version") == "14.1.2"
+                and report.get("graph_core_v3_preserved") is True
+                and report.get("graph_core_v3_rebuilt") is False
             )
-            _check(
-                checks, "cutover_rebuild_report", report_ok,
-                rows_imported=rebuild.get("rows_imported"), files=rebuild.get("files"), files_ok=rebuild.get("files_ok"),
-                source_v4_files=report.get("source_v4_files"), previous_backend=report.get("previous_backend"),
-            )
-            rollback = _verify_rollback_backup(report)
-            _check(
-                checks, "rollback_backup_integrity", rollback.get("status") == "ok",
-                detail=str(rollback.get("reason") or ""), backup_dir=rollback.get("backup_dir"), artifacts=rollback.get("artifacts"),
-            )
+            _check(checks, "install_report", install_ok, source=report.get("source"), target=report.get("target"), graph_core_v3_preserved=report.get("graph_core_v3_preserved"))
+            backup_ok = backup_path.is_file() and actual_size == expected_size and bool(expected_hash) and actual_hash == expected_hash
+            _check(checks, "rollback_backup_integrity", backup_ok, detail="RELEASE_BACKUP_EXACT" if backup_ok else "RELEASE_BACKUP_MISMATCH", path=str(backup_path), bytes=actual_size, sha256=actual_hash)
         except Exception as exc:
-            _check(checks, "cutover_rebuild_report", False, detail=f"{type(exc).__name__}: {exc}")
-            _check(checks, "rollback_backup_integrity", False, detail="CUTOVER_REPORT_UNUSABLE")
+            _check(checks, "install_report", False, detail=f"{type(exc).__name__}: {exc}")
+            _check(checks, "rollback_backup_integrity", False, detail="INSTALL_REPORT_UNUSABLE")
     else:
-        _warn(checks, "cutover_rebuild_report", "CUTOVER_REPORT_NOT_FOUND", path=str(cutover_report))
-        _warn(checks, "rollback_backup_integrity", "NOT_EVALUATED_WITHOUT_CUTOVER_REPORT")
+        _warn(checks, "install_report", "INSTALL_REPORT_NOT_FOUND", path=str(install_report))
+        _warn(checks, "rollback_backup_integrity", "NOT_EVALUATED_WITHOUT_INSTALL_REPORT")
 
     # Performance acceptance here is deliberately bounded by the existing HTTP
     # timeouts. No new product threshold is invented in WP10.
@@ -371,17 +410,17 @@ def run_acceptance(base_url: str, cutover_report: Path) -> Dict[str, Any]:
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Read-only ZEC V14 field acceptance")
+    p = argparse.ArgumentParser(description="Read-only ZEC V14.1.2 field acceptance")
     p.add_argument("--base-url", default="http://127.0.0.1:8080")
-    p.add_argument("--cutover-report", default="/tmp/zec_v14_cutover_report.json")
-    p.add_argument("--output", default="/tmp/ZEC_V14_FIELD_ACCEPTANCE.json")
+    p.add_argument("--install-report", default="/tmp/zec_v14_1_2_install_report.json")
+    p.add_argument("--output", default="/tmp/ZEC_V14_1_2_FIELD_ACCEPTANCE.json")
     p.add_argument("--json", action="store_true")
     return p.parse_args(argv)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv)
-    result = run_acceptance(args.base_url, Path(args.cutover_report))
+    result = run_acceptance(args.base_url, Path(args.install_report))
     output = Path(args.output).expanduser().resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")

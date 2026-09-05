@@ -19,13 +19,14 @@ class V1211Rc10ModernUiPixelPassTests(unittest.TestCase):
         self.assertIn('id="expertMenu"', html)
         self.assertNotIn('<div class="nav">', html)
 
-    def test_graph_page_uses_mockup_style_dashboard_components(self):
+    def test_graph_page_uses_greenfield_three_lane_workspace(self):
         html = build_graph_page(dict(DEFAULT_CONFIG))
         self.assertIn("zec-modern-body", html)
-        self.assertIn("zec-chart-card", html)
-        self.assertIn("zec-kpi-strip", html)
-        self.assertIn("Aktive Signale / Quellen", html)
-        self.assertIn("/graph_old", html)
+        self.assertIn("gf-three-column", html)
+        self.assertIn("Leistungsfluss &amp; Regelziel", html)
+        self.assertIn("SOC &amp; historische Grenzen", html)
+        self.assertIn("Zustände &amp; Ereignisse", html)
+        self.assertNotIn("/graph_old", html)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,11 @@
+RELEASE: V14.1.2
+BUILD_ID: v14.1.2-20260905
+STATUS: PASS
+TEST_FILES: 124
+TESTS: 960
+SUBTESTS: 679
+EXECUTION: four disjoint deterministic pytest groups; each test file exactly once
+GROUP_1: 261 tests + 607 subtests PASS
+GROUP_2: 225 tests + 2 subtests PASS
+GROUP_3: 225 tests + 41 subtests PASS
+GROUP_4: 249 tests + 29 subtests PASS

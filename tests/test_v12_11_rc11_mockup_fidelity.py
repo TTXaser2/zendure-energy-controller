@@ -22,13 +22,16 @@ class V1211Rc11MockupFidelityTests(unittest.TestCase):
         self.assertIn('Betriebsereignisse', html)
         self.assertNotIn('Aktuelle Energieflüsse', html)
 
-    def test_graph_page_keeps_dark_graph_mockup_shell(self):
+    def test_graph_page_follows_global_theme_and_does_not_force_dark(self):
         cfg = dict(DEFAULT_CONFIG)
         cfg["UI_DARK_MODE"] = False
         html = build_graph_page(cfg)
-        self.assertIn("modern-dark", html)
-        self.assertIn("zec-chart-card", html)
-        self.assertIn("Graph-Verlauf CSV", html)
+        self.assertIn('data-theme="light"', html)
+        self.assertIn("gf-three-column", html)
+        self.assertIn("/static/graph_v14_1.css", html)
+        self.assertIn('classList.add("zec-modern-body","modern-light","zec-shared-shell")', html)
+        self.assertNotIn('classList.add("zec-modern-body","modern-dark","zec-shared-shell")', html)
+        self.assertNotIn("/graph_old", html)
 
 
 if __name__ == "__main__":

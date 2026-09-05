@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class TestRC16PerformanceEndpoints(unittest.TestCase):
     def test_version_label_rc16(self):
-        self.assertEqual(version.APP_VERSION_LABEL, "V14.0.0")
+        self.assertEqual(version.APP_VERSION_LABEL, "V14.1.2")
 
     def test_tail_reader_avoids_old_rows_for_recent_window(self):
         now = datetime.now().replace(microsecond=0)
@@ -36,11 +36,13 @@ class TestRC16PerformanceEndpoints(unittest.TestCase):
         finally:
             os.unlink(path)
 
-    def test_soc_day_section_has_timeout_and_cache_status(self):
-        html = web_ui.build_modern_soc_day_section({})
-        self.assertIn("AbortController", html)
-        self.assertIn("SOC-Tageskurve wird noch vorbereitet", html)
-        self.assertIn("payload.cache_status", html)
+    def test_soc_day_section_has_bounded_timeout_cache_status_and_stale_day_guard(self):
+        js = (ROOT / "static" / "status_v2.js").read_text(encoding="utf-8")
+        self.assertIn("AbortController", js)
+        self.assertIn("controller.abort(),30000", js)
+        self.assertIn("SOC_DAY_DATE_MISMATCH", js)
+        self.assertIn("socChart.clear(requestedDate)", js)
+        self.assertIn("p.cache_status", js)
 
     def test_status_page_refreshes_grid_mini_sparkline_endpoint(self):
         html = web_ui.build_status_page({"UI_DARK_MODE": False}, {"current_mode":"AUTO", "grid_power_valid":True, "raw_grid_power":-100})
@@ -51,17 +53,20 @@ class TestRC16PerformanceEndpoints(unittest.TestCase):
         self.assertIn('this.inFlight', js)
 
     def test_graph_page_prevents_overlapping_requests_and_has_timeout(self):
-        html = web_ui.build_graph_page({"UI_DARK_MODE": False})
-        self.assertIn("graphRequestInFlight", html)
-        self.assertIn("AbortController", html)
-        self.assertIn("Graphdaten werden noch vorbereitet", html)
-        self.assertIn("payload.cache_status", html)
+        js = (ROOT / "static" / "graph_v14_1.js").read_text(encoding="utf-8")
+        self.assertIn("loading:false,reloadPending:false", js)
+        self.assertIn("if(state.loading){state.reloadPending=true;return;}", js)
+        self.assertIn("AbortController", js)
+        self.assertIn("timeoutMs=30000", js)
+        self.assertIn("Daten werden geladen", js)
 
     def test_trace_tool_contains_endpoint_timing_checks(self):
         text = (ROOT / "tools" / "collect_zec_trace.sh").read_text(encoding="utf-8")
         self.assertIn("HTTP / ENDPOINT TIMINGS", text)
         self.assertIn("/soc-day-data", text)
-        self.assertIn("/graph-view-data?range=24h&resolution=1min", text)
+        self.assertIn("/api/graph/v1/runtime", text)
+        self.assertIn("/api/graph/v1/workspace", text)
+        self.assertNotIn("/graph-view-data", text)
         self.assertIn("time_starttransfer", text)
 
 

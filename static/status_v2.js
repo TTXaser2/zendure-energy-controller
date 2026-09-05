@@ -387,6 +387,13 @@
   class SocDayChart extends CanvasChart {
     constructor(canvas,tooltip){super(canvas,tooltip);this.mobileDetails=$('#storageSocMobileDetails');this.mobileQuery=window.matchMedia('(max-width:620px)');this.mobileQuery.addEventListener?.('change',()=>{if(!this.mobileQuery.matches&&this.mobileDetails)this.mobileDetails.hidden=true;this.draw();});}
     setData(payload){this.payload=payload||{points:[]};this.kind='soc';this.drawLegend();this.draw();}
+    clear(date=''){
+      this.hoverX=null;
+      if(this.tooltip)this.tooltip.hidden=true;
+      if(this.mobileDetails){this.mobileDetails.hidden=true;this.mobileDetails.innerHTML='';}
+      this.payload={date,points:[],zendure_unit_count:1,primary_storage_present:true,config_segments:[]};
+      this.kind='soc';this.drawLegend();this.draw();
+    }
     showSocDetails(html,x,y){
       if(this.mobileQuery.matches&&this.mobileDetails){this.tooltip.hidden=true;this.mobileDetails.innerHTML=html;this.mobileDetails.hidden=false;return;}
       if(this.mobileDetails)this.mobileDetails.hidden=true;
@@ -569,7 +576,7 @@
   const statusPoll=new PollChannel(apiUrl('/status-view-data'),3000,p=>{const seq=number(p.snapshot_epoch_ms)||Date.now();if(seq<statusSequence)return;statusSequence=seq;applyStatus(p);},2500);
   const miniPoll=new PollChannel(apiUrl('/grid-mini-data'),10000,p=>miniChart.setData(p),2500);
 
-  let selectedDate=new Date(); let dayInFlight=false; let dayController=null;
+  let selectedDate=new Date(); let dayController=null; let dayRequestSequence=0;
   const dateString=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   const localDateFromString=value=>{const m=String(value||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?new Date(Number(m[1]),Number(m[2])-1,Number(m[3])):null;};
   const dayLabel=d=>d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit',year:'numeric'});
@@ -579,9 +586,33 @@
     if(picker){picker.value=ds;picker.max=payload.available_to||today;if(payload.available_from)picker.min=payload.available_from;}
   }
   async function refreshSocDay(){
-    if(document.visibilityState==='hidden'||dayInFlight)return;dayInFlight=true;dayController=new AbortController();const timeout=setTimeout(()=>dayController.abort(),5000);
-    const status=$('#storageSocStatus');const ds=dateString(selectedDate);syncDateControls();
-    try{const r=await fetch(apiUrl(`/storage-soc-day-data?date=${encodeURIComponent(ds)}`),{cache:'no-store',signal:dayController.signal});if(!r.ok)throw new Error(`HTTP ${r.status}`);const p=await r.json();const returned=localDateFromString(p.date);if(returned)selectedDate=returned;syncDateControls(p);socChart.setData(p);status.textContent=p.is_today?`Stand: ${p.last_point_at||'—'} · aktualisiert alle 60 s · Quelle: ${p.source||'—'} · Cache ${p.cache_status||'—'}`:`${p.complete===false?'Daten unvollständig':'Vollständiger Tag'}: ${p.date} · Quelle: ${p.source||'—'} · Cache ${p.cache_status||'—'}`;}catch(e){status.textContent='SOC-Tageskurve wird noch vorbereitet oder ist vorübergehend nicht verfügbar.';}finally{clearTimeout(timeout);dayController=null;dayInFlight=false;}
+    if(document.visibilityState==='hidden')return;
+    const requestId=++dayRequestSequence;
+    const requestedDate=dateString(selectedDate);
+    if(dayController)dayController.abort();
+    const controller=new AbortController();dayController=controller;
+    const timeout=setTimeout(()=>controller.abort(),30000);
+    const status=$('#storageSocStatus');
+    syncDateControls();
+    socChart.clear(requestedDate);
+    status.textContent=`SOC-Tageskurve für ${requestedDate} wird geladen…`;
+    try{
+      const r=await fetch(apiUrl(`/storage-soc-day-data?date=${encodeURIComponent(requestedDate)}`),{cache:'no-store',signal:controller.signal});
+      if(!r.ok)throw new Error(`HTTP ${r.status}`);
+      const p=await r.json();
+      if(requestId!==dayRequestSequence)return;
+      if(p?.error)throw new Error(String(p.error));
+      if(String(p?.date||'')!==requestedDate)throw new Error(`SOC_DAY_DATE_MISMATCH:${p?.date||'missing'}`);
+      syncDateControls(p);socChart.setData(p);
+      status.textContent=p.is_today?`Stand: ${p.last_point_at||'—'} · aktualisiert alle 60 s · Quelle: ${p.source||'—'} · Cache ${p.cache_status||'—'}`:`${p.complete===false?'Daten unvollständig':'Vollständiger Tag'}: ${p.date} · Quelle: ${p.source||'—'} · Cache ${p.cache_status||'—'}`;
+    }catch(e){
+      if(requestId!==dayRequestSequence)return;
+      socChart.clear(requestedDate);
+      status.textContent=e?.name==='AbortError'?`SOC-Tageskurve für ${requestedDate} konnte nicht innerhalb von 30 s geladen werden.`:`SOC-Tageskurve für ${requestedDate} konnte nicht geladen werden.`;
+    }finally{
+      clearTimeout(timeout);
+      if(dayController===controller)dayController=null;
+    }
   }
 
   $('#dayPrev').addEventListener('click',()=>{const n=new Date(selectedDate);n.setDate(n.getDate()-1);selectedDate=n;refreshSocDay();});

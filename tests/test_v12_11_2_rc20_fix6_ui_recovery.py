@@ -146,13 +146,15 @@ class Rc20Fix6SettingsUiTests(unittest.TestCase):
 
     def test_graph_uses_the_same_shared_navigation_shell(self):
         html = build_graph_page(dict(DEFAULT_CONFIG))
+        script = Path(__file__).resolve().parents[1].joinpath("static/graph_v14_1.js").read_text(encoding="utf-8")
         self.assertIn('class="zec-topbar"', html)
         self.assertIn('class="is-active" href="/graph"', html)
         self.assertIn('id="globalStatusNavDot"', html)
         self.assertIn('/static/status_v2.css', html)
+        self.assertIn('/static/graph_v14_1.js', html)
         self.assertNotIn('class="zec-nav-modern"', html)
-        self.assertIn('let graphRequestInFlight = false;', html)
-        self.assertEqual(1, html.count('let graphRequestInFlight = false;'))
+        self.assertIn('if(state.loading){state.reloadPending=true;return;}', script)
+        self.assertNotIn('/graph_old', html)
 
     def test_preview_close_reenables_review_by_recomputing_bar(self):
         script = Path(__file__).resolve().parents[1].joinpath("static/settings_v2.js").read_text(encoding="utf-8")

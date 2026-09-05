@@ -14,14 +14,16 @@ class TestRC12UiPolish(unittest.TestCase):
         self.assertNotIn("SMA Direktquelle", html)
         self.assertNotIn("CPU-Sparkline", html)
 
-    def test_graph_page_contains_scrollable_events_and_linear_time_axis(self):
+    def test_graph_page_contains_state_timeline_and_linear_time_axis(self):
+        root = __import__('pathlib').Path(web_ui.__file__).resolve().parent
         html = web_ui.build_graph_page({})
-        self.assertIn("#eventBox", html)
-        with open(web_ui.__file__, encoding="utf-8") as src:
-            self.assertIn("overflow-y: auto", src.read())
-        self.assertIn("axis_start_epoch_ms", html)
-        self.assertIn("type:'linear'", html)
-        self.assertNotIn("Netz Rohwert','grid_power_raw_w", html)
+        js = (root / "static" / "graph_v14_1.js").read_text(encoding="utf-8")
+        self.assertIn('id="gfStateTimeline"', html)
+        self.assertIn("type:'linear'", js)
+        self.assertIn("OPERATING_MODE", js)
+        self.assertIn("CONTROL_INTENT", js)
+        self.assertIn("CONTROL_REASON", js)
+        self.assertNotIn("/graph-view-data", js)
 
 
 if __name__ == "__main__":

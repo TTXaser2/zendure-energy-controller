@@ -3,16 +3,17 @@ import tempfile
 import time
 import unittest
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import version
 from csv_logger import CsvRotatingLogger
 from measurement_db import query_graph_points, resolve_measurement_db_path
-from web_ui import build_graph_view_payload, build_status_page
+from web_ui import build_status_page
 
 
 class TestRC17SqliteGraphStore(unittest.TestCase):
     def test_version_label_rc17(self):
-        self.assertEqual(version.APP_VERSION_LABEL, "V14.0.0")
+        self.assertEqual(version.APP_VERSION_LABEL, "V14.1.2")
 
     def test_db_writes_even_when_csv_logging_off(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -46,30 +47,13 @@ class TestRC17SqliteGraphStore(unittest.TestCase):
             self.assertEqual(len(points), 1)
             self.assertEqual(points[0]["soc"], 77.0)
 
-    def test_graph_payload_prefers_sqlite_db_when_available(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            now = datetime.now()
-            cfg = {
-                "MEASUREMENT_LOG_MODE": "off",
-                "MEASUREMENT_SCHEMA_VERSION": "3",
-                "MEASUREMENT_LOG_DIR": tmp,
-                "MEASUREMENT_DB_ENABLED": True,
-                "MEASUREMENT_DB_FILE": "test.sqlite3",
-            }
-            logger = CsvRotatingLogger()
-            logger.log(cfg, {
-                "datetime_local": now.strftime("%Y-%m-%d %H:%M:%S"),
-                "epoch_s": now.timestamp(),
-                "grid_power_w": -42,
-                "zendure_soc_percent": 66,
-                "soc_valid": True,
-                "mode": "AUTO_CHARGE",
-            })
-            logger.close()
-            payload = build_graph_view_payload(cfg, {"graph_history": []}, range_name="24h", resolution="1min")
-            self.assertEqual(payload["source"], "measurement_db_1min")
-            self.assertEqual(payload["cache_status"], "db_hit")
-            self.assertGreaterEqual(len(payload["points"]), 1)
+    def test_legacy_graph_payload_adapter_is_removed(self):
+        import web_ui
+        self.assertFalse(hasattr(web_ui, "build_graph_view_payload"))
+        source = Path(web_ui.__file__).read_text(encoding="utf-8")
+        self.assertNotIn('@app.get("/graph-view-data")', source)
+        self.assertNotIn('@app.get("/graph-data")', source)
+        self.assertNotIn('@app.get("/graph-data.csv")', source)
 
     def test_status_page_mentions_sqlite_store(self):
         cfg = {"MEASUREMENT_LOG_MODE": "off", "MEASUREMENT_DB_ENABLED": True, "MEASUREMENT_LOG_DIR": "logs"}

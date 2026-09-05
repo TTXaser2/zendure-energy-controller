@@ -204,17 +204,22 @@ def test_wp9_routes_bind_to_v3_episode_contract(tmp_path):
 
 
 def test_graph_page_exposes_wp9_pair_side_by_side_overlay_and_synchronized_inspector():
+    root = Path(__file__).resolve().parents[1]
     html = build_graph_page({})
-    assert "/api/graph/v1/episode-triggers" in html
-    assert "/api/graph/v1/episode-comparison" in html
-    assert "Episodenvergleich" in html
+    js = (root / "static" / "graph_v14_1.js").read_text(encoding="utf-8")
+    assert "/api/graph/v1/episode-triggers" in js
+    assert "/api/graph/v1/episode-comparison" in js
+    assert "Episoden t=0" in html
     assert "Nebeneinander" in html
-    assert "Überlagern" in html
+    assert "Überlagert" in html
     assert "t=0" in html
-    assert "visuelle Ähnlichkeit" in html
-    assert "comparisonInspectorA" in html
-    assert "comparisonInspectorB" in html
-    assert "/graph-view-data" not in html
+    assert "selectCursor" in js
+    assert "gfComparePowerA" in html
+    assert "gfComparePowerB" in html
+    assert "gfComparePowerOverlay" in html
+    assert "episodeA.overview.relative_timestamps_ms" in js
+    assert "episodeB.overview.relative_timestamps_ms" in js
+    assert "/graph-view-data" not in js
 
 
 def test_wp9_does_not_modify_controller_logic():

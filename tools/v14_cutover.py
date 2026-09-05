@@ -21,6 +21,7 @@ import shutil
 import sqlite3
 import sys
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence
 
@@ -28,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from graph_core_v3 import connect_graph_core, validate_graph_core  # noqa: E402
+from graph_core_v3 import validate_graph_core  # noqa: E402
 from graph_history_runtime import graph_history_runtime_status  # noqa: E402
 from measurement_db import detect_measurement_db_backend, resolve_measurement_db_path  # noqa: E402
 from tools.rebuild_graph_core_v3 import (  # noqa: E402
@@ -41,6 +42,37 @@ from tools.rebuild_graph_core_v3 import (  # noqa: E402
 STATE_FILE = "cutover_state.json"
 ARTIFACTS = ("db", "wal", "shm")
 MIN_FREE_MARGIN_BYTES = 512 * 1024 * 1024
+
+
+@contextmanager
+def _runtime_root_context(runtime_root: Optional[Path]):
+    """Resolve relative runtime paths exactly as the installed service would.
+
+    Installer/diagnostic tools execute package code from a staging directory.
+    Relative settings such as MEASUREMENT_LOG_DIR="logs" are runtime-root
+    relative, not package-root relative.  This explicit context prevents a
+    staging CWD from redirecting verification to a non-existent shadow DB.
+    """
+    if runtime_root is None:
+        yield None
+        return
+    root = runtime_root.expanduser().resolve()
+    if not root.is_dir():
+        raise FileNotFoundError(f"RUNTIME_ROOT_MISSING:{root}")
+    previous = Path.cwd()
+    os.chdir(root)
+    try:
+        yield root
+    finally:
+        os.chdir(previous)
+
+
+def _readonly_graph_connection(path: Path) -> sqlite3.Connection:
+    """Open an existing graph store without schema/WAL mutation."""
+    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=30.0)
+    conn.execute("PRAGMA query_only=ON")
+    conn.execute("PRAGMA busy_timeout=30000")
+    return conn
 
 
 def _artifact_paths(db_path: Path) -> Dict[str, Path]:
@@ -107,13 +139,20 @@ def _fsync_dir(path: Path) -> None:
         os.close(fd)
 
 
-def preflight(config_path: Path) -> Dict[str, Any]:
+def preflight(config_path: Path, runtime_root: Optional[Path] = None) -> Dict[str, Any]:
     config_path = config_path.expanduser().resolve()
     if not config_path.is_file():
         return {"status": "error", "reason": "CONFIG_MISSING", "config": str(config_path)}
-    config = _load_json(config_path)
-    db_path = Path(resolve_measurement_db_path(dict(config))).expanduser().resolve()
-    dirs = candidate_dirs(config, config_path, [])
+    with _runtime_root_context(runtime_root) as active_root:
+        config = _load_json(config_path)
+        db_path = Path(resolve_measurement_db_path(dict(config))).expanduser().resolve()
+        dirs = candidate_dirs(config, config_path, [])
+        result = _preflight_resolved(config_path, config, db_path, dirs)
+        result["runtime_root"] = str(active_root) if active_root is not None else str(Path.cwd())
+        return result
+
+
+def _preflight_resolved(config_path: Path, config: Dict[str, Any], db_path: Path, dirs) -> Dict[str, Any]:
     files = find_v4_files(dirs, [])
     source_bytes = sum(p.stat().st_size for p in files)
     artifacts = _artifact_paths(db_path)
@@ -288,37 +327,40 @@ def restore(backup_dir: Path) -> Dict[str, Any]:
     return {"status": "ok", "reason": "RESTORED", "target_db": str(db_path), "restored": restored}
 
 
-def verify(config_path: Path) -> Dict[str, Any]:
+def verify(config_path: Path, runtime_root: Optional[Path] = None) -> Dict[str, Any]:
     config_path = config_path.expanduser().resolve()
-    config = _load_json(config_path)
-    db_path = Path(resolve_measurement_db_path(dict(config))).expanduser().resolve()
-    detection = detect_measurement_db_backend(str(db_path))
-    result: Dict[str, Any] = {
-        "status": "error",
-        "db_path": str(db_path),
-        "db_backend": detection.get("backend"),
-        "db_schema_version": detection.get("schema_version"),
-        "quick_check": _quick_check(db_path),
-        "controller_readiness_impact": "NONE",
-    }
-    if detection.get("backend") != "v3":
-        result["reason"] = "NOT_V3"
+    with _runtime_root_context(runtime_root) as active_root:
+        config = _load_json(config_path)
+        db_path = Path(resolve_measurement_db_path(dict(config))).expanduser().resolve()
+        detection = detect_measurement_db_backend(str(db_path))
+        result: Dict[str, Any] = {
+            "status": "error",
+            "db_path": str(db_path),
+            "db_backend": detection.get("backend"),
+            "db_schema_version": detection.get("schema_version"),
+            "quick_check": _quick_check(db_path),
+            "controller_readiness_impact": "NONE",
+            "runtime_root": str(active_root) if active_root is not None else str(Path.cwd()),
+            "verification_mode": "READ_ONLY",
+        }
+        if detection.get("backend") != "v3":
+            result["reason"] = "NOT_V3"
+            return result
+        conn = _readonly_graph_connection(db_path)
+        try:
+            validation = validate_graph_core(conn)
+        finally:
+            conn.close()
+        runtime = graph_history_runtime_status(config)
+        result.update({"validation": validation, "runtime": runtime})
+        if validation.get("integrity_check") != "ok":
+            result["reason"] = "V3_INTEGRITY_FAILED"
+            return result
+        if runtime.get("read_mode") != "V3_NATIVE" or not runtime.get("workspace_ready"):
+            result["reason"] = "V3_RUNTIME_NOT_READY"
+            return result
+        result.update({"status": "ok", "reason": "V3_NATIVE_READY"})
         return result
-    conn = connect_graph_core(db_path)
-    try:
-        validation = validate_graph_core(conn)
-    finally:
-        conn.close()
-    runtime = graph_history_runtime_status(config)
-    result.update({"validation": validation, "runtime": runtime})
-    if validation.get("integrity_check") != "ok":
-        result["reason"] = "V3_INTEGRITY_FAILED"
-        return result
-    if runtime.get("read_mode") != "V3_NATIVE" or not runtime.get("workspace_ready"):
-        result["reason"] = "V3_RUNTIME_NOT_READY"
-        return result
-    result.update({"status": "ok", "reason": "V3_NATIVE_READY"})
-    return result
 
 
 def rebuild_and_cutover(config_path: Path, backup_dir: Path, *, report_path: Optional[Path] = None) -> Dict[str, Any]:
@@ -432,6 +474,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     for name in ("preflight", "verify"):
         p = sub.add_parser(name)
         p.add_argument("--config", required=True)
+        p.add_argument("--runtime-root", default="")
         p.add_argument("--json", action="store_true")
     p = sub.add_parser("rebuild")
     p.add_argument("--config", required=True)
@@ -447,9 +490,9 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv)
     if args.command == "preflight":
-        result = preflight(Path(args.config))
+        result = preflight(Path(args.config), Path(args.runtime_root) if args.runtime_root else None)
     elif args.command == "verify":
-        result = verify(Path(args.config))
+        result = verify(Path(args.config), Path(args.runtime_root) if args.runtime_root else None)
     elif args.command == "rebuild":
         result = rebuild_and_cutover(
             Path(args.config), Path(args.backup_dir),

@@ -1,0 +1,11 @@
+version.py
+tools/update_zendure_controller.sh
+tools/v14_cutover.py
+tools/collect_zec_install_diagnostics.sh
+tools/v14_field_acceptance.py
+tests/test_v14_1_1_installer_runtime_root.py
+tests/* (Release-Identitätsasserts)
+RELEASE_INFO_V14_1_1.md
+BUILD_VALIDATION_V14_1_1.md
+V14_1_1_SOURCE_MANIFEST.sha256
+validation/V14_1_1_*

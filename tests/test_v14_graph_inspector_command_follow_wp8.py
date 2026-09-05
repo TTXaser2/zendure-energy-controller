@@ -244,13 +244,15 @@ def test_wp8_api_and_browser_bind_inspector_and_command_follow_to_v3_without_leg
     assert follow["contract_version"] == 1
     assert follow["event"]["event_id"] == event_id
 
+    root = Path(__file__).resolve().parents[1]
     html = build_graph_page({})
-    assert "/api/graph/v1/inspector" in html
-    assert "/api/graph/v1/command-follow" in html
+    js = (root / "static" / "graph_v14_1.js").read_text(encoding="utf-8")
+    assert "/api/graph/v1/inspector" in js
+    assert "/api/graph/v1/command-follow" in js
     assert "Regler-Inspector" in html
-    assert "Command-Follow / Ursache-Wirkung" in html
-    assert "/graph-view-data" not in html
-    assert "Publish oder gleiche Richtung allein gelten nicht als Wirksamkeitsnachweis" in html
+    assert "Command-Follow" in html
+    assert "/graph-view-data" not in js
+    assert "Publish und gleiche Richtung allein gelten nicht als Wirksamkeitsnachweis" in js
 
 
 def test_wp8_does_not_modify_controller_logic():

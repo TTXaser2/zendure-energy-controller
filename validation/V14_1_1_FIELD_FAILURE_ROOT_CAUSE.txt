@@ -1,0 +1,31 @@
+RELEASE_TARGET: V14.1.1
+FIELD_SOURCE: failed V14.1.0 preflight on productive V14.0.0-r2
+STATUS: ROOT_CAUSE_CONFIRMED
+
+Observed wrong preflight result:
+  status=error
+  reason=NOT_V3
+  db_backend=missing
+  db_path=/home/pi/Downloads/zendure_controller_v14_1_0/logs/zec_measurements.sqlite3
+
+Productive evidence at the same time:
+  installed version=14.0.0
+  build_id=v14.0.0-20260904-r2
+  /ready ready=true
+  /api/graph/v1/runtime read_mode=V3_NATIVE
+  workspace_ready=true
+  productive db_path=/opt/zendure-controller/logs/zec_measurements.sqlite3
+  prior productive local verify quick_check=ok, schema_version=3
+
+Root cause:
+  V14.1.0 package preflight executed package v14_cutover.py from the staging CWD.
+  The productive config intentionally uses relative MEASUREMENT_LOG_DIR=logs and
+  empty MEASUREMENT_DB_PATH. resolve_measurement_db_path therefore resolved the
+  DB below the staging CWD instead of the installed runtime root.
+
+V14.1.1 correction contract:
+  - verify/preflight support explicit --runtime-root
+  - installer pins runtime root to /opt/zendure-controller
+  - diagnostics pin runtime root to dirname(config)
+  - existing V3 verify is read-only and does not call connect_graph_core()
+  - regression reproduces staging-CWD failure and verifies fixed lookup

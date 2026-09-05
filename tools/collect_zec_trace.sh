@@ -169,7 +169,9 @@ PY
   http_timing "http://127.0.0.1:8080/"
   http_timing "http://127.0.0.1:8080/status"
   http_timing "http://127.0.0.1:8080/soc-day-data"
-  http_timing "http://127.0.0.1:8080/graph-view-data?range=24h&resolution=1min"
+  http_timing "http://127.0.0.1:8080/graph"
+  http_timing "http://127.0.0.1:8080/api/graph/v1/runtime"
+  http_timing "http://127.0.0.1:8080/api/graph/v1/workspace"
   http_timing "http://127.0.0.1:8080/grid-mini-sparkline"
   http_timing "http://127.0.0.1:8080/measurement-db-status"
 

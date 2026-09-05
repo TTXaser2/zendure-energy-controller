@@ -1,153 +1,71 @@
-# Zendure Energy Controller V13.0.3
+# Zendure Energy Controller V14.0.0
 
-**Build-ID:** `v13.0.3-20260814`
+**Build-ID:** `v14.0.0-20260904-r2`
 
-V13.0.3 ist ein enger UI-/UX-Hotfix auf Basis der produktiven V13.0.2. Der Live-Regelalgorithmus und alle Runtime-/Storage-Sicherheitsverträge bleiben fachlich unverändert.
+V14.0.0 ist der produktive Integrationsrelease des in WP1–WP9 aufgebauten Graph-/History-Unterbaus. Ausgangsbasis ist ausschließlich der verifizierte Produktivstand V13.0.3 / `v13.0.3-20260814`.
 
-<img width="1517" height="2318" alt="image" src="https://github.com/user-attachments/assets/2a53616d-e46f-44fa-b6cf-3dc890696053" />
+## 1. Hauptumfang
 
-## V13.0.3 Hotfix
+- Graph Core V3 als kompakte permanente historische Basis.
+- V3 Query/Catalog, Entity-/Topology-Persistenz, Coverage/Evidence und Retention-Grundlagen.
+- Konsolidierte bestehende History-Pfade einschließlich historisch korrekter MAX-SOC-Verläufe.
+- Neuer Graph Workspace mit Guided-/Free-Modus.
+- Cursor-Inspector und Command-Follow / Cause-Effect mit expliziter `NOT_EVALUABLE`-Semantik.
+- Episodenvergleich Side-by-Side / Overlay mit persistierten Triggern und relativer `t=0`-Achse.
+- Produktiver V14-Cutover als Rebuild aus Measurement V4 in eine separate V3-Kandidaten-DB.
+- Atomarer Graphstore-Swap erst nach vollständiger Validierung.
+- Separates rollbackfähiges DB/WAL/SHM-Backup mit Größen-/SHA256-Verifikation.
+- Automatische Diagnosepakete bei Preflight- und Updatefehlern.
+- Read-only V14-Feldabnahmewerkzeug.
 
-- Config-State-/Import-Preview verwendet kontextbezogene Titel.
-- No-op zeigt verständlich „Keine Änderungen erforderlich“, ohne Bestätigungscheckboxen oder toten Commitbutton.
-- Der bekannte V13.0.1-Registry-Display-Metadata-Übergang bleibt technisch diagnostizierbar, zählt aber nicht mehr als nutzerrelevante Migration.
-- Technische Codes erscheinen nur im Expertenbereich „Technische Details“.
-- Echte Diffs, Validation, CAS, Commit und echte Bestätigungen bleiben erhalten.
+## 2. Bewusst unverändert
 
-## V13.0.2 Basisfunktionen
+V14.0.0 ändert nicht die fachliche Regler-, Command-, Safety- oder Hardware-Semantik. Insbesondere bleiben AUTO/Harvest/Cross-Charge/NIGHT, aktive Neutralisierung, Command-Effect/Readback/Resync und die Primärspeicherpriorität geschützt.
 
-Der Release härtet die in V13 eingeführten Konfigurationsstände/Import-/Exportpfade sowie den asynchronen SQLite-Graphstore:
+Measurement V4 bleibt unverändert bei 246 Standard- bzw. 249 Extended-Feldern und ist weiterhin die optionale Deep-Trace-/Rebuild-Evidenzschicht. Graph Core V3 und Measurement V4 besitzen getrennte Lifecycles.
 
-- SQLite-Writer recovern nach transienten Schreibfehlern mit Rollback, neuer Connection und erneutem Batchversuch; fehlgeschlagene Batches werden nicht still verworfen.
-- Runtime-Writer und historischer Graph-Backfill koordinieren produktive DB-Schreibphasen über einen Maintenance-Lock.
-- Writerdiagnose behält den letzten Fehler und erkennt einen überfälligen erfolgreichen DB-Write.
-- Der Backfill meldet NUL-/CSV-Leseprobleme explizit, statt betroffene Dateien unbemerkt zu überspringen.
-- Lokale benannte Stände können den Scope `portable_profile` verwenden, bleiben aber `artifact_kind=named_state`; ein Austauschprofil bleibt `artifact_kind=portable_profile`.
-- Beschädigte, aber dateiseitig sicher identifizierbare Konfigurationsstände können revisionsgebunden gelöscht werden.
-- Modalnavigation, Inline-Fehleranzeige, CSRF-Erneuerung und No-op-Preview wurden gehärtet.
-- Default-/Inheritance-Prüfung verwendet dieselbe kanonische Resolve-Semantik wie die Runtime.
-- Historische Graphlegenden erhalten chronologische Rückkehrwerte, z. B. `99 % → 80 % → 99 %`.
-- Benutzertexte und aktuelles Handbuch wurden auf unnötige historische Release-/RC-Bezüge bereinigt.
-- Benutzerbegriff: **verteilbares Regelprofil**. Der interne stabile Vertrag `portable_profile` bleibt unverändert.
+## 3. Produktiver Cutover
 
-## 1. Benannte Konfigurationsstände
+Der Installer übernimmt keine Engineering-V3-Datenbank als Produktivwahrheit. Stattdessen:
 
-- ZEC kann benannte Konfigurationsstände mit Name, Beschreibung, Erstellzeit, Quellversion, Registry-/Config-Schema, Scope und Integritätshash speichern.
-- Lokaler Store: `/opt/zendure-controller/config-states/` mit restriktiven Rechten.
-- Ein gespeicherter Stand wird **niemals direkt aktiviert**. Laden führt immer über Migration, vollständige Servervalidierung, Preview/Diff, explizite Bestätigung, CAS und atomischen Commit.
-- Geerbte Defaults bleiben geerbt. Ein Stand materialisiert nicht still alte Defaults; echte Default-Abweichungen werden im Preview sichtbar.
-- Konfigurationsstände sind strikt vom Last-Good-A/B-Recoverystore getrennt und niemals selbst Recoverycandidate.
+1. Paket-/Source-/Syntax-/Test-Preflight vor Dienststopp.
+2. vollständiges Rollback-Backup der V13.0.3-Installation und Root-Artefakte.
+3. separates Backup des bestehenden Graphstores einschließlich WAL/SHM.
+4. Rebuild von Graph Core V3 aus dem vorhandenen Measurement-V4-Bestand in eine Kandidaten-DB.
+5. vollständige V3-Validierung.
+6. atomare Aktivierung.
+7. lokale Verifikation und Dienststart.
+8. getrennte Prüfung von Controller-Readiness und Graph-History-Readiness.
+9. automatischer Rollback bei echtem Installationsfehler.
 
-## 2. Import und Export
+## 4. Graph- und History-Vertrag
 
-Das Format ist `ZEC-CONFIG-BUNDLE`, Formatversion 1.
+- Graph-History-Readiness beeinflusst die Controller-Readiness nicht.
+- V3 ist der kanonische produktive History-Unterbau.
+- Legacy-Lesewege bleiben nur als ausdrücklich gekennzeichnete Kompatibilität erhalten.
+- Measurement V4 darf Graph/Inspector/Evidence anreichern, ist aber keine Voraussetzung für den normalen Graphbetrieb.
+- Fehlende historische Entity-/Coverage-/Evidence-Daten werden nicht erfunden oder zwischen Episoden imputiert.
+- Publish oder bloß gleichgerichtete Istleistung gelten nicht als Wirkungsnachweis.
 
-Unterstützt werden:
+## 5. Nicht festgelegt
 
-- vollständiger Export zur Sicherung bzw. kontrollierten Systemmigration;
-- benannte lokale Konfigurationsstände;
-- **verteilbares Regelprofil** für den Austausch ausdrücklich portabler Regelparameter zwischen ZEC-Installationen;
-- Expert-Import einer historischen rohen `config.json`, weiterhin nur über Migration/Preview/Validation/Commit.
+V14.0.0 führt ausdrücklich keine eigenmächtig gewählte produktive Retentiondauer, keinen Retention-Scheduler und keine automatische VACUUM-Policy ein.
 
-Die Bundle-Integritätsprüfung verwendet kanonisches JSON und SHA-256. Der Hash bestätigt **Integrität**, nicht Herkunft oder Authentizität. Unbekannte Registry-/Schema-Abweichungen werden ohne expliziten Migrationsvertrag fail closed abgewiesen.
+## 6. Installation und Abnahme
 
-V13.0.2 akzeptiert den exakt bekannten V13.0.1-Registryvertrag als ausschließlich darstellungsbezogenen Kompatibilitätsübergang. Beliebige Registry-Abweichungen bleiben gesperrt.
+Verbindlich:
 
-## 3. Scope und Portabilität
+- `README_INSTALLATION.md`
+- `RELEASE_INFO_V14_0_0.md`
+- `BUILD_VALIDATION_V14_0_0.md`
+- `V14_0_0_SOURCE_MANIFEST.sha256`
 
-Die SettingsRegistry bleibt Schemaautorität. Alle 191 aktiven editierbaren LIVE/RESTART-Settings besitzen eine ausdrückliche Portabilitätsklasse.
+Nach erfolgreicher Installation ist die reale Feldabnahme mit `tools/v14_field_acceptance.py` auszuführen. Build-PASS ist nicht Produktiv-PASS.
 
-Ein verteilbares Regelprofil enthält ausschließlich `portable_profile`-Settings. Insbesondere Secrets, lokale Runtime-/Pfadangaben und anlagen-/standortspezifische Einstellungen werden nicht automatisch als Regelprofil transportiert.
-
-Auch ein verteilbares Profil wird auf dem Zielsystem vollständig validiert und niemals blind angewendet.
-
-## 4. Secrets
-
-- Benannte lokale Stände enthalten keinen Secret-Klartext.
-- Normaler Export enthält standardmäßig keinen Secret-Klartext.
-- Ein Secret-Klartextexport ist nur im Expertenmodus und nach separater ausdrücklicher Bestätigung möglich.
-- Beim Import bleibt ein vorhandenes Zielsecret standardmäßig erhalten (`keep`).
-- `replace` und `clear` sind explizite Expert-Operationen; `clear` benötigt zusätzlich eine Commit-Bestätigung.
-- Preview, Diff, Audit und API-Antworten geben keine Secret-Klartexte zurück.
-
-## 5. Config-Commit und Recovery
-
-Der Whole-File-/CAS-Vertrag bleibt erhalten:
-
-1. finale revisionsgebundene Reread-/CAS-Prüfung;
-2. vollständige Servervalidierung des Whole Candidate;
-3. atomischer Write;
-4. exakte Post-Write-Reread-Prüfung;
-5. bei Mismatch atomische Wiederherstellung der exakt zuvor gelesenen Bytes;
-6. Runtime-Adoption erst nach erfolgreicher Endverifikation.
-
-Schlägt auch die Rollback-Verifikation fehl, wird der Configzustand fail closed als invalid behandelt. Last-Good-Promotion bleibt an den bestehenden Stable-Ready-/Eligibility-Vertrag gebunden.
-
-## 6. `configured`, `effective`, `pending_restart`
-
-- `configured`: persistierter Nutzerstand;
-- `effective`: aktuell laufender Wert;
-- `pending_restart`: konfigurierte Änderung benötigt einen Dienstneustart, bevor sie wirksam wird.
-
-Konfigurationsstände und Imports umgehen diesen Vertrag nicht.
-
-## 7. Historisch korrekte SOC-Graph-Overlays
-
-Historische Messpunkte und Konfigurations-Overlays sind getrennt:
-
-- Measurement V4 bleibt unverändert und führt `config_control_hash`.
-- Eine separate `graph_config_timeline` im SQLite-Graphstore ordnet historische Configwechsel zeitlich zu.
-- Ein Configwechsel innerhalb eines Tages erzeugt ein neues Overlaysegment.
-- Historische Tage verwenden die damals wirksame Config, nicht die heutige.
-- Fehlt ein historischer Snapshot, wird der Abschnitt als unbekannt behandelt; aktuelle Werte werden nicht rückwirkend eingesetzt.
-- Für vorhandene V4-Historie existiert ein idempotenter Backfill; danach pflegt die Runtime die Timeline bei Hashwechseln inkrementell weiter.
-- Die Legende bildet chronologische Zustandswechsel ab und entfernt nur unmittelbar aufeinanderfolgende Dubletten.
-
-## 8. SQLite-Graphstore
-
-- SQLite bleibt ein nachgelagerter, asynchroner Mess-/Graphpfad und blockiert den Reglerzyklus nicht.
-- Transiente DB-Fehler führen zu Rollback, Connection-Neuaufbau und Wiederholung des noch nicht bestätigten Batches.
-- Die Queue bleibt bounded; echte Drops werden gezählt und diagnostiziert.
-- Der letzte DB-Fehler bleibt sichtbar, bis ein neuer Fehler ihn ersetzt; ein späteres `queued` löscht die historische Fehlerinformation nicht.
-- Runtime-Writer und Wartungs-/Backfillpfade verwenden einen separaten Interprozess-Maintenance-Lock für produktive Schreibphasen.
-
-## 9. Measurement V4 bleibt produktiver Vertrag
-
-- Produktive Runtime schreibt ausschließlich `ZEC-MEASUREMENT-V4`.
-- Standardprofil: 246 Felder; Extended: 249 Felder.
-- Historische V3-Dateien bleiben ausschließlich offline/read-only für Analyse, Replay oder kontrollierten Import.
-- Es wird kein V3-Runtimepfad wieder eingeführt.
-- `/graph-data.csv` bleibt der eigenständige Vertrag `ZEC-GRAPH-EXPORT-V1`.
-
-## 10. No-Regression
-
-Explizit geschützt sind insbesondere:
-
-- AUTO_GRID_EXPORT / AUTO_GRID_IMPORT / HOLD und Totzonenkonvergenz;
-- Harvest-Zielwertbildung, High-SOC-Logik und Primärspeicherpriorität;
-- proportionale/symmetrische Cross-Charge-Korrektur;
-- NIGHT_DISCHARGE, Reserve-SOC, aktive 0-W-Neutralisierung und Folgeübergang;
-- Command-Effect-/Readback-/Resync-/SmartMode-/Gegenlimitvertrag;
-- hostweite Single-Owner-/Command-Owner-Garantie;
-- Measurement-V4-Header 246/249 und V4-Runtimevertrag;
-- Last-Good-A/B-Recovery und `configured/effective/pending_restart`;
-- historische V3-Offlinenutzung ohne produktiven V3-Writer.
-
-## 11. Handbuch und Releasebelege
-
-Aktuelles Benutzerhandbuch:
+## 7. Aktuelles Benutzerhandbuch
 
 ```text
 docs/Zendure_Energy_Controller_Handbuch.pdf
 ```
 
-V13.0.2-Releasebelege:
-
-```text
-README_INSTALLATION.md
-RELEASE_INFO_V13_0_2.md
-BUILD_VALIDATION_V13_0_2.md
-V13_0_2_SOURCE_MANIFEST.sha256
-V13_0_2_USER_TEXT_AUDIT.md
-SPEZIFIKATION_ZEC_V13_0_2_HOTFIX_CONFIG_STATES_CSRF_SQLITE_HARDENING_UI_CLEANUP_V1_1.md
-```
+Historische Release-, Spezifikations- und Validierungsdokumente bleiben im Paket als Entwicklungs-/Auditspur erhalten.

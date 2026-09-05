@@ -1,157 +1,81 @@
-# Installation – Zendure Energy Controller V14.0.0
+# Installation – Zendure Energy Controller V14.1.2
 
-**Ziel-Build-ID:** `v14.0.0-20260904-r2`
+**Release:** `V14.1.2`  
+**Build-ID:** `v14.1.2-20260905`
 
-`pytest` und Node.js sind **keine Produktivvoraussetzungen**. Die vollständige Testsuite wird buildseitig und erneut aus dem finalen ZIP ausgeführt. Der Installer verifiziert diese manifestgeschützte Build-Evidenz und führt auf dem Pi ausschließlich produktionsgeeignete Runtime-/Config-/Cutover-Smokes sowie Source-Manifestprüfungen aus.
+`pytest` und Node.js sind keine Produktivvoraussetzungen. Vollständige Test- und ResourceWarning-Gates werden buildseitig und erneut aus dem finalen ZIP ausgeführt. Der Pi-Installer verwendet nur produktionsgeeignete Smokes, Manifestprüfung, Config-Preflight und read-only Graph-Core-V3-Verifikation.
 
 ## 1. Verbindlicher Ausgangsstand
 
-Der einzige direkte Updatepfad dieses Installers ist:
+Direktes Update ausschließlich von:
 
 ```text
-V13.0.3
-APP_VERSION  = 13.0.3
-APP_BUILD_ID = v13.0.3-20260814
+V14.1.1
+APP_VERSION  = 14.1.1
+APP_BUILD_ID = v14.1.1-20260905
 ```
 
-Andere Versionen werden vor jeder Produktivänderung fail closed abgewiesen.
+Andere Ausgangsstände werden vor jeder Produktivänderung fail closed abgewiesen.
 
-## 2. Paket prüfen und installieren
-
-Das Releasepaket muss exakt heißen:
+## 2. Paketname und Installation
 
 ```text
-zendure_controller_v14_0_0.zip
+zendure_controller_v14_1_2.zip
 ```
-
-Auf dem Pi:
 
 ```bash
 cd /home/pi/Downloads
-sha256sum zendure_controller_v14_0_0.zip
-unzip -t zendure_controller_v14_0_0.zip
-rm -rf zendure_controller_v14_0_0
-unzip -q zendure_controller_v14_0_0.zip
-chmod +x zendure_controller_v14_0_0/tools/update_zendure_controller.sh
-bash zendure_controller_v14_0_0/tools/update_zendure_controller.sh v14_0_0
+sha256sum zendure_controller_v14_1_2.zip
+unzip -t zendure_controller_v14_1_2.zip
+rm -rf zendure_controller_v14_1_2
+unzip -q zendure_controller_v14_1_2.zip
+chmod +x zendure_controller_v14_1_2/tools/update_zendure_controller.sh
+bash zendure_controller_v14_1_2/tools/update_zendure_controller.sh v14_1_2
 ```
 
-Der SHA256 muss exakt dem in der Releaseübergabe genannten Wert entsprechen.
+Der SHA256 muss exakt dem im Release-Exit-Gate genannten Wert entsprechen.
 
 ## 3. Installer-Preflight
 
-Vor dem Stoppen produktiver Dienste prüft der Installer insbesondere:
+Vor dem Stoppen der Dienste werden geprüft:
 
-- exakt V13.0.3 / `v13.0.3-20260814` als installierte Quelle;
-- Zielversion 14.0.0 / `v14.0.0-20260904-r2`;
-- vollständiges `V14_0_0_SOURCE_MANIFEST.sha256`;
-- Python-Syntax;
-- Bash-Syntax;
+- exakte V14.1.1-Quellidentität;
+- V14.1.2-Zielidentität;
+- `V14_1_2_SOURCE_MANIFEST.sha256`;
+- Python-/Bash-Syntax;
 - JavaScript-Syntax, falls Node.js vorhanden ist;
-- Runtime-/Readiness-Smoke;
-- Config-Migration im `--check-only`-Modus;
-- V14-Graph-Cutover-Preflight;
-- vollständige Tests mit `ResourceWarning` als Fehler.
+- Runtime-/Readiness-Smoke mit `ResourceWarning` als Fehler;
+- Config-Migration `--check-only`;
+- bestehender Graph Core V3 per read-only Verify;
+- manifestgeschützte vollständige Build-Testevidenz.
 
-Node.js bleibt keine Produktivvoraussetzung.
+## 4. Datenbankverhalten
 
-## 4. Graph-Core-V3-Cutover
+V14.1.2 baut Graph Core V3 **nicht erneut auf**. Die produktive V3-Datenbank aus V14.1.1 bleibt erhalten. `logs/`, SQLite-Dateien, Config, Last-Good und Konfigurationsstände werden beim Source-Copy nicht überschrieben.
 
-Nach dem normalen Installationsbackup wird der produktive History-Unterbau kontrolliert neu aufgebaut:
-
-```text
-Measurement V4
-→ separate V3-Kandidaten-DB
-→ vollständige Rebuild-/Integritätsprüfung
-→ Backup bestehender DB/WAL/SHM
-→ atomarer Swap
-→ Post-Activation-Verify
-```
-
-Eine bereits vorhandene Engineering-V3-DB wird nicht als Produktivwahrheit übernommen.
-
-Beschädigte V4-Quelldateien, unvollständige Quellmengen oder ein Rebuild ohne importierte Zeilen führen zum Abbruch. Die bestehende DB wird in diesem Fall nicht still überschrieben.
+Vor und nach dem Kopieren muss die vorhandene V3-Datenbank erfolgreich verifiziert werden.
 
 ## 5. Rollback
 
-Typische Sicherungen:
+Vor jeder Produktivänderung erzeugt der Installer ein vollständiges `/opt/zendure-controller`-Backup sowie Config- und Root-Artefakt-Backups. Größe und SHA256 des vollständigen Release-Backups werden im Installationsreport gespeichert.
 
-```text
-/home/pi/zendure-controller-backup-<Zeitstempel>.tar.gz
-/home/pi/config.pre-v14.0.0.<Zeitstempel>.json
-/var/backups/zec-v14.0.0-root-artifacts-<Zeitstempel>
-/home/pi/zec-v14-graph-backup-<Zeitstempel>/
-```
+Bei echtem Installationsfehler nach Beginn der Transaktion wird das vollständige Backup automatisch wiederhergestellt und der vorherige Dienstzustand hergestellt.
 
-Für DB/WAL/SHM werden Größe und SHA256 im Cutover-State gespeichert und beim Restore erneut geprüft. Restore verifiziert die Backupquellen und baut temporäre Restore-Artefakte vollständig auf, bevor produktive Dateien umgeschaltet werden. Ein manipuliertes oder beschädigtes Backup führt fail closed zum Abbruch.
+## 6. Feldabnahme
 
-Bei echtem Installationsfehler nach Beginn der Produktivtransaktion greift der automatische Rollbackvertrag. Zusätzlich wird ein Diagnosepaket erzeugt.
-
-## 6. Unmittelbare Feldprüfung
-
-Nach Installer-PASS:
-
-```bash
-grep -E 'APP_VERSION|APP_VERSION_LABEL|APP_BUILD_ID' /opt/zendure-controller/version.py
-systemctl is-active zendure-controller.service
-curl -fsS http://127.0.0.1:8080/health | python3 -m json.tool
-curl -fsS http://127.0.0.1:8080/ready  | python3 -m json.tool
-curl -fsS http://127.0.0.1:8080/api/graph/v1/runtime | python3 -m json.tool
-```
-
-Erwartete Identität:
-
-```text
-APP_VERSION = "14.0.0"
-APP_VERSION_LABEL = "V14.0.0"
-APP_BUILD_ID = "v14.0.0-20260904-r2"
-```
-
-Für den Graph muss gelten:
-
-```text
-read_mode = V3_NATIVE
-workspace_ready = true
-control_readiness_impact = NONE
-```
-
-## 7. Vollständige read-only V14-Feldabnahme
+Nach erfolgreicher Installation:
 
 ```bash
 cd /opt/zendure-controller
 python3 tools/v14_field_acceptance.py \
   --base-url http://127.0.0.1:8080 \
-  --cutover-report /tmp/zec_v14_cutover_report.json \
-  --output /tmp/zec_v14_field_acceptance.json \
+  --install-report /tmp/zec_v14_1_2_install_report.json \
+  --output /tmp/ZEC_V14_1_2_FIELD_ACCEPTANCE.json \
   --json
 ```
 
-Der Report prüft ohne Gerätekommandos unter anderem:
+Die Abnahme ist read-only und sendet keine Gerätekommandos. Sie prüft Releaseidentität, Dienst, `/health`, `/ready`, V3-Runtime, Greenfield-Graphseite, 48-h-Overview, Inspector, Command-Follow, Interaktionsvertrag (Zeitraumvergleich, t=0-Episodenvergleich, Bereichsauswahl, synchroner Cursor, Evidence-Segmente), SQLite-`quick_check` sowie die Integrität des vollständigen Release-Rollback-Backups.
 
-- Releaseidentität und Dienststatus;
-- `/health` und `/ready`;
-- Graph-History-Readiness;
-- Workspace und 48-h-Overview;
-- Inspector;
-- Command-Follow;
-- Episode Comparison;
-- SQLite-`quick_check`;
-- Cutover-Rebuildreport;
-- Integrität der Rollback-Artefakte.
+## 7. Unveränderte Verträge
 
-Das Feldabnahmewerkzeug verändert keine Konfiguration und führt keinen Rollback aus.
-
-## 8. Diagnosepakete
-
-Bei Preflight- oder Updatefehlern erzeugt der Installer automatisch ein Diagnosepaket. Die rohe `config.json` wird nicht ungefiltert aufgenommen; Secrets werden redigiert. Controller- und Graph-Readiness werden getrennt dokumentiert.
-
-## 9. Unveränderte Verträge
-
-V14.0.0 ändert keine Regler-/Command-/Safety-Semantik und führt keine neue Retentiondauer, keinen Scheduler und keine automatische VACUUM-Policy ein.
-
-## 10. Git-Vorschlag
-
-```text
-Commit: feat: ZEC V14.0.0 graph history platform and productive cutover
-Tag:    v14.0.0
-```
+V14.1.2 ändert keine Regler-/Command-/Safety-Semantik. Keine neue Retentiondauer, kein Scheduler, keine automatische VACUUM-Policy.

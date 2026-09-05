@@ -136,7 +136,7 @@ def render_global_topbar(
         '<summary id="expertMenuButton" class="zec-expert-button" aria-label="Expertenmenü öffnen">Experte <span aria-hidden="true">▾</span></summary>'
         '<div id="expertMenu" class="zec-expert-menu"><a href="/mqtt-diagnostics">MQTT Diagnose</a>'
         '<a href="/measurements">Messdaten-CSV</a><a href="/status_old">Alte Statusseite</a>'
-        '<a href="/graph_old">Alter Graph</a></div></details>'
+        '</div></details>'
     )
     return f'''<header class="zec-topbar">
     <a class="zec-brand" href="/" aria-label="Zur Statusseite"><span class="zec-wordmark">ZENDURE</span><span class="zec-product">Energy Controller</span><span class="zec-brand-divider" aria-hidden="true"></span></a>

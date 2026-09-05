@@ -44,9 +44,9 @@ class V1302ConfigArtifactHotfixTests(unittest.TestCase):
         self.session = "v1302-session"
 
     def test_release_and_registry_contract_are_v13_0_2(self):
-        self.assertEqual("14.0.0", version.APP_VERSION)
-        self.assertEqual("V14.0.0", version.APP_VERSION_LABEL)
-        self.assertEqual("v14.0.0-20260904-r2", version.APP_BUILD_ID)
+        self.assertEqual("14.1.2", version.APP_VERSION)
+        self.assertEqual("V14.1.2", version.APP_VERSION_LABEL)
+        self.assertEqual("v14.1.2-20260905", version.APP_BUILD_ID)
         self.assertEqual("1.25-v13.0", SCHEMA_VERSION)
         self.assertNotEqual(OLD_REGISTRY_HASH, registry_contract_sha256())
 
@@ -298,12 +298,12 @@ class V1302BackfillAndUiContractTests(unittest.TestCase):
 
     def test_installer_is_strict_v13_0_1_to_v13_0_2(self):
         script=(ROOT/"tools"/"update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_VERSION="v14_0_0"',script)
-        self.assertIn('EXPECTED_SOURCE_VERSION="13.0.3"',script)
-        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v13.0.3-20260814"',script)
-        self.assertIn('EXPECTED_TARGET_VERSION="14.0.0"',script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v14.0.0-20260904-r2"',script)
-        self.assertIn('V14_0_0_SOURCE_MANIFEST.sha256',script)
+        self.assertIn('EXPECTED_VERSION="v14_1_2"',script)
+        self.assertIn('EXPECTED_SOURCE_VERSION="14.1.1"',script)
+        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v14.1.1-20260905"',script)
+        self.assertIn('EXPECTED_TARGET_VERSION="14.1.2"',script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v14.1.2-20260905"',script)
+        self.assertIn('V14_1_2_SOURCE_MANIFEST.sha256',script)
 
 
 if __name__ == '__main__':

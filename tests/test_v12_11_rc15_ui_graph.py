@@ -7,7 +7,7 @@ import version
 
 class TestRC15UiGraphPolish(unittest.TestCase):
     def test_version_label_rc15(self):
-        self.assertEqual(version.APP_VERSION_LABEL, "V14.0.0")
+        self.assertEqual(version.APP_VERSION_LABEL, "V14.1.2")
 
     def test_zendure_mqtt_warning_is_card_local_not_global_strip(self):
         cfg = {"UI_DARK_MODE": False, "NIGHT_DISCHARGE_ENABLED": False}
@@ -26,24 +26,22 @@ class TestRC15UiGraphPolish(unittest.TestCase):
         self.assertIn("tooltip:{mode:'nearest', intersect:false", html)
         self.assertIn("pointHitRadius:18", html)
 
-    def test_graph_payload_last_24h_axis_is_full_24_hours(self):
-        now = datetime.now()
-        rows = []
-        for delta_min, soc in [(70, 80), (40, 82), (10, 84)]:
-            dt = now - timedelta(minutes=delta_min)
-            rows.append({"date": dt.date().isoformat(), "timestamp": dt.strftime("%H:%M:%S"), "grid_power": -100, "soc": soc})
-        payload = web_ui.build_graph_view_payload({}, {"graph_history": rows}, range_name="24h", resolution="1min")
-        r = payload["range"]
-        self.assertEqual(r["name"], "24h")
-        self.assertAlmostEqual(r["axis_duration_hours"], 24.0, places=2)
-        self.assertIn("–", r["label"])
-
-    def test_graph_page_uses_x_axis_tooltip_and_range_label(self):
+    def test_greenfield_graph_has_true_24h_and_48h_range_controls(self):
+        from pathlib import Path
         html = web_ui.build_graph_page({"UI_DARK_MODE": False})
-        self.assertIn("interaction:{mode:'index', axis:'x', intersect:false}", html)
-        self.assertIn("tooltip:{mode:'index', intersect:false", html)
-        self.assertIn("rangeText = r.label", html)
-        self.assertIn("axis_duration_hours", web_ui.build_graph_view_payload({}, {}, range_name="24h")["range"])
+        js = Path(web_ui.__file__).resolve().parent.joinpath("static/graph_v14_1.js").read_text(encoding="utf-8")
+        self.assertIn('data-gf-preset="24h"', html)
+        self.assertIn('data-gf-preset="48h"', html)
+        self.assertIn("MAX_WINDOW_MS = 48 * 60 * 60 * 1000", js)
+
+    def test_graph_page_uses_v3_linear_axis_and_48h_range_guard(self):
+        from pathlib import Path
+        html = web_ui.build_graph_page({"UI_DARK_MODE": False})
+        js = Path(web_ui.__file__).resolve().parent.joinpath("static/graph_v14_1.js").read_text(encoding="utf-8")
+        self.assertIn("interaction:{mode:'nearest',intersect:false}", js)
+        self.assertIn("type:'linear'", js)
+        self.assertIn("MAX_WINDOW_MS = 48 * 60 * 60 * 1000", js)
+        self.assertIn("Analyse-Workspace", html)
 
 
 if __name__ == "__main__":

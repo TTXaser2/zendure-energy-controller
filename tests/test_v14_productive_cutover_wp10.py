@@ -130,20 +130,21 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def test_release_identity_and_installer_cutover_contract_are_v14():
-    assert version.APP_VERSION == "14.0.0"
-    assert version.APP_VERSION_LABEL == "V14.0.0"
-    assert version.APP_BUILD_ID == "v14.0.0-20260904-r2"
+def test_release_identity_and_installer_v3_preservation_contract_are_v14_1():
+    assert version.APP_VERSION == "14.1.2"
+    assert version.APP_VERSION_LABEL == "V14.1.2"
+    assert version.APP_BUILD_ID == "v14.1.2-20260905"
     script = (ROOT / "tools" / "update_zendure_controller.sh").read_text(encoding="utf-8")
-    assert 'EXPECTED_VERSION="v14_0_0"' in script
-    assert 'EXPECTED_SOURCE_VERSION="13.0.3"' in script
-    assert 'EXPECTED_SOURCE_BUILD_ID="v13.0.3-20260814"' in script
-    assert 'EXPECTED_TARGET_VERSION="14.0.0"' in script
-    assert 'EXPECTED_TARGET_BUILD_ID="v14.0.0-20260904-r2"' in script
-    assert "V14_0_0_SOURCE_MANIFEST.sha256" in script
-    assert "tools/v14_cutover.py preflight" in script
-    assert "tools/v14_cutover.py rebuild" in script
+    assert 'EXPECTED_VERSION="v14_1_2"' in script
+    assert 'EXPECTED_SOURCE_VERSION="14.1.1"' in script
+    assert 'EXPECTED_SOURCE_BUILD_ID="v14.1.1-20260905"' in script
+    assert 'EXPECTED_TARGET_VERSION="14.1.2"' in script
+    assert 'EXPECTED_TARGET_BUILD_ID="v14.1.2-20260905"' in script
+    assert "V14_1_2_SOURCE_MANIFEST.sha256" in script
+    assert "tools/v14_cutover.py preflight" not in script
+    assert "tools/v14_cutover.py rebuild" not in script
     assert "tools/v14_cutover.py verify" in script
+    assert "graph_core_v3_preserved" in script
     assert "collect_zec_install_diagnostics.sh" in script
     assert "verify_build_test_evidence" in script
     assert 'verify_source_manifest_at "$TARGET"' in script
@@ -266,13 +267,14 @@ def test_install_diagnostics_never_copy_raw_config_and_document_redaction():
     assert "/ready" in script
 
 
-def test_installer_rollback_restores_external_graphstore_and_collects_diagnostics():
+def test_installer_rollback_restores_full_release_backup_and_collects_diagnostics():
     script = (ROOT / "tools" / "update_zendure_controller.sh").read_text(encoding="utf-8")
-    diagnostics_idx = script.index('collect_install_diagnostics "v14-install-failure"')
-    graph_restore_idx = script.index('v14_cutover.py" restore')
+    diagnostics_idx = script.index('collect_install_diagnostics "v14.1.2-install-failure"')
     target_restore_idx = script.index('sudo rm -rf "$TARGET"')
-    assert diagnostics_idx < graph_restore_idx < target_restore_idx
-    assert "GRAPH_CUTOVER_COMPLETED" in script
+    assert diagnostics_idx < target_restore_idx
+    assert "GRAPH_CUTOVER_COMPLETED" not in script
+    assert 'BACKUP_SHA256="$(sha256sum "$BACKUP"' in script
+    assert "graph_core_v3_preserved" in script
     assert "Graph-History-Readiness" in script
     assert "control_readiness_impact" in script
 

@@ -67,27 +67,35 @@ def test_terminology_is_central_and_machine_ids_are_not_used_as_german_labels():
 
 
 def test_graph_page_is_v3_workspace_and_does_not_call_legacy_history_payload():
+    root = Path(__file__).resolve().parents[1]
     html = build_graph_page({"UI_DARK_MODE": False})
-    assert "/api/graph/v1/workspace" in html
-    assert "/api/graph/v1/overview" in html
-    assert "/api/graph/v1/entity-overview" in html
-    assert "/api/graph/v1/coverage" in html
-    assert "/api/graph/v1/evidence" in html
-    assert "/api/graph/v1/entity-coverage" in html
-    assert "/graph-view-data" not in html
-    assert "/graph-data.csv" not in html
-    assert "maximal 48 Stunden" in html
-    assert "Freie Auswahl" not in html  # supplied centrally by the manifest, not duplicated in the page
-    assert "Graph-Workspace auf Graph Core V3" in html
-    assert "/graph_old" in html
+    js = (root / "static" / "graph_v14_1.js").read_text(encoding="utf-8")
+    for endpoint in (
+        "/api/graph/v1/workspace",
+        "/api/graph/v1/overview",
+        "/api/graph/v1/coverage",
+        "/api/graph/v1/evidence",
+    ):
+        assert endpoint in js
+    assert "/graph-view-data" not in js
+    assert "/graph-data.csv" not in js
+    assert "/graph_old" not in html
+    assert "/graph_old" not in js
+    assert "Analyse-Workspace" in html
+    assert "Freies Lagebild" in html
+    assert 'data-greenfield-contract="v14.1.2"' in html
+    assert "/static/graph_v14_1.css" in html
+    assert "/static/graph_v14_1.js" in html
 
 
-def test_graph_page_exposes_graceful_evidence_and_wp8_tools_while_retaining_wp9_boundary():
+def test_graph_page_exposes_graceful_evidence_and_wp8_wp9_tools():
     html = build_graph_page({})
-    assert "Coverage &amp; Evidence" in html
-    assert "Measurement V4 ist keine Voraussetzung" in html
+    assert "Datenqualität" in html
+    assert "Measurement V4 ist keine Laufzeitvoraussetzung" in html
     assert "Regler-Inspector" in html
-    assert "Command-Follow / Ursache-Wirkung" in html
+    assert "Command-Follow" in html
+    assert "Episoden t=0" in html
+    assert 'id="gfComparisonArea"' in html
     assert "physical_storage_units_if_present" in Path(__file__).resolve().parents[1].joinpath("graph_workspace.py").read_text(encoding="utf-8")
     assert "episode_comparison" in Path(__file__).resolve().parents[1].joinpath("graph_workspace.py").read_text(encoding="utf-8")
 
