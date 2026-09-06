@@ -45,10 +45,10 @@ class V1303PreviewUxHotfixTests(unittest.TestCase):
         self.coordinator = ConfigArtifactCoordinator(self.manager, self.service, self.store)
         self.session = "v1303-session"
 
-    def test_release_identity_is_v14_1_2(self):
-        self.assertEqual("14.1.2", version.APP_VERSION)
-        self.assertEqual("V14.1.2", version.APP_VERSION_LABEL)
-        self.assertEqual("v14.1.2-20260905", version.APP_BUILD_ID)
+    def test_release_identity_is_v14_1_3(self):
+        self.assertEqual("14.1.3", version.APP_VERSION)
+        self.assertEqual("V14.1.3", version.APP_VERSION_LABEL)
+        self.assertEqual("v14.1.3-20260906", version.APP_BUILD_ID)
 
     def test_v13_0_1_portable_profile_display_transition_is_technical_only(self):
         data = as_v13_0_1_bundle(build_bundle(
@@ -165,13 +165,13 @@ class V1303PreviewUxHotfixTests(unittest.TestCase):
         self.assertIn(".modal-body{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain", css)
         self.assertIn(".modal-actions{padding:12px 16px calc(12px + env(safe-area-inset-bottom));position:sticky;bottom:0}", css)
 
-    def test_installer_is_strict_v13_0_2_to_v14_1_2(self):
+    def test_installer_is_strict_v13_0_2_to_v14_1_3(self):
         script = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_VERSION="v14_1_2"', script)
-        self.assertIn('EXPECTED_SOURCE_VERSION="14.1.1"', script)
-        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v14.1.1-20260905"', script)
-        self.assertIn('EXPECTED_TARGET_VERSION="14.1.2"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v14.1.2-20260905"', script)
+        self.assertIn('EXPECTED_VERSION="v14_1_3"', script)
+        self.assertIn('EXPECTED_SOURCE_VERSION="14.1.2"', script)
+        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v14.1.2-20260905"', script)
+        self.assertIn('EXPECTED_TARGET_VERSION="14.1.3"', script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v14.1.3-20260906"', script)
 
 
 if __name__ == "__main__":

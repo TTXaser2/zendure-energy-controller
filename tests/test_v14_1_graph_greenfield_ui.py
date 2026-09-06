@@ -13,7 +13,7 @@ def test_greenfield_graph_page_is_separate_from_legacy_presentation():
     html = build_graph_page({**DEFAULT_CONFIG, "UI_DARK_MODE": False})
     source = (ROOT / "web_ui.py").read_text(encoding="utf-8")
     js = GRAPH_JS.read_text(encoding="utf-8")
-    assert 'data-greenfield-contract="v14.1.2"' in html
+    assert 'data-greenfield-contract="v14.1.3"' in html
     assert '/static/graph_v14_1.css' in html
     assert '/static/graph_v14_1.js' in html
     assert 'Analyse-Workspace' in html
@@ -43,7 +43,8 @@ def test_desktop_information_architecture_is_three_column_with_synchronized_lane
     css = GRAPH_CSS.read_text(encoding="utf-8")
     js = GRAPH_JS.read_text(encoding="utf-8")
     assert 'class="gf-three-column"' in html
-    assert 'grid-template-columns:280px minmax(640px,1fr) 360px' in css
+    assert 'grid-template-columns:260px minmax(660px,1fr) 340px' in css
+    assert 'max-width:2020px' in css
     assert 'id="gfPowerChart"' in html
     assert 'id="gfSocChart"' in html
     assert 'id="gfStateTimeline"' in html

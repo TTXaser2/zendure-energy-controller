@@ -1049,26 +1049,11 @@ def build_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any]) -> Dict[str
         "cache_age_s": 0,
     }
 
-_replay_health_cache: Dict[str, Any] = {"port": None, "available": False, "checked_epoch": 0.0}
+_replay_health_cache: Dict[str, Any] = {"port": None, "available": False, "checked_epoch": 0.0, "refreshing": False}
+_replay_health_lock = threading.Lock()
 
 
-def replay_service_available(cfg: Dict[str, Any]) -> bool:
-    """Return cached reachability of the optional replay service.
-
-    The replay root page enumerates CSV files and can legitimately take longer
-    than a sub-second probe.  RC9 therefore uses the dedicated lightweight
-    ``/health`` endpoint and validates its JSON contract.  Negative results are
-    cached only briefly so a service started just after the controller becomes
-    visible without waiting half a minute.  This function is called only by the
-    web/status path, never by the controller loop.
-    """
-    port = int(cfg.get("REPLAY_WEB_PORT", 8090) or 8090)
-    now = time.time()
-    cached_for = now - float(_replay_health_cache.get("checked_epoch") or 0)
-    cache_ttl = 30.0 if bool(_replay_health_cache.get("available")) else 5.0
-    if _replay_health_cache.get("port") == port and cached_for < cache_ttl:
-        return bool(_replay_health_cache.get("available"))
-
+def _refresh_replay_health(port: int) -> None:
     available = False
     try:
         response = requests.get(f"http://127.0.0.1:{port}/health", timeout=1.5)
@@ -1077,8 +1062,29 @@ def replay_service_available(cfg: Dict[str, Any]) -> bool:
         available = isinstance(payload, dict) and str(payload.get("status") or "").lower() == "ok"
     except Exception:
         available = False
-    _replay_health_cache.update({"port": port, "available": available, "checked_epoch": now})
-    return available
+    with _replay_health_lock:
+        _replay_health_cache.update({"port": port, "available": available, "checked_epoch": time.time(), "refreshing": False})
+
+
+def replay_service_available(cfg: Dict[str, Any]) -> bool:
+    """Return cached reachability without blocking page rendering.
+
+    V14.1.3 moves the optional Analyse-Service probe off the synchronous HTML
+    render path. A stale cache schedules one bounded daemon probe and returns
+    the last known value immediately. The controller loop never calls this.
+    """
+    port = int(cfg.get("REPLAY_WEB_PORT", 8090) or 8090)
+    now = time.time()
+    with _replay_health_lock:
+        cached_port = _replay_health_cache.get("port")
+        cached_available = bool(_replay_health_cache.get("available"))
+        cached_for = now - float(_replay_health_cache.get("checked_epoch") or 0)
+        cache_ttl = 30.0 if cached_available else 5.0
+        stale = cached_port != port or cached_for >= cache_ttl
+        if stale and not bool(_replay_health_cache.get("refreshing")):
+            _replay_health_cache["refreshing"] = True
+            threading.Thread(target=_refresh_replay_health, args=(port,), name="zec-replay-health", daemon=True).start()
+        return cached_available if cached_port in (None, port) else False
 
 
 def analysis_service_url(cfg: Dict[str, Any]) -> str:
@@ -4880,20 +4886,26 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
         decorated = dict(base_payload)
         try:
             if history_mode == "V3_NATIVE":
-                config_payload = GRAPH_QUERY_SERVICE.config_timeline(
-                    resolve_measurement_db_path(cfg),
-                    int(day_start.timestamp() * 1000),
-                    int(day_end.timestamp() * 1000),
-                )
-                segments, timeline_meta = build_segments_from_rows(
-                    list(config_payload.get("items") or []), day_start, day_end,
-                    current_effective_config=cfg if is_today else None,
-                    meta={
-                        "timeline_status": "hit" if config_payload.get("items") else "empty",
-                        "query_source": "graph_query_service_v1",
-                        "query_meta": dict(config_payload.get("meta") or {}),
-                    },
-                )
+                prebuilt_segments = base_payload.get("config_segments")
+                prebuilt_meta = base_payload.get("config_timeline")
+                if isinstance(prebuilt_segments, list) and prebuilt_segments:
+                    segments = list(prebuilt_segments)
+                    timeline_meta = dict(prebuilt_meta or {})
+                else:
+                    config_payload = GRAPH_QUERY_SERVICE.config_timeline(
+                        resolve_measurement_db_path(cfg),
+                        int(day_start.timestamp() * 1000),
+                        int(day_end.timestamp() * 1000),
+                    )
+                    segments, timeline_meta = build_segments_from_rows(
+                        list(config_payload.get("items") or []), day_start, day_end,
+                        current_effective_config=cfg if is_today else None,
+                        meta={
+                            "timeline_status": "hit" if config_payload.get("items") else "empty",
+                            "query_source": "graph_query_service_v1",
+                            "query_meta": dict(config_payload.get("meta") or {}),
+                        },
+                    )
             else:
                 # V2/unknown remains an explicit legacy compatibility path.
                 segments, timeline_meta = build_day_segments(
@@ -4956,6 +4968,11 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
         history = query_storage_day_history(
             cfg, day_start, day_end,
             current_effective_config=cfg if is_today else None,
+            status_fast=True,
+            include_physical_units=snapshot_unit_count > 1,
+            primary_present_hint=snapshot_primary_present,
+            unit_labels_hint=unit_labels,
+            runtime_hint=history_runtime,
         )
         points = list(history.get("points") or [])
         source = str(history.get("source") or "graph_core_v3_1min")
@@ -4973,6 +4990,9 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
             "history_entities": history.get("entities") or {},
             "controlled_storage_display_name": history.get("controlled_display_name") or "",
             "primary_storage_display_name": history.get("primary_display_name") or "",
+            "config_segments": history.get("config_segments") or [],
+            "config_timeline": history.get("config_timeline") or {},
+            "config_legend": history.get("config_legend") or {},
         }
     else:
         try:

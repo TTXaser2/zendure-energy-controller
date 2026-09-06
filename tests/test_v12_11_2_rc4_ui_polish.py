@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class V12112Rc4UiPolishTests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual("14.1.2", version.APP_VERSION)
-        self.assertEqual("V14.1.2", version.APP_VERSION_LABEL)
+        self.assertEqual("14.1.3", version.APP_VERSION)
+        self.assertEqual("V14.1.3", version.APP_VERSION_LABEL)
 
     def test_status_markup_contains_approved_polish(self):
         payload = {

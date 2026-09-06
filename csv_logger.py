@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from version import APP_VERSION, APP_VERSION_LABEL
+from control_state_semantics import project_graph_state_row
 
 # Schema-neutraler RAM-/Graph-Exportvertrag. Diese Spaltenliste ist kein
 # produktives Measurement-Schema. Persistente Controller-Messdaten werden
@@ -421,7 +422,12 @@ class CsvRotatingLogger:
         return merged
 
     def log(self, config: Dict[str, Any], row: Dict[str, Any]) -> Dict[str, Any]:
-        db_status = self._enqueue_measurement_db(config, row)
+        # Graph Core must receive the canonical sparse operating-mode/intent
+        # projection independently of MEASUREMENT_LOG_MODE.  V14.1.2 queued
+        # the raw controller row before Measurement V4 normalized these fields,
+        # leaving OPERATING_MODE and CONTROL_INTENT absent from the V3 timeline.
+        graph_row = project_graph_state_row(row)
+        db_status = self._enqueue_measurement_db(config, graph_row)
         v4_status = self._ensure_v4_logger().log(config, row)
         return self._merge_db_status(v4_status, db_status)
 

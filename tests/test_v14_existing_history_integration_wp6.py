@@ -201,7 +201,12 @@ def test_status_soc_day_endpoint_switches_to_v3_history_semantics(tmp_path):
     assert payload["history_runtime"]["control_readiness_impact"] == "NONE"
     assert payload["config_legend"]["max_soc"] == [99, 80, 99]
     assert payload["primary_storage_present"] is True
-    assert payload["history_entities"]
+    # V14.1.3 status-fast contract: the Status SOC day graph must not pay for
+    # entity/coverage/evidence reads that its UI does not consume. Entity-rich
+    # semantics remain available on the normal Graph V3 query paths.
+    assert payload["history_entities"] == {}
+    assert payload["history_coverage"]["meta"]["status"] == "SKIPPED_STATUS_FAST"
+    assert payload["history_evidence"]["meta"]["status"] == "SKIPPED_STATUS_FAST"
 
 
 def test_wp6_does_not_define_retention_horizon_scheduler_or_vacuum_policy():

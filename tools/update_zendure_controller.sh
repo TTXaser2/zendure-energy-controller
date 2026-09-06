@@ -5,14 +5,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/root_artifact_transaction.sh"
 
 VERSION="${1:-}"
-EXPECTED_VERSION="v14_1_2"
-EXPECTED_SOURCE_VERSION="14.1.1"
-EXPECTED_SOURCE_BUILD_ID="v14.1.1-20260905"
-EXPECTED_TARGET_VERSION="14.1.2"
-EXPECTED_TARGET_BUILD_ID="v14.1.2-20260905"
+EXPECTED_VERSION="v14_1_3"
+EXPECTED_SOURCE_VERSION="14.1.2"
+EXPECTED_SOURCE_BUILD_ID="v14.1.2-20260905"
+EXPECTED_TARGET_VERSION="14.1.3"
+EXPECTED_TARGET_BUILD_ID="v14.1.3-20260906"
 
 if [ "$VERSION" != "$EXPECTED_VERSION" ]; then
-    echo "FEHLER: Dieses Update-Skript unterstützt ausschließlich die verifizierte V14.1.1-Basis als Quelle für V14.1.2."
+    echo "FEHLER: Dieses Update-Skript unterstützt ausschließlich die verifizierte V14.1.2-Basis als Quelle für V14.1.3."
     echo "Aufruf: $0 ${EXPECTED_VERSION}"
     exit 1
 fi
@@ -22,15 +22,16 @@ DIR="/home/pi/Downloads/zendure_controller_${VERSION}"
 TARGET="/opt/zendure-controller"
 STAMP="$(date +%Y%m%d_%H%M%S)"
 BACKUP="/home/pi/zendure-controller-backup-${STAMP}.tar.gz"
-CONFIG_BACKUP="/home/pi/config.pre-v14.1.2.${STAMP}.json"
-ROOT_ARTIFACT_BACKUP="/var/backups/zec-v14.1.2-root-artifacts-${STAMP}"
+CONFIG_BACKUP="/home/pi/config.pre-v14.1.3.${STAMP}.json"
+ROOT_ARTIFACT_BACKUP="/var/backups/zec-v14.1.3-root-artifacts-${STAMP}"
 RESTART_HELPER_DEST="/usr/local/sbin/zendure-controller-restart"
 SUDOERS_DEST="/etc/sudoers.d/zendure-controller"
 ROLLBACK_STARTED=0
 BACKUP_CREATED=0
 ROOT_ARTIFACTS_BACKED_UP=0
 INSTALLATION_STARTED=0
-INSTALL_REPORT="/tmp/zec_v14_1_2_install_report.json"
+INSTALL_REPORT="/tmp/zec_v14_1_3_install_report.json"
+STATE_BACKFILL_REPORT="/tmp/zec_v14_1_3_state_backfill.json"
 BACKUP_SHA256=""
 BACKUP_SIZE=""
 INSTALL_DIAGNOSTICS=""
@@ -103,13 +104,13 @@ recover_on_error() {
     fi
     ROLLBACK_STARTED=1
     echo
-    collect_install_diagnostics "v14.1.2-install-failure" || true
+    collect_install_diagnostics "v14.1.3-install-failure" || true
     if [ "$INSTALLATION_STARTED" -eq 0 ]; then
-        echo "FEHLER: V14.1.2-Paketvorprüfung wurde abgebrochen."
+        echo "FEHLER: V14.1.3-Paketvorprüfung wurde abgebrochen."
         echo "Die Produktivinstallation wurde noch nicht begonnen; Dienste und /opt/zendure-controller blieben unverändert."
         exit "$exit_code"
     fi
-    echo "FEHLER: V14.1.2-Update wurde während der Produktivinstallation abgebrochen. Starte automatischen Rollback."
+    echo "FEHLER: V14.1.3-Update wurde während der Produktivinstallation abgebrochen. Starte automatischen Rollback."
     sudo systemctl stop zendure-controller.service zendure-replay.service zendure-status-preview.service >/dev/null 2>&1 || true
     if [ "$BACKUP_CREATED" -eq 1 ] && [ -f "$BACKUP" ]; then
         sudo rm -rf "$TARGET"
@@ -137,14 +138,14 @@ trap 'recover_on_error $?' ERR EXIT
 
 verify_source_manifest_at() {
     local root="$1"
-    [ -f "$root/V14_1_2_SOURCE_MANIFEST.sha256" ] || {
-        echo "FEHLER: V14_1_2_SOURCE_MANIFEST.sha256 fehlt unter: $root"
+    [ -f "$root/V14_1_3_SOURCE_MANIFEST.sha256" ] || {
+        echo "FEHLER: V14_1_3_SOURCE_MANIFEST.sha256 fehlt unter: $root"
         return 1
     }
     (
         trap - ERR
         cd "$root"
-        sha256sum -c V14_1_2_SOURCE_MANIFEST.sha256 >/dev/null
+        sha256sum -c V14_1_3_SOURCE_MANIFEST.sha256 >/dev/null
     )
 }
 
@@ -153,13 +154,13 @@ verify_source_manifest() {
 }
 
 verify_build_test_evidence() {
-    PYTHONDONTWRITEBYTECODE=1 python3 - "$DIR/validation/V14_1_2_FULL_TEST.txt" "$DIR/validation/V14_1_2_RESOURCEWARNING_TEST.txt" <<'PY'
+    PYTHONDONTWRITEBYTECODE=1 python3 - "$DIR/validation/V14_1_3_FULL_TEST.txt" "$DIR/validation/V14_1_3_RESOURCEWARNING_TEST.txt" <<'PY'
 from pathlib import Path
 import sys
 
 expected = {
-    Path(sys.argv[1]): ("RELEASE: V14.1.2", "STATUS: PASS"),
-    Path(sys.argv[2]): ("RELEASE: V14.1.2", "STATUS: PASS", "RESOURCEWARNING: ERROR"),
+    Path(sys.argv[1]): ("RELEASE: V14.1.3", "STATUS: PASS"),
+    Path(sys.argv[2]): ("RELEASE: V14.1.3", "STATUS: PASS", "RESOURCEWARNING: ERROR"),
 }
 for path, markers in expected.items():
     if not path.is_file():
@@ -167,7 +168,7 @@ for path, markers in expected.items():
     text = path.read_text(encoding="utf-8")
     if any(marker not in text for marker in markers):
         raise SystemExit(f"FEHLER: Build-Testevidenz unvollständig: {path.name}")
-print("Build-Testevidenz für V14.1.2 verifiziert, inklusive vollständigem ResourceWarning-Gate.")
+print("Build-Testevidenz für V14.1.3 verifiziert, inklusive vollständigem ResourceWarning-Gate.")
 PY
 }
 
@@ -175,6 +176,7 @@ verify_javascript_syntax_if_available() {
     if command -v node >/dev/null 2>&1; then
         node --check static/status_v2.js
         node --check static/settings_v2.js
+        node --check static/graph_v14_1.js
         echo "JavaScript-Syntax lokal mit Node.js geprüft."
     else
         echo "INFO: Node.js ist nicht installiert; keine Produktivabhängigkeit."
@@ -218,10 +220,10 @@ INSTALLED_VERSION="${INSTALLED_IDENTITY[0]:-}"
 INSTALLED_BUILD_ID="${INSTALLED_IDENTITY[1]:-}"
 SOURCE_MODE=""
 if [ "$INSTALLED_VERSION" = "$EXPECTED_SOURCE_VERSION" ] && [ "$INSTALLED_BUILD_ID" = "$EXPECTED_SOURCE_BUILD_ID" ]; then
-    SOURCE_MODE="V14_1_1"
+    SOURCE_MODE="V14_1_2"
 else
     echo "FEHLER: Nicht unterstützter Ausgangsstand: Version=${INSTALLED_VERSION}, Build-ID=${INSTALLED_BUILD_ID:-nicht gesetzt}"
-    echo "Erlaubt ist ausschließlich V14.1.1 / v14.1.1-20260905. Kein Rücksprung auf andere Releases."
+    echo "Erlaubt ist ausschließlich V14.1.2 / v14.1.2-20260905. Kein Rücksprung auf andere Releases."
     exit 1
 fi
 echo "Ausgangsstand erkannt: ${SOURCE_MODE} (${INSTALLED_VERSION}${INSTALLED_BUILD_ID:+ / ${INSTALLED_BUILD_ID}})"
@@ -230,7 +232,7 @@ if systemctl is-active --quiet zendure-controller.service; then CONTROLLER_WAS_A
 if systemctl is-active --quiet zendure-replay.service; then REPLAY_WAS_ACTIVE=1; fi
 if systemctl is-active --quiet zendure-status-preview.service; then PREVIEW_WAS_ACTIVE=1; fi
 
-echo "V14.1.2-Paket vor dem Stoppen des Produktivdienstes entpacken und prüfen..."
+echo "V14.1.3-Paket vor dem Stoppen des Produktivdienstes entpacken und prüfen..."
 rm -rf "$DIR"
 unzip -q "$ZIP" -d /home/pi/Downloads
 [ -d "$DIR" ] || { echo "FEHLER: erwarteter ZIP-Root fehlt: $DIR"; exit 1; }
@@ -262,7 +264,7 @@ verify_source_manifest
     bash -n tools/update_zendure_controller.sh
     ZEC_INSTALLER_PREFLIGHT=1 PYTHONWARNINGS="error::ResourceWarning" verify_runtime_readiness_smoke "$DIR"
     python3 tools/migrate_config_to_current.py --config "$TARGET/config.json" --check-only --json >/tmp/zec_v14_migration_preflight.json
-    python3 tools/v14_cutover.py verify --config "$TARGET/config.json" --runtime-root "$TARGET" --json >/tmp/zec_v14_1_2_graph_preflight.json
+    python3 tools/v14_cutover.py verify --config "$TARGET/config.json" --runtime-root "$TARGET" --json >/tmp/zec_v14_1_3_graph_preflight.json
     verify_build_test_evidence
 )
 
@@ -286,7 +288,7 @@ cp "$TARGET/config.json" "$CONFIG_BACKUP"
 chmod 600 "$CONFIG_BACKUP"
 backup_root_artifacts
 
-echo "Kopiere V14.1.2-Dateien; config.json, Last-Good, Konfigurationsstände und Laufzeitdaten bleiben erhalten..."
+echo "Kopiere V14.1.3-Dateien; config.json, Last-Good, Konfigurationsstände und Laufzeitdaten bleiben erhalten..."
 rsync -a \
   --exclude 'config.json' \
   --exclude 'config.json.last-good*' \
@@ -310,8 +312,40 @@ cd "$TARGET"
 echo "Führe idempotente gemeinsame Configmigration aus..."
 python3 tools/migrate_config_to_current.py --config config.json --json | tee /tmp/zec_v14_migration_result.json
 
-echo "Graph Core V3 bleibt erhalten; prüfe bestehende V3-Datenbank vor dem Neustart..."
-python3 tools/v14_cutover.py verify --config "$TARGET/config.json" --runtime-root "$TARGET" --json >/tmp/zec_v14_1_2_graph_verify_prestart.json
+echo "Graph Core V3 bleibt erhalten; prüfe bestehende V3-Datenbank vor der gezielten State-Reparatur..."
+python3 tools/v14_cutover.py verify --config "$TARGET/config.json" --runtime-root "$TARGET" --json >/tmp/zec_v14_1_3_graph_verify_prebackfill.json
+
+echo "Repariere – soweit Measurement-V4-Evidenz vorhanden ist – ausschließlich fehlende OPERATING_MODE-/CONTROL_INTENT-Intervalle..."
+set +e
+python3 tools/backfill_graph_control_states_v14_1_3.py \
+  --config "$TARGET/config.json" \
+  --runtime-root "$TARGET" \
+  --apply --json >"$STATE_BACKFILL_REPORT"
+STATE_BACKFILL_RC=$?
+set -e
+python3 - "$STATE_BACKFILL_REPORT" "$STATE_BACKFILL_RC" <<'PYSTATE'
+import json, sys
+from pathlib import Path
+path=Path(sys.argv[1])
+rc=int(sys.argv[2])
+try:
+    payload=json.loads(path.read_text(encoding='utf-8'))
+except Exception as exc:
+    raise SystemExit(f"FEHLER: State-Backfill-Report unlesbar: {exc}")
+reason=str(payload.get('reason') or '')
+status=str(payload.get('status') or '')
+if reason == 'NO_V4_FILES':
+    print('INFO: Keine Measurement-V4-Dateien vorhanden; historischer State-Backfill wird übersprungen. Live-State-Persistenz ist davon unabhängig.')
+    raise SystemExit(0)
+if rc != 0 or status not in {'ok','warning'}:
+    raise SystemExit(f"FEHLER: gezielter State-Backfill fehlgeschlagen: rc={rc} status={status} reason={reason}")
+planned=payload.get('planned_intervals') or {}
+inserted=payload.get('inserted_intervals') or {}
+print(f"State-Backfill: {reason}; geplant={planned}; eingefügt={inserted}; quick_check={payload.get('quick_check_after')}")
+PYSTATE
+
+echo "Prüfe Graph Core V3 nach der gezielten State-Reparatur erneut..."
+python3 tools/v14_cutover.py verify --config "$TARGET/config.json" --runtime-root "$TARGET" --json >/tmp/zec_v14_1_3_graph_verify_prestart.json
 
 rm -rf "$TARGET/Tools"
 rm -f "$TARGET/zendureController.py"
@@ -344,7 +378,7 @@ python3 -m py_compile *.py tools/*.py
 verify_javascript_syntax_if_available
 bash -n tools/update_zendure_controller.sh
 ZEC_INSTALLER_PREFLIGHT=1 PYTHONWARNINGS="error::ResourceWarning" verify_runtime_readiness_smoke "$TARGET"
-python3 tools/v14_cutover.py verify --config "$TARGET/config.json" --runtime-root "$TARGET" --json >/tmp/zec_v14_1_2_graph_verify_local.json
+python3 tools/v14_cutover.py verify --config "$TARGET/config.json" --runtime-root "$TARGET" --json >/tmp/zec_v14_1_3_graph_verify_local.json
 verify_source_manifest_at "$TARGET"
 
 echo "Starte Controller..."
@@ -390,7 +424,7 @@ elif [ "$TRANSITIONAL_ACCEPTED" -eq 1 ]; then
     echo "Kein Rollback: Controller, Datenquellen, Command-State, statische Invarianten und Telemetrie sind gesund."
     [ -s "$READY_JSON" ] && cat "$READY_JSON"
 else
-    echo "FEHLER: V14.1.2 erreichte weder ready=true noch einen stabilen sicheren Übergangszustand."
+    echo "FEHLER: V14.1.3 erreichte weder ready=true noch einen stabilen sicheren Übergangszustand."
     [ -s "$READY_JSON" ] && cat "$READY_JSON"
     journalctl -u zendure-controller.service --since "@$INSTALL_START_EPOCH" --no-pager || true
     false
@@ -426,13 +460,20 @@ echo "Prüfe ausgelieferte V14.1-Greenfield-Graphseite..."
 GRAPH_PAGE_HTML="$(mktemp)"
 GRAPH_JS_BODY="$(mktemp)"
 GRAPH_CSS_BODY="$(mktemp)"
+SETTINGS_CSS_BODY="$(mktemp)"
 curl -fsS --connect-timeout 1 --max-time 10 http://127.0.0.1:8080/graph >"$GRAPH_PAGE_HTML"
 curl -fsS --connect-timeout 1 --max-time 10 http://127.0.0.1:8080/static/graph_v14_1.js >"$GRAPH_JS_BODY"
 curl -fsS --connect-timeout 1 --max-time 10 http://127.0.0.1:8080/static/graph_v14_1.css >"$GRAPH_CSS_BODY"
-grep -F 'data-greenfield-contract="v14.1.2"' "$GRAPH_PAGE_HTML" >/dev/null
+curl -fsS --connect-timeout 1 --max-time 10 http://127.0.0.1:8080/static/settings_v2.css >"$SETTINGS_CSS_BODY"
+grep -F 'data-greenfield-contract="v14.1.3"' "$GRAPH_PAGE_HTML" >/dev/null
 grep -F '/static/graph_v14_1.js' "$GRAPH_PAGE_HTML" >/dev/null
 grep -F 'id="gfSelectMode"' "$GRAPH_PAGE_HTML" >/dev/null
 grep -F 'id="gfComparisonArea"' "$GRAPH_PAGE_HTML" >/dev/null
+grep -F 'id="gfBusyBadge"' "$GRAPH_PAGE_HTML" >/dev/null
+grep -F 'id="gfStateMagnifier"' "$GRAPH_PAGE_HTML" >/dev/null
+grep -F 'id="gfCommandCursorCard"' "$GRAPH_PAGE_HTML" >/dev/null
+grep -F 'id="gfCompareHoverCard"' "$GRAPH_PAGE_HTML" >/dev/null
+grep -F 'data-gf-lane-toggle' "$GRAPH_PAGE_HTML" >/dev/null
 ! grep -F 'data-gf-context-tab="compare"' "$GRAPH_PAGE_HTML" >/dev/null
 grep -F '/api/graph/v1/workspace' "$GRAPH_JS_BODY" >/dev/null
 grep -F '/api/graph/v1/overview' "$GRAPH_JS_BODY" >/dev/null
@@ -440,22 +481,34 @@ grep -F 'loadPeriodComparison' "$GRAPH_JS_BODY" >/dev/null
 grep -F 'episodeA.overview.relative_timestamps_ms' "$GRAPH_JS_BODY" >/dev/null
 grep -F 'Array.isArray(value)?value:[]' "$GRAPH_JS_BODY" >/dev/null
 grep -F 'tooltip:{enabled:false}' "$GRAPH_JS_BODY" >/dev/null
+grep -F 'Math.round(Number(start))' "$GRAPH_JS_BODY" >/dev/null
+grep -F 'chooseSimilarTriggerB' "$GRAPH_JS_BODY" >/dev/null
+grep -F '1 gemeinsame Datenlücke' "$GRAPH_JS_BODY" >/dev/null
 ! grep -F '/graph-view-data' "$GRAPH_JS_BODY" >/dev/null
 ! grep -F '/graph_old' "$GRAPH_JS_BODY" >/dev/null
 grep -F 'html[data-theme="dark"] .gf-page' "$GRAPH_CSS_BODY" >/dev/null
 grep -F '.gf-cursor-card' "$GRAPH_CSS_BODY" >/dev/null
 grep -F '.gf-selection-bar' "$GRAPH_CSS_BODY" >/dev/null
-rm -f "$GRAPH_PAGE_HTML" "$GRAPH_JS_BODY" "$GRAPH_CSS_BODY"
+grep -F '.gf-state-hover-panel' "$GRAPH_CSS_BODY" >/dev/null
+grep -F 'max-width:2020px' "$GRAPH_CSS_BODY" >/dev/null
+grep -F 'V14.1.3: complete Settings-V2 dark-theme normalization' "$SETTINGS_CSS_BODY" >/dev/null
+grep -F 'html[data-theme="dark"] body.zec-settings-v2' "$SETTINGS_CSS_BODY" >/dev/null
+grep -F 'color-scheme:dark' "$SETTINGS_CSS_BODY" >/dev/null
+rm -f "$GRAPH_PAGE_HTML" "$GRAPH_JS_BODY" "$GRAPH_CSS_BODY" "$SETTINGS_CSS_BODY"
 
 trap - ERR EXIT
 cleanup_tmp
 
 echo "Update abgeschlossen und Installations-Abnahme erfolgreich."
-echo "V14.1.2 erfolgreich installiert."
-python3 - "$INSTALL_REPORT" "$BACKUP" "$CONFIG_BACKUP" "$ROOT_ARTIFACT_BACKUP" "$INSTALLED_VERSION" "$INSTALLED_BUILD_ID" "$EXPECTED_TARGET_VERSION" "$EXPECTED_TARGET_BUILD_ID" "$BACKUP_SHA256" "$BACKUP_SIZE" <<'PYREPORT'
+echo "V14.1.3 erfolgreich installiert."
+python3 - "$INSTALL_REPORT" "$BACKUP" "$CONFIG_BACKUP" "$ROOT_ARTIFACT_BACKUP" "$INSTALLED_VERSION" "$INSTALLED_BUILD_ID" "$EXPECTED_TARGET_VERSION" "$EXPECTED_TARGET_BUILD_ID" "$BACKUP_SHA256" "$BACKUP_SIZE" "$STATE_BACKFILL_REPORT" <<'PYREPORT'
 import json, sys, time
 from pathlib import Path
-(path, backup, config_backup, root_backup, source_version, source_build, target_version, target_build, backup_sha, backup_size) = sys.argv[1:]
+(path, backup, config_backup, root_backup, source_version, source_build, target_version, target_build, backup_sha, backup_size, state_backfill_path) = sys.argv[1:]
+try:
+    state_backfill = json.loads(Path(state_backfill_path).read_text(encoding='utf-8'))
+except Exception:
+    state_backfill = {"status": "unknown", "reason": "REPORT_UNAVAILABLE"}
 payload = {
     "format": "ZEC_V14_1_INSTALL_REPORT_V1",
     "status": "ok",
@@ -467,6 +520,7 @@ payload = {
     "root_artifact_backup": root_backup,
     "graph_core_v3_rebuilt": False,
     "graph_core_v3_preserved": True,
+    "graph_control_state_backfill": state_backfill,
 }
 Path(path).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 PYREPORT

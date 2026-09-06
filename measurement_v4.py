@@ -14,6 +14,12 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from csv_logger import compute_config_control_hash, estimate_retention_hours, measurement_log_mode, resolve_log_target
+from control_state_semantics import (
+    control_intent as _shared_control_intent,
+    derive_control_state,
+    map_operating_mode as _shared_map_operating_mode,
+    map_target_reason as _shared_map_target_reason,
+)
 from measurement_v4_contract import (
     EXTENDED_FIELDS,
     MISSING_REQUIRED_SOURCE_BITS,
@@ -255,13 +261,14 @@ def build_config_snapshot(config: Dict[str, Any]) -> Dict[str, Any]:
 
 def build_v4_row(config: Dict[str, Any], row: Dict[str, Any], previous_effective_command_w: Optional[float] = None) -> Dict[str, Any]:
     measurement_time_utc, epoch_ms = _line_epoch(row)
+    derived_state = derive_control_state(row)
     mode_raw = str(row.get("mode", "UNKNOWN") or "UNKNOWN")
-    target_final = _safe_float(row.get("target_final_w", row.get("zendure_target_power_w")))
-    active_limiters = _csv_list(row.get("technical_limiters", row.get("target_limiters_summary")))
-    control_reason = str(row.get("control_reason", row.get("target_final_reason", "UNKNOWN")) or "UNKNOWN")
-    target_reason = _map_target_reason(control_reason, mode_raw, target_final, active_limiters, row)
-    operating_mode = _map_operating_mode(mode_raw, target_reason=target_reason, row=row)
-    control_intent = _control_intent(operating_mode, target_final)
+    target_final = derived_state["target_final_w"]
+    active_limiters = list(derived_state["active_limiters"])
+    control_reason = str(derived_state["control_reason"])
+    target_reason = str(derived_state["target_reason"])
+    operating_mode = str(derived_state["operating_mode"])
+    control_intent = str(derived_state["control_intent"])
 
     missing_names = _filter_missing_required_sources(_csv_list(row.get("control_missing_required_sources")), config, row)
     missing_mask, missing_count = _mask_from_names(missing_names, MISSING_SOURCE_ALIASES, MISSING_REQUIRED_SOURCE_BITS)
@@ -617,38 +624,11 @@ def _filter_missing_required_sources(names: List[str], config: Dict[str, Any], r
 
 
 def _map_operating_mode(mode: str, *, target_reason: str = "", row: Optional[Dict[str, Any]] = None) -> str:
-    raw = str(mode or "").upper()
-    reason = str((row or {}).get("control_reason", (row or {}).get("target_final_reason", "")) or "").upper()
-    # The legacy controller internally uses safe_state() also as a neutralizing
-    # helper for SOC limits. In V4 these are target limiters, not fault modes.
-    if raw == "SAFE_STATE" and target_reason in {"MAX_SOC_LIMIT", "MIN_SOC_LIMIT"}:
-        return "AUTO"
-    if raw == "SAFE_STATE" and ("SOC ZU HOCH" in reason or "SOC ZU NIEDRIG" in reason):
-        return "AUTO"
-    if raw in {"AUTO", "HOLD", "HOLD_DEADBAND", "NIGHT_DISCHARGE", "STOP_HOLD", "SAFE_STATE"}:
-        return raw
-    if raw in {"MANUAL_FIXED_CHARGE", "FIXED_CHARGE"}:
-        return "FIXED_CHARGE"
-    if raw in {"MANUAL_FIXED_DISCHARGE", "FIXED_DISCHARGE"}:
-        return "FIXED_DISCHARGE"
-    if raw in {"CHARGE", "DISCHARGE", "CHARGE_RAMP_DOWN", "DISCHARGE_RAMP_DOWN", "BLOCKED_BY_SMA"}:
-        return "AUTO"
-    return "UNKNOWN"
+    return _shared_map_operating_mode(mode, target_reason=target_reason, row=row)
 
 
 def _control_intent(operating_mode: str, target_final: Optional[float]) -> str:
-    if operating_mode == "SAFE_STATE":
-        return "SAFE"
-    if operating_mode in {"HOLD", "HOLD_DEADBAND", "STOP_HOLD"}:
-        return "HOLD"
-    if target_final is None:
-        return "UNKNOWN"
-    if target_final > 0:
-        return "CHARGE"
-    if target_final < 0:
-        return "DISCHARGE"
-    return "NEUTRAL"
-
+    return _shared_control_intent(operating_mode, target_final)
 
 def _map_mqtt_status(value: Any, row: Dict[str, Any]) -> str:
     raw = str(value or "").upper()
@@ -670,59 +650,7 @@ def _map_mqtt_status(value: Any, row: Dict[str, Any]) -> str:
 
 
 def _map_target_reason(reason: str, operating_mode: str, target_final: Optional[float], active_limiters: List[str], row: Dict[str, Any]) -> str:
-    raw = str(reason or "").upper()
-    upper_limiters = {str(item).upper() for item in active_limiters}
-    cross_charge_active = (
-        _bool01(row.get("cross_charge_guard_active")) == "1"
-        or _bool01(row.get("cross_charge_guard_limited")) == "1"
-        or "CROSS_CHARGE" in upper_limiters
-        or "SMA_DISCHARGE" in upper_limiters
-        or "CROSS_CHARGE" in raw
-        or "BLOCKED_BY_SMA" in raw
-    )
-    if operating_mode == "NIGHT_DISCHARGE":
-        return "NIGHT_BASE_DISCHARGE"
-    stop_reason = str(row.get("night_discharge_stop_reason", "") or "").upper()
-    if "RESERVE" in stop_reason:
-        return "NIGHT_RESERVE_STOP"
-    if "WINDOW" in stop_reason or "ENDED" in stop_reason:
-        return "NIGHT_WINDOW_ENDED_NEUTRALIZED"
-    if operating_mode == "FIXED_CHARGE":
-        return "FIXED_CHARGE"
-    if operating_mode == "FIXED_DISCHARGE":
-        return "FIXED_DISCHARGE"
-    if operating_mode == "STOP_HOLD":
-        return "MANUAL_STOP"
-    if "MIN_SOC" in raw or "SOC ZU NIEDRIG" in raw or "MIN_SOC" in upper_limiters:
-        return "MIN_SOC_LIMIT"
-    if "MAX_SOC" in raw or "SOC ZU HOCH" in raw or "MAX_SOC" in upper_limiters:
-        return "MAX_SOC_LIMIT"
-    if str(operating_mode or "").upper() == "SAFE_STATE":
-        return "SAFE_STATE"
-    if cross_charge_active:
-        return "CROSS_CHARGE_BLOCKED" if target_final == 0 else "CROSS_CHARGE_REDUCED"
-    if "REST_SURPLUS" in raw or "HARVEST" in raw or "RESTÜBERSCHUSS" in raw or "RESTUEBERSCHUSS" in raw or "ERNTE" in raw:
-        return "REST_SURPLUS_HARVEST"
-    if "DEADBAND" in raw:
-        return "DEADBAND"
-    if "DISCONNECT" in raw or "MQTT" in raw:
-        return "MQTT_DISCONNECTED" if "DISCONNECT" in raw else "ZENDURE_MQTT_STALE"
-    if "GRID" in raw and "STALE" in raw:
-        return "GRID_STALE"
-    if "SOC" in raw and "STALE" in raw:
-        return "SOC_STALE"
-    if "RAMP" in raw or "STEP" in raw:
-        return "STEP_LIMIT"
-    if "SMOOTH" in raw:
-        return "SMOOTHING"
-    if target_final is not None:
-        if target_final > 0:
-            return "AUTO_GRID_EXPORT"
-        if target_final < 0:
-            return "AUTO_GRID_IMPORT"
-        return "DEADBAND"
-    return "UNKNOWN"
-
+    return _shared_map_target_reason(reason, operating_mode, target_final, active_limiters, row)
 
 def _safe_state_reason(row: Dict[str, Any], mqtt_status: str, missing_names: List[str], operating_mode: str) -> str:
     if operating_mode != "SAFE_STATE":

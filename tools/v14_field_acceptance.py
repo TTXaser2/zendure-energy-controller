@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Read-only productive field acceptance for ZEC V14.1.2.
+"""Read-only productive field acceptance for ZEC V14.1.3.
 
 This tool never publishes commands, changes configuration, mutates the graph
 store, or performs a rollback. It exercises the running HTTP/read-only graph
@@ -26,10 +26,10 @@ if str(ROOT) not in sys.path:
 
 from version import APP_BUILD_ID, APP_VERSION, APP_VERSION_LABEL  # noqa: E402
 
-EXPECTED_VERSION = "14.1.2"
-EXPECTED_LABEL = "V14.1.2"
-EXPECTED_BUILD_ID = "v14.1.2-20260905"
-FORMAT = "ZEC_V14_1_2_FIELD_ACCEPTANCE_V1"
+EXPECTED_VERSION = "14.1.3"
+EXPECTED_LABEL = "V14.1.3"
+EXPECTED_BUILD_ID = "v14.1.3-20260906"
+FORMAT = "ZEC_V14_1_3_FIELD_ACCEPTANCE_V1"
 
 
 def _sha256(path: Path) -> str:
@@ -199,7 +199,7 @@ def run_acceptance(base_url: str, install_report: Path) -> Dict[str, Any]:
         metrics["graph_page_ms"] = round(ms, 3)
         text = body.decode("utf-8", errors="replace")
         page_ok = (
-            'data-greenfield-contract="v14.1.2"' in text
+            'data-greenfield-contract="v14.1.3"' in text
             and '/static/graph_v14_1.js' in text
             and '/static/graph_v14_1.css' in text
             and '/graph_old' not in text
@@ -211,10 +211,13 @@ def run_acceptance(base_url: str, install_report: Path) -> Dict[str, Any]:
     try:
         js_body, js_ms = _http(base_url, "/static/graph_v14_1.js", timeout=10)
         css_body, css_ms = _http(base_url, "/static/graph_v14_1.css", timeout=10)
+        settings_css_body, settings_css_ms = _http(base_url, "/static/settings_v2.css", timeout=10)
         metrics["graph_greenfield_js_ms"] = round(js_ms, 3)
         metrics["graph_greenfield_css_ms"] = round(css_ms, 3)
+        metrics["settings_dark_css_ms"] = round(settings_css_ms, 3)
         js_text = js_body.decode("utf-8", errors="replace")
         css_text = css_body.decode("utf-8", errors="replace")
+        settings_css_text = settings_css_body.decode("utf-8", errors="replace")
         asset_ok = (
             "/api/graph/v1/workspace" in js_text
             and "/api/graph/v1/overview" in js_text
@@ -222,9 +225,16 @@ def run_acceptance(base_url: str, install_report: Path) -> Dict[str, Any]:
             and "/graph-view-data" not in js_text
             and "/graph_old" not in js_text
             and 'html[data-theme="dark"] .gf-page' in css_text
-            and "grid-template-columns:280px minmax(640px,1fr) 360px" in css_text
+            and "grid-template-columns:260px minmax(660px,1fr) 340px" in css_text
+            and "max-width:2020px" in css_text
         )
         _check(checks, "graph_greenfield_assets", asset_ok, js_bytes=len(js_body), css_bytes=len(css_body))
+        settings_dark_ok = (
+            "V14.1.3: complete Settings-V2 dark-theme normalization" in settings_css_text
+            and 'html[data-theme="dark"] body.zec-settings-v2' in settings_css_text
+            and "color-scheme:dark" in settings_css_text
+        )
+        _check(checks, "settings_dark_mode_contract", settings_dark_ok, css_bytes=len(settings_css_body))
         interaction_ok = (
             "gfSelectMode" in js_text
             and "loadPeriodComparison" in js_text
@@ -234,9 +244,18 @@ def run_acceptance(base_url: str, install_report: Path) -> Dict[str, Any]:
             and "gfPowerCursorCard" in text
             and "gfSocCursorCard" in text
             and "gfStateCursorCard" in text
+            and "gfCommandCursorCard" in text
+            and "gfCompareHoverCard" in text
+            and "gfStateMagnifier" in text
+            and "gfBusyBadge" in text
+            and "data-gf-lane-toggle" in text
+            and "Math.round(Number(start))" in js_text
+            and "chooseSimilarTriggerB" in js_text
+            and "1 gemeinsame Datenlücke" in js_text
             and 'data-gf-context-tab="compare"' not in text
             and ".gf-cursor-card" in css_text
             and ".gf-selection-bar" in css_text
+            and ".gf-state-hover-panel" in css_text
         )
         _check(checks, "graph_interaction_contract", interaction_ok)
     except Exception as exc:
@@ -265,6 +284,10 @@ def run_acceptance(base_url: str, install_report: Path) -> Dict[str, Any]:
             checks, "graph_overview_48h", bool(stamps),
             points=len(stamps), series_count=len(overview.get("series") or {}), resolution=overview.get("resolution"),
         )
+        interval_items = [dict(x) for x in ((overview.get("intervals") or {}).get("items") or []) if isinstance(x, dict)]
+        state_counts = {kind: sum(1 for x in interval_items if x.get("kind") == kind) for kind in ("OPERATING_MODE", "CONTROL_INTENT", "CONTROL_REASON")}
+        state_ok = state_counts["OPERATING_MODE"] > 0 and state_counts["CONTROL_INTENT"] > 0 and state_counts["CONTROL_REASON"] > 0
+        _check(checks, "graph_control_state_intervals", state_ok, counts=state_counts, truncated=(overview.get("intervals") or {}).get("truncated"))
     except Exception as exc:
         _check(checks, "graph_overview_48h", False, detail=f"{type(exc).__name__}: {exc}")
 
@@ -341,6 +364,17 @@ def run_acceptance(base_url: str, install_report: Path) -> Dict[str, Any]:
     else:
         _check(checks, "episode_comparison", False, detail="FEWER_THAN_TWO_PERSISTED_TRIGGERS_IN_48H")
 
+    try:
+        from datetime import datetime
+        today = datetime.now().date().isoformat()
+        soc_day, ms = _json(base_url, "/storage-soc-day-data", params={"date": today}, timeout=20)
+        metrics["status_soc_day_ms"] = round(ms, 3)
+        soc_points = list(soc_day.get("points") or [])
+        soc_ok = soc_day.get("source") == "graph_core_v3_1min" and bool(soc_points)
+        _check(checks, "status_soc_day_v3", soc_ok, date=today, points=len(soc_points), cache_status=soc_day.get("cache_status"), source=soc_day.get("source"))
+    except Exception as exc:
+        _check(checks, "status_soc_day_v3", False, detail=f"{type(exc).__name__}: {exc}")
+
     db_path_raw = str(runtime.get("db_path") or "")
     if db_path_raw:
         db_path = Path(db_path_raw)
@@ -365,12 +399,18 @@ def run_acceptance(base_url: str, install_report: Path) -> Dict[str, Any]:
             actual_hash = _sha256(backup_path) if backup_path.is_file() else ""
             install_ok = (
                 report.get("status") == "ok"
-                and (report.get("source") or {}).get("version") == "14.1.1"
-                and (report.get("target") or {}).get("version") == "14.1.2"
+                and (report.get("source") or {}).get("version") == "14.1.2"
+                and (report.get("target") or {}).get("version") == "14.1.3"
                 and report.get("graph_core_v3_preserved") is True
                 and report.get("graph_core_v3_rebuilt") is False
             )
             _check(checks, "install_report", install_ok, source=report.get("source"), target=report.get("target"), graph_core_v3_preserved=report.get("graph_core_v3_preserved"))
+            state_backfill = dict(report.get("graph_control_state_backfill") or {})
+            state_reason = str(state_backfill.get("reason") or "")
+            state_backfill_ok = state_reason in {"REPAIRED", "REPAIRED_WITH_SOURCE_ERRORS", "NO_V4_FILES"}
+            if state_reason != "NO_V4_FILES":
+                state_backfill_ok = state_backfill_ok and state_backfill.get("numeric_graph_data_mutated") is False and state_backfill.get("command_events_mutated") is False and state_backfill.get("control_reason_mutated") is False
+            _check(checks, "graph_control_state_backfill_report", state_backfill_ok, reason=state_reason, inserted=state_backfill.get("inserted_intervals"), source_errors=len(state_backfill.get("source_errors") or []))
             backup_ok = backup_path.is_file() and actual_size == expected_size and bool(expected_hash) and actual_hash == expected_hash
             _check(checks, "rollback_backup_integrity", backup_ok, detail="RELEASE_BACKUP_EXACT" if backup_ok else "RELEASE_BACKUP_MISMATCH", path=str(backup_path), bytes=actual_size, sha256=actual_hash)
         except Exception as exc:
@@ -410,10 +450,10 @@ def run_acceptance(base_url: str, install_report: Path) -> Dict[str, Any]:
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Read-only ZEC V14.1.2 field acceptance")
+    p = argparse.ArgumentParser(description="Read-only ZEC V14.1.3 field acceptance")
     p.add_argument("--base-url", default="http://127.0.0.1:8080")
-    p.add_argument("--install-report", default="/tmp/zec_v14_1_2_install_report.json")
-    p.add_argument("--output", default="/tmp/ZEC_V14_1_2_FIELD_ACCEPTANCE.json")
+    p.add_argument("--install-report", default="/tmp/zec_v14_1_3_install_report.json")
+    p.add_argument("--output", default="/tmp/ZEC_V14_1_3_FIELD_ACCEPTANCE.json")
     p.add_argument("--json", action="store_true")
     return p.parse_args(argv)
 

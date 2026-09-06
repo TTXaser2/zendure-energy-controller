@@ -57,7 +57,8 @@ def test_v1412_period_comparison_supports_side_by_side_and_relative_overlay():
         assert f'id="{canvas_id}"' in html
     assert "comparisonMode:'side'" in GRAPH_JS
     assert "setComparisonDisplay('overlay')" in GRAPH_JS
-    assert 'relative?absolute.map' in GRAPH_JS
+    assert "domain==='relative'?raw.map" in GRAPH_JS
+    assert "timeline:'relative'" in GRAPH_JS
     assert "tag:'A'" in GRAPH_JS and "tag:'B'" in GRAPH_JS
 
 

@@ -83,7 +83,7 @@ def test_graph_page_is_v3_workspace_and_does_not_call_legacy_history_payload():
     assert "/graph_old" not in js
     assert "Analyse-Workspace" in html
     assert "Freies Lagebild" in html
-    assert 'data-greenfield-contract="v14.1.2"' in html
+    assert 'data-greenfield-contract="v14.1.3"' in html
     assert "/static/graph_v14_1.css" in html
     assert "/static/graph_v14_1.js" in html
 

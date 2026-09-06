@@ -33,7 +33,7 @@ def test_verify_runtime_root_reproduces_and_fixes_field_preflight_cwd_bug(tmp_pa
     }
     config_path = runtime_root / "config.json"
     config_path.write_text(json.dumps(config), encoding="utf-8")
-    staging_cwd = tmp_path / "Downloads" / "zendure_controller_v14_1_2"
+    staging_cwd = tmp_path / "Downloads" / "zendure_controller_v14_1_3"
     staging_cwd.mkdir(parents=True)
 
     # Old V14.1.0 behavior: relative logs resolve below the staging CWD.

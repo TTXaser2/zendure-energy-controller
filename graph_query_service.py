@@ -1391,6 +1391,115 @@ class GraphQueryService:
             "overview_meta": dict(payload.get("meta") or {}),
         }
 
+    def storage_day_status(
+        self,
+        path: str,
+        start_ms: int,
+        end_ms: int,
+        *,
+        limit: int = 2000,
+    ) -> Dict[str, Any]:
+        """Lean V3 day payload for the status-page SOC chart.
+
+        Unlike ``compatibility_points()`` this path intentionally reads only
+        the four storage series plus OPERATING_MODE/CONTROL_REASON and the
+        effective config timeline. It does not load command events, topology,
+        runs, retention, coverage or evidence. Those belong to the analysis
+        workspace, not to the small status chart.
+        """
+        start_ms, end_ms = int(start_ms), int(end_ms)
+        if end_ms <= start_ms:
+            raise GraphQueryError("INVALID_TIME_RANGE")
+        if end_ms - start_ms > DEFAULT_MAX_WINDOW_MS:
+            raise GraphQueryError("WINDOW_EXCEEDS_48H")
+        ids = (
+            "zendure_actual_power_w",
+            "zendure_soc_percent",
+            "primary_soc_percent",
+            "primary_power_w",
+        )
+        plan = plan_query(start_ms, end_ms, resolution="1min", purpose="overview")
+        fingerprint = _db_fingerprint(path)
+        key = ("storage_day_status", fingerprint, start_ms, end_ms, int(limit))
+        cached = self._cache_get(key)
+        if cached is not None:
+            return cached
+
+        started = time.perf_counter()
+        conn = self._open_v3(path)
+        try:
+            numeric = _query_numeric(conn, start_ms, end_ms, ids, plan)
+            timestamps = list(numeric.get("timestamps_ms") or [])[: max(0, int(limit))]
+            series = dict(numeric.get("series") or {})
+            # Status SOC needs only two sparse contexts. Query them directly
+            # instead of materializing every limiter/quality/command state in
+            # the day and filtering in Python. This matters most near the end
+            # of a busy day on the Pi 3B+.
+            interval_rows = conn.execute(
+                """
+                SELECT interval_id,kind,run_id,entity_id,start_ms,end_ms,value_code,source,quality
+                  FROM graph_intervals
+                 WHERE kind IN ('OPERATING_MODE','CONTROL_REASON')
+                   AND start_ms<=? AND (end_ms IS NULL OR end_ms>?)
+                 ORDER BY start_ms,interval_id
+                 LIMIT ?
+                """,
+                (int(end_ms), int(start_ms), max(5000, int(limit) * 4)),
+            ).fetchall()
+            intervals = [dict(row) for row in interval_rows]
+            config_rows = _query_config(conn, start_ms, end_ms)
+        finally:
+            conn.close()
+
+        by_kind: Dict[str, List[Dict[str, Any]]] = {}
+        for item in intervals:
+            by_kind.setdefault(str(item.get("kind") or ""), []).append(item)
+
+        def value_at(kind: str, ts_ms: int) -> str:
+            value = ""
+            for item in by_kind.get(kind, []):
+                if int(item["start_ms"]) > ts_ms:
+                    break
+                finish = item.get("end_ms")
+                if finish is None or ts_ms < int(finish):
+                    value = str(item.get("value_code") or "")
+            return value
+
+        def series_value(series_id: str, index: int) -> Optional[float]:
+            values = list(series.get(series_id) or [])
+            return values[index] if index < len(values) else None
+
+        points: List[Dict[str, Any]] = []
+        for index, ts_value in enumerate(timestamps):
+            ts_ms = int(ts_value)
+            mode = value_at("OPERATING_MODE", ts_ms)
+            points.append({
+                "epoch_ms": ts_ms,
+                "zendure_actual_power_w": series_value("zendure_actual_power_w", index),
+                "soc": series_value("zendure_soc_percent", index),
+                "primary_soc": series_value("primary_soc_percent", index),
+                "primary_power_w": series_value("primary_power_w", index),
+                "mode": mode,
+                "control_reason": value_at("CONTROL_REASON", ts_ms),
+                "safe_state_active": mode == "SAFE_STATE",
+                "night_window_active": mode == "NIGHT_DISCHARGE",
+            })
+
+        payload = {
+            "points": points,
+            "config_timeline": config_rows,
+            "meta": {
+                "cache": "miss",
+                "query_source": plan.source,
+                "row_count": len(points),
+                "series_count": len(ids),
+                "interval_count": len(intervals),
+                "query_ms": round((time.perf_counter() - started) * 1000.0, 3),
+            },
+        }
+        self._cache_put(key, payload)
+        return payload
+
     def evidence(
         self,
         path: str,

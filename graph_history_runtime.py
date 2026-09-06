@@ -151,15 +151,26 @@ def _v3_storage_day(
     day_end: datetime,
     *,
     current_effective_config: Optional[Mapping[str, Any]] = None,
+    status_fast: bool = False,
+    include_physical_units: bool = True,
+    primary_present_hint: Optional[bool] = None,
+    unit_labels_hint: Optional[Sequence[str]] = None,
+    runtime_hint: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     path = resolve_measurement_db_path(dict(config))
     start_ms = int(day_start.timestamp() * 1000)
     end_ms = int(day_end.timestamp() * 1000)
 
-    points, compat_meta = GRAPH_QUERY_SERVICE.compatibility_points(path, start_ms, end_ms, limit=2000)
-    overview_meta = dict(compat_meta.get("overview_meta") or {})
-
-    config_payload = GRAPH_QUERY_SERVICE.config_timeline(path, start_ms, end_ms)
+    if status_fast:
+        status_payload = GRAPH_QUERY_SERVICE.storage_day_status(path, start_ms, end_ms, limit=2000)
+        points = list(status_payload.get("points") or [])
+        compat_meta = {"status_fast": True, "overview_meta": dict(status_payload.get("meta") or {})}
+        overview_meta = dict(status_payload.get("meta") or {})
+        config_payload = {"items": list(status_payload.get("config_timeline") or []), "meta": dict(status_payload.get("meta") or {})}
+    else:
+        points, compat_meta = GRAPH_QUERY_SERVICE.compatibility_points(path, start_ms, end_ms, limit=2000)
+        overview_meta = dict(compat_meta.get("overview_meta") or {})
+        config_payload = GRAPH_QUERY_SERVICE.config_timeline(path, start_ms, end_ms)
     config_rows = list(config_payload.get("items") or [])
     segments, timeline_meta = build_segments_from_rows(
         config_rows,
@@ -174,17 +185,18 @@ def _v3_storage_day(
         },
     )
 
-    entities_payload: Dict[str, Any] = {"entities": {}, "meta": {}}
-    try:
-        entities_payload = GRAPH_QUERY_SERVICE.entity_overview(
-            path,
-            start_ms,
-            end_ms,
-            series_ids=ENTITY_STORAGE_SERIES,
-            resolution="1min",
-        )
-    except Exception as exc:
-        entities_payload = {"entities": {}, "meta": {"error": str(exc), "status": "UNAVAILABLE"}}
+    entities_payload: Dict[str, Any] = {"entities": {}, "meta": {"status": "SKIPPED_STATUS_FAST" if status_fast and not include_physical_units else "EMPTY"}}
+    if include_physical_units or not status_fast:
+        try:
+            entities_payload = GRAPH_QUERY_SERVICE.entity_overview(
+                path,
+                start_ms,
+                end_ms,
+                series_ids=ENTITY_STORAGE_SERIES,
+                resolution="1min",
+            )
+        except Exception as exc:
+            entities_payload = {"entities": {}, "meta": {"error": str(exc), "status": "UNAVAILABLE"}}
 
     all_entities = dict(entities_payload.get("entities") or {})
     physical = [
@@ -240,28 +252,31 @@ def _v3_storage_day(
         result_points.append(item)
 
     coverage: Dict[str, Any]
-    try:
-        coverage = GRAPH_QUERY_SERVICE.coverage(path, series_ids=SYSTEM_STORAGE_SERIES)
-    except Exception as exc:
-        coverage = {"series": {}, "meta": {"error": str(exc), "status": "UNAVAILABLE"}}
-
     evidence: Dict[str, Any]
-    try:
-        evidence = GRAPH_QUERY_SERVICE.evidence(
-            path,
-            start_ms,
-            end_ms,
-            series_ids=SYSTEM_STORAGE_SERIES,
-            resolution="1min",
-        )
-    except Exception as exc:
-        evidence = {
-            "series": {},
-            "meta": {"error": str(exc), "status": "NOT_SUPPORTED_OR_UNAVAILABLE"},
-            "resolution": "1min",
-        }
+    if status_fast:
+        coverage = {"series": {}, "meta": {"status": "SKIPPED_STATUS_FAST"}}
+        evidence = {"series": {}, "meta": {"status": "SKIPPED_STATUS_FAST"}, "resolution": "1min"}
+    else:
+        try:
+            coverage = GRAPH_QUERY_SERVICE.coverage(path, series_ids=SYSTEM_STORAGE_SERIES)
+        except Exception as exc:
+            coverage = {"series": {}, "meta": {"error": str(exc), "status": "UNAVAILABLE"}}
+        try:
+            evidence = GRAPH_QUERY_SERVICE.evidence(
+                path,
+                start_ms,
+                end_ms,
+                series_ids=SYSTEM_STORAGE_SERIES,
+                resolution="1min",
+            )
+        except Exception as exc:
+            evidence = {
+                "series": {},
+                "meta": {"error": str(exc), "status": "NOT_SUPPORTED_OR_UNAVAILABLE"},
+                "resolution": "1min",
+            }
 
-    runtime = graph_history_runtime_status(config)
+    runtime = dict(runtime_hint) if runtime_hint is not None else graph_history_runtime_status(config)
     return {
         "points": result_points,
         "source": "graph_core_v3_1min",
@@ -273,9 +288,9 @@ def _v3_storage_day(
         "coverage": coverage,
         "evidence": evidence,
         "entities": all_entities,
-        "zendure_unit_count": len(physical) if physical else 1,
-        "unit_labels": unit_labels or [str(controlled_entity.get("display_name") or "Zendure")],
-        "primary_storage_present": bool(primary_entity),
+        "zendure_unit_count": len(physical) if physical else max(1, len(list(unit_labels_hint or [])) or 1),
+        "unit_labels": unit_labels or list(unit_labels_hint or []) or [str(controlled_entity.get("display_name") or "Zendure")],
+        "primary_storage_present": bool(primary_entity) if primary_present_hint is None else bool(primary_present_hint),
         "primary_display_name": str(primary_entity.get("display_name") or ""),
         "controlled_display_name": str(controlled_entity.get("display_name") or "Zendure"),
         "available_from": runtime.get("available_from") or "",
@@ -351,9 +366,14 @@ def query_storage_day_history(
     day_end: datetime,
     *,
     current_effective_config: Optional[Mapping[str, Any]] = None,
+    status_fast: bool = False,
+    include_physical_units: bool = True,
+    primary_present_hint: Optional[bool] = None,
+    unit_labels_hint: Optional[Sequence[str]] = None,
+    runtime_hint: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Return one coherent status-day history payload across V3/V2 cutover."""
-    status = graph_history_runtime_status(config)
+    status = dict(runtime_hint) if runtime_hint is not None else graph_history_runtime_status(config)
     mode = str(status.get("read_mode") or "")
     if mode == "V3_NATIVE":
         try:
@@ -362,6 +382,11 @@ def query_storage_day_history(
                 day_start,
                 day_end,
                 current_effective_config=current_effective_config,
+                status_fast=status_fast,
+                include_physical_units=include_physical_units,
+                primary_present_hint=primary_present_hint,
+                unit_labels_hint=unit_labels_hint,
+                runtime_hint=status,
             )
         except Exception as exc:
             return {

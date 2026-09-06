@@ -15,8 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class Rc20ReleaseIntegrationTests(unittest.TestCase):
     def test_version_is_rc20_without_measurement_schema_change(self):
-        self.assertEqual("14.1.2", version.APP_VERSION)
-        self.assertEqual("V14.1.2", version.APP_VERSION_LABEL)
+        self.assertEqual("14.1.3", version.APP_VERSION)
+        self.assertEqual("V14.1.3", version.APP_VERSION_LABEL)
         self.assertFalse(hasattr(version, "CSV_SCHEMA"))
 
     def test_migration_cli_check_apply_and_idempotence(self):
@@ -100,12 +100,12 @@ class Rc20ReleaseIntegrationTests(unittest.TestCase):
 
     def test_updater_is_exact_sequential_atomic_and_rollback_capable(self):
         script = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_VERSION="v14_1_2"', script)
-        self.assertIn('EXPECTED_SOURCE_VERSION="14.1.1"', script)
-        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v14.1.1-20260905"', script)
-        self.assertIn('EXPECTED_TARGET_VERSION="14.1.2"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v14.1.2-20260905"', script)
-        self.assertIn('SOURCE_MODE="V14_1_1"', script)
+        self.assertIn('EXPECTED_VERSION="v14_1_3"', script)
+        self.assertIn('EXPECTED_SOURCE_VERSION="14.1.2"', script)
+        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v14.1.2-20260905"', script)
+        self.assertIn('EXPECTED_TARGET_VERSION="14.1.3"', script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v14.1.3-20260906"', script)
+        self.assertIn('SOURCE_MODE="V14_1_2"', script)
         self.assertIn('EXPECTED_TARGET_VERSION" ]', script)
         self.assertIn("migrate_config_to_current.py", script)
         self.assertIn("v14_cutover.py", script)
@@ -126,7 +126,7 @@ class Rc20ReleaseIntegrationTests(unittest.TestCase):
         self.assertIn("verify_source_manifest", script)
         self.assertIn("command -v node", script)
         self.assertIn("Node.js ist nicht installiert; keine Produktivabhängigkeit", script)
-        self.assertEqual(2, script.count("node --check"))
+        self.assertEqual(3, script.count("node --check"))
 
     def test_preflight_failure_does_not_touch_productive_services(self):
         script = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
@@ -157,7 +157,7 @@ class Rc20ReleaseIntegrationTests(unittest.TestCase):
         self.assertIn('os.environ.get("ZEC_INSTALLER_PREFLIGHT") == "1"', web_ui)
 
     def test_release_manifest_must_not_ship_runtime_logs(self):
-        manifest = (ROOT / "V14_1_2_SOURCE_MANIFEST.sha256").read_text(encoding="utf-8")
+        manifest = (ROOT / "V14_1_3_SOURCE_MANIFEST.sha256").read_text(encoding="utf-8")
         self.assertNotIn("./logs/", manifest)
         self.assertNotIn(".sqlite3", manifest)
 

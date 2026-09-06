@@ -70,14 +70,14 @@ class V12130MeasurementV4OnlyTests(unittest.TestCase):
         self.assertEqual((), steps2)
 
 
-    def test_installer_accepts_v14_0_0_r2_and_targets_v14_1_2_preserving_v3(self):
+    def test_installer_accepts_v14_0_0_r2_and_targets_v14_1_3_preserving_v3(self):
         script = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_VERSION="v14_1_2"', script)
-        self.assertIn('EXPECTED_SOURCE_VERSION="14.1.1"', script)
-        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v14.1.1-20260905"', script)
-        self.assertIn('SOURCE_MODE="V14_1_1"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v14.1.2-20260905"', script)
-        self.assertIn('V14_1_2_SOURCE_MANIFEST.sha256', script)
+        self.assertIn('EXPECTED_VERSION="v14_1_3"', script)
+        self.assertIn('EXPECTED_SOURCE_VERSION="14.1.2"', script)
+        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v14.1.2-20260905"', script)
+        self.assertIn('SOURCE_MODE="V14_1_2"', script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v14.1.3-20260906"', script)
+        self.assertIn('V14_1_3_SOURCE_MANIFEST.sha256', script)
         self.assertNotIn('tools/v14_cutover.py preflight', script)
         self.assertNotIn('tools/v14_cutover.py rebuild', script)
         self.assertIn('tools/v14_cutover.py verify', script)

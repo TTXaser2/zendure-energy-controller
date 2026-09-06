@@ -179,3 +179,68 @@ body.help-open{position:fixed;left:0;right:0;width:100%;overflow:hidden;touch-ac
 .technical-details summary{cursor:pointer;font-weight:700;color:var(--text)}
 .technical-details-body{display:grid;gap:6px;margin-top:10px;font-size:12px;overflow-wrap:anywhere}
 .technical-details-body code{white-space:normal;overflow-wrap:anywhere}
+
+/* V14.1.3: complete Settings-V2 dark-theme normalization.
+   Legacy V12/V13 selectors are intentionally overridden here so every settings
+   control uses the same semantic dark tokens as the shared ZEC shell. */
+html[data-theme="dark"] body.zec-settings-v2{
+  color-scheme:dark;
+  --bg:var(--zec-page-bg,#07111e);--panel:var(--zec-card-bg,#0d1929);--panel2:var(--zec-card-alt,#101f32);
+  --text:var(--zec-text,#e8eef7);--muted:var(--zec-muted,#9eb0c5);--line:var(--zec-card-border,#25364b);
+  --shadow:none;--green-soft:color-mix(in srgb,var(--green) 16%,var(--panel));--blue-soft:rgba(37,99,235,.14);
+  --amber-soft:rgba(217,119,6,.14);--red-soft:rgba(239,68,68,.13)
+}
+html[data-theme="dark"] body.zec-settings-v2 .settings-sidebar,
+html[data-theme="dark"] body.zec-settings-v2 .sidebar-version,
+html[data-theme="dark"] body.zec-settings-v2 .settings-header,
+html[data-theme="dark"] body.zec-settings-v2 .category-panel,
+html[data-theme="dark"] body.zec-settings-v2 .section-block,
+html[data-theme="dark"] body.zec-settings-v2 .search-results,
+html[data-theme="dark"] body.zec-settings-v2 .save-bar,
+html[data-theme="dark"] body.zec-settings-v2 .modal,
+html[data-theme="dark"] body.zec-settings-v2 .modal-head,
+html[data-theme="dark"] body.zec-settings-v2 .modal-actions,
+html[data-theme="dark"] body.zec-settings-v2 .mobile-categories,
+html[data-theme="dark"] body.zec-settings-v2 .search-drawer,
+html[data-theme="dark"] body.zec-settings-v2 .search-drawer .search-result,
+html[data-theme="dark"] body.zec-settings-v2 .config-state-section,
+html[data-theme="dark"] body.zec-settings-v2 .config-state-item{background:var(--panel);color:var(--text)}
+html[data-theme="dark"] body.zec-settings-v2 .settings-header{background:color-mix(in srgb,var(--panel) 96%,transparent)}
+html[data-theme="dark"] body.zec-settings-v2 .save-bar{background:color-mix(in srgb,var(--panel) 97%,transparent)}
+html[data-theme="dark"] body.zec-settings-v2 .category-link{color:var(--text)}
+html[data-theme="dark"] body.zec-settings-v2 .category-link:hover,
+html[data-theme="dark"] body.zec-settings-v2 .search-result:hover{background:var(--panel2)}
+html[data-theme="dark"] body.zec-settings-v2 .mode-toggle{background:var(--panel2)}
+html[data-theme="dark"] body.zec-settings-v2 .mode-toggle button{color:var(--muted)}
+html[data-theme="dark"] body.zec-settings-v2 .mode-toggle button.active{background:var(--panel);color:var(--green);outline-color:color-mix(in srgb,var(--green) 55%,var(--line));box-shadow:none}
+html[data-theme="dark"] body.zec-settings-v2 .search-wrap input,
+html[data-theme="dark"] body.zec-settings-v2 .toolbar-button,
+html[data-theme="dark"] body.zec-settings-v2 .mobile-category-select,
+html[data-theme="dark"] body.zec-settings-v2 .category-head .more,
+html[data-theme="dark"] body.zec-settings-v2 .setting-control input[type=text],
+html[data-theme="dark"] body.zec-settings-v2 .setting-control input[type=password],
+html[data-theme="dark"] body.zec-settings-v2 .setting-control input[type=number],
+html[data-theme="dark"] body.zec-settings-v2 .setting-control input[type=time],
+html[data-theme="dark"] body.zec-settings-v2 .setting-control select,
+html[data-theme="dark"] body.zec-settings-v2 .config-state-grid input,
+html[data-theme="dark"] body.zec-settings-v2 .config-state-grid textarea,
+html[data-theme="dark"] body.zec-settings-v2 .config-state-grid select,
+html[data-theme="dark"] body.zec-settings-v2 .secret-actions button,
+html[data-theme="dark"] body.zec-settings-v2 .back-btn,
+html[data-theme="dark"] body.zec-settings-v2 .header-pill,
+html[data-theme="dark"] body.zec-settings-v2 .header-link{background:var(--panel2);border-color:var(--line);color:var(--text)}
+html[data-theme="dark"] body.zec-settings-v2 .unit,
+html[data-theme="dark"] body.zec-settings-v2 .meta-pill{background:var(--panel2);border-color:var(--line);color:var(--muted)}
+html[data-theme="dark"] body.zec-settings-v2 .setting-control input:disabled,
+html[data-theme="dark"] body.zec-settings-v2 .setting-control select:disabled{background:color-mix(in srgb,var(--bg) 75%,var(--panel));color:var(--muted)}
+html[data-theme="dark"] body.zec-settings-v2 .setting-row{border-bottom-color:var(--line)}
+html[data-theme="dark"] body.zec-settings-v2 .setting-key,
+html[data-theme="dark"] body.zec-settings-v2 .diff-values,
+html[data-theme="dark"] body.zec-settings-v2 .technical-details,
+html[data-theme="dark"] body.zec-settings-v2 .technical-details summary{color:var(--muted)}
+html[data-theme="dark"] body.zec-settings-v2 .modal-close{color:var(--text)}
+html[data-theme="dark"] body.zec-settings-v2 .switch-track{background:#4a5a6d}
+html[data-theme="dark"] body.zec-settings-v2 .switch-track:after{background:#e8eef7}
+html[data-theme="dark"] body.zec-settings-v2 input,
+html[data-theme="dark"] body.zec-settings-v2 select,
+html[data-theme="dark"] body.zec-settings-v2 textarea{accent-color:var(--green)}

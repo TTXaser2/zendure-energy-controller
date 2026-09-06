@@ -578,6 +578,13 @@
 
   let selectedDate=new Date(); let dayController=null; let dayRequestSequence=0;
   const dateString=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const socDayCacheKey=date=>`zec:soc-day:v14.1.3:${date}`;
+  function readSocDayCache(date){
+    try{const raw=sessionStorage.getItem(socDayCacheKey(date));if(!raw)return null;const payload=JSON.parse(raw);return String(payload?.date||'')===String(date)?payload:null;}catch(_){return null;}
+  }
+  function writeSocDayCache(payload){
+    try{if(payload?.date)sessionStorage.setItem(socDayCacheKey(payload.date),JSON.stringify(payload));}catch(_){/* cache is only a UX accelerator */}
+  }
   const localDateFromString=value=>{const m=String(value||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?new Date(Number(m[1]),Number(m[2])-1,Number(m[3])):null;};
   const dayLabel=d=>d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit',year:'numeric'});
   function syncDateControls(payload={}){
@@ -594,8 +601,17 @@
     const timeout=setTimeout(()=>controller.abort(),30000);
     const status=$('#storageSocStatus');
     syncDateControls();
-    socChart.clear(requestedDate);
-    status.textContent=`SOC-Tageskurve für ${requestedDate} wird geladen…`;
+    const cached=readSocDayCache(requestedDate);
+    const visibleSameDate=String(socChart.payload?.date||'')===requestedDate&&(socChart.payload?.points||[]).length>0;
+    if(cached){
+      socChart.setData(cached);
+      status.textContent=`Gespeicherter Stand ${cached.last_point_at||'—'} · wird aktualisiert…`;
+    }else if(visibleSameDate){
+      status.textContent=`SOC-Tageskurve ${requestedDate} wird aktualisiert…`;
+    }else{
+      socChart.clear(requestedDate);
+      status.textContent=`SOC-Tageskurve für ${requestedDate} wird geladen…`;
+    }
     try{
       const r=await fetch(apiUrl(`/storage-soc-day-data?date=${encodeURIComponent(requestedDate)}`),{cache:'no-store',signal:controller.signal});
       if(!r.ok)throw new Error(`HTTP ${r.status}`);
@@ -603,12 +619,18 @@
       if(requestId!==dayRequestSequence)return;
       if(p?.error)throw new Error(String(p.error));
       if(String(p?.date||'')!==requestedDate)throw new Error(`SOC_DAY_DATE_MISMATCH:${p?.date||'missing'}`);
-      syncDateControls(p);socChart.setData(p);
+      syncDateControls(p);socChart.setData(p);writeSocDayCache(p);
       status.textContent=p.is_today?`Stand: ${p.last_point_at||'—'} · aktualisiert alle 60 s · Quelle: ${p.source||'—'} · Cache ${p.cache_status||'—'}`:`${p.complete===false?'Daten unvollständig':'Vollständiger Tag'}: ${p.date} · Quelle: ${p.source||'—'} · Cache ${p.cache_status||'—'}`;
     }catch(e){
       if(requestId!==dayRequestSequence)return;
-      socChart.clear(requestedDate);
-      status.textContent=e?.name==='AbortError'?`SOC-Tageskurve für ${requestedDate} konnte nicht innerhalb von 30 s geladen werden.`:`SOC-Tageskurve für ${requestedDate} konnte nicht geladen werden.`;
+      const fallback=readSocDayCache(requestedDate);
+      if(fallback){
+        socChart.setData(fallback);
+        status.textContent=e?.name==='AbortError'?`Gespeicherter Stand ${fallback.last_point_at||'—'} · Aktualisierung nach 30 s abgebrochen.`:`Gespeicherter Stand ${fallback.last_point_at||'—'} · Aktualisierung derzeit nicht möglich.`;
+      }else{
+        socChart.clear(requestedDate);
+        status.textContent=e?.name==='AbortError'?`SOC-Tageskurve für ${requestedDate} konnte nicht innerhalb von 30 s geladen werden.`:`SOC-Tageskurve für ${requestedDate} konnte nicht geladen werden.`;
+      }
     }finally{
       clearTimeout(timeout);
       if(dayController===controller)dayController=null;

@@ -14,26 +14,41 @@ from web_ui import build_status_view_payload, replay_service_available
 
 class V12112Rc9UiSemanticsTests(unittest.TestCase):
     def setUp(self):
-        web_ui._replay_health_cache.update({"port": None, "available": False, "checked_epoch": 0.0})
+        web_ui._replay_health_cache.update({"port": None, "available": False, "checked_epoch": 0.0, "refreshing": False})
 
     def test_version(self):
-        self.assertEqual("14.1.2", version.APP_VERSION)
-        self.assertEqual("V14.1.2", version.APP_VERSION_LABEL)
+        self.assertEqual("14.1.3", version.APP_VERSION)
+        self.assertEqual("V14.1.3", version.APP_VERSION_LABEL)
 
-    def test_replay_probe_uses_lightweight_health_json(self):
+    def test_replay_probe_is_non_blocking_and_schedules_refresh(self):
+        thread = Mock()
+        with patch("web_ui.threading.Thread", return_value=thread) as thread_ctor, \
+             patch("web_ui.requests.get") as get:
+            self.assertFalse(replay_service_available({"REPLAY_WEB_PORT": 8090}))
+        get.assert_not_called()
+        thread_ctor.assert_called_once()
+        self.assertIs(thread_ctor.call_args.kwargs["target"], web_ui._refresh_replay_health)
+        self.assertEqual((8090,), thread_ctor.call_args.kwargs["args"])
+        self.assertTrue(thread_ctor.call_args.kwargs["daemon"])
+        thread.start.assert_called_once_with()
+
+    def test_replay_refresh_uses_lightweight_health_json(self):
         response = Mock()
         response.raise_for_status.return_value = None
         response.json.return_value = {"status": "ok", "version": "12.11.2-rc9"}
         with patch("web_ui.requests.get", return_value=response) as get:
-            self.assertTrue(replay_service_available({"REPLAY_WEB_PORT": 8090}))
+            web_ui._refresh_replay_health(8090)
         get.assert_called_once_with("http://127.0.0.1:8090/health", timeout=1.5)
+        self.assertTrue(web_ui._replay_health_cache["available"])
+        self.assertEqual(8090, web_ui._replay_health_cache["port"])
 
     def test_replay_probe_rejects_invalid_health_contract(self):
         response = Mock()
         response.raise_for_status.return_value = None
         response.json.return_value = {"status": "starting"}
         with patch("web_ui.requests.get", return_value=response):
-            self.assertFalse(replay_service_available({"REPLAY_WEB_PORT": 8090}))
+            web_ui._refresh_replay_health(8090)
+        self.assertFalse(web_ui._replay_health_cache["available"])
 
     def test_status_payload_marks_reachable_replay_active(self):
         snap = ControllerState().snapshot()
