@@ -1,0 +1,29 @@
+{
+  "release": "V14.1.4",
+  "status": "PASS",
+  "benchmark": "GraphQueryService.storage_day_status synthetic mapping path",
+  "points": 1440,
+  "intervals": 2880,
+  "v14_1_3_times_ms": [
+    194.0338279999878,
+    215.06613099995775,
+    208.00783900000397,
+    195.32525599998962,
+    203.79285299998173,
+    255.48584800003482,
+    197.32732499994654
+  ],
+  "v14_1_3_median_ms": 203.79285299998173,
+  "v14_1_4_times_ms": [
+    3.667069000016454,
+    3.2916330000034577,
+    3.049487999987832,
+    3.2651629999804754,
+    53.42643699998462,
+    3.2545469999831766,
+    3.1539060000227437
+  ],
+  "v14_1_4_median_ms": 3.2651629999804754,
+  "median_speedup_x": 62.41429692826984,
+  "scope_note": "Synthetic isolated source-level benchmark; not a Raspberry Pi end-to-end latency claim."
+}

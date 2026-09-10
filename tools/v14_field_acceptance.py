@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Read-only productive field acceptance for ZEC V14.1.3.
+"""Read-only productive field acceptance for ZEC V14.1.4.
 
 This tool never publishes commands, changes configuration, mutates the graph
 store, or performs a rollback. It exercises the running HTTP/read-only graph
@@ -26,10 +26,10 @@ if str(ROOT) not in sys.path:
 
 from version import APP_BUILD_ID, APP_VERSION, APP_VERSION_LABEL  # noqa: E402
 
-EXPECTED_VERSION = "14.1.3"
-EXPECTED_LABEL = "V14.1.3"
-EXPECTED_BUILD_ID = "v14.1.3-20260906"
-FORMAT = "ZEC_V14_1_3_FIELD_ACCEPTANCE_V1"
+EXPECTED_VERSION = "14.1.4"
+EXPECTED_LABEL = "V14.1.4"
+EXPECTED_BUILD_ID = "v14.1.4-20260908"
+FORMAT = "ZEC_V14_1_4_FIELD_ACCEPTANCE_V1"
 
 
 def _sha256(path: Path) -> str:
@@ -199,7 +199,7 @@ def run_acceptance(base_url: str, install_report: Path) -> Dict[str, Any]:
         metrics["graph_page_ms"] = round(ms, 3)
         text = body.decode("utf-8", errors="replace")
         page_ok = (
-            'data-greenfield-contract="v14.1.3"' in text
+            'data-greenfield-contract="v14.1.4"' in text
             and '/static/graph_v14_1.js' in text
             and '/static/graph_v14_1.css' in text
             and '/graph_old' not in text
@@ -399,18 +399,16 @@ def run_acceptance(base_url: str, install_report: Path) -> Dict[str, Any]:
             actual_hash = _sha256(backup_path) if backup_path.is_file() else ""
             install_ok = (
                 report.get("status") == "ok"
-                and (report.get("source") or {}).get("version") == "14.1.2"
-                and (report.get("target") or {}).get("version") == "14.1.3"
+                and (report.get("source") or {}).get("version") == "14.1.3"
+                and (report.get("target") or {}).get("version") == "14.1.4"
                 and report.get("graph_core_v3_preserved") is True
                 and report.get("graph_core_v3_rebuilt") is False
             )
             _check(checks, "install_report", install_ok, source=report.get("source"), target=report.get("target"), graph_core_v3_preserved=report.get("graph_core_v3_preserved"))
             state_backfill = dict(report.get("graph_control_state_backfill") or {})
             state_reason = str(state_backfill.get("reason") or "")
-            state_backfill_ok = state_reason in {"REPAIRED", "REPAIRED_WITH_SOURCE_ERRORS", "NO_V4_FILES"}
-            if state_reason != "NO_V4_FILES":
-                state_backfill_ok = state_backfill_ok and state_backfill.get("numeric_graph_data_mutated") is False and state_backfill.get("command_events_mutated") is False and state_backfill.get("control_reason_mutated") is False
-            _check(checks, "graph_control_state_backfill_report", state_backfill_ok, reason=state_reason, inserted=state_backfill.get("inserted_intervals"), source_errors=len(state_backfill.get("source_errors") or []))
+            state_backfill_ok = state_reason == "COMPLETED_IN_SOURCE_RELEASE_V14_1_3" and state_backfill.get("status") == "not_run"
+            _check(checks, "graph_control_state_backfill_report", state_backfill_ok, reason=state_reason, inserted=state_backfill.get("inserted_intervals"))
             backup_ok = backup_path.is_file() and actual_size == expected_size and bool(expected_hash) and actual_hash == expected_hash
             _check(checks, "rollback_backup_integrity", backup_ok, detail="RELEASE_BACKUP_EXACT" if backup_ok else "RELEASE_BACKUP_MISMATCH", path=str(backup_path), bytes=actual_size, sha256=actual_hash)
         except Exception as exc:
@@ -450,10 +448,10 @@ def run_acceptance(base_url: str, install_report: Path) -> Dict[str, Any]:
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Read-only ZEC V14.1.3 field acceptance")
+    p = argparse.ArgumentParser(description="Read-only ZEC V14.1.4 field acceptance")
     p.add_argument("--base-url", default="http://127.0.0.1:8080")
-    p.add_argument("--install-report", default="/tmp/zec_v14_1_3_install_report.json")
-    p.add_argument("--output", default="/tmp/ZEC_V14_1_3_FIELD_ACCEPTANCE.json")
+    p.add_argument("--install-report", default="/tmp/zec_v14_1_4_install_report.json")
+    p.add_argument("--output", default="/tmp/ZEC_V14_1_4_FIELD_ACCEPTANCE.json")
     p.add_argument("--json", action="store_true")
     return p.parse_args(argv)
 

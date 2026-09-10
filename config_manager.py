@@ -112,8 +112,13 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 
     # Cross-Charge-Schutz / externe Zusatzbatterie
     "CROSS_CHARGE_ENABLED": False,
+    "SECOND_BATTERY_INTEGRATION_ENABLED": False,
     "SECOND_BATTERY_DISPLAY_NAME": "SMA Sunny Island",
     "SECOND_BATTERY_SOURCE_PROFILE": "evcc_standard",
+    "SECOND_BATTERY_MODBUS_TEMPLATE": "sma_sunny_island",
+    "SECOND_BATTERY_MODBUS_HOST": "",
+    "SECOND_BATTERY_MODBUS_PORT": 502,
+    "SECOND_BATTERY_MODBUS_UNIT_ID": 3,
     "SECOND_BATTERY_EVCC_BASE_TOPIC": "evcc/site/battery/devices/1",
     "SECOND_BATTERY_POWER_TOPIC": "evcc/site/battery/devices/1/power",
     "SECOND_BATTERY_SOC_TOPIC": "evcc/site/battery/devices/1/soc",
@@ -312,8 +317,13 @@ CONFIG_SCHEMA: Dict[str, Dict[str, Any]] = {
     "COMMAND_EFFECT_FORCE_RESEND_SECONDS": {"group": "Regelung", "label": "Resend-Zeit bei anhaltender Nichtwirkung", "type": "int", "min": 30, "max": 900, "unit": "s", "description": "Nach dieser Zeit sendet ZEC einen weiterhin unwirksamen aktiven Sollzustand vollständig erneut. Resync-Versand und anschließend bestätigte Gerätewirkung werden getrennt dokumentiert."},
 
     "CROSS_CHARGE_ENABLED": {"group": "Zweitbatterie", "subgroup": "Cross-Charge-Schutz", "label": "Cross-Charge-Schutz aktiv", "type": "bool", "description": "Aktiviert das Einlesen einer externen Zusatzbatterie per MQTT und verhindert unerwünschtes Batterie-zu-Batterie-Laden."},
-    "SECOND_BATTERY_DISPLAY_NAME": {"group": "Zweitbatterie", "subgroup": "Zweitbatterie-Messwerte", "label": "Zusatzbatterie Anzeigename", "type": "str", "description": "Freier Anzeigename der externen Batterie auf Statusseite, Graph und CSV-Beschreibungen, z. B. SMA Sunny Island, Victron ESS oder Hausspeicher Keller."},
-    "SECOND_BATTERY_SOURCE_PROFILE": {"group": "Zweitbatterie", "subgroup": "Zweitbatterie-Messwerte", "label": "Datenquellen-Profil", "type": "select", "options": {"evcc_standard": "EVCC Standard", "custom": "Benutzerdefiniert"}, "description": "EVCC Standard ist eine Komfort-Vorlage: aus dem Basis-Topic werden /power, /soc und /capacity gebildet. Benutzerdefiniert erlaubt vollständig frei angegebene Einzel-Topics und optionale JSON-Feldpfade."},
+    "SECOND_BATTERY_INTEGRATION_ENABLED": {"group": "Primärspeicher", "subgroup": "Integration & Identität", "label": "Primärspeicher-Integration aktiv", "type": "bool", "description": "Aktiviert die Primärspeicher-Datenquelle unabhängig davon, ob Cross-Charge oder Harvest verwendet werden."},
+    "SECOND_BATTERY_DISPLAY_NAME": {"group": "Primärspeicher", "subgroup": "Integration & Identität", "label": "Primärspeicher-Anzeigename", "type": "str", "description": "Freier Anzeigename des Primärspeichers für Status, Graph, Inspector und Diagnose."},
+    "SECOND_BATTERY_SOURCE_PROFILE": {"group": "Primärspeicher", "subgroup": "Anbindung", "label": "Primärspeicher-Anbindung", "type": "select", "options": {"evcc_standard": "EVCC", "custom": "Benutzerdefiniertes MQTT", "modbus_template": "Direkt per Modbus"}, "description": "Wählt genau eine Primärspeicherquelle. Quellenwechsel sind restartpflichtig."},
+    "SECOND_BATTERY_MODBUS_TEMPLATE": {"group": "Primärspeicher", "subgroup": "Modbus-Datenquelle", "label": "Gerät / Template", "type": "select", "options": {"sma_sunny_island": "SMA Sunny Island"}, "description": "Versioniertes read-only Modbus-Template."},
+    "SECOND_BATTERY_MODBUS_HOST": {"group": "Primärspeicher", "subgroup": "Modbus-Datenquelle", "label": "Host / IP-Adresse", "type": "str", "description": "Host oder IP-Adresse des Primärspeichers für Modbus TCP."},
+    "SECOND_BATTERY_MODBUS_PORT": {"group": "Primärspeicher", "subgroup": "Modbus-Datenquelle", "label": "Modbus-Port", "type": "int", "min": 1, "max": 65535, "description": "Template-Default 502; installationsseitig überschreibbar."},
+    "SECOND_BATTERY_MODBUS_UNIT_ID": {"group": "Primärspeicher", "subgroup": "Modbus-Datenquelle", "label": "Unit-ID", "type": "int", "min": 0, "max": 255, "description": "Template-Default 3; installationsseitig überschreibbar."},
     "SECOND_BATTERY_EVCC_BASE_TOPIC": {"group": "Zweitbatterie", "subgroup": "Zweitbatterie-Messwerte", "label": "EVCC Batterie-Basis-Topic", "type": "str", "description": "Basis-Topic der Zusatzbatterie bei EVCC-Standardstruktur, z. B. evcc/site/battery/devices/1. Daraus werden Leistung, SOC und Kapazität automatisch als /power, /soc und /capacity abgeleitet.", "cross_profile": "evcc"},
     "SECOND_BATTERY_POWER_TOPIC": {"group": "Zweitbatterie", "subgroup": "Zweitbatterie-Messwerte", "label": "Leistungs-Topic", "type": "str", "description": "Vollständiges MQTT-Topic der Zusatzbatterie-Leistung. Dieses Topic ist im benutzerdefinierten Profil Pflicht, weil der Cross-Charge-Schutz primär aus der Leistung erkennt, ob die Zusatzbatterie entlädt.", "cross_profile": "custom"},
     "SECOND_BATTERY_SOC_TOPIC": {"group": "Zweitbatterie", "subgroup": "Zweitbatterie-Messwerte", "label": "SOC-Topic", "type": "str", "description": "Optionales MQTT-Topic für den Ladezustand der Zusatzbatterie in Prozent. Der Schutz kann auch ohne SOC arbeiten; die Anzeige zeigt dann 'nicht konfiguriert'.", "cross_profile": "custom"},
@@ -505,6 +515,9 @@ def validate_config(candidate: Dict[str, Any]) -> Tuple[Dict[str, Any], bool]:
     if isinstance(candidate, dict):
         if "CROSS_CHARGE_ENABLED" not in candidate and "EVCC_ENABLED" in candidate:
             result["CROSS_CHARGE_ENABLED"] = bool(result.get("EVCC_ENABLED", False))
+            changed = True
+        if "SECOND_BATTERY_INTEGRATION_ENABLED" not in candidate:
+            result["SECOND_BATTERY_INTEGRATION_ENABLED"] = bool(result.get("CROSS_CHARGE_ENABLED", False) or result.get("REST_SURPLUS_HARVEST_ENABLED", False))
             changed = True
         if "SECOND_BATTERY_EVCC_BASE_TOPIC" not in candidate and result.get("EVCC_SMA_BATTERY_TOPIC"):
             result["SECOND_BATTERY_EVCC_BASE_TOPIC"] = str(result.get("EVCC_SMA_BATTERY_TOPIC", "")).strip()

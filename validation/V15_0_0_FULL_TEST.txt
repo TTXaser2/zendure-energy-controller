@@ -1,0 +1,9 @@
+RELEASE: V15.0.0
+STATUS: PASS
+SUITE: FULL PROJECT TEST SUITE
+TESTS: 1024
+SUBTESTS: 692
+TEST_FILES: 133
+DURATION_S: 28.27
+TEST_ENVIRONMENT: Product sources unchanged; sandbox lacks existing paho-mqtt package, therefore collection used an external non-product minimal paho import shim outside the working tree.
+MODBUS_RUNTIME_DEPENDENCY_ADDED: NO

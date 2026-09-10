@@ -40,6 +40,11 @@ from zendure_local_api import (
     WORKER_STOPPING,
 )
 from cross_charge import cross_charge_enabled, normalize_discharge_power_w, display_power_w
+from primary_storage_source import (
+    PROFILE_MODBUS_TEMPLATE,
+    primary_storage_integration_enabled,
+    primary_storage_source_profile,
+)
 
 
 class ZendureController:
@@ -1365,50 +1370,85 @@ class ZendureController:
         })
         return True
 
-    def second_battery_data_is_fresh(self, cfg: Dict[str, Any]) -> bool:
-        """Return True when the latest second-battery MQTT values are fresh."""
+    def _primary_storage_age_seconds(self) -> Optional[int]:
+        """Return source-neutral primary-storage age using monotonic time when available."""
         with self.state.lock:
-            last_evcc = self.state.last_sma_battery_update_epoch
-        timeout = cfg.get("SECOND_BATTERY_STALE_TIMEOUT_SECONDS", cfg.get("EVCC_STALE_TIMEOUT_SECONDS", 30))
-        return last_evcc is not None and (time.time() - last_evcc) <= timeout
+            last_mono = self.state.last_sma_battery_update_monotonic
+            last_epoch = self.state.last_sma_battery_update_epoch
+        if last_mono is not None:
+            try:
+                return max(0, int(time.monotonic() - float(last_mono)))
+            except Exception:
+                pass
+        if last_epoch is None:
+            return None
+        try:
+            return max(0, int(time.time() - float(last_epoch)))
+        except Exception:
+            return None
+
+    def second_battery_data_is_fresh(self, cfg: Dict[str, Any]) -> bool:
+        """Return whether the configured primary-storage snapshot is control-fresh."""
+        if not primary_storage_integration_enabled(cfg):
+            return False
+        age_s = self._primary_storage_age_seconds()
+        try:
+            timeout = float(cfg.get("SECOND_BATTERY_STALE_TIMEOUT_SECONDS", cfg.get("EVCC_STALE_TIMEOUT_SECONDS", 30)) or 30)
+        except Exception:
+            timeout = 30.0
+        return age_s is not None and float(age_s) <= timeout
 
     def update_second_battery_display_metrics(self, cfg: Dict[str, Any]) -> None:
-        """Normalize second-battery values for UI/CSV/graph independent of AUTO.
+        """Normalize primary-storage values for UI/CSV/graph independent of AUTO.
 
         This method intentionally does not calculate Cross-Charge control values.
         It is safe to run in NIGHT_DISCHARGE, FIXED_CHARGE, FIXED_DISCHARGE,
-        STOP_HOLD and Safe-State paths because it only derives display values
-        from the most recent MQTT raw values.
+        STOP_HOLD and Safe-State paths because it only derives presentation and
+        validity fields from the most recent normalized source snapshot.
         """
-        if not cross_charge_enabled(cfg):
+        if not primary_storage_integration_enabled(cfg):
             with self.state.lock:
                 self.state.sma_battery_discharge_power = 0.0
                 self.state.sma_battery_display_power = 0.0
                 self.state.second_battery_data_available = False
                 self.state.second_battery_data_fresh = False
                 self.state.second_battery_data_valid = False
+                self.state.second_battery_data_age_seconds = None
                 self.state.second_battery_validity_reason = "SECOND_BATTERY_DISABLED"
                 self.state.second_battery_data_used_for_control = False
             return
 
-        sign = cfg.get("SECOND_BATTERY_DISCHARGE_SIGN", cfg.get("EVCC_SMA_DISCHARGE_SIGN", 1))
+        profile = primary_storage_source_profile(cfg)
+        # Native templates already normalize vendor semantics to the canonical
+        # ZEC contract: positive = discharge, negative = charge. MQTT profiles
+        # retain their existing configurable sign mapping.
+        sign = 1 if profile == PROFILE_MODBUS_TEMPLATE else cfg.get(
+            "SECOND_BATTERY_DISCHARGE_SIGN", cfg.get("EVCC_SMA_DISCHARGE_SIGN", 1)
+        )
         with self.state.lock:
             sma_power = self.state.sma_battery_power
-            last_evcc = self.state.last_sma_battery_update_epoch
+            last_epoch = self.state.last_sma_battery_update_epoch
+            last_mono = self.state.last_sma_battery_update_monotonic
+            source_available = bool(
+                self.state.primary_storage_data_available
+                or self.state.evcc_data_available
+                or last_epoch is not None
+                or last_mono is not None
+            )
 
         fresh = self.second_battery_data_is_fresh(cfg)
         sma_discharge = normalize_discharge_power_w(sma_power, sign)
         sma_display_power = display_power_w(sma_power, sign)
-        age_s = None if last_evcc is None else max(0, int(time.time() - last_evcc))
+        age_s = self._primary_storage_age_seconds()
 
         with self.state.lock:
             self.state.sma_battery_discharge_power = sma_discharge
             self.state.sma_battery_display_power = sma_display_power
-            self.state.second_battery_data_available = last_evcc is not None
+            self.state.second_battery_data_available = source_available
             self.state.second_battery_data_fresh = fresh
-            self.state.second_battery_data_valid = fresh
+            self.state.second_battery_data_valid = bool(source_available and fresh)
             self.state.second_battery_data_age_seconds = age_s
-            if last_evcc is None:
+            if not source_available:
                 self.state.second_battery_validity_reason = "SECOND_BATTERY_MISSING"
             elif fresh:
                 self.state.second_battery_validity_reason = "OK"

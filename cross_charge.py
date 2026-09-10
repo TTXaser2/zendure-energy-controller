@@ -17,6 +17,7 @@ from typing import Any, Dict, Optional, Set
 
 PROFILE_EVCC_STANDARD = "evcc_standard"
 PROFILE_CUSTOM = "custom"
+PROFILE_MODBUS_TEMPLATE = "modbus_template"
 PAYLOAD_NUMBER = "number"
 PAYLOAD_JSON = "json"
 UNIT_W = "W"
@@ -27,6 +28,18 @@ UNIT_KWH = "kWh"
 
 def cross_charge_enabled(cfg: Dict[str, Any]) -> bool:
     return bool(cfg.get("CROSS_CHARGE_ENABLED", cfg.get("EVCC_ENABLED", False)))
+
+
+def second_battery_integration_enabled(cfg: Dict[str, Any]) -> bool:
+    """Return whether the primary-storage integration exists independently of Cross-Charge."""
+    if "SECOND_BATTERY_INTEGRATION_ENABLED" in cfg:
+        return bool(cfg.get("SECOND_BATTERY_INTEGRATION_ENABLED"))
+    return cross_charge_enabled(cfg)
+
+
+def second_battery_mqtt_source_enabled(cfg: Dict[str, Any]) -> bool:
+    profile = str(cfg.get("SECOND_BATTERY_SOURCE_PROFILE", PROFILE_EVCC_STANDARD) or PROFILE_EVCC_STANDARD)
+    return second_battery_integration_enabled(cfg) and profile in {PROFILE_EVCC_STANDARD, PROFILE_CUSTOM}
 
 
 def _clean_topic(topic: Any) -> str:
@@ -41,6 +54,8 @@ def second_battery_topics(cfg: Dict[str, Any]) -> Dict[str, str]:
     /capacity. In custom profile the configured single-value topics are used.
     """
     profile = str(cfg.get("SECOND_BATTERY_SOURCE_PROFILE", PROFILE_EVCC_STANDARD) or PROFILE_EVCC_STANDARD)
+    if profile == PROFILE_MODBUS_TEMPLATE:
+        return {"power": "", "soc": "", "capacity": ""}
     if profile == PROFILE_EVCC_STANDARD:
         base = _clean_topic(cfg.get("SECOND_BATTERY_EVCC_BASE_TOPIC") or cfg.get("EVCC_SMA_BATTERY_TOPIC") or "evcc/site/battery/devices/1")
         if not base:

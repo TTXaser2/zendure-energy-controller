@@ -31,9 +31,9 @@ def power_flow_meaning(value: float, positive_label: str = "Netzbezug", negative
 def sma_power_meaning(value: float, deadband: float = 1.0) -> str:
     # Darstellungslogik: positive Werte bedeuten Ladung, negative Werte bedeuten Entladung.
     if value > deadband:
-        return "zweite Batterie lädt"
+        return "Primärspeicher lädt"
     if value < -deadband:
-        return "zweite Batterie entlädt"
+        return "Primärspeicher entlädt"
     return "nahe 0 W"
 
 
@@ -312,7 +312,28 @@ class ControllerState:
     last_local_api_error: str = "none"
     last_local_api_error_time: str = "-"
     last_sma_battery_update_epoch: Optional[float] = None
+    # V15 native primary-storage sources use monotonic time as the control
+    # freshness authority while preserving wall-clock time for UI/history.
+    last_sma_battery_update_monotonic: Optional[float] = None
     last_sma_battery_update_time: str = "-"
+    primary_storage_data_available: bool = False
+    primary_storage_source_profile: str = ""
+    primary_storage_source_type: str = ""
+    primary_storage_template_id: str = ""
+    primary_storage_endpoint: str = ""
+    primary_storage_unit_id: Optional[int] = None
+    primary_storage_source_health: str = "STARTING"
+    primary_storage_last_poll_ok: Optional[bool] = None
+    primary_storage_last_attempt_epoch: Optional[float] = None
+    primary_storage_last_attempt_monotonic: Optional[float] = None
+    primary_storage_last_success_epoch: Optional[float] = None
+    primary_storage_last_success_monotonic: Optional[float] = None
+    primary_storage_consecutive_failures: int = 0
+    primary_storage_connect_count: int = 0
+    primary_storage_request_count: int = 0
+    primary_storage_error_count: int = 0
+    primary_storage_request_duration_ms: Optional[float] = None
+    primary_storage_last_error_code: str = ""
     last_zendure_power_update_epoch: Optional[float] = None
     last_zendure_power_update_time: str = "-"
 
@@ -1325,14 +1346,32 @@ class ControllerState:
                 used_for_control=self.mqtt_command_path_used_for_control,
                 false_reason="MQTT_DISCONNECTED",
             )
+            integration_enabled = bool(cfg.get(
+                "SECOND_BATTERY_INTEGRATION_ENABLED",
+                cfg.get("CROSS_CHARGE_ENABLED", cfg.get("EVCC_ENABLED", False)),
+            ))
+            second_timestamp = (
+                self.last_sma_battery_update_monotonic
+                if self.last_sma_battery_update_monotonic is not None
+                else self.last_sma_battery_update_epoch
+            )
+            second_now = time.monotonic() if self.last_sma_battery_update_monotonic is not None else now_epoch
+            second_has_value = bool(
+                integration_enabled
+                and (
+                    self.primary_storage_data_available
+                    or self.evcc_data_available
+                    or second_timestamp is not None
+                )
+            )
             second_status = timestamp_status(
                 "second_battery",
-                self.last_sma_battery_update_epoch,
+                second_timestamp,
                 cfg.get("SECOND_BATTERY_STALE_TIMEOUT_SECONDS", cfg.get("EVCC_STALE_TIMEOUT_SECONDS", 30)),
-                has_value=self.evcc_data_available and self.last_sma_battery_update_epoch is not None,
+                has_value=second_has_value,
                 used_for_control=self.second_battery_data_used_for_control,
-                now_epoch=now_epoch,
-                missing_reason="SECOND_BATTERY_MISSING",
+                now_epoch=second_now,
+                missing_reason="SECOND_BATTERY_MISSING" if integration_enabled else "SECOND_BATTERY_DISABLED",
                 stale_reason="SECOND_BATTERY_STALE",
             )
             zendure_power_status = timestamp_status(
@@ -1369,6 +1408,15 @@ class ControllerState:
             self.second_battery_data_valid = second_status.valid
             self.second_battery_data_age_seconds = second_status.age_s
             self.second_battery_validity_reason = second_status.reason
+            if integration_enabled:
+                if not second_status.available:
+                    self.primary_storage_source_health = "STARTING"
+                elif not second_status.fresh:
+                    self.primary_storage_source_health = "STALE"
+                elif self.primary_storage_last_poll_ok is False:
+                    self.primary_storage_source_health = "DEGRADED"
+                else:
+                    self.primary_storage_source_health = "OK"
             self.actual_zendure_power_valid = zendure_power_status.valid
             self.actual_zendure_power_age_s = zendure_power_status.age_s
             self.actual_zendure_power_validity_reason = zendure_power_status.reason
@@ -1509,7 +1557,10 @@ class ControllerState:
                 "raw_second_battery_power_w": round(self.sma_battery_power, 1),
                 "raw_second_battery_soc_percent": self.sma_battery_soc,
                 "raw_second_battery_capacity_kwh": self.sma_battery_capacity_kwh,
-                "raw_second_battery_source": "EVCC/SMA" if self.evcc_data_available else "none",
+                "raw_second_battery_source": (
+                    "SMA" if self.primary_storage_source_profile == "modbus_template" and self.primary_storage_data_available
+                    else ("EVCC/SMA" if (self.primary_storage_data_available or self.evcc_data_available) else "none")
+                ),
                 "raw_second_battery_age_s": self.second_battery_data_age_seconds,
                 "norm_grid_power_w": round(self.grid_power, 1),
                 "norm_grid_power_smoothed_w": round(self.grid_power, 1),
@@ -1912,11 +1963,17 @@ class ControllerState:
         """
         with self.lock:
             now_epoch = time.time()
+            now_monotonic = time.monotonic()
 
             def age_seconds(epoch_value: Optional[float]) -> Optional[int]:
                 if epoch_value is None:
                     return None
                 return max(0, int(now_epoch - epoch_value))
+
+            def primary_storage_age_seconds() -> Optional[int]:
+                if self.last_sma_battery_update_monotonic is not None:
+                    return max(0, int(now_monotonic - self.last_sma_battery_update_monotonic))
+                return age_seconds(self.last_sma_battery_update_epoch)
 
             # Refresh the command-state freshness against the same wall clock
             # used for all other bounded readiness ages. No history or I/O is
@@ -1939,9 +1996,17 @@ class ControllerState:
                 "soc_validity_reason": self.soc_validity_reason,
                 "zendure_telemetry_source": self.zendure_telemetry_source,
                 "zendure_local_api_fallback_active": self.zendure_local_api_fallback_active,
-                "last_sma_battery_update_age_seconds": age_seconds(self.last_sma_battery_update_epoch),
+                "last_sma_battery_update_age_seconds": primary_storage_age_seconds(),
                 "second_battery_valid": self.second_battery_data_valid,
                 "second_battery_validity_reason": self.second_battery_validity_reason,
+                "primary_storage_data_available": self.primary_storage_data_available,
+                "primary_storage_source_profile": self.primary_storage_source_profile,
+                "primary_storage_source_type": self.primary_storage_source_type,
+                "primary_storage_template_id": self.primary_storage_template_id,
+                "primary_storage_endpoint": self.primary_storage_endpoint,
+                "primary_storage_unit_id": self.primary_storage_unit_id,
+                "primary_storage_source_health": self.primary_storage_source_health,
+                "primary_storage_last_poll_ok": self.primary_storage_last_poll_ok,
                 "mqtt_command_path_available": self.mqtt_command_path_available,
                 "mqtt_command_path_fresh": self.mqtt_command_path_fresh,
                 "mqtt_command_path_valid": self.mqtt_command_path_valid,
@@ -1980,11 +2045,17 @@ class ControllerState:
     def snapshot(self) -> Dict[str, Any]:
         with self.lock:
             now_epoch = time.time()
+            now_monotonic = time.monotonic()
 
             def age_seconds(epoch_value: Optional[float]) -> Optional[int]:
                 if epoch_value is None:
                     return None
                 return max(0, int(now_epoch - epoch_value))
+
+            def primary_storage_age_seconds() -> Optional[int]:
+                if self.last_sma_battery_update_monotonic is not None:
+                    return max(0, int(now_monotonic - self.last_sma_battery_update_monotonic))
+                return age_seconds(self.last_sma_battery_update_epoch)
 
             def signed_target_stage(value: Any) -> int:
                 try:
@@ -2247,7 +2318,23 @@ class ControllerState:
                 "zendure_local_api_latest_error_code": self.zendure_local_api_latest_error_code,
                 "zendure_local_api_parse_warning_count": self.zendure_local_api_parse_warning_count,
                 "last_sma_battery_update_time": self.last_sma_battery_update_time,
-                "last_sma_battery_update_age_seconds": age_seconds(self.last_sma_battery_update_epoch),
+                "last_sma_battery_update_age_seconds": primary_storage_age_seconds(),
+                "primary_storage_data_available": self.primary_storage_data_available,
+                "primary_storage_source_profile": self.primary_storage_source_profile,
+                "primary_storage_source_type": self.primary_storage_source_type,
+                "primary_storage_template_id": self.primary_storage_template_id,
+                "primary_storage_endpoint": self.primary_storage_endpoint,
+                "primary_storage_unit_id": self.primary_storage_unit_id,
+                "primary_storage_source_health": self.primary_storage_source_health,
+                "primary_storage_last_poll_ok": self.primary_storage_last_poll_ok,
+                "primary_storage_last_attempt_epoch": self.primary_storage_last_attempt_epoch,
+                "primary_storage_last_success_epoch": self.primary_storage_last_success_epoch,
+                "primary_storage_consecutive_failures": self.primary_storage_consecutive_failures,
+                "primary_storage_connect_count": self.primary_storage_connect_count,
+                "primary_storage_request_count": self.primary_storage_request_count,
+                "primary_storage_error_count": self.primary_storage_error_count,
+                "primary_storage_request_duration_ms": self.primary_storage_request_duration_ms,
+                "primary_storage_last_error_code": self.primary_storage_last_error_code,
                 "last_zendure_power_update_time": self.last_zendure_power_update_time,
                 "last_zendure_power_update_age_seconds": age_seconds(self.last_zendure_power_update_epoch),
                 "battery_soc": self.battery_soc,

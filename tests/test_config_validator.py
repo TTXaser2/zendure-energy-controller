@@ -48,6 +48,7 @@ class ConfigValidatorTests(unittest.TestCase):
 
     def test_evcc_profile_requires_base_topic(self):
         cfg = self.base_config()
+        cfg["SECOND_BATTERY_INTEGRATION_ENABLED"] = True
         cfg["CROSS_CHARGE_ENABLED"] = True
         cfg["SECOND_BATTERY_SOURCE_PROFILE"] = "evcc_standard"
         cfg["SECOND_BATTERY_EVCC_BASE_TOPIC"] = ""
@@ -56,8 +57,9 @@ class ConfigValidatorTests(unittest.TestCase):
         self.assertTrue(buckets["ERROR"])
 
 
-    def test_cross_charge_enabled_warns_on_empty_display_name(self):
+    def test_integrated_primary_storage_uses_fallback_on_empty_display_name(self):
         cfg = self.base_config()
+        cfg["SECOND_BATTERY_INTEGRATION_ENABLED"] = True
         cfg["CROSS_CHARGE_ENABLED"] = True
         cfg["SECOND_BATTERY_SOURCE_PROFILE"] = "evcc_standard"
         cfg["SECOND_BATTERY_EVCC_BASE_TOPIC"] = "evcc/site/battery/devices/1"
@@ -65,7 +67,7 @@ class ConfigValidatorTests(unittest.TestCase):
         buckets, issues = self.severities(cfg)
         self.assertIn("SECOND_BATTERY_NAME_EMPTY", {issue.code for issue in issues})
         self.assertFalse(buckets["ERROR"])
-        self.assertTrue(buckets["WARNING"])
+        self.assertTrue(buckets["INFO"])
 
     def test_restart_relevant_changes_detects_web_port_and_mqtt(self):
         from config_validator import restart_relevant_changes
@@ -80,6 +82,7 @@ class ConfigValidatorTests(unittest.TestCase):
 
     def test_custom_cross_charge_requires_power_topic_and_json_paths(self):
         cfg = self.base_config()
+        cfg["SECOND_BATTERY_INTEGRATION_ENABLED"] = True
         cfg["CROSS_CHARGE_ENABLED"] = True
         cfg["SECOND_BATTERY_SOURCE_PROFILE"] = "custom"
         cfg["SECOND_BATTERY_POWER_TOPIC"] = ""

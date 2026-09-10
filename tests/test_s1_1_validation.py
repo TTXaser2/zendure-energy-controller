@@ -62,7 +62,7 @@ class TestS11Validation(unittest.TestCase):
         self.assert_has("VAL-007")
 
     def test_val_008_harvest_topics(self):
-        self.values.update(SECOND_BATTERY_SOURCE_PROFILE="custom", SECOND_BATTERY_POWER_TOPIC="")
+        self.values.update(SECOND_BATTERY_INTEGRATION_ENABLED=True, SECOND_BATTERY_SOURCE_PROFILE="custom", SECOND_BATTERY_POWER_TOPIC="")
         self.assert_has("VAL-008")
 
     def test_val_009_harvest_maximum(self):

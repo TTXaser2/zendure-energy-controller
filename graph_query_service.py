@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import copy
 import json
+import heapq
 import os
 import sqlite3
 import threading
@@ -1455,24 +1456,53 @@ class GraphQueryService:
         for item in intervals:
             by_kind.setdefault(str(item.get("kind") or ""), []).append(item)
 
-        def value_at(kind: str, ts_ms: int) -> str:
-            value = ""
-            for item in by_kind.get(kind, []):
-                if int(item["start_ms"]) > ts_ms:
-                    break
-                finish = item.get("end_ms")
-                if finish is None or ts_ms < int(finish):
-                    value = str(item.get("value_code") or "")
-            return value
+        # Bind the four numeric arrays once.  V14.1.3 rebuilt ``list(...)`` for
+        # every point/series access, which made a full day scale quadratically
+        # in Python allocation/copy work.
+        series_values: Dict[str, List[Optional[float]]] = {
+            series_id: list(series.get(series_id) or []) for series_id in ids
+        }
+        timestamp_values = [int(value) for value in timestamps]
+
+        def interval_values(kind: str) -> List[str]:
+            """Map sparse intervals to sorted timestamps without rescanning.
+
+            Intervals are ordered by start_ms/interval_id.  A max-priority heap
+            preserves the old "latest active interval wins" semantics even if
+            malformed/legacy data contains overlaps, while reducing the normal
+            full-day path from O(points*intervals) to O((points+intervals) log n).
+            """
+            items = by_kind.get(kind, [])
+            active: List[Tuple[int, int, Optional[int], str]] = []
+            cursor = 0
+            result: List[str] = []
+            for ts_ms in timestamp_values:
+                while cursor < len(items) and int(items[cursor]["start_ms"]) <= ts_ms:
+                    item = items[cursor]
+                    start_value = int(item["start_ms"])
+                    interval_id = int(item.get("interval_id") or cursor)
+                    finish_raw = item.get("end_ms")
+                    finish = int(finish_raw) if finish_raw is not None else None
+                    heapq.heappush(
+                        active,
+                        (-start_value, -interval_id, finish, str(item.get("value_code") or "")),
+                    )
+                    cursor += 1
+                while active and active[0][2] is not None and ts_ms >= int(active[0][2]):
+                    heapq.heappop(active)
+                result.append(active[0][3] if active else "")
+            return result
+
+        mode_values = interval_values("OPERATING_MODE")
+        reason_values = interval_values("CONTROL_REASON")
 
         def series_value(series_id: str, index: int) -> Optional[float]:
-            values = list(series.get(series_id) or [])
+            values = series_values.get(series_id) or []
             return values[index] if index < len(values) else None
 
         points: List[Dict[str, Any]] = []
-        for index, ts_value in enumerate(timestamps):
-            ts_ms = int(ts_value)
-            mode = value_at("OPERATING_MODE", ts_ms)
+        for index, ts_ms in enumerate(timestamp_values):
+            mode = mode_values[index] if index < len(mode_values) else ""
             points.append({
                 "epoch_ms": ts_ms,
                 "zendure_actual_power_w": series_value("zendure_actual_power_w", index),
@@ -1480,7 +1510,7 @@ class GraphQueryService:
                 "primary_soc": series_value("primary_soc_percent", index),
                 "primary_power_w": series_value("primary_power_w", index),
                 "mode": mode,
-                "control_reason": value_at("CONTROL_REASON", ts_ms),
+                "control_reason": reason_values[index] if index < len(reason_values) else "",
                 "safe_state_active": mode == "SAFE_STATE",
                 "night_window_active": mode == "NIGHT_DISCHARGE",
             })

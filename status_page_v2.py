@@ -211,14 +211,16 @@ def render_status_page_v2(
 
     primary_card = ""
     if primary_present:
+        primary_name = payload['primary'].get('name') or 'Primärspeicher'
         primary_card = f'''
       <article class="zec-card zec-primary-card" data-card="primary">
-        <header class="zec-card-header"><div class="zec-card-title">{_icon('primary')}<h2>Primärspeicher</h2></div>{_info_button('Primärspeicher','Diese Karte zeigt den SMA-/Primärspeicher. ZEC steuert ihn nicht direkt, berücksichtigt SOC und Lade-/Entladeleistung jedoch für Harvest, Cross-Charge-Schutz und die defensive Speicherpriorität.')}</header>
+        <header class="zec-card-header"><div class="zec-card-title">{_icon('primary')}<h2 data-zec="primary.name">{_e(primary_name)}</h2></div>{_info_button(str(primary_name),'Diese Karte zeigt den konfigurierten Primärspeicher. ZEC steuert ihn nicht direkt, berücksichtigt SOC und Lade-/Entladeleistung jedoch für Harvest, Cross-Charge-Schutz und die defensive Speicherpriorität.')}</header>
         <div class="zec-storage-layout zec-storage-layout-single">
-          {_ring('primary', 'SMA', payload['primary'].get('soc'), 'SOC aktuell')}
+          {_ring('primary', str(primary_name), payload['primary'].get('soc'), 'SOC aktuell')}
           <div class="zec-storage-details">
             <div class="zec-detail-row"><span>Istleistung</span><strong data-zec="primary.actual">{_e(payload['primary'].get('actual'))}</strong></div>
             <div class="zec-detail-row"><span>Status</span><strong data-zec="primary.status">{_e(payload['primary'].get('status'))}</strong></div>
+            <div class="zec-detail-row"><span>Quellenstatus</span><strong data-zec="primary.source_health">{_e(payload['primary'].get('source_health'))}</strong></div>
             <div class="zec-detail-row zec-harmony-row zec-detail-row-stacked"><span>Harmonisierung</span><strong data-zec="primary.line">{_e(payload['primary'].get('line'))}</strong></div>
             <div class="zec-detail-row zec-detail-row-stacked"><span>Harvest-Rechnung</span><strong data-zec="primary.harvest_calculation">{_e(payload['primary'].get('harvest_calculation'))}</strong></div>
           </div>

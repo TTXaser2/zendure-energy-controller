@@ -31,10 +31,10 @@ def operational_settings():
 class V12110SettingsHelpContractTests(unittest.TestCase):
     def test_registry_help_coverage_and_depth(self):
         ops = operational_settings()
-        self.assertEqual(211, len(SETTINGS))
-        self.assertEqual(171, len(ops))
+        self.assertEqual(215, len(SETTINGS))
+        self.assertEqual(175, len(ops))
         self.assertEqual(12, len({s.category for s in ops}))
-        self.assertEqual(69, len({(s.category, s.section) for s in ops}))
+        self.assertEqual(70, len({(s.category, s.section) for s in ops}))
         self.assertEqual(62, sum(s.help.help_level == "rich" for s in ops))
         self.assertTrue(all(s.help.short_help.strip() for s in ops))
         self.assertTrue(all(s.help.extended_help.strip() for s in ops))

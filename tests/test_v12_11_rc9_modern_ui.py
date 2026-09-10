@@ -25,7 +25,7 @@ class V1211Rc9ModernUiTests(unittest.TestCase):
         cfg["UI_DARK_MODE"] = False
         html = build_graph_page(cfg)
         self.assertIn('Analyse-Workspace', html)
-        self.assertIn('data-greenfield-contract="v14.1.3"', html)
+        self.assertIn('data-greenfield-contract="v14.1.4"', html)
         self.assertIn('classList.add("zec-modern-body","modern-light","zec-shared-shell")', html)
         self.assertIn('/static/graph_v14_1.js', html)
         self.assertNotIn('/graph_old', html)

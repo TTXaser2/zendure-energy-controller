@@ -145,6 +145,13 @@ TIME_PRESETS = [
     {"preset_id": "48h", "label": "48 Stunden", "window_ms": 48 * 60 * 60 * 1000},
 ]
 
+CALENDAR_PRESETS = [
+    {"preset_id": "today", "label": "Heute", "semantics": "LOCAL_TODAY_TO_NOW"},
+    {"preset_id": "yesterday", "label": "Gestern", "semantics": "LOCAL_COMPLETE_PREVIOUS_DAY"},
+    {"preset_id": "today_yesterday", "label": "Heute & Gestern", "semantics": "LOCAL_YESTERDAY_TO_NOW"},
+    {"preset_id": "last_two_complete_days", "label": "Letzte 2 Kalendertage", "semantics": "LOCAL_TWO_COMPLETE_DAYS_BEFORE_TODAY"},
+]
+
 
 def _decorate_catalog(items: Iterable[Mapping[str, Any]]) -> List[Dict[str, Any]]:
     result: List[Dict[str, Any]] = []
@@ -234,6 +241,7 @@ def workspace_manifest(catalog: Mapping[str, Any]) -> Dict[str, Any]:
             "visual_similarity_is_causality_proof": False,
         },
         "time_presets": [dict(item) for item in TIME_PRESETS],
+        "calendar_presets": [dict(item) for item in CALENDAR_PRESETS],
         "guided_views": resolve_guided_views(GUIDED_VIEWS, []),
         "terms": dict(TERMS_DE),
         "catalog": {

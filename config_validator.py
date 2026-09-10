@@ -22,7 +22,15 @@ from typing import Any, Dict, Iterable, List, Optional, Set
 
 import requests
 
-from cross_charge import PROFILE_CUSTOM, PROFILE_EVCC_STANDARD, cross_charge_enabled, second_battery_topics
+from cross_charge import (
+    PROFILE_CUSTOM,
+    PROFILE_EVCC_STANDARD,
+    PROFILE_MODBUS_TEMPLATE,
+    cross_charge_enabled,
+    second_battery_integration_enabled,
+    second_battery_topics,
+)
+from primary_storage_modbus import get_primary_storage_template, resolve_modbus_endpoint
 
 
 @dataclass
@@ -136,6 +144,10 @@ RESTART_RELEVANT_KEYS = {
     "ZENDURE_LOCAL_API_TIMEOUT_SECONDS",
     "CROSS_CHARGE_ENABLED",
     "SECOND_BATTERY_SOURCE_PROFILE",
+    "SECOND_BATTERY_MODBUS_TEMPLATE",
+    "SECOND_BATTERY_MODBUS_HOST",
+    "SECOND_BATTERY_MODBUS_PORT",
+    "SECOND_BATTERY_MODBUS_UNIT_ID",
     "SECOND_BATTERY_EVCC_BASE_TOPIC",
     "SECOND_BATTERY_POWER_TOPIC",
     "SECOND_BATTERY_SOC_TOPIC",
@@ -378,22 +390,28 @@ def validate_config_semantics(
     elif manual_mode in {"FIXED_DISCHARGE", "FIXED_CHARGE"}:
         issues.append(_issue("WARNING", "Ein fester manueller Lade-/Entlademodus übersteuert die automatische Netzleistungsregelung bis zum konfigurierten Ziel-SOC.", ["MANUAL_MODE"], "Manueller Modus", "MANUAL_FIXED_MODE_ACTIVE"))
 
-    # Cross-Charge protection / external battery data source.
-    if cross_charge_enabled(cfg):
+    # Primary-storage source is independent from Cross-Charge enablement.
+    if second_battery_integration_enabled(cfg):
         profile = _str_value(cfg, "SECOND_BATTERY_SOURCE_PROFILE") or PROFILE_EVCC_STANDARD
-        if profile not in {PROFILE_EVCC_STANDARD, PROFILE_CUSTOM}:
-            issues.append(_issue("ERROR", "Das Datenquellen-Profil der Zweitbatterie ist ungültig.", ["SECOND_BATTERY_SOURCE_PROFILE"], "Zweitbatterie", "SECOND_BATTERY_PROFILE_INVALID"))
+        if profile not in {PROFILE_EVCC_STANDARD, PROFILE_CUSTOM, PROFILE_MODBUS_TEMPLATE}:
+            issues.append(_issue("ERROR", "Die Primärspeicher-Anbindung ist ungültig.", ["SECOND_BATTERY_SOURCE_PROFILE"], "Primärspeicher", "SECOND_BATTERY_PROFILE_INVALID"))
 
         if not _str_value(cfg, "SECOND_BATTERY_DISPLAY_NAME"):
-            issues.append(_issue("WARNING", "Der Anzeigename der Zusatzbatterie ist leer. Die Oberfläche verwendet dann technische Fallback-Bezeichnungen.", ["SECOND_BATTERY_DISPLAY_NAME"], "Zweitbatterie", "SECOND_BATTERY_NAME_EMPTY"))
+            issues.append(_issue("INFO", "Der Primärspeicher-Anzeigename ist leer. ZEC verwendet den Template- bzw. Primärspeicher-Fallbacknamen.", ["SECOND_BATTERY_DISPLAY_NAME"], "Primärspeicher", "SECOND_BATTERY_NAME_EMPTY"))
 
         topics = second_battery_topics(cfg)
         if profile == PROFILE_EVCC_STANDARD:
             if not _str_value(cfg, "SECOND_BATTERY_EVCC_BASE_TOPIC"):
-                issues.append(_issue("ERROR", "Die Zweitbatterie nutzt das Profil EVCC Standard, aber das EVCC Batterie-Basis-Topic ist leer.", ["CROSS_CHARGE_ENABLED", "SECOND_BATTERY_SOURCE_PROFILE", "SECOND_BATTERY_EVCC_BASE_TOPIC"], "Zweitbatterie", "SECOND_BATTERY_EVCC_BASE_TOPIC_MISSING"))
+                issues.append(_issue("ERROR", "Die Primärspeicher-Anbindung EVCC benötigt ein EVCC Batterie-Basis-Topic.", ["SECOND_BATTERY_SOURCE_PROFILE", "SECOND_BATTERY_EVCC_BASE_TOPIC"], "Primärspeicher", "SECOND_BATTERY_EVCC_BASE_TOPIC_MISSING"))
+        elif profile == PROFILE_MODBUS_TEMPLATE:
+            try:
+                template = get_primary_storage_template(_str_value(cfg, "SECOND_BATTERY_MODBUS_TEMPLATE") or "sma_sunny_island")
+                resolve_modbus_endpoint(cfg, template)
+            except Exception as exc:
+                issues.append(_issue("ERROR", f"Die direkte Modbus-Anbindung ist unvollständig oder ungültig: {exc}", ["SECOND_BATTERY_SOURCE_PROFILE", "SECOND_BATTERY_MODBUS_TEMPLATE", "SECOND_BATTERY_MODBUS_HOST", "SECOND_BATTERY_MODBUS_PORT", "SECOND_BATTERY_MODBUS_UNIT_ID"], "Primärspeicher", "SECOND_BATTERY_MODBUS_CONFIG_INVALID"))
         else:
             if not topics.get("power"):
-                issues.append(_issue("ERROR", "Die Zweitbatterie ist aktiv, aber im benutzerdefinierten Profil fehlt das Leistungs-Topic der Zusatzbatterie.", ["CROSS_CHARGE_ENABLED", "SECOND_BATTERY_SOURCE_PROFILE", "SECOND_BATTERY_POWER_TOPIC"], "Zweitbatterie", "SECOND_BATTERY_POWER_TOPIC_MISSING"))
+                issues.append(_issue("ERROR", "Die Primärspeicher-Integration ist aktiv, aber im benutzerdefinierten MQTT-Profil fehlt das Leistungs-Topic.", ["SECOND_BATTERY_SOURCE_PROFILE", "SECOND_BATTERY_POWER_TOPIC"], "Primärspeicher", "SECOND_BATTERY_POWER_TOPIC_MISSING"))
 
             for kind, topic_key, payload_key, json_key, label in (
                 ("power", "SECOND_BATTERY_POWER_TOPIC", "SECOND_BATTERY_POWER_PAYLOAD_TYPE", "SECOND_BATTERY_POWER_JSON_PATH", "Leistung"),
@@ -408,22 +426,23 @@ def validate_config_semantics(
                 if topic_value and payload_type == "json" and not json_path:
                     issues.append(_issue("ERROR", f"Für {label} ist JSON-Payload gewählt, aber der JSON-Feldpfad ist leer.", [topic_key, payload_key, json_key], "Zweitbatterie", f"SECOND_BATTERY_{kind.upper()}_JSON_PATH_MISSING"))
 
-        power_unit = _str_value(cfg, "SECOND_BATTERY_POWER_UNIT") or "W"
-        capacity_unit = _str_value(cfg, "SECOND_BATTERY_CAPACITY_UNIT") or "kWh"
-        if power_unit not in {"W", "kW"}:
-            issues.append(_issue("ERROR", "Die Leistungseinheit der Zusatzbatterie muss W oder kW sein.", ["SECOND_BATTERY_POWER_UNIT"], "Zweitbatterie", "SECOND_BATTERY_POWER_UNIT_INVALID"))
-        if capacity_unit not in {"Wh", "kWh"}:
-            issues.append(_issue("ERROR", "Die Kapazitätseinheit der Zusatzbatterie muss Wh oder kWh sein.", ["SECOND_BATTERY_CAPACITY_UNIT"], "Zweitbatterie", "SECOND_BATTERY_CAPACITY_UNIT_INVALID"))
+        if profile in {PROFILE_EVCC_STANDARD, PROFILE_CUSTOM}:
+            power_unit = _str_value(cfg, "SECOND_BATTERY_POWER_UNIT") or "W"
+            capacity_unit = _str_value(cfg, "SECOND_BATTERY_CAPACITY_UNIT") or "kWh"
+            if power_unit not in {"W", "kW"}:
+                issues.append(_issue("ERROR", "Die Leistungseinheit der Primärspeicher-MQTT-Quelle muss W oder kW sein.", ["SECOND_BATTERY_POWER_UNIT"], "Primärspeicher", "SECOND_BATTERY_POWER_UNIT_INVALID"))
+            if capacity_unit not in {"Wh", "kWh"}:
+                issues.append(_issue("ERROR", "Die Kapazitätseinheit der Primärspeicher-MQTT-Quelle muss Wh oder kWh sein.", ["SECOND_BATTERY_CAPACITY_UNIT"], "Primärspeicher", "SECOND_BATTERY_CAPACITY_UNIT_INVALID"))
 
-        sign = _int_value(cfg, "SECOND_BATTERY_DISCHARGE_SIGN", 1)
-        if sign not in (-1, 1):
-            issues.append(_issue("ERROR", "Das Entlade-Vorzeichen der Zusatzbatterie muss entweder 1 oder -1 sein.", ["SECOND_BATTERY_DISCHARGE_SIGN"], "Zweitbatterie", "SECOND_BATTERY_SIGN_INVALID"))
+            sign = _int_value(cfg, "SECOND_BATTERY_DISCHARGE_SIGN", 1)
+            if sign not in (-1, 1):
+                issues.append(_issue("ERROR", "Das Entlade-Vorzeichen der Primärspeicher-MQTT-Quelle muss entweder 1 oder -1 sein.", ["SECOND_BATTERY_DISCHARGE_SIGN"], "Primärspeicher", "SECOND_BATTERY_SIGN_INVALID"))
         if _int_value(cfg, "CROSS_CHARGE_SIGNIFICANT_W", 80) <= 0:
             issues.append(_issue("ERROR", "Die Cross-Charge-Signifikanzschwelle muss größer als 0 Watt sein.", ["CROSS_CHARGE_SIGNIFICANT_W"], "Zweitbatterie", "CROSS_CHARGE_SIGNIFICANT_ZERO"))
         if _int_value(cfg, "SECOND_BATTERY_STALE_TIMEOUT_SECONDS", 30) < 5:
-            issues.append(_issue("WARNING", "Ein sehr kurzer Daten-Timeout kann bei kurzen MQTT-Pausen unnötig schnell zur Blockierung der Zendure-Ladung führen.", ["SECOND_BATTERY_STALE_TIMEOUT_SECONDS"], "Zweitbatterie", "SECOND_BATTERY_TIMEOUT_LOW"))
+            issues.append(_issue("WARNING", "Ein sehr kurzer Primärspeicher-Daten-Timeout kann bei kurzen Quellunterbrechungen unnötig schnell zur Blockierung der Zendure-Ladung führen.", ["SECOND_BATTERY_STALE_TIMEOUT_SECONDS"], "Zweitbatterie", "SECOND_BATTERY_TIMEOUT_LOW"))
         if profile == PROFILE_CUSTOM and topics.get("soc") == "" and topics.get("capacity") == "":
-            issues.append(_issue("INFO", "SOC- und Kapazitäts-Topic sind nicht konfiguriert. Die Zweitbatterie-Diagnose funktioniert weiterhin über die Leistungsmessung; Status- und Diagnoseanzeige bleiben für diese Zusatzwerte leer.", ["SECOND_BATTERY_SOC_TOPIC", "SECOND_BATTERY_CAPACITY_TOPIC"], "Zweitbatterie", "SECOND_BATTERY_OPTIONAL_VALUES_EMPTY"))
+            issues.append(_issue("INFO", "SOC- und Kapazitäts-Topic sind nicht konfiguriert. Die Primärspeicher-Diagnose funktioniert weiterhin über die Leistungsmessung; Status- und Diagnoseanzeige bleiben für diese Zusatzwerte leer.", ["SECOND_BATTERY_SOC_TOPIC", "SECOND_BATTERY_CAPACITY_TOPIC"], "Zweitbatterie", "SECOND_BATTERY_OPTIONAL_VALUES_EMPTY"))
 
     # Restüberschuss-Ernte: harte Abhängigkeiten und verständliche Querhinweise.
     harvest_enabled = _bool_value(cfg.get("REST_SURPLUS_HARVEST_ENABLED", False))

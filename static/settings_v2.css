@@ -244,3 +244,12 @@ html[data-theme="dark"] body.zec-settings-v2 .switch-track:after{background:#e8e
 html[data-theme="dark"] body.zec-settings-v2 input,
 html[data-theme="dark"] body.zec-settings-v2 select,
 html[data-theme="dark"] body.zec-settings-v2 textarea{accent-color:var(--green)}
+
+/* V15.0.0 native primary-storage read-only connection test */
+.modbus-test-box{display:flex;flex-direction:column;gap:.55rem;margin-top:.65rem}
+.modbus-test-box .admin-action-button{align-self:flex-start}
+.modbus-test-result{display:none;border:1px solid var(--border-subtle);border-radius:10px;padding:.7rem .8rem;background:var(--surface-muted);font-size:.88rem;line-height:1.35}
+.modbus-test-result.pending,.modbus-test-result.success,.modbus-test-result.error{display:flex;flex-direction:column;gap:.25rem}
+.modbus-test-result.success{border-color:var(--success-border, var(--border-subtle))}
+.modbus-test-result.error{border-color:var(--danger-border, var(--border-subtle))}
+.modbus-test-result small{opacity:.8}

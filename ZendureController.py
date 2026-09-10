@@ -44,6 +44,7 @@ def main() -> None:
     from controller_logic import ZendureController
     from csv_logger import CsvRotatingLogger
     from mqtt_bridge import MqttBridge
+    from primary_storage_modbus import PrimaryStorageModbusWorker
     from shelly_client import ShellyClient
     from sma_energy_meter import SmaEnergyMeterClient
     from state import ControllerState
@@ -68,6 +69,21 @@ def main() -> None:
 
     mqtt_bridge = MqttBridge(state, config_manager.get, app_logger=app_logger)
     mqtt_bridge.start()
+
+    primary_storage_worker = None
+    if bool(config.get("SECOND_BATTERY_INTEGRATION_ENABLED", False)) and str(config.get("SECOND_BATTERY_SOURCE_PROFILE", "evcc_standard") or "evcc_standard") == "modbus_template":
+        try:
+            primary_storage_worker = PrimaryStorageModbusWorker(state, config)
+            primary_storage_worker.start()
+            app_logger.log(config, "[PRIMARY_STORAGE] nativer read-only Modbus-Collector gestartet")
+        except Exception as exc:
+            with state.lock:
+                state.primary_storage_source_profile = "modbus_template"
+                state.primary_storage_source_type = "modbus_tcp"
+                state.primary_storage_source_health = "STALE"
+                state.primary_storage_last_poll_ok = False
+                state.primary_storage_last_error_code = f"CONFIG_ERROR:{type(exc).__name__}"
+            app_logger.log(config, f"[PRIMARY_STORAGE] Modbus-Collector konnte nicht gestartet werden: {type(exc).__name__}: {exc}")
 
     controller = ZendureController(
         config_manager=config_manager,
@@ -115,6 +131,11 @@ def main() -> None:
     try:
         controller.run_forever()
     finally:
+        try:
+            if primary_storage_worker is not None:
+                primary_storage_worker.stop()
+        except Exception:
+            pass
         try:
             controller.close()
         except Exception:

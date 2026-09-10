@@ -13,7 +13,7 @@ def test_greenfield_graph_page_is_separate_from_legacy_presentation():
     html = build_graph_page({**DEFAULT_CONFIG, "UI_DARK_MODE": False})
     source = (ROOT / "web_ui.py").read_text(encoding="utf-8")
     js = GRAPH_JS.read_text(encoding="utf-8")
-    assert 'data-greenfield-contract="v14.1.3"' in html
+    assert 'data-greenfield-contract="v14.1.4"' in html
     assert '/static/graph_v14_1.css' in html
     assert '/static/graph_v14_1.js' in html
     assert 'Analyse-Workspace' in html

@@ -180,7 +180,7 @@
       if (n('MAX_POWER_STEP_W') < n('REST_SURPLUS_MIN_EXPORT_W')) notices.push({kind:'warning',text:'Der maximale Leistungsschritt liegt unter der Harvest-Entry-Schwelle; Restüberschuss kann bewusst langsamer aufgenommen werden.'});
       if (n('SMOOTHING_FACTOR') < .10 || interval >= 10) notices.push({kind:'warning',text:'Harvest-Reaktion ist durch starke Glättung oder langes Regelintervall deutlich träge.'});
     }
-    if (categoryName === 'Cross-Charge-Schutz' && n('SECOND_BATTERY_STALE_TIMEOUT_SECONDS') < 5) notices.push({kind:'warning',text:'Sehr kurze Zweitbatterie-Aktualität: kurze MQTT-Pausen können den Schutz unnötig früh blockieren.'});
+    if (categoryName === 'Cross-Charge-Schutz' && n('SECOND_BATTERY_STALE_TIMEOUT_SECONDS') < 5) notices.push({kind:'warning',text:'Sehr kurze Primärspeicher-Aktualität: kurze Quellpausen können die Regelverwendung unnötig früh blockieren.'});
     if (categoryName === 'Kommandowirkung & Resync' && n('COMMAND_RESYNC_COOLDOWN_SECONDS') === 0) notices.push({kind:'warning',text:'Resync-Wartezeit ist 0 s. Dadurch können Wiederherstellungs-Publishes sehr häufig wiederholt werden.'});
     if (categoryName === 'Nachtbetrieb' && currentByKey('NIGHT_DISCHARGE_ENABLED') === true) {
       if (n('NIGHT_DISCHARGE_POWER_W') <= 0) notices.push({kind:'warning',text:'Nachtbetrieb ist aktiviert, aber die feste Nachtleistung ist 0 W. Die serverseitige Prüfung wird diese Kombination blockieren.'});
@@ -427,9 +427,10 @@
       s.inherited_default ? 'geerbter Ausgangswert' : '',
     ].filter(Boolean);
     const resetAction = s.editable && !s.secret_set && s.default_ui?.action ? `<button type="button" class="reset-button" data-reset="${esc(s.key)}">${esc(s.default_ui.action)}</button>` : '';
+    const modbusTestAction = s.key === 'SECOND_BATTERY_MODBUS_HOST' ? `<div class="modbus-test-box"><button id="primaryStorageModbusTest" class="admin-action-button" type="button">Verbindung testen</button><div id="primaryStorageModbusTestResult" class="modbus-test-result" aria-live="polite"></div></div>` : '';
     return `<article class="${classes}" data-setting="${esc(s.key)}">
       <div class="setting-copy"><div class="setting-title-line"><div class="setting-label">${esc(s.label)}</div>${helpButton('setting', s.key, s.label)}</div>${app.mode==='expert'?`<div class="setting-key">${esc(s.key)}</div>`:''}<div class="setting-help">${esc(s.help?.short || s.description || '')}</div>${guidanceHtml(s)}</div>
-      <div class="setting-editor">${inputHtml(s)}${issueHtml(issues)}<div class="field-meta">${metas.map(m=>`<span class="meta-pill">${esc(m)}</span>`).join('')}<span class="meta-pill ${s.apply_class==='restart_required'?'restart':'live'}">${esc(s.apply_text || s.apply_class)}</span>${resetAction}</div></div>
+      <div class="setting-editor">${inputHtml(s)}${issueHtml(issues)}${modbusTestAction}<div class="field-meta">${metas.map(m=>`<span class="meta-pill">${esc(m)}</span>`).join('')}<span class="meta-pill ${s.apply_class==='restart_required'?'restart':'live'}">${esc(s.apply_text || s.apply_class)}</span>${resetAction}</div></div>
     </article>`;
   }
   function emptyStateHtml(category) {
@@ -479,6 +480,33 @@
     if (adminRestart && !adminRestart.disabled) adminRestart.onclick = restart;
     const adminPointer = $('#adminPointerRepairAction');
     if (adminPointer && !adminPointer.disabled) adminPointer.onclick = repairPointer;
+    const modbusTest = $('#primaryStorageModbusTest');
+    if (modbusTest) modbusTest.onclick = testPrimaryStorageModbus;
+  }
+  async function testPrimaryStorageModbus() {
+    const button = $('#primaryStorageModbusTest');
+    const result = $('#primaryStorageModbusTestResult');
+    if (!button || !result) return;
+    const keys = ['SECOND_BATTERY_MODBUS_TEMPLATE','SECOND_BATTERY_MODBUS_HOST','SECOND_BATTERY_MODBUS_PORT','SECOND_BATTERY_MODBUS_UNIT_ID'];
+    const draft = {};
+    keys.forEach(key => { const spec = settingByKey(key); if (spec) draft[key] = currentValue(spec); });
+    button.disabled = true;
+    button.textContent = 'Verbindung wird geprüft …';
+    result.className = 'modbus-test-result pending';
+    result.textContent = 'Read-only Test läuft. Einstellungen und aktive Quelle bleiben unverändert.';
+    try {
+      const data = await api('/settings/primary-storage-modbus-test', {method:'POST', body:JSON.stringify({draft})});
+      const power = Number(data.power_w || 0);
+      const powerText = `${power < 0 ? 'Ladung' : power > 0 ? 'Entladung' : 'Neutral'} ${Math.abs(power).toLocaleString('de-DE')} W`;
+      result.className = 'modbus-test-result success';
+      result.innerHTML = `<b>Verbindung erfolgreich</b><span>Gerät: ${esc(data.device || data.template_id)}</span><span>Endpoint: ${esc(data.endpoint)} · Unit-ID ${esc(data.unit_id)}</span><span>Leistung: ${esc(powerText)} · SOC: ${esc(data.soc_percent)} %</span><span>Antwortzeit: ${esc(data.response_time_ms)} ms</span><small>Nur lesender Test – am Gerät und an der wirksamen ZEC-Konfiguration wurde nichts verändert.</small>`;
+    } catch (error) {
+      result.className = 'modbus-test-result error';
+      result.innerHTML = `<b>Verbindungstest fehlgeschlagen</b><span>${esc(error.message)}</span><small>Der Test war ausschließlich lesend; Einstellungen und aktive Quelle wurden nicht verändert.</small>`;
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Verbindung testen';
+    }
   }
   function openSearch() {
     document.body.classList.add('search-open');

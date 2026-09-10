@@ -203,11 +203,13 @@
     const zf = $('[data-card="zendure"] .zec-card-footer'); if (zf) setDot(zf, p.zendure?.tone);
 
     setRing('primary', p.primary?.soc, p.primary?.tone);
+    text('primary.name', p.primary?.name || 'Primärspeicher');
     text('primary.actual', p.primary?.actual);
     text('primary.status', p.primary?.status);
     text('primary.line', p.primary?.line);
     text('primary.harvest_calculation', p.primary?.harvest_calculation);
     text('primary.source', p.primary?.source);
+    text('primary.source_health', p.primary?.source_health);
     text('primary.freshness_text', p.primary?.freshness_text);
     const pf = $('[data-card="primary"] .zec-card-footer'); if (pf) setDot(pf, p.primary?.tone);
 
@@ -405,7 +407,7 @@
       const count=Number(p.zendure_unit_count||1);
       if(count>1){defs.push({key:'zendure_unit_1_soc',label:p.unit_labels?.[0]||'Zendure 1',color:colors[0]});defs.push({key:'zendure_unit_2_soc',label:p.unit_labels?.[1]||'Zendure 2',color:colors[1]});}
       else defs.push({key:'zendure_soc',label:'Zendure',color:colors[0]});
-      if(p.primary_storage_present!==false)defs.push({key:'primary_soc',label:'Primärspeicher',color:colors[2]});
+      if(p.primary_storage_present!==false)defs.push({key:'primary_soc',label:p.primary_storage_display_name||'Primärspeicher',color:colors[2]});
       return defs;
     }
     configSegments(){
@@ -515,7 +517,7 @@
       const protectedLevels=configSegments.flatMap(s=>[s.min_soc,s.max_soc,s.reserve_soc]).concat([0,100]);
       series.forEach(s=>{const raw=points.map(pt=>({minute:number(pt.minute),value:number(pt[s.key])}));this.drawQuantizedSocLine(ctx,raw,s.color,x,y,protectedLevels);});
       if(p.is_today){const now=new Date();const minute=now.getHours()*60+now.getMinutes();ctx.strokeStyle=css('--zec-blue');ctx.setLineDash([2,4]);ctx.beginPath();ctx.moveTo(x(minute),pad.t);ctx.lineTo(x(minute),h-pad.b);ctx.stroke();ctx.setLineDash([]);}
-      if(this.hoverX!==null&&points.length){const minute=Math.max(0,Math.min(1440,Math.round((this.hoverX-pad.l)/pw*1440)));let nearest=points[0],dist=Infinity;points.forEach(pt=>{const d=Math.abs(Number(pt.minute)-minute);if(d<dist){dist=d;nearest=pt;}});const px=x(nearest.minute);ctx.strokeStyle=css('--zec-blue');ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px,pad.t);ctx.lineTo(px,h-pad.b);ctx.stroke();series.forEach(s=>{const v=number(nearest[s.key]);if(v===null)return;ctx.fillStyle=s.color;ctx.beginPath();ctx.arc(px,y(v),3.5,0,Math.PI*2);ctx.fill();});const rows=series.map(s=>`<div class="zec-chart-tooltip-row"><span>${escapeHtml(s.label)}</span><b>${escapeHtml(fmtSoc(nearest[s.key]))}</b></div>`).join('');const reason=fmtReason(nearest.reason);const reasonRow=reason?`<div class="zec-chart-tooltip-row"><span>Grund</span><b>${escapeHtml(reason)}</b></div>`:'';const primaryPowerRow=p.primary_storage_present!==false?`<div class="zec-chart-tooltip-row"><span>Primärspeicher</span><b>${escapeHtml(fmtPower(nearest.primary_power_w))}</b></div>`:'';const cfgSeg=this.configAt(Number(nearest.minute));const cfgRow=cfgSeg&&cfgSeg.known!==false?`<div class="zec-chart-tooltip-row"><span>Grenzen</span><b>${escapeHtml(`Min ${fmtSoc(cfgSeg.min_soc)} · Max ${fmtSoc(cfgSeg.max_soc)} · Reserve ${fmtSoc(cfgSeg.reserve_soc)}`)}</b></div><div class="zec-chart-tooltip-row"><span>Nachtfenster</span><b>${escapeHtml(`${cfgSeg.night_start||'—'}–${cfgSeg.night_end||'—'}`)}</b></div>`:`<div class="zec-chart-tooltip-row"><span>Historische Konfiguration</span><b>nicht verfügbar</b></div>`;this.showSocDetails(`<strong>${escapeHtml(p.date||'')} ${escapeHtml(nearest.time||'')}</strong>${rows}<div class="zec-chart-tooltip-row"><span>Zendure-Leistung</span><b>${escapeHtml(fmtPower(nearest.zendure_power_w))}</b></div>${primaryPowerRow}${cfgRow}<div class="zec-chart-tooltip-row"><span>Modus</span><b>${escapeHtml(nearest.mode||'—')}</b></div>${reasonRow}`,px,pad.t+ph*.55);}
+      if(this.hoverX!==null&&points.length){const minute=Math.max(0,Math.min(1440,Math.round((this.hoverX-pad.l)/pw*1440)));let nearest=points[0],dist=Infinity;points.forEach(pt=>{const d=Math.abs(Number(pt.minute)-minute);if(d<dist){dist=d;nearest=pt;}});const px=x(nearest.minute);ctx.strokeStyle=css('--zec-blue');ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px,pad.t);ctx.lineTo(px,h-pad.b);ctx.stroke();series.forEach(s=>{const v=number(nearest[s.key]);if(v===null)return;ctx.fillStyle=s.color;ctx.beginPath();ctx.arc(px,y(v),3.5,0,Math.PI*2);ctx.fill();});const rows=series.map(s=>`<div class="zec-chart-tooltip-row"><span>${escapeHtml(s.label)}</span><b>${escapeHtml(fmtSoc(nearest[s.key]))}</b></div>`).join('');const reason=fmtReason(nearest.reason);const reasonRow=reason?`<div class="zec-chart-tooltip-row"><span>Grund</span><b>${escapeHtml(reason)}</b></div>`:'';const primaryName=p.primary_storage_display_name||'Primärspeicher';const primaryPowerRow=p.primary_storage_present!==false?`<div class="zec-chart-tooltip-row"><span>${escapeHtml(primaryName)}</span><b>${escapeHtml(fmtPower(nearest.primary_power_w))}</b></div>`:'';const cfgSeg=this.configAt(Number(nearest.minute));const cfgRow=cfgSeg&&cfgSeg.known!==false?`<div class="zec-chart-tooltip-row"><span>Grenzen</span><b>${escapeHtml(`Min ${fmtSoc(cfgSeg.min_soc)} · Max ${fmtSoc(cfgSeg.max_soc)} · Reserve ${fmtSoc(cfgSeg.reserve_soc)}`)}</b></div><div class="zec-chart-tooltip-row"><span>Nachtfenster</span><b>${escapeHtml(`${cfgSeg.night_start||'—'}–${cfgSeg.night_end||'—'}`)}</b></div>`:`<div class="zec-chart-tooltip-row"><span>Historische Konfiguration</span><b>nicht verfügbar</b></div>`;this.showSocDetails(`<strong>${escapeHtml(p.date||'')} ${escapeHtml(nearest.time||'')}</strong>${rows}<div class="zec-chart-tooltip-row"><span>Zendure-Leistung</span><b>${escapeHtml(fmtPower(nearest.zendure_power_w))}</b></div>${primaryPowerRow}${cfgRow}<div class="zec-chart-tooltip-row"><span>Modus</span><b>${escapeHtml(nearest.mode||'—')}</b></div>${reasonRow}`,px,pad.t+ph*.55);}
     }
   }
 

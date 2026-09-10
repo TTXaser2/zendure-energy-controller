@@ -14,7 +14,7 @@ def render_graph_page(shell_html: str, *, version_label: str) -> str:
     css_link = f'<link rel="stylesheet" href="/static/graph_v14_1.css?v={html.escape(version_label)}">'
     page = shell_html.replace("</head>", css_link + "</head>", 1)
     page += r'''
-    <main class="gf-page" data-greenfield-contract="v14.1.3">
+    <main class="gf-page" data-greenfield-contract="v14.1.4">
       <section class="gf-analysis-toolbar" aria-label="Analysezeitraum und Werkzeuge">
         <div class="gf-toolbar-title">
           <span class="gf-eyebrow">Graph Core V3</span>
@@ -22,11 +22,19 @@ def render_graph_page(shell_html: str, *, version_label: str) -> str:
           <button type="button" class="gf-info" data-gf-info="workspace" aria-label="Info zum Analyse-Workspace">i</button><button type="button" class="gf-layout-reset" id="gfResetLayout" title="Lane-Reihenfolge und Einklappzustand zurücksetzen">Layout zurücksetzen</button>
         </div>
         <div class="gf-toolbar-controls">
-          <div class="gf-preset-row" role="group" aria-label="Zeitraum">
-            <button type="button" class="gf-chip" data-gf-preset="2h">2 h</button>
-            <button type="button" class="gf-chip" data-gf-preset="6h">6 h</button>
-            <button type="button" class="gf-chip is-active" data-gf-preset="24h">24 h</button>
-            <button type="button" class="gf-chip" data-gf-preset="48h">48 h</button>
+          <div class="gf-time-groups" aria-label="Zeitraum">
+            <div class="gf-time-group"><span class="gf-time-group-label">Rollierend</span><div class="gf-preset-row" role="group" aria-label="Rollierende Zeiträume">
+              <button type="button" class="gf-chip" data-gf-preset="2h">2 h</button>
+              <button type="button" class="gf-chip" data-gf-preset="6h">6 h</button>
+              <button type="button" class="gf-chip is-active" data-gf-preset="24h">24 h</button>
+              <button type="button" class="gf-chip" data-gf-preset="48h">48 h</button>
+            </div></div>
+            <div class="gf-time-group"><span class="gf-time-group-label">Kalendertage</span><div class="gf-preset-row" role="group" aria-label="Kalendertage">
+              <button type="button" class="gf-chip" data-gf-calendar-preset="today">Heute</button>
+              <button type="button" class="gf-chip" data-gf-calendar-preset="yesterday">Gestern</button>
+              <button type="button" class="gf-chip" data-gf-calendar-preset="today_yesterday">Heute &amp; Gestern</button>
+              <button type="button" class="gf-chip" data-gf-calendar-preset="last_two_complete_days" title="Vorgestern 00:00 bis heute 00:00">Letzte 2 Kalendertage</button>
+            </div></div>
             <button type="button" class="gf-chip" id="gfCustomToggle">Benutzerdefiniert</button>
           </div>
           <button type="button" class="gf-chip" id="gfSelectMode" aria-pressed="false">Bereich markieren</button>
@@ -229,11 +237,11 @@ def render_graph_page(shell_html: str, *, version_label: str) -> str:
             <div class="gf-context-title"><span class="gf-kicker">Cursor</span><h2>Regler-Inspector</h2><span id="gfInspectorTime" class="gf-badge neutral">kein Punkt gewählt</span></div>
             <div id="gfInspectorEmpty" class="gf-context-empty">Klicke in einen Graphen oder eine Zustandsspur. Alle Lanes bleiben dabei zeitlich synchron.</div>
             <div id="gfInspectorContent" hidden>
-              <div class="gf-inspector-section"><h3>Messwerte</h3><div id="gfInspectorMeasurements" class="gf-kv-list"></div></div>
-              <div class="gf-inspector-section"><h3>Zielwertpipeline</h3><div id="gfInspectorPipeline" class="gf-kv-list"></div></div>
-              <div class="gf-inspector-section"><h3>Zustände</h3><div id="gfInspectorStates" class="gf-kv-list"></div></div>
-              <div class="gf-inspector-section"><h3>Historische Config</h3><div id="gfInspectorConfig" class="gf-kv-list"></div></div>
-              <div class="gf-inspector-section"><h3>Entities / Topologie</h3><div id="gfInspectorEntities" class="gf-kv-list"></div></div>
+              <div class="gf-inspector-section gf-inspector-core"><h3>Messwerte</h3><div id="gfInspectorMeasurements" class="gf-kv-list"></div></div>
+              <div class="gf-inspector-section gf-inspector-core"><h3>Zielwertpipeline</h3><div id="gfInspectorPipeline" class="gf-pipeline" aria-label="Zielwertpipeline als Verarbeitungskette"></div></div>
+              <div class="gf-inspector-section gf-inspector-core"><h3>Zustände</h3><div id="gfInspectorStates" class="gf-kv-list"></div></div>
+              <details class="gf-inspector-section gf-inspector-details"><summary>Historische Config</summary><div id="gfInspectorConfig" class="gf-kv-list"></div></details>
+              <details class="gf-inspector-section gf-inspector-details"><summary>Entities / Topologie</summary><div id="gfInspectorEntities" class="gf-kv-list"></div></details>
               <div id="gfInspectorCommandLink"></div>
             </div>
           </section>

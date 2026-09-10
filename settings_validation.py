@@ -10,6 +10,7 @@ from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Tuple
 
 from settings_codecs import ParseIssue, parse_value
 from settings_registry import SETTINGS_BY_KEY, ApplyClass
+from primary_storage_modbus import get_primary_storage_template, resolve_modbus_endpoint
 
 
 class ValidationSeverity(Enum):
@@ -152,10 +153,17 @@ def validate_candidate(values: Mapping[str, Any], context: Optional[ValidationCo
     if harvest and not (integration is True and cross):
         issues.append(_issue("VAL-007", ValidationSeverity.ERROR, ("REST_SURPLUS_HARVEST_ENABLED", "SECOND_BATTERY_INTEGRATION_ENABLED", "CROSS_CHARGE_ENABLED")))
 
-    if get("SECOND_BATTERY_SOURCE_PROFILE") == "custom" and not get("SECOND_BATTERY_POWER_TOPIC"):
+    source_profile = str(get("SECOND_BATTERY_SOURCE_PROFILE") or "evcc_standard")
+    if source_profile == "custom" and integration is True and not get("SECOND_BATTERY_POWER_TOPIC"):
         issues.append(_issue("VAL-008", ValidationSeverity.ERROR, ("SECOND_BATTERY_SOURCE_PROFILE", "SECOND_BATTERY_POWER_TOPIC")))
-    if bool(get("HARVEST_HIGH_SMA_SOC_ENABLED")) and not get("SECOND_BATTERY_SOC_TOPIC"):
+    if bool(get("HARVEST_HIGH_SMA_SOC_ENABLED")) and source_profile == "custom" and not get("SECOND_BATTERY_SOC_TOPIC"):
         issues.append(_issue("VAL-008", ValidationSeverity.ERROR, ("HARVEST_HIGH_SMA_SOC_ENABLED", "SECOND_BATTERY_SOC_TOPIC")))
+    if integration is True and source_profile == "modbus_template":
+        try:
+            template = get_primary_storage_template(get("SECOND_BATTERY_MODBUS_TEMPLATE") or "sma_sunny_island")
+            resolve_modbus_endpoint(values, template)
+        except Exception as exc:
+            issues.append(_issue("VAL-026", ValidationSeverity.ERROR, ("SECOND_BATTERY_SOURCE_PROFILE", "SECOND_BATTERY_MODBUS_TEMPLATE", "SECOND_BATTERY_MODBUS_HOST", "SECOND_BATTERY_MODBUS_PORT", "SECOND_BATTERY_MODBUS_UNIT_ID"), reason=str(exc)))
 
     maximum = get("SECOND_BATTERY_MAX_CHARGE_POWER_W")
     if harvest and not (isinstance(maximum, int) and not isinstance(maximum, bool) and 300 <= maximum <= 10000):

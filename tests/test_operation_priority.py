@@ -108,6 +108,8 @@ def base_cfg(**overrides):
         "MANUAL_FIXED_CHARGE_TARGET_SOC": 90,
     })
     cfg.update(overrides)
+    if overrides.get("CROSS_CHARGE_ENABLED") is True and "SECOND_BATTERY_INTEGRATION_ENABLED" not in overrides:
+        cfg["SECOND_BATTERY_INTEGRATION_ENABLED"] = True
     return cfg
 
 

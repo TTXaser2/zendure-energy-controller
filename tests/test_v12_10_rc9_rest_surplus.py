@@ -36,6 +36,9 @@ def cfg_rc9(**overrides):
         "MANUAL_MODE": "AUTO",
         "NIGHT_DISCHARGE_ENABLED": False,
         "CROSS_CHARGE_ENABLED": True,
+        # V15 separates source availability from Cross-Charge. These historical
+        # harvest fixtures model an explicitly configured primary storage.
+        "SECOND_BATTERY_INTEGRATION_ENABLED": True,
         "SECOND_BATTERY_DISCHARGE_SIGN": 1,
         "SECOND_BATTERY_MAX_CHARGE_POWER_W": 2300,
         "REST_SURPLUS_HARVEST_ENABLED": True,

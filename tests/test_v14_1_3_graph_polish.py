@@ -10,7 +10,7 @@ def text(path: str) -> str:
 def test_greenfield_contract_and_lane_layout_controls():
     page = text("graph_ui/page.py")
     js = text("static/graph_v14_1.js")
-    assert 'data-greenfield-contract="v14.1.3"' in page
+    assert 'data-greenfield-contract="v14.1.4"' in page
     for lane in ("power", "soc", "state", "comparison"):
         assert f'data-gf-lane="{lane}"' in page
     assert "data-gf-lane-toggle" in page
@@ -41,7 +41,10 @@ def test_busy_feedback_and_free_series_debounce_are_explicit():
     assert "gf-lane-busy" in page
     assert "Datenreihen werden geladen" in js
     assert "scheduleFreeReload" in js
-    assert "setTimeout(()=>{state.freeReloadTimer=null;loadAll(true);},300)" in js
+    # V14.1.4 keeps the explicit debounce/busy contract but upgrades the old
+    # full-workspace reload to an incremental series reload.
+    assert "state.freeReloadTimer=setTimeout(()=>{state.freeReloadTimer=null;reloadFreeSelection();},250)" in js
+    assert "async function reloadFreeSelection" in js
     assert ".gf-spinner" in css
     assert ".gf-lane.is-loading" in css
 

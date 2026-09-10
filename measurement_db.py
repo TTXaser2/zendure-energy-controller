@@ -499,11 +499,12 @@ class MeasurementDbWriter:
         try:
             from csv_logger import compute_config_control_hash
             from graph_config_timeline import overlay_from_config
+            from primary_storage_source import resolved_primary_storage_display_name
             payload["_graph_config_hash"] = compute_config_control_hash(config)
             payload["_graph_config_overlay"] = overlay_from_config(config)
             payload["_graph_entity_config"] = {
                 "zendure_device_id": str(config.get("DEVICE_ID") or "").strip(),
-                "primary_display_name": str(config.get("SECOND_BATTERY_DISPLAY_NAME") or "").strip(),
+                "primary_display_name": resolved_primary_storage_display_name(config),
                 "primary_source_profile": str(config.get("SECOND_BATTERY_SOURCE_PROFILE") or "").strip(),
                 "primary_integration_enabled": bool(config.get("SECOND_BATTERY_INTEGRATION_ENABLED", False)),
             }

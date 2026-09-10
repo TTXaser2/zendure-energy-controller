@@ -13,7 +13,12 @@ import paho.mqtt.client as mqtt
 from state import ControllerState
 from app_logger import RotatingAppLogger
 from zendure_local_api import zendure_temp_to_celsius
-from cross_charge import cross_charge_enabled, parse_second_battery_value, second_battery_subscription_topics, second_battery_topics
+from cross_charge import (
+    parse_second_battery_value,
+    second_battery_mqtt_source_enabled,
+    second_battery_subscription_topics,
+    second_battery_topics,
+)
 from mqtt_topic_filter import mqtt_diagnostic_should_capture, mqtt_topic_matches_filter
 
 
@@ -109,7 +114,7 @@ class MqttBridge:
         ):
             self.client.subscribe(topics[key])
 
-        if cross_charge_enabled(cfg):
+        if second_battery_mqtt_source_enabled(cfg):
             for topic in sorted(second_battery_subscription_topics(cfg)):
                 self.client.subscribe(topic)
 
@@ -275,7 +280,7 @@ class MqttBridge:
                     pack_sn = parts[-2] if len(parts) >= 3 else "unknown"
                     self.state.update_zendure_battery_metrics("MQTT", [{"pack_sn": pack_sn, "state": payload}])
 
-                elif cross_charge_enabled(cfg):
+                elif second_battery_mqtt_source_enabled(cfg):
                     second_topics = second_battery_topics(cfg)
                     updated_second_battery = False
                     if topic == second_topics.get("power"):
@@ -304,10 +309,29 @@ class MqttBridge:
             self.log(f"[MQTT] Fehler auf {topic}: {exc}")
 
     def _mark_evcc(self, now: float, now_text: str) -> None:
+        """Compatibility name for a successful MQTT primary-storage observation."""
+        cfg = self.config_getter()
+        profile = str(cfg.get("SECOND_BATTERY_SOURCE_PROFILE", "evcc_standard") or "evcc_standard")
+        now_monotonic = time.monotonic()
         with self.state.lock:
             self.state.evcc_data_available = True
+            self.state.primary_storage_data_available = True
             self.state.last_sma_battery_update_epoch = now
+            self.state.last_sma_battery_update_monotonic = now_monotonic
             self.state.last_sma_battery_update_time = now_text
+            self.state.primary_storage_source_profile = profile
+            self.state.primary_storage_source_type = "mqtt"
+            self.state.primary_storage_template_id = ""
+            self.state.primary_storage_endpoint = "MQTT"
+            self.state.primary_storage_unit_id = None
+            self.state.primary_storage_source_health = "OK"
+            self.state.primary_storage_last_poll_ok = True
+            self.state.primary_storage_last_attempt_epoch = now
+            self.state.primary_storage_last_attempt_monotonic = now_monotonic
+            self.state.primary_storage_last_success_epoch = now
+            self.state.primary_storage_last_success_monotonic = now_monotonic
+            self.state.primary_storage_consecutive_failures = 0
+            self.state.primary_storage_last_error_code = ""
 
     def publish(self, topic: str, value: Any, force: bool = False, numeric: bool = True) -> bool:
         cfg = self.config_getter()

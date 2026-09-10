@@ -1,0 +1,5 @@
+RELEASE: V15.0.0
+STATUS: PASS
+GATE: node --check
+FILES: 3
+FILES_CHECKED: static/status_v2.js, static/settings_v2.js, static/graph_v14_1.js

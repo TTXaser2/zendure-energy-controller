@@ -165,9 +165,11 @@ def _canonical_source(value: Any, *, second_battery: bool = False) -> str:
     raw = str(value or "").strip().upper()
     if second_battery:
         profile = str(value or "").strip().lower()
+        if profile == "modbus_template":
+            return "SMA"
         if profile == "evcc_standard" or "EVCC" in raw:
             return "EVCC_STANDARD"
-        if profile == "evcc_custom":
+        if profile in {"custom", "evcc_custom"}:
             return "EVCC_CUSTOM"
         if "SMA" in raw:
             return "SMA"

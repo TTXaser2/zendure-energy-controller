@@ -16,6 +16,7 @@ import shlex
 import subprocess
 import threading
 import time
+from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional
 from urllib.parse import urlsplit
@@ -33,6 +34,12 @@ from config_states import ConfigStateError, ConfigStateStore
 from config_artifacts import ConfigArtifactCoordinator
 from config_validator import ValidationIssue, restart_relevant_changes, split_issues, validate_config_semantics
 from cross_charge import cross_charge_enabled
+from primary_storage_source import (
+    primary_storage_integration_enabled,
+    primary_storage_source_label,
+    primary_storage_source_profile,
+    resolved_primary_storage_display_name,
+)
 from csv_logger import estimate_retention_hours, measurement_log_mode, detected_log_mounts, resolve_log_path
 from measurement_db import query_graph_points, query_measurement_date_range, resolve_measurement_db_path, db_status_for_config
 from graph_query_service import GRAPH_QUERY_SERVICE, GraphQueryError
@@ -43,6 +50,7 @@ from version import APP_BUILD_ID, APP_VERSION, APP_VERSION_LABEL
 from status_page_v2 import render_global_topbar, render_status_page_v2
 from system_metrics import get_system_metrics
 from operational_events import OperationalEventJournal, read_recent_events
+from primary_storage_modbus import probe_primary_storage_modbus
 from storage_inventory import StorageInventory
 from state import ControllerState
 from translations import (
@@ -205,8 +213,8 @@ def delayed_service_restart(cfg: Dict[str, Any], delay_seconds: float = 1.0) -> 
 
 
 def second_battery_name(cfg: Dict[str, Any]) -> str:
-    name = str(cfg.get("SECOND_BATTERY_DISPLAY_NAME", "") or "").strip()
-    return name or "Zusatzbatterie"
+    """Compatibility wrapper for the source-neutral primary-storage display name."""
+    return resolved_primary_storage_display_name(cfg)
 
 
 def status_url_after_restart(request: Request, cfg: Dict[str, Any]) -> str:
@@ -271,13 +279,22 @@ def build_ready_payload(cfg: Dict[str, Any], snap: Dict[str, Any]) -> Dict[str, 
         "reason": snap.get("soc_validity_reason"),
     }
 
-    if cross_charge_enabled(cfg):
+    if primary_storage_integration_enabled(cfg):
         second_age = snap.get("last_sma_battery_update_age_seconds")
         second_timeout = int(cfg.get("SECOND_BATTERY_STALE_TIMEOUT_SECONDS", cfg.get("EVCC_STALE_TIMEOUT_SECONDS", 30)))
         second_ok = bool(snap.get("second_battery_valid", True)) and second_age is not None and int(second_age) <= second_timeout
-        checks["cross_charge_second_battery"] = {
-            "ok": second_ok, "age_seconds": second_age, "timeout_seconds": second_timeout,
+        check_id = "cross_charge_second_battery" if cross_charge_enabled(cfg) else "primary_storage_source"
+        checks[check_id] = {
+            "ok": second_ok,
+            "age_seconds": second_age,
+            "timeout_seconds": second_timeout,
             "reason": snap.get("second_battery_validity_reason"),
+            "source_profile": snap.get("primary_storage_source_profile") or primary_storage_source_profile(cfg),
+            "source_type": snap.get("primary_storage_source_type"),
+            "source_health": snap.get("primary_storage_source_health"),
+            "last_poll_ok": snap.get("primary_storage_last_poll_ok"),
+            "endpoint": snap.get("primary_storage_endpoint"),
+            "unit_id": snap.get("primary_storage_unit_id"),
         }
 
     command_path_ok = bool(
@@ -1815,6 +1832,35 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
         except OSError as exc:
             return JSONResponse({"error": type(exc).__name__}, status_code=500)
 
+    @app.post("/settings/primary-storage-modbus-test")
+    async def settings_primary_storage_modbus_test(request: Request):
+        """Read-only Modbus test using browser draft values; never saves or swaps runtime source."""
+        try:
+            verify_admin_request(request)
+            payload = await request.json()
+            draft = payload.get("draft") or {}
+            if not isinstance(draft, dict):
+                return JSONResponse({"error": "DRAFT_OBJECT_REQUIRED"}, status_code=422)
+            allowed = {
+                "SECOND_BATTERY_MODBUS_TEMPLATE",
+                "SECOND_BATTERY_MODBUS_HOST",
+                "SECOND_BATTERY_MODBUS_PORT",
+                "SECOND_BATTERY_MODBUS_UNIT_ID",
+            }
+            cfg = dict(config_manager.get())
+            for key in allowed:
+                if key in draft:
+                    cfg[key] = draft[key]
+            result = probe_primary_storage_modbus(cfg)
+            result["runtime_unchanged"] = True
+            result["settings_saved"] = False
+            return JSONResponse(result)
+        except PermissionError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=403)
+        except Exception as exc:
+            code = getattr(exc, "code", type(exc).__name__)
+            return JSONResponse({"status": "error", "error": str(code), "detail": str(exc), "read_only": True, "runtime_unchanged": True, "settings_saved": False}, status_code=422)
+
     # Legacy form endpoints remain registered as explicit no-write tombstones so
     # old bookmarks or scripts cannot bypass the RC20 preview/commit contract.
     @app.post("/settings/validate")
@@ -2821,7 +2867,7 @@ def rest_surplus_status_lines(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
 
 def build_status_page_legacy(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
     current_mode = str(s["current_mode"])
-    evcc_enabled = bool(cross_charge_enabled(cfg))
+    evcc_enabled = bool(primary_storage_integration_enabled(cfg))
     second_name = second_battery_name(cfg)
     second_name_html = html.escape(second_name)
     mode_color = {
@@ -3024,7 +3070,7 @@ def build_status_page_legacy(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
     if evcc_enabled:
         evcc_age = s.get("last_sma_battery_update_age_seconds")
         evcc_timeout = int(cfg.get("SECOND_BATTERY_STALE_TIMEOUT_SECONDS", cfg.get("EVCC_STALE_TIMEOUT_SECONDS", 30)))
-        evcc_has_data = bool(s.get("evcc_data_available", False)) and evcc_age is not None
+        evcc_has_data = bool(s.get("second_battery_data_available", s.get("primary_storage_data_available", False))) and evcc_age is not None
         evcc_current = evcc_has_data and evcc_age <= evcc_timeout
         evcc_status_text = "Aktuell" if evcc_current else ("Veraltet" if evcc_has_data else "Keine Daten")
         evcc_color = "#4CAF50" if evcc_current else "#f44336"
@@ -3034,11 +3080,11 @@ def build_status_page_legacy(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
             f"Timeout: {evcc_timeout} s"
         )
         evcc_status_card_html = status_card(
-            'Zusatzbatterie MQTT',
+            'Primärspeicher-Quelle',
             badge(evcc_status_text, evcc_color),
             evcc_details,
             'gray',
-            f'Diese Anzeige bewertet, ob über MQTT aktuelle Zusatzbatterie-Werte für {second_name_html} eintreffen. Grün bedeutet: Die Werte sind vorhanden und jünger als der konfigurierte Daten-Timeout. Rot bedeutet: Es liegen keine oder zu alte Werte vor; je nach Config blockiert der Cross-Charge-Schutz dann die Zendure-Ladung konservativ.',
+            f'Diese Anzeige bewertet die aktuell konfigurierte Primärspeicherquelle für {second_name_html}. Quelle: {html.escape(primary_storage_source_label(cfg))}. Grün bedeutet: Die Daten sind vorhanden und jünger als der konfigurierte Daten-Timeout. Rot bedeutet: Es liegen keine oder zu alte Werte vor. Source Health und Regel-Freshness bleiben getrennte Verträge.',
             settings_group='Zweitbatterie'
         )
         harvest_lines = rest_surplus_status_lines(cfg, s)
@@ -3048,10 +3094,12 @@ def build_status_page_legacy(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
             f'Darstellung: positiv = Ladung, negativ = Entladung<br>'
             f'Entladung berechnet: {s["sma_battery_discharge_power"]:.1f} W<br>'
             f'SOC: {s["sma_battery_soc"] if s["sma_battery_soc"] is not None else "-"} %<br>'
-            f'MQTT Update: {s["last_sma_battery_update_time"]}'
+            f'Letztes Quellupdate: {s["last_sma_battery_update_time"]}<br>'
+            f'Quelle: {html.escape(primary_storage_source_label(cfg))}<br>'
+            f'Source Health: {html.escape(str(s.get("primary_storage_source_health") or "-"))}'
             f'{harvest_lines}',
             'gray',
-            f'Dieser Wert kommt per MQTT aus der generischen MQTT-Zusatzbatterie-Integration. Für die Anzeige wird die in den Settings konfigurierte Vorzeichenlogik berücksichtigt: positiv bedeutet Ladung von {second_name_html}, negativ bedeutet Entladung. Der positive Entladewert wird intern für den Cross-Charge-Schutz genutzt, um Batterie-zu-Batterie-Ladung zu vermeiden. Die Restüberschuss-Ernte wird hier angezeigt, weil sie fachlich nur zusammen mit dem Primärspeicher/Zweitbatterie-Signal sinnvoll ist.',
+            f'Diese Karte zeigt den normalisierten Primärspeicherwert aus {html.escape(primary_storage_source_label(cfg))}. Für die Oberfläche gilt positiv = Ladung, negativ = Entladung. Interne Source-IDs und Historienidentität bleiben beim Quellenwechsel stabil; Regelung und Source Health verwenden den gemeinsamen Primärspeicher-State.',
             settings_group='Zweitbatterie'
         )
 
@@ -3059,7 +3107,7 @@ def build_status_page_legacy(cfg: Dict[str, Any], s: Dict[str, Any]) -> str:
     if evcc_enabled:
         limiter_details = f'Effektiver Überschuss für Zendure: {s["effective_export_power"]} W'
     else:
-        limiter_details = 'Cross-Charge-Schutz ist deaktiviert; Zusatzbatterie-abhängige Werte werden ausgeblendet.'
+        limiter_details = 'Primärspeicher-Integration ist deaktiviert; primärspeicherabhängige Werte werden ausgeblendet.'
 
     replay_port = int(cfg.get("REPLAY_WEB_PORT", 8090))
     analysis_link_html = (
@@ -4716,13 +4764,19 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
         },
         "primary": {
             "present": primary_present,
+            "name": second_battery_name(cfg) if primary_present else "",
             "soc": primary_soc if primary_present else None,
             "actual": _signed_power_phrase(primary_power) if primary_present else "nicht konfiguriert",
             "actual_raw": primary_power if primary_present else None,
             "status": primary_status if primary_present else "nicht konfiguriert",
             "line": harmony if primary_present else "",
             "harvest_calculation": harvest_calculation if primary_present else "",
-            "source": second_battery_name(cfg) if primary_present else "",
+            "source": primary_storage_source_label(cfg) if primary_present else "",
+            "source_profile": primary_storage_source_profile(cfg) if primary_present else "",
+            "source_health": str(s.get("primary_storage_source_health") or "-") if primary_present else "",
+            "last_poll_ok": s.get("primary_storage_last_poll_ok") if primary_present else None,
+            "endpoint": s.get("primary_storage_endpoint") if primary_present else "",
+            "unit_id": s.get("primary_storage_unit_id") if primary_present else None,
             "age": primary_age if primary_present else None,
             "freshness_text": primary_freshness if primary_present else "",
             "tone": primary_tone if primary_present else "unknown",
@@ -4865,7 +4919,14 @@ def _parse_day(date_text: Optional[str]) -> datetime:
             pass
     return datetime.combine(datetime.now().date(), datetime.min.time())
 
+# Keep the legacy single-entry shape for older diagnostics/tests, but back it
+# with a bounded multi-day LRU so switching among recent complete days does not
+# evict the previous day on every click.
 _storage_day_cache: Dict[str, Any] = {"key": "", "built_epoch": 0.0, "payload": None}
+_storage_day_cache_entries: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
+_STORAGE_DAY_CACHE_MAX_ENTRIES = 6
+_STORAGE_DAY_TODAY_TTL_S = 60
+_STORAGE_DAY_HISTORY_TTL_S = 6 * 60 * 60
 _storage_day_lock = threading.Lock()
 
 
@@ -4941,13 +5002,37 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
     snapshot_unit_count = min(2, max(1, len(status_units)))
     cache_key = f"{day_start.date().isoformat()}|storage-wp6|{history_mode}|p{int(snapshot_primary_present)}|u{snapshot_unit_count}"
     now_epoch = time.time()
-    ttl = 60 if is_today else 3600
+    ttl = _STORAGE_DAY_TODAY_TTL_S if is_today else _STORAGE_DAY_HISTORY_TTL_S
     with _storage_day_lock:
-        if _storage_day_cache.get("key") == cache_key and _storage_day_cache.get("payload") and now_epoch - float(_storage_day_cache.get("built_epoch") or 0) < ttl:
-            payload = dict(_storage_day_cache["payload"])
+        # Historical tests/admin tools used clear()/legacy reset fields before
+        # rebuilding the status payload.  Honour that reset contract while the
+        # actual cache is now multi-entry.
+        legacy_reset = (
+            not _storage_day_cache
+            or (
+                _storage_day_cache.get("key") == ""
+                and _storage_day_cache.get("payload") is None
+                and bool(_storage_day_cache_entries)
+            )
+        )
+        if legacy_reset:
+            _storage_day_cache_entries.clear()
+        entry = _storage_day_cache_entries.get(cache_key)
+        if entry is None and _storage_day_cache.get("key") == cache_key and _storage_day_cache.get("payload"):
+            entry = {
+                "payload": _storage_day_cache.get("payload"),
+                "built_epoch": float(_storage_day_cache.get("built_epoch") or 0),
+            }
+        if entry and entry.get("payload") and now_epoch - float(entry.get("built_epoch") or 0) < ttl:
+            _storage_day_cache_entries[cache_key] = entry
+            _storage_day_cache_entries.move_to_end(cache_key)
+            payload = dict(entry["payload"])
             payload["cache_status"] = "hit"
-            payload["cache_age_s"] = int(now_epoch - float(_storage_day_cache.get("built_epoch") or 0))
+            payload["cache_age_s"] = int(now_epoch - float(entry.get("built_epoch") or 0))
+            payload["cache_entries"] = len(_storage_day_cache_entries)
             return _decorate_with_historical_config(payload)
+        if entry is not None:
+            _storage_day_cache_entries.pop(cache_key, None)
 
     points: List[Dict[str, Any]] = []
     source = "measurement_db_1min"
@@ -5039,9 +5124,12 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
             })
     points = sorted(points, key=lambda x: x.get("minute", 0))
     complete = bool(is_today or (points and int(points[-1].get("minute", 0)) >= 1430))
+    historical_primary_name = str(history_details.get("primary_storage_display_name") or "").strip()
+    primary_display_name = historical_primary_name or second_battery_name(cfg)
     payload = {
         "date": day_start.date().isoformat(), "is_today": is_today, "complete": complete,
         "zendure_unit_count": unit_count, "primary_storage_present": primary_present,
+        "primary_storage_display_name": primary_display_name,
         "unit_labels": unit_labels, "axis_minute_start": 0, "axis_minute_end": 1440,
         "points": points, "source": source, "cache_status": "rebuilt", "cache_age_s": 0,
         "error": error, "last_point_at": points[-1]["time"] if points else "",
@@ -5049,7 +5137,13 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
         **history_details,
     }
     with _storage_day_lock:
+        cache_entry = {"payload": payload, "built_epoch": now_epoch}
+        _storage_day_cache_entries[cache_key] = cache_entry
+        _storage_day_cache_entries.move_to_end(cache_key)
+        while len(_storage_day_cache_entries) > _STORAGE_DAY_CACHE_MAX_ENTRIES:
+            _storage_day_cache_entries.popitem(last=False)
         _storage_day_cache.update({"key": cache_key, "payload": payload, "built_epoch": now_epoch})
+        payload["cache_entries"] = len(_storage_day_cache_entries)
     return _decorate_with_historical_config(payload)
 
 def _status_info(title: str, text: str) -> str:

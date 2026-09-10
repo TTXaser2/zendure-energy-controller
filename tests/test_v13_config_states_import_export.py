@@ -35,7 +35,7 @@ class V13ConfigStateTests(unittest.TestCase):
 
     def test_every_managed_setting_has_explicit_portability(self):
         specs = managed_settings()
-        self.assertEqual(191, len(specs))
+        self.assertEqual(195, len(specs))
         self.assertTrue(all(spec.portability_class is not None for spec in specs))
         self.assertTrue(all(spec.portability_class is not PortabilityClass.SECRET or spec.is_secret for spec in specs))
 
