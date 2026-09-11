@@ -13,7 +13,7 @@ def test_state_detail_view_is_global_cursor_driven_and_no_longer_called_zeitlupe
     assert "Zeitlupe" not in js
     assert "Zeitlupe" not in page
     assert "Detailausschnitt" in js
-    assert "10-Minuten-Zoom um den Cursor" in js
+    assert "Zoom um den Cursor" in js
     update = js.split("function updateCursorCards", 1)[1].split("function setSelectionMode", 1)[0]
     assert "renderStateMagnifier(actual)" in update
     hover = js.split("function bindStateHover", 1)[1].split("function setHoverMs", 1)[0]

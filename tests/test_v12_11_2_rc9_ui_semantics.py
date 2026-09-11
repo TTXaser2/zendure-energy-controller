@@ -17,8 +17,8 @@ class V12112Rc9UiSemanticsTests(unittest.TestCase):
         web_ui._replay_health_cache.update({"port": None, "available": False, "checked_epoch": 0.0, "refreshing": False})
 
     def test_version(self):
-        self.assertEqual("15.0.1", version.APP_VERSION)
-        self.assertEqual("V15.0.1", version.APP_VERSION_LABEL)
+        self.assertEqual("15.0.2", version.APP_VERSION)
+        self.assertEqual("V15.0.2", version.APP_VERSION_LABEL)
 
     def test_replay_probe_is_non_blocking_and_schedules_refresh(self):
         thread = Mock()

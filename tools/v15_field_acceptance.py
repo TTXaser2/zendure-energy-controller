@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Read-only productive field acceptance for ZEC V15.0.1.
+"""Read-only productive field acceptance for ZEC V15.0.2.
 
 This tool never publishes commands, changes configuration, mutates the graph
 store, or performs a rollback. It exercises the running HTTP/read-only graph
@@ -26,10 +26,10 @@ if str(ROOT) not in sys.path:
 
 from version import APP_BUILD_ID, APP_VERSION, APP_VERSION_LABEL  # noqa: E402
 
-EXPECTED_VERSION = "15.0.1"
-EXPECTED_LABEL = "V15.0.1"
-EXPECTED_BUILD_ID = "v15.0.1-20260911"
-FORMAT = "ZEC_V15_0_1_FIELD_ACCEPTANCE_V1"
+EXPECTED_VERSION = "15.0.2"
+EXPECTED_LABEL = "V15.0.2"
+EXPECTED_BUILD_ID = "v15.0.2-20260911"
+FORMAT = "ZEC_V15_0_2_FIELD_ACCEPTANCE_V1"
 
 
 def _sha256(path: Path) -> str:
@@ -277,6 +277,11 @@ def run_acceptance(base_url: str, install_report: Path, expect_primary_profile: 
             and "renderStateMagnifier(actual)" in js_text
             and "data-gf-state-detail-window" in js_text
             and "applyComparisonFocus" in js_text
+            and "adaptiveDetailWindow" in js_text
+            and "chartYRatioFromPointer" in js_text
+            and "setHoverMsAt(ts,chartYRatioFromPointer(chart,event))" in js_text
+            and "top .10s ease-out" in css_text
+            and "min-height:112px" in css_text
             and "gfCalendarPrev" in text
             and "gfCalendarNext" in text
             and "gfBusyBadge" in text
@@ -431,8 +436,8 @@ def run_acceptance(base_url: str, install_report: Path, expect_primary_profile: 
             actual_hash = _sha256(backup_path) if backup_path.is_file() else ""
             install_ok = (
                 report.get("status") == "ok"
-                and (report.get("source") or {}).get("version") == "15.0.0"
-                and (report.get("target") or {}).get("version") == "15.0.1"
+                and (report.get("source") or {}).get("version") == "15.0.1"
+                and (report.get("target") or {}).get("version") == "15.0.2"
                 and report.get("graph_core_v3_preserved") is True
                 and report.get("graph_core_v3_rebuilt") is False
             )
@@ -480,10 +485,10 @@ def run_acceptance(base_url: str, install_report: Path, expect_primary_profile: 
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Read-only ZEC V15.0.1 field acceptance")
+    p = argparse.ArgumentParser(description="Read-only ZEC V15.0.2 field acceptance")
     p.add_argument("--base-url", default="http://127.0.0.1:8080")
-    p.add_argument("--install-report", default="/tmp/zec_v15_0_1_install_report.json")
-    p.add_argument("--output", default="/tmp/ZEC_V15_0_1_FIELD_ACCEPTANCE.json")
+    p.add_argument("--install-report", default="/tmp/zec_v15_0_2_install_report.json")
+    p.add_argument("--output", default="/tmp/ZEC_V15_0_2_FIELD_ACCEPTANCE.json")
     p.add_argument("--expect-primary-profile", choices=("", "evcc_standard", "custom", "modbus_template"), default="")
     p.add_argument("--json", action="store_true")
     return p.parse_args(argv)

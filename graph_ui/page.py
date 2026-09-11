@@ -140,7 +140,7 @@ def render_graph_page(shell_html: str, *, version_label: str) -> str:
             <div class="gf-lane-body">
               <div class="gf-state-wrap">
                 <div id="gfStateHoverPanel" class="gf-state-hover-panel">
-                  <div id="gfStateMagnifier" class="gf-state-magnifier"><div class="gf-state-magnifier-title"><strong>Detailausschnitt</strong><span>10-Minuten-Zoom um den Cursor</span></div><div class="gf-state-magnifier-empty">Cursor über Leistung, SOC oder Zustände bewegen.</div></div>
+                  <div id="gfStateMagnifier" class="gf-state-magnifier"><div class="gf-state-magnifier-title"><strong>Detailausschnitt</strong><span>Zoom um den Cursor</span></div><div class="gf-state-magnifier-empty">Cursor über Leistung, SOC oder Zustände bewegen.</div></div>
                   <div id="gfStateCursorCard" class="gf-cursor-card gf-state-card" hidden></div>
                 </div>
                 <div id="gfStateTimeline" class="gf-state-timeline" aria-label="Zustands-Timeline"></div>
@@ -252,8 +252,8 @@ def render_graph_page(shell_html: str, *, version_label: str) -> str:
             <div id="gfCommandContent" hidden>
               <div id="gfCommandSummary" class="gf-kv-list"></div>
               <div id="gfCommandLegend" class="gf-inline-legend gf-command-legend" aria-label="Command-Legende"></div>
-              <div id="gfCommandCursorCard" class="gf-command-values"><strong>Cursorwerte</strong><span>Cursor über den Mini-Graph bewegen.</span></div>
               <div class="gf-chart-wrap gf-chart-context"><canvas id="gfCommandChart"></canvas></div>
+              <div id="gfCommandCursorCard" class="gf-command-values" aria-live="polite"></div>
               <div id="gfCommandEvidence" class="gf-callout"></div>
             </div>
           </section>

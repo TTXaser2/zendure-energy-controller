@@ -136,11 +136,11 @@ class V12121HelpMobileQualityTests(unittest.TestCase):
 
     def test_updater_requires_v13_0_3_as_primary_source(self):
         script = (ROOT / "tools" / "update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_SOURCE_VERSION="15.0.0"', script)
-        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v15.0.0-20260910"', script)
-        self.assertIn('SOURCE_MODE="V15_0_0"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v15.0.1-20260911"', script)
-        self.assertIn('EXPECTED_VERSION="v15_0_1"', script)
+        self.assertIn('EXPECTED_SOURCE_VERSION="15.0.1"', script)
+        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v15.0.1-20260911"', script)
+        self.assertIn('SOURCE_MODE="V15_0_1"', script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v15.0.2-20260911"', script)
+        self.assertIn('EXPECTED_VERSION="v15_0_2"', script)
         self.assertNotIn('SOURCE_MODE="V12_12_0"', script)
 
 
