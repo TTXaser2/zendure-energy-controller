@@ -29,12 +29,12 @@ def render_graph_page(shell_html: str, *, version_label: str) -> str:
               <button type="button" class="gf-chip is-active" data-gf-preset="24h">24 h</button>
               <button type="button" class="gf-chip" data-gf-preset="48h">48 h</button>
             </div></div>
-            <div class="gf-time-group"><span class="gf-time-group-label">Kalendertage</span><div class="gf-preset-row" role="group" aria-label="Kalendertage">
+            <div class="gf-time-group"><span class="gf-time-group-label">Kalendertage</span><button type="button" class="gf-chip gf-day-step" id="gfCalendarPrev" title="Kalenderfenster einen Tag zurück" aria-label="Kalenderfenster einen Tag zurück">←</button><div class="gf-preset-row" role="group" aria-label="Kalendertage">
               <button type="button" class="gf-chip" data-gf-calendar-preset="today">Heute</button>
               <button type="button" class="gf-chip" data-gf-calendar-preset="yesterday">Gestern</button>
               <button type="button" class="gf-chip" data-gf-calendar-preset="today_yesterday">Heute &amp; Gestern</button>
-              <button type="button" class="gf-chip" data-gf-calendar-preset="last_two_complete_days" title="Vorgestern 00:00 bis heute 00:00">Letzte 2 Kalendertage</button>
-            </div></div>
+              <button type="button" class="gf-chip" data-gf-calendar-preset="last_two_complete_days" title="Zwei vollständig abgeschlossene Kalendertage">Vorgestern &amp; Gestern</button>
+            </div><button type="button" class="gf-chip gf-day-step" id="gfCalendarNext" title="Kalenderfenster einen Tag vor" aria-label="Kalenderfenster einen Tag vor">→</button></div>
             <button type="button" class="gf-chip" id="gfCustomToggle">Benutzerdefiniert</button>
           </div>
           <button type="button" class="gf-chip" id="gfSelectMode" aria-pressed="false">Bereich markieren</button>
@@ -139,8 +139,8 @@ def render_graph_page(shell_html: str, *, version_label: str) -> str:
             </header>
             <div class="gf-lane-body">
               <div class="gf-state-wrap">
-                <div id="gfStateHoverPanel" class="gf-state-hover-panel" hidden>
-                  <div id="gfStateMagnifier" class="gf-state-magnifier"></div>
+                <div id="gfStateHoverPanel" class="gf-state-hover-panel">
+                  <div id="gfStateMagnifier" class="gf-state-magnifier"><div class="gf-state-magnifier-title"><strong>Detailausschnitt</strong><span>10-Minuten-Zoom um den Cursor</span></div><div class="gf-state-magnifier-empty">Cursor über Leistung, SOC oder Zustände bewegen.</div></div>
                   <div id="gfStateCursorCard" class="gf-cursor-card gf-state-card" hidden></div>
                 </div>
                 <div id="gfStateTimeline" class="gf-state-timeline" aria-label="Zustands-Timeline"></div>
@@ -200,7 +200,7 @@ def render_graph_page(shell_html: str, *, version_label: str) -> str:
             </div>
 
             <div id="gfComparisonEmpty" class="gf-comparison-empty">Wähle zwei Zeiträume oder zwei Ereignisse. Die Ergebnisse erscheinen hier direkt unter den synchronen Hauptspuren.</div>
-            <div id="gfCompareHoverCard" class="gf-compare-hover-card" hidden></div>
+            <div id="gfCompareHoverCard" class="gf-compare-hover-card"><div class="gf-compare-hover-placeholder"><strong>A / B / Δ</strong><span>Nach dem Laden eines Vergleichs bleiben die synchronen Vergleichswerte hier sichtbar.</span></div></div>
             <div id="gfCompareSideView" class="gf-compare-side" hidden>
               <section class="gf-compare-period-panel">
                 <div class="gf-compare-caption" id="gfCompareCaptionA">A</div>
@@ -252,7 +252,8 @@ def render_graph_page(shell_html: str, *, version_label: str) -> str:
             <div id="gfCommandContent" hidden>
               <div id="gfCommandSummary" class="gf-kv-list"></div>
               <div id="gfCommandLegend" class="gf-inline-legend gf-command-legend" aria-label="Command-Legende"></div>
-              <div class="gf-chart-wrap gf-chart-context"><canvas id="gfCommandChart"></canvas><div id="gfCommandCursorCard" class="gf-cursor-card" hidden></div></div>
+              <div id="gfCommandCursorCard" class="gf-command-values"><strong>Cursorwerte</strong><span>Cursor über den Mini-Graph bewegen.</span></div>
+              <div class="gf-chart-wrap gf-chart-context"><canvas id="gfCommandChart"></canvas></div>
               <div id="gfCommandEvidence" class="gf-callout"></div>
             </div>
           </section>

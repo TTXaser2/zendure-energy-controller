@@ -131,16 +131,16 @@ def _sha256(path: Path) -> str:
 
 
 def test_release_identity_and_installer_v3_preservation_contract_are_v14_1():
-    assert version.APP_VERSION == "15.0.0"
-    assert version.APP_VERSION_LABEL == "V15.0.0"
-    assert version.APP_BUILD_ID == "v15.0.0-20260910"
+    assert version.APP_VERSION == "15.0.1"
+    assert version.APP_VERSION_LABEL == "V15.0.1"
+    assert version.APP_BUILD_ID == "v15.0.1-20260911"
     script = (ROOT / "tools" / "update_zendure_controller.sh").read_text(encoding="utf-8")
-    assert 'EXPECTED_VERSION="v15_0_0"' in script
-    assert 'EXPECTED_SOURCE_VERSION="14.1.4"' in script
-    assert 'EXPECTED_SOURCE_BUILD_ID="v14.1.4-20260908"' in script
-    assert 'EXPECTED_TARGET_VERSION="15.0.0"' in script
-    assert 'EXPECTED_TARGET_BUILD_ID="v15.0.0-20260910"' in script
-    assert "V15_0_0_SOURCE_MANIFEST.sha256" in script
+    assert 'EXPECTED_VERSION="v15_0_1"' in script
+    assert 'EXPECTED_SOURCE_VERSION="15.0.0"' in script
+    assert 'EXPECTED_SOURCE_BUILD_ID="v15.0.0-20260910"' in script
+    assert 'EXPECTED_TARGET_VERSION="15.0.1"' in script
+    assert 'EXPECTED_TARGET_BUILD_ID="v15.0.1-20260911"' in script
+    assert "V15_0_1_SOURCE_MANIFEST.sha256" in script
     assert "tools/v14_cutover.py preflight" not in script
     assert "tools/v14_cutover.py rebuild" not in script
     assert "tools/v14_cutover.py verify" in script
@@ -269,7 +269,7 @@ def test_install_diagnostics_never_copy_raw_config_and_document_redaction():
 
 def test_installer_rollback_restores_full_release_backup_and_collects_diagnostics():
     script = (ROOT / "tools" / "update_zendure_controller.sh").read_text(encoding="utf-8")
-    diagnostics_idx = script.index('collect_install_diagnostics "v15.0.0-install-failure"')
+    diagnostics_idx = script.index('collect_install_diagnostics "v15.0.1-install-failure"')
     target_restore_idx = script.index('sudo rm -rf "$TARGET"')
     assert diagnostics_idx < target_restore_idx
     assert "GRAPH_CUTOVER_COMPLETED" not in script

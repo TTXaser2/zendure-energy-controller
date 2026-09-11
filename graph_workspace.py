@@ -149,7 +149,7 @@ CALENDAR_PRESETS = [
     {"preset_id": "today", "label": "Heute", "semantics": "LOCAL_TODAY_TO_NOW"},
     {"preset_id": "yesterday", "label": "Gestern", "semantics": "LOCAL_COMPLETE_PREVIOUS_DAY"},
     {"preset_id": "today_yesterday", "label": "Heute & Gestern", "semantics": "LOCAL_YESTERDAY_TO_NOW"},
-    {"preset_id": "last_two_complete_days", "label": "Letzte 2 Kalendertage", "semantics": "LOCAL_TWO_COMPLETE_DAYS_BEFORE_TODAY"},
+    {"preset_id": "last_two_complete_days", "label": "Vorgestern & Gestern", "semantics": "LOCAL_TWO_COMPLETE_DAYS_BEFORE_TODAY"},
 ]
 
 

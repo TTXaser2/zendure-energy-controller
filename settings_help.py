@@ -119,7 +119,7 @@ CATEGORY_HELP_TEXT = {
     "Leistungsgrenzen & SOC-Schutz": "Lade-/Entladegrenzen sowie MIN/MAX-SOC sind anlagen- und geräteabhängige Schutzwerte. Sie begrenzen auch manuelle, Nacht- und AUTO-Ziele. Diese Werte sind keine universellen Empfehlungen und müssen zur konkreten Hardware passen.",
     "AUTO-Regelung": "Die Netzabweichung wird über Mittelwert, Totzone, Gain, Smoothing und Step kontrolliert nachgeführt. MIN_COMMAND_CHANGE_W beeinflusst die Publish-Auflösung, nicht die interne Sollwertrechnung. Mehr Reaktionsgeschwindigkeit ist nicht automatisch bessere Regelung.",
     "Nachtbetrieb": "Der Nachtmodus erzeugt eine feste Basisentladung und ist keine netzleistungsnachgeführte AUTO-Entladung. Start und Ende dürfen über Mitternacht laufen. Eine optionale Nachtreserve pausiert die feste Basisentladung; globale MIN-SOC-Grenzen und aktive 0-W-Neutralisierung beim Exit bleiben Schutzinvarianten.",
-    "Primärspeicher & SMA": "Die Datenquelle des Primärspeichers liefert Leistung, SOC und optional Kapazität für Cross-Charge und Harvest. Vorzeichen- und Einheitsnormalisierung sind sicherheitsrelevant. EVCC-Standardprofil und benutzerdefinierte Topics sind getrennte Quellpfade.",
+    "Primärspeicher & SMA": "Die Primärspeicher-Anbindung kann über EVCC, benutzerdefiniertes MQTT oder ein geprüftes read-only Modbus-Geräteprofil erfolgen. Nach Auswahl einer Quelle zeigt ZEC unmittelbar die dafür relevanten Verbindungsparameter. Vorzeichen-, Einheits- und Freshness-Semantik bleiben quellenneutral und sicherheitsrelevant.",
     "Harvest / Restüberschuss": "Der Primärspeicher hat grundsätzlich Vorrang. Harvest nutzt nur Restüberschuss oder ausdrücklich spezifizierte Parallel-Harvest-Leistung. Floor, Restart und Near-Limit sind geordnete Schwellen; positive W-Overrides ersetzen den jeweiligen Ratio-Wert. Restexport ist nicht automatisch ein absoluter Zendure-Sollwert.",
     "Cross-Charge-Schutz": "Cross-Charge wird symmetrisch behandelt. Gegenläufiger Zendure-Sollwert wird proportional reduziert, aber der Schutz kehrt die Richtung nicht selbstständig um. Frische Zweitbatteriedaten sind erforderlich; Sollwertkonflikt und tatsächlich beobachteter Gegenfluss bleiben getrennte Sachverhalte.",
     "Kommandowirkung & Resync": "Ein MQTT-Publish ist kein Wirkungsnachweis. Diagnose trennt Publish, Richtungsreaktion, Sollwerttracking und Systemziel. 0-W-Neutralisierung ist ein aktives Kommando. Resync-Parameter steuern Recovery bei bestätigter Nichtwirkung und sind keine normale Reglerdynamik.",
@@ -147,6 +147,7 @@ HANDBOOK_SECTIONS = {
 }
 
 SECTION_ORDER_OVERRIDES = {
+    "Primärspeicher & SMA": ("Integration & Status", "Integration & Identität", "Anbindung", "Gerät & Verbindung · Modbus", "MQTT-Datenquelle · EVCC Standard", "MQTT-Datenquelle · Benutzerdefiniert", "MQTT-Payload · Benutzerdefiniert", "Normalisierung", "Freshness & Verfügbarkeit", "Technische Leistungsdaten"),
     "Betriebsart & manuelle Steuerung": ("Betriebsart", "Profil Feste Entladung", "Profil Feste Ladung"),
     "Nachtbetrieb": ("Aktivierung", "Zeitfenster", "Feste Basisentladung", "Reserve & Folgeverhalten"),
     "Harvest / Restüberschuss": ("Master & Zielbild", "High-SOC & Vollspeicher", "Entry & Hysterese", "Near-Limit-Entry", "Primärspeicher-Schwellen", "Tageszeitprofil"),
@@ -281,11 +282,11 @@ SHORT_HELP = {
     'NIGHT_START_MINUTE': 'Startminute des Nachtmodus.',
     'SECOND_BATTERY_STALE_TIMEOUT_SECONDS': 'Nach dieser Zeit ohne vollständiges Primärspeicher-Update gelten die Daten für die Regelung als veraltet. Das gilt quellenneutral für MQTT und native Modbus-Templates; Source Health kann bereits vorher DEGRADED melden, solange der letzte vollständige Snapshot noch frisch ist.',
     'SECOND_BATTERY_DISPLAY_NAME': 'Freier Anzeigename des Primärspeichers. Dieser Name wird in Status, Graph, Inspector und Diagnose verwendet; interne IDs und Historienidentität bleiben stabil.',
-    'SECOND_BATTERY_SOURCE_PROFILE': 'Wählt genau eine Primärspeicher-Anbindung: EVCC, benutzerdefiniertes MQTT oder direktes read-only Modbus über ein versioniertes Gerätetemplate. Ein Quellenwechsel erfordert einen Dienstneustart.',
-    'SECOND_BATTERY_MODBUS_TEMPLATE': 'Versioniertes read-only Gerätetemplate für die direkte Modbus-Anbindung. In V15.0.0 ist SMA Sunny Island verfügbar.',
+    'SECOND_BATTERY_SOURCE_PROFILE': 'Wählt genau eine Primärspeicher-Anbindung: EVCC, benutzerdefiniertes MQTT oder direktes read-only Modbus über ein geprüftes Geräteprofil. Die jeweils benötigten Verbindungsparameter werden unmittelbar darunter geführt. Ein Quellenwechsel erfordert einen Dienstneustart.',
+    'SECOND_BATTERY_MODBUS_TEMPLATE': 'Geprüftes read-only Geräteprofil für die direkte Modbus-Anbindung. Derzeit ist SMA Sunny Island verfügbar. Weitere Geräteprofile werden versioniert mit ZEC-Releases ausgeliefert; Register sind nicht frei editierbar.',
     'SECOND_BATTERY_MODBUS_HOST': 'Host oder IP-Adresse des Primärspeichers für Modbus TCP. Der Wert ist installationsspezifisch.',
-    'SECOND_BATTERY_MODBUS_PORT': 'Modbus-TCP-Port. Das SMA-Sunny-Island-Template verwendet 502 als Default; der Wert kann installationsseitig überschrieben werden.',
-    'SECOND_BATTERY_MODBUS_UNIT_ID': 'Modbus Unit-ID. Das SMA-Sunny-Island-Template verwendet 3 als Default; der Wert kann installationsseitig überschrieben werden.',
+    'SECOND_BATTERY_MODBUS_PORT': 'Modbus-TCP-Port. Das Geräteprofil SMA Sunny Island verwendet 502 als Default; der Wert kann installationsseitig überschrieben werden.',
+    'SECOND_BATTERY_MODBUS_UNIT_ID': 'Modbus Unit-ID. Das Geräteprofil SMA Sunny Island verwendet 3 als Default; der Wert kann installationsseitig überschrieben werden.',
     'SECOND_BATTERY_CAPACITY_TOPIC': 'Optionales MQTT-Topic für die Primärspeicher-Kapazität im MQTT-Profil. Die Kapazität dient Anzeige und Diagnose, ist aber nicht zwingend für die Schutzentscheidung erforderlich.',
     'SECOND_BATTERY_POWER_TOPIC': 'Vollständiges MQTT-Topic der Primärspeicher-Leistung. Dieses Topic ist nur im benutzerdefinierten MQTT-Profil Pflicht.',
     'SECOND_BATTERY_SOC_TOPIC': "Optionales MQTT-Topic für den Ladezustand des Primärspeichers in Prozent. Das native Sunny-Island-Template liest den SOC direkt per Modbus und benötigt dieses MQTT-Topic nicht.",

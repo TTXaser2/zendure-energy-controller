@@ -406,6 +406,48 @@
     }
     return `<div class="setting-control">${control}${s.unit?`<span class="unit">${esc(s.unit)}</span>`:''}</div>`;
   }
+  function primarySourceGuideHtml() {
+    const profile = String(currentByKey('SECOND_BATTERY_SOURCE_PROFILE') || 'evcc_standard');
+    const specLabel = (key) => settingByKey(key)?.label || key;
+    let title = '';
+    let detail = '';
+    let meta = '';
+    let targetKey = '';
+    let status = 'ready';
+    if (profile === 'modbus_template') {
+      const template = String(currentByKey('SECOND_BATTERY_MODBUS_TEMPLATE') || 'sma_sunny_island');
+      const templateSpec = settingByKey('SECOND_BATTERY_MODBUS_TEMPLATE');
+      const option = templateSpec?.options?.find(o => String(o.value) === template);
+      const device = option?.label || template || 'Geräteprofil wählen';
+      const host = String(currentByKey('SECOND_BATTERY_MODBUS_HOST') || '').trim();
+      const port = currentByKey('SECOND_BATTERY_MODBUS_PORT') ?? 502;
+      const unitId = currentByKey('SECOND_BATTERY_MODBUS_UNIT_ID') ?? 3;
+      title = 'Direkt per Modbus ausgewählt';
+      targetKey = host ? 'SECOND_BATTERY_MODBUS_TEMPLATE' : 'SECOND_BATTERY_MODBUS_HOST';
+      status = host ? 'ready' : 'attention';
+      detail = host ? `Grundkonfiguration vollständig: ${device} · ${host}.` : `Noch erforderlich: ${specLabel('SECOND_BATTERY_MODBUS_HOST')}.`;
+      meta = `Gerät / Modell: ${device} · Port ${port} · Unit-ID ${unitId}. Port und Unit-ID sind Geräteprofil-Defaults und im Expertenmodus änderbar. Der Verbindungstest ist ausschließlich lesend.`;
+    } else if (profile === 'custom') {
+      const power = String(currentByKey('SECOND_BATTERY_POWER_TOPIC') || '').trim();
+      const soc = String(currentByKey('SECOND_BATTERY_SOC_TOPIC') || '').trim();
+      const missing = [];
+      if (!power) missing.push(specLabel('SECOND_BATTERY_POWER_TOPIC'));
+      if (!soc) missing.push(specLabel('SECOND_BATTERY_SOC_TOPIC'));
+      title = 'Benutzerdefiniertes MQTT ausgewählt';
+      targetKey = missing.length ? (!power ? 'SECOND_BATTERY_POWER_TOPIC' : 'SECOND_BATTERY_SOC_TOPIC') : 'SECOND_BATTERY_POWER_TOPIC';
+      status = missing.length ? 'attention' : 'ready';
+      detail = missing.length ? `Noch zu prüfen/ergänzen: ${missing.join(', ')}.` : 'Leistungs- und SOC-Topic sind eingetragen.';
+      meta = 'Weitere Payload- und Normalisierungsoptionen stehen bei Bedarf im Expertenmodus zur Verfügung.';
+    } else {
+      const base = String(currentByKey('SECOND_BATTERY_EVCC_BASE_TOPIC') || '').trim();
+      title = 'EVCC ausgewählt';
+      targetKey = 'SECOND_BATTERY_EVCC_BASE_TOPIC';
+      status = base ? 'ready' : 'attention';
+      detail = base ? `EVCC Batterie-Basis-Topic: ${base}.` : `Noch erforderlich: ${specLabel('SECOND_BATTERY_EVCC_BASE_TOPIC')}.`;
+      meta = 'Leistung, SOC und optionale Kapazität werden aus der EVCC-Standardstruktur abgeleitet.';
+    }
+    return `<div class="primary-source-guide ${status}" data-primary-source-profile="${esc(profile)}"><div class="primary-source-guide-copy"><b>${esc(title)}</b><span>${esc(detail)}</span><small>${esc(meta)}</small></div><button type="button" class="primary-source-jump" data-primary-source-jump="${esc(targetKey)}">Zu den Quellen-Einstellungen</button></div>`;
+  }
   function settingHtml(s) {
     const visible = dependencyVisible(s);
     if (!settingVisibleInMode(s)) return '';
@@ -428,9 +470,10 @@
     ].filter(Boolean);
     const resetAction = s.editable && !s.secret_set && s.default_ui?.action ? `<button type="button" class="reset-button" data-reset="${esc(s.key)}">${esc(s.default_ui.action)}</button>` : '';
     const modbusTestAction = s.key === 'SECOND_BATTERY_MODBUS_HOST' ? `<div class="modbus-test-box"><button id="primaryStorageModbusTest" class="admin-action-button" type="button">Verbindung testen</button><div id="primaryStorageModbusTestResult" class="modbus-test-result" aria-live="polite"></div></div>` : '';
+    const sourceGuide = s.key === 'SECOND_BATTERY_SOURCE_PROFILE' ? primarySourceGuideHtml() : '';
     return `<article class="${classes}" data-setting="${esc(s.key)}">
       <div class="setting-copy"><div class="setting-title-line"><div class="setting-label">${esc(s.label)}</div>${helpButton('setting', s.key, s.label)}</div>${app.mode==='expert'?`<div class="setting-key">${esc(s.key)}</div>`:''}<div class="setting-help">${esc(s.help?.short || s.description || '')}</div>${guidanceHtml(s)}</div>
-      <div class="setting-editor">${inputHtml(s)}${issueHtml(issues)}${modbusTestAction}<div class="field-meta">${metas.map(m=>`<span class="meta-pill">${esc(m)}</span>`).join('')}<span class="meta-pill ${s.apply_class==='restart_required'?'restart':'live'}">${esc(s.apply_text || s.apply_class)}</span>${resetAction}</div></div>
+      <div class="setting-editor">${inputHtml(s)}${sourceGuide}${issueHtml(issues)}${modbusTestAction}<div class="field-meta">${metas.map(m=>`<span class="meta-pill">${esc(m)}</span>`).join('')}<span class="meta-pill ${s.apply_class==='restart_required'?'restart':'live'}">${esc(s.apply_text || s.apply_class)}</span>${resetAction}</div></div>
     </article>`;
   }
   function emptyStateHtml(category) {
@@ -477,6 +520,15 @@
     const showExpert = $('#showExpertMode');
     if (showExpert) showExpert.onclick = () => { app.mode='expert'; storageSet('zecSettingsMode', app.mode); render(); };
     const adminRestart = $('#adminRestartAction');
+    $$('[data-primary-source-jump]').forEach(button => button.onclick = () => {
+      const key = button.dataset.primarySourceJump;
+      const target = targetForSettingKey(key);
+      if (!target) return;
+      target.scrollIntoView({behavior:'smooth', block:'center'});
+      target.classList.add('guided-target');
+      setTimeout(() => target.classList.remove('guided-target'), 1400);
+      target.querySelector('input,select,button')?.focus({preventScroll:true});
+    });
     if (adminRestart && !adminRestart.disabled) adminRestart.onclick = restart;
     const adminPointer = $('#adminPointerRepairAction');
     if (adminPointer && !adminPointer.disabled) adminPointer.onclick = repairPointer;

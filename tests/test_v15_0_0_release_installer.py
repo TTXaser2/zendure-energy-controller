@@ -5,20 +5,20 @@ import version
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_v15_release_identity_and_exact_source():
-    assert version.APP_VERSION == "15.0.0"
-    assert version.APP_VERSION_LABEL == "V15.0.0"
-    assert version.APP_BUILD_ID == "v15.0.0-20260910"
+def test_v15_0_1_release_identity_and_exact_source():
+    assert version.APP_VERSION == "15.0.1"
+    assert version.APP_VERSION_LABEL == "V15.0.1"
+    assert version.APP_BUILD_ID == "v15.0.1-20260911"
     script = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
     for token in (
-        'EXPECTED_VERSION="v15_0_0"',
-        'EXPECTED_SOURCE_VERSION="14.1.4"',
-        'EXPECTED_SOURCE_BUILD_ID="v14.1.4-20260908"',
-        'EXPECTED_TARGET_VERSION="15.0.0"',
-        'EXPECTED_TARGET_BUILD_ID="v15.0.0-20260910"',
-        'SOURCE_MODE="V14_1_4"',
-        'V15_0_0_SOURCE_MANIFEST.sha256',
-        '/tmp/zec_v15_0_0_install_report.json',
+        'EXPECTED_VERSION="v15_0_1"',
+        'EXPECTED_SOURCE_VERSION="15.0.0"',
+        'EXPECTED_SOURCE_BUILD_ID="v15.0.0-20260910"',
+        'EXPECTED_TARGET_VERSION="15.0.1"',
+        'EXPECTED_TARGET_BUILD_ID="v15.0.1-20260911"',
+        'SOURCE_MODE="V15_0_0"',
+        'V15_0_1_SOURCE_MANIFEST.sha256',
+        '/tmp/zec_v15_0_1_install_report.json',
     ):
         assert token in script
 
@@ -40,13 +40,13 @@ def test_v15_installer_preserves_config_runtime_and_graph_core_v3():
 def test_v15_field_acceptance_can_require_native_modbus_profile():
     tool = (ROOT / "tools/v15_field_acceptance.py").read_text(encoding="utf-8")
     for token in (
-        'EXPECTED_VERSION = "15.0.0"',
-        'EXPECTED_BUILD_ID = "v15.0.0-20260910"',
+        'EXPECTED_VERSION = "15.0.1"',
+        'EXPECTED_BUILD_ID = "v15.0.1-20260911"',
         '--expect-primary-profile',
         '"modbus_template"',
         '"modbus_tcp"',
         'primary_storage_source_expected',
-        '/tmp/zec_v15_0_0_install_report.json',
+        '/tmp/zec_v15_0_1_install_report.json',
     ):
         assert token in tool
     assert "commands_published_by_this_tool" in tool

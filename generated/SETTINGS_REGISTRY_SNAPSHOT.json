@@ -2310,7 +2310,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Wählt genau eine Primärspeicher-Anbindung: EVCC, benutzerdefiniertes MQTT oder direktes read-only Modbus über ein versioniertes Gerätetemplate. Ein Quellenwechsel erfordert einen Dienstneustart. Wirksamkeit nach Speichern: Dienstneustart; aktive Primärspeicherquelle wird danach neu initialisiert. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_EVCC_BASE_TOPIC, SECOND_BATTERY_POWER_TOPIC, SECOND_BATTERY_SOC_TOPIC, SECOND_BATTERY_CAPACITY_TOPIC, SECOND_BATTERY_MODBUS_TEMPLATE, SECOND_BATTERY_MODBUS_HOST, SECOND_BATTERY_MODBUS_PORT, SECOND_BATTERY_MODBUS_UNIT_ID.",
+        "extended": "Wählt genau eine Primärspeicher-Anbindung: EVCC, benutzerdefiniertes MQTT oder direktes read-only Modbus über ein geprüftes Geräteprofil. Die jeweils benötigten Verbindungsparameter werden unmittelbar darunter geführt. Ein Quellenwechsel erfordert einen Dienstneustart. Wirksamkeit nach Speichern: Dienstneustart; aktive Primärspeicherquelle wird danach neu initialisiert. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_EVCC_BASE_TOPIC, SECOND_BATTERY_POWER_TOPIC, SECOND_BATTERY_SOC_TOPIC, SECOND_BATTERY_CAPACITY_TOPIC, SECOND_BATTERY_MODBUS_TEMPLATE, SECOND_BATTERY_MODBUS_HOST, SECOND_BATTERY_MODBUS_PORT, SECOND_BATTERY_MODBUS_UNIT_ID.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -2328,7 +2328,7 @@
           "SOURCE",
           "PROFILE"
         ],
-        "short": "Wählt genau eine Primärspeicher-Anbindung: EVCC, benutzerdefiniertes MQTT oder direktes read-only Modbus über ein versioniertes Gerätetemplate. Ein Quellenwechsel erfordert einen Dienstneustart.",
+        "short": "Wählt genau eine Primärspeicher-Anbindung: EVCC, benutzerdefiniertes MQTT oder direktes read-only Modbus über ein geprüftes Geräteprofil. Die jeweils benötigten Verbindungsparameter werden unmittelbar darunter geführt. Ein Quellenwechsel erfordert einen Dienstneustart.",
         "when": null
       },
       "key": "SECOND_BATTERY_SOURCE_PROFILE",
@@ -2374,7 +2374,7 @@
     },
     {
       "apply_class": "restart_required",
-      "apply_text": "Dienstneustart; Template wird danach neu initialisiert",
+      "apply_text": "Dienstneustart; Geräteprofil wird danach neu initialisiert",
       "bootstrap_value": "sma_sunny_island",
       "category": "Primärspeicher & SMA",
       "codec_id": "select",
@@ -2391,7 +2391,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Versioniertes read-only Gerätetemplate für die direkte Modbus-Anbindung. In V15.0.0 ist SMA Sunny Island verfügbar. Wirksamkeit nach Speichern: Dienstneustart; Template wird danach neu initialisiert. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_SOURCE_PROFILE, SECOND_BATTERY_MODBUS_HOST, SECOND_BATTERY_MODBUS_PORT, SECOND_BATTERY_MODBUS_UNIT_ID.",
+        "extended": "Geprüftes read-only Geräteprofil für die direkte Modbus-Anbindung. Derzeit ist SMA Sunny Island verfügbar. Weitere Geräteprofile werden versioniert mit ZEC-Releases ausgeliefert; Register sind nicht frei editierbar. Wirksamkeit nach Speichern: Dienstneustart; Geräteprofil wird danach neu initialisiert. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_SOURCE_PROFILE, SECOND_BATTERY_MODBUS_HOST, SECOND_BATTERY_MODBUS_PORT, SECOND_BATTERY_MODBUS_UNIT_ID.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -2400,20 +2400,20 @@
         },
         "level": "base",
         "search_terms": [
-          "Gerät / Template",
+          "Gerät / Modell",
           "SECOND_BATTERY_MODBUS_TEMPLATE",
           "Primärspeicher & SMA",
-          "Modbus-Datenquelle",
+          "Gerät & Verbindung · Modbus",
           "SECOND",
           "BATTERY",
           "MODBUS",
           "TEMPLATE"
         ],
-        "short": "Versioniertes read-only Gerätetemplate für die direkte Modbus-Anbindung. In V15.0.0 ist SMA Sunny Island verfügbar.",
+        "short": "Geprüftes read-only Geräteprofil für die direkte Modbus-Anbindung. Derzeit ist SMA Sunny Island verfügbar. Weitere Geräteprofile werden versioniert mit ZEC-Releases ausgeliefert; Register sind nicht frei editierbar.",
         "when": null
       },
       "key": "SECOND_BATTERY_MODBUS_TEMPLATE",
-      "label": "Gerät / Template",
+      "label": "Gerät / Modell",
       "lifecycle": "active",
       "maximum": null,
       "minimum": null,
@@ -2436,7 +2436,7 @@
       "reset_value": "sma_sunny_island",
       "risk": "Hoch",
       "secret_policy": "none",
-      "section": "Modbus-Datenquelle",
+      "section": "Gerät & Verbindung · Modbus",
       "unit": null,
       "validator_ids": [
         "VAL-026"
@@ -2473,7 +2473,7 @@
           "Host / IP-Adresse",
           "SECOND_BATTERY_MODBUS_HOST",
           "Primärspeicher & SMA",
-          "Modbus-Datenquelle",
+          "Gerät & Verbindung · Modbus",
           "SECOND",
           "BATTERY",
           "MODBUS",
@@ -2501,7 +2501,7 @@
       "reset_value": "",
       "risk": "Hoch",
       "secret_policy": "none",
-      "section": "Modbus-Datenquelle",
+      "section": "Gerät & Verbindung · Modbus",
       "unit": null,
       "validator_ids": [
         "VAL-026"
@@ -2526,7 +2526,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Modbus-TCP-Port. Das SMA-Sunny-Island-Template verwendet 502 als Default; der Wert kann installationsseitig überschrieben werden. Wirksamkeit nach Speichern: Dienstneustart. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_SOURCE_PROFILE, SECOND_BATTERY_MODBUS_TEMPLATE.",
+        "extended": "Modbus-TCP-Port. Das Geräteprofil SMA Sunny Island verwendet 502 als Default; der Wert kann installationsseitig überschrieben werden. Wirksamkeit nach Speichern: Dienstneustart. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_SOURCE_PROFILE, SECOND_BATTERY_MODBUS_TEMPLATE.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -2538,13 +2538,13 @@
           "Modbus-Port",
           "SECOND_BATTERY_MODBUS_PORT",
           "Primärspeicher & SMA",
-          "Modbus-Datenquelle",
+          "Gerät & Verbindung · Modbus",
           "SECOND",
           "BATTERY",
           "MODBUS",
           "PORT"
         ],
-        "short": "Modbus-TCP-Port. Das SMA-Sunny-Island-Template verwendet 502 als Default; der Wert kann installationsseitig überschrieben werden.",
+        "short": "Modbus-TCP-Port. Das Geräteprofil SMA Sunny Island verwendet 502 als Default; der Wert kann installationsseitig überschrieben werden.",
         "when": null
       },
       "key": "SECOND_BATTERY_MODBUS_PORT",
@@ -2566,7 +2566,7 @@
       "reset_value": 502,
       "risk": "Hoch",
       "secret_policy": "none",
-      "section": "Modbus-Datenquelle",
+      "section": "Gerät & Verbindung · Modbus",
       "unit": null,
       "validator_ids": [
         "VAL-026"
@@ -2591,7 +2591,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Modbus Unit-ID. Das SMA-Sunny-Island-Template verwendet 3 als Default; der Wert kann installationsseitig überschrieben werden. Wirksamkeit nach Speichern: Dienstneustart. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_SOURCE_PROFILE, SECOND_BATTERY_MODBUS_TEMPLATE.",
+        "extended": "Modbus Unit-ID. Das Geräteprofil SMA Sunny Island verwendet 3 als Default; der Wert kann installationsseitig überschrieben werden. Wirksamkeit nach Speichern: Dienstneustart. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_SOURCE_PROFILE, SECOND_BATTERY_MODBUS_TEMPLATE.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -2603,13 +2603,13 @@
           "Unit-ID",
           "SECOND_BATTERY_MODBUS_UNIT_ID",
           "Primärspeicher & SMA",
-          "Modbus-Datenquelle",
+          "Gerät & Verbindung · Modbus",
           "SECOND",
           "BATTERY",
           "MODBUS",
           "UNIT"
         ],
-        "short": "Modbus Unit-ID. Das SMA-Sunny-Island-Template verwendet 3 als Default; der Wert kann installationsseitig überschrieben werden.",
+        "short": "Modbus Unit-ID. Das Geräteprofil SMA Sunny Island verwendet 3 als Default; der Wert kann installationsseitig überschrieben werden.",
         "when": null
       },
       "key": "SECOND_BATTERY_MODBUS_UNIT_ID",
@@ -2631,7 +2631,7 @@
       "reset_value": 3,
       "risk": "Hoch",
       "secret_policy": "none",
-      "section": "Modbus-Datenquelle",
+      "section": "Gerät & Verbindung · Modbus",
       "unit": null,
       "validator_ids": [
         "VAL-026"

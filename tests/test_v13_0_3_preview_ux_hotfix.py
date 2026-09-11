@@ -46,9 +46,9 @@ class V1303PreviewUxHotfixTests(unittest.TestCase):
         self.session = "v1303-session"
 
     def test_release_identity_is_v14_1_3(self):
-        self.assertEqual("15.0.0", version.APP_VERSION)
-        self.assertEqual("V15.0.0", version.APP_VERSION_LABEL)
-        self.assertEqual("v15.0.0-20260910", version.APP_BUILD_ID)
+        self.assertEqual("15.0.1", version.APP_VERSION)
+        self.assertEqual("V15.0.1", version.APP_VERSION_LABEL)
+        self.assertEqual("v15.0.1-20260911", version.APP_BUILD_ID)
 
     def test_v13_0_1_portable_profile_display_transition_is_technical_only(self):
         data = as_v13_0_1_bundle(build_bundle(
@@ -167,11 +167,11 @@ class V1303PreviewUxHotfixTests(unittest.TestCase):
 
     def test_installer_is_strict_v13_0_2_to_v14_1_3(self):
         script = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_VERSION="v15_0_0"', script)
-        self.assertIn('EXPECTED_SOURCE_VERSION="14.1.4"', script)
-        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v14.1.4-20260908"', script)
-        self.assertIn('EXPECTED_TARGET_VERSION="15.0.0"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v15.0.0-20260910"', script)
+        self.assertIn('EXPECTED_VERSION="v15_0_1"', script)
+        self.assertIn('EXPECTED_SOURCE_VERSION="15.0.0"', script)
+        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v15.0.0-20260910"', script)
+        self.assertIn('EXPECTED_TARGET_VERSION="15.0.1"', script)
+        self.assertIn('EXPECTED_TARGET_BUILD_ID="v15.0.1-20260911"', script)
 
 
 if __name__ == "__main__":

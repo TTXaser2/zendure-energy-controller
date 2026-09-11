@@ -1,0 +1,10 @@
+RELEASE: V15.0.1
+STATUS: PASS
+RESOURCEWARNING: ERROR
+SUITE: FULL PROJECT TEST SUITE
+TESTS: 1042
+SUBTESTS: 692
+TEST_FILES: 136
+DURATION_S: 26.81
+TEST_ENVIRONMENT: Same complete test-file set; external non-product paho import shim used only because the sandbox lacks the pre-existing paho-mqtt dependency.
+MODBUS_RUNTIME_DEPENDENCY_ADDED: NO

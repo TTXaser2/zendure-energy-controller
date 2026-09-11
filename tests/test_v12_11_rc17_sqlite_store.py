@@ -13,7 +13,7 @@ from web_ui import build_status_page
 
 class TestRC17SqliteGraphStore(unittest.TestCase):
     def test_version_label_rc17(self):
-        self.assertEqual(version.APP_VERSION_LABEL, "V15.0.0")
+        self.assertEqual(version.APP_VERSION_LABEL, "V15.0.1")
 
     def test_db_writes_even_when_csv_logging_off(self):
         with tempfile.TemporaryDirectory() as tmp:

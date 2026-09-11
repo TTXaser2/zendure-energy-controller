@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Read-only productive field acceptance for ZEC V15.0.0.
+"""Read-only productive field acceptance for ZEC V15.0.1.
 
 This tool never publishes commands, changes configuration, mutates the graph
 store, or performs a rollback. It exercises the running HTTP/read-only graph
@@ -26,10 +26,10 @@ if str(ROOT) not in sys.path:
 
 from version import APP_BUILD_ID, APP_VERSION, APP_VERSION_LABEL  # noqa: E402
 
-EXPECTED_VERSION = "15.0.0"
-EXPECTED_LABEL = "V15.0.0"
-EXPECTED_BUILD_ID = "v15.0.0-20260910"
-FORMAT = "ZEC_V15_0_0_FIELD_ACCEPTANCE_V1"
+EXPECTED_VERSION = "15.0.1"
+EXPECTED_LABEL = "V15.0.1"
+EXPECTED_BUILD_ID = "v15.0.1-20260911"
+FORMAT = "ZEC_V15_0_1_FIELD_ACCEPTANCE_V1"
 
 
 def _sha256(path: Path) -> str:
@@ -223,12 +223,15 @@ def run_acceptance(base_url: str, install_report: Path, expect_primary_profile: 
         js_body, js_ms = _http(base_url, "/static/graph_v14_1.js", timeout=10)
         css_body, css_ms = _http(base_url, "/static/graph_v14_1.css", timeout=10)
         settings_css_body, settings_css_ms = _http(base_url, "/static/settings_v2.css", timeout=10)
+        settings_js_body, settings_js_ms = _http(base_url, "/static/settings_v2.js", timeout=10)
         metrics["graph_greenfield_js_ms"] = round(js_ms, 3)
         metrics["graph_greenfield_css_ms"] = round(css_ms, 3)
         metrics["settings_dark_css_ms"] = round(settings_css_ms, 3)
+        metrics["settings_guidance_js_ms"] = round(settings_js_ms, 3)
         js_text = js_body.decode("utf-8", errors="replace")
         css_text = css_body.decode("utf-8", errors="replace")
         settings_css_text = settings_css_body.decode("utf-8", errors="replace")
+        settings_js_text = settings_js_body.decode("utf-8", errors="replace")
         asset_ok = (
             "/api/graph/v1/workspace" in js_text
             and "/api/graph/v1/overview" in js_text
@@ -244,8 +247,20 @@ def run_acceptance(base_url: str, install_report: Path, expect_primary_profile: 
             "V14.1.3: complete Settings-V2 dark-theme normalization" in settings_css_text
             and 'html[data-theme="dark"] body.zec-settings-v2' in settings_css_text
             and "color-scheme:dark" in settings_css_text
+            and "V15.0.1: guided primary-storage source setup and dark-mode contrast fixes" in settings_css_text
+            and '.discard-btn{background:var(--panel2)' in settings_css_text
+            and '.issue-list li.error' in settings_css_text
+            and '.issue-list li.warning' in settings_css_text
         )
         _check(checks, "settings_dark_mode_contract", settings_dark_ok, css_bytes=len(settings_css_body))
+        settings_guidance_ok = (
+            "function primarySourceGuideHtml()" in settings_js_text
+            and "Direkt per Modbus ausgewählt" in settings_js_text
+            and "Geräteprofil-Defaults" in settings_js_text
+            and "data-primary-source-jump" in settings_js_text
+            and "Verbindung testen" in settings_js_text
+        )
+        _check(checks, "primary_storage_settings_guidance", settings_guidance_ok, js_bytes=len(settings_js_body))
         interaction_ok = (
             "gfSelectMode" in js_text
             and "loadPeriodComparison" in js_text
@@ -258,6 +273,12 @@ def run_acceptance(base_url: str, install_report: Path, expect_primary_profile: 
             and "gfCommandCursorCard" in text
             and "gfCompareHoverCard" in text
             and "gfStateMagnifier" in text
+            and "Detailausschnitt" in text
+            and "renderStateMagnifier(actual)" in js_text
+            and "data-gf-state-detail-window" in js_text
+            and "applyComparisonFocus" in js_text
+            and "gfCalendarPrev" in text
+            and "gfCalendarNext" in text
             and "gfBusyBadge" in text
             and "data-gf-lane-toggle" in text
             and "Math.round(Number(start))" in js_text
@@ -410,8 +431,8 @@ def run_acceptance(base_url: str, install_report: Path, expect_primary_profile: 
             actual_hash = _sha256(backup_path) if backup_path.is_file() else ""
             install_ok = (
                 report.get("status") == "ok"
-                and (report.get("source") or {}).get("version") == "14.1.4"
-                and (report.get("target") or {}).get("version") == "15.0.0"
+                and (report.get("source") or {}).get("version") == "15.0.0"
+                and (report.get("target") or {}).get("version") == "15.0.1"
                 and report.get("graph_core_v3_preserved") is True
                 and report.get("graph_core_v3_rebuilt") is False
             )
@@ -459,10 +480,10 @@ def run_acceptance(base_url: str, install_report: Path, expect_primary_profile: 
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Read-only ZEC V15.0.0 field acceptance")
+    p = argparse.ArgumentParser(description="Read-only ZEC V15.0.1 field acceptance")
     p.add_argument("--base-url", default="http://127.0.0.1:8080")
-    p.add_argument("--install-report", default="/tmp/zec_v15_0_0_install_report.json")
-    p.add_argument("--output", default="/tmp/ZEC_V15_0_0_FIELD_ACCEPTANCE.json")
+    p.add_argument("--install-report", default="/tmp/zec_v15_0_1_install_report.json")
+    p.add_argument("--output", default="/tmp/ZEC_V15_0_1_FIELD_ACCEPTANCE.json")
     p.add_argument("--expect-primary-profile", choices=("", "evcc_standard", "custom", "modbus_template"), default="")
     p.add_argument("--json", action="store_true")
     return p.parse_args(argv)

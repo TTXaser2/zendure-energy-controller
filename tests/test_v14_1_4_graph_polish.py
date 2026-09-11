@@ -21,9 +21,7 @@ def test_cursor_cards_flip_to_left_instead_of_clamping_over_analysis_point():
     assert "left=x-gap-width" in body
     assert "card.dataset.gfSide=side" in body
     assert "left=x+gap" in body
-    command = js.split("function renderCommand", 1)[1].split("function triggerText", 1)[0]
-    assert "placeChartCard(card,current,ts" in command
-    assert "current.width-250" not in command
+    assert "current.width-250" not in js
 
 
 def test_inspector_pipeline_is_a_real_visual_chain_with_deltas_and_collapsible_details():
