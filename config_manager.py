@@ -256,7 +256,7 @@ CONFIG_SCHEMA: Dict[str, Dict[str, Any]] = {
     "MQTT_USER": {"group": "Netzwerk", "label": "MQTT Benutzer", "type": "str", "description": "Benutzername für MQTT. Leer lassen, wenn keine Authentifizierung verwendet wird."},
     "MQTT_PASSWORD": {"group": "Netzwerk", "label": "MQTT Passwort", "type": "password", "description": "Passwort für MQTT. Wird in der lokalen config.json gespeichert."},
     "DEVICE_ID": {"group": "Netzwerk", "label": "Zendure Device ID", "type": "str", "description": "Identifier der Zendure Headunit für die MQTT-Topics."},
-    "WEB_PORT": {"group": "Netzwerk", "label": "Web Port", "type": "int", "min": 1, "max": 65535, "description": "HTTP-Port des Webinterfaces. Änderung erfordert Neustart."},
+    "WEB_PORT": {"group": "Netzwerk", "label": "Web Port", "type": "int", "min": 1024, "max": 65535, "description": "HTTP-Port des Webinterfaces. Unterstützter Standarddeploymentbereich 1024–65535; Änderung erfordert Neustart und wird auf Portkonflikte geprüft."},
     "REPLAY_WEB_PORT": {"group": "Weboberfläche", "label": "Analyse-Web Port", "type": "int", "min": 1, "max": 65535, "description": "Port des optionalen separaten Analyse-/Replay-Webdienstes. Der Dienst wird mitgeliefert, aber nicht automatisch aktiviert."},
     "HEADLESS_MODE": {"group": "Netzwerk", "label": "Headless Mode", "type": "bool", "description": "Schaltet die Weboberflächen ab. Beim Aufruf der Web-URLs wird nur noch eine Hinweisseite angezeigt. Die Regelung läuft weiter; Änderungen sind dann ausschließlich über die config.json und den regulären Config-Reload möglich. Ein Neustart ist zum Beenden des Headless Mode nicht erforderlich, wenn die config.json während des laufenden Programms angepasst wird."},
 

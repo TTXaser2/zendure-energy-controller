@@ -53,8 +53,8 @@ def _snapshot():
 
 class V12112Rc10TopologyTests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual("15.0.2", version.APP_VERSION)
-        self.assertEqual("V15.0.2", version.APP_VERSION_LABEL)
+        self.assertEqual("16.0.1", version.APP_VERSION)
+        self.assertEqual("V16.0.1", version.APP_VERSION_LABEL)
 
     def test_existing_primary_storage_topology_remains_present(self):
         snap = _snapshot()
@@ -180,7 +180,7 @@ class V12112Rc10PreviewTests(unittest.TestCase):
         self.assertIn("primaryPowerRow", js)
 
     def test_preview_service_is_installed_but_not_enabled_by_update_script(self):
-        update = Path("tools/update_zendure_controller.sh").read_text(encoding="utf-8")
+        update = Path("tools/install_zendure_controller.sh").read_text(encoding="utf-8")
         unit = Path("systemd/zendure-status-preview.service").read_text(encoding="utf-8")
         self.assertIn("zendure-status-preview.service", update)
         self.assertNotIn("enable zendure-status-preview.service", update)

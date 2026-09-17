@@ -128,11 +128,12 @@ class V1291StabilizationTests(unittest.TestCase):
         self.assertIn('data-zec="zendure.command_warning"', html)
 
     def test_update_script_cleans_stale_tests_but_not_v2_logs(self):
-        script = (Path(__file__).resolve().parents[1] / "tools" / "update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn("rsync -a --delete \"$DIR/tests/\" \"$TARGET/tests/\"", script)
+        script = (Path(__file__).resolve().parents[1] / "tools" / "install_zendure_controller.sh").read_text(encoding="utf-8")
+        self.assertIn("rsync -a --delete", script)
+        self.assertIn("--exclude 'logs/'", script)
+        self.assertIn("--exclude '*.sqlite3'", script)
+        self.assertIn("rollback_update", script)
         self.assertNotIn("V2-Messdaten-Bereinigung", script)
-        self.assertIn("recover_on_error", script)
-
 
 if __name__ == "__main__":
     unittest.main()

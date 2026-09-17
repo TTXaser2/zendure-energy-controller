@@ -13708,7 +13708,7 @@
       "label": "Web Port",
       "lifecycle": "active",
       "maximum": 65535,
-      "minimum": 1,
+      "minimum": 1024,
       "options": [],
       "order": 212,
       "origin": "RC19",
@@ -13725,7 +13725,9 @@
       "secret_policy": "none",
       "section": "Webserver & Zugriff",
       "unit": null,
-      "validator_ids": [],
+      "validator_ids": [
+        "VAL-027"
+      ],
       "value_type": "int",
       "visibility": "protected_expert"
     },

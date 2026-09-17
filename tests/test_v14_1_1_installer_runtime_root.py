@@ -80,8 +80,9 @@ def test_verify_runtime_root_reproduces_and_fixes_field_preflight_cwd_bug(tmp_pa
 
 
 def test_installer_and_diagnostics_pin_graph_verify_to_installed_runtime_root():
-    installer = (ROOT / "tools" / "update_zendure_controller.sh").read_text(encoding="utf-8")
-    diagnostics = (ROOT / "tools" / "collect_zec_install_diagnostics.sh").read_text(encoding="utf-8")
+    installer = (ROOT / "tools" / "install_zendure_controller.sh").read_text(encoding="utf-8")
+    support = (ROOT / "tools" / "zec_support_bundle.py").read_text(encoding="utf-8")
     assert installer.count('--runtime-root "$TARGET"') >= 3
-    assert 'RUNTIME_ROOT="$(cd "$(dirname "$CONFIG")" && pwd)"' in diagnostics
-    assert '--runtime-root "$RUNTIME_ROOT"' in diagnostics
+    assert "v14_cutover_preflight" in support
+    assert "v14_cutover_verify" in support
+    assert "'--runtime-root',runtime_root" in support

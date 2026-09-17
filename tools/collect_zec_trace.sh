@@ -47,6 +47,14 @@ mkdir -p "$OUTPUT_DIR" 2>/dev/null || OUTPUT_DIR="$HOME"
 TS="$(date +%Y%m%d_%H%M%S)"
 OUT="$OUTPUT_DIR/zec_trace_$TS.txt"
 LATEST="$OUTPUT_DIR/zec_trace_latest.txt"
+DEFAULT_WEB_PORT=8080
+BASE_URL="http://127.0.0.1:${DEFAULT_WEB_PORT}"
+if [[ -f "$INSTALL_DIR/tools/deployment_contract.py" ]]; then
+  resolved="$(python3 "$INSTALL_DIR/tools/deployment_contract.py" endpoint --target "$INSTALL_DIR" --json 2>/dev/null || true)"
+  if [[ -n "$resolved" ]]; then
+    BASE_URL="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("base_url",f"http://127.0.0.1:{sys.argv[2]}"))' "$resolved" "$DEFAULT_WEB_PORT" 2>/dev/null || echo "http://127.0.0.1:${DEFAULT_WEB_PORT}")"
+  fi
+fi
 
 section() {
   echo
@@ -160,23 +168,23 @@ PY
   run_cmd "NETWORK / IP ADDR BRIEF" sh -c 'ip -brief addr 2>/dev/null || ip addr'
 
   section "HTTP / READY"
-  redacted_status_json "http://127.0.0.1:8080/ready" "$INCLUDE_SENSITIVE"
+  redacted_status_json "${BASE_URL}/ready" "$INCLUDE_SENSITIVE"
 
   section "HTTP / STATUS REDACTED"
-  redacted_status_json "http://127.0.0.1:8080/status" "$INCLUDE_SENSITIVE"
+  redacted_status_json "${BASE_URL}/status" "$INCLUDE_SENSITIVE"
 
   section "HTTP / ENDPOINT TIMINGS"
-  http_timing "http://127.0.0.1:8080/"
-  http_timing "http://127.0.0.1:8080/status"
-  http_timing "http://127.0.0.1:8080/soc-day-data"
-  http_timing "http://127.0.0.1:8080/graph"
-  http_timing "http://127.0.0.1:8080/api/graph/v1/runtime"
-  http_timing "http://127.0.0.1:8080/api/graph/v1/workspace"
-  http_timing "http://127.0.0.1:8080/grid-mini-sparkline"
-  http_timing "http://127.0.0.1:8080/measurement-db-status"
+  http_timing "${BASE_URL}/"
+  http_timing "${BASE_URL}/status"
+  http_timing "${BASE_URL}/soc-day-data"
+  http_timing "${BASE_URL}/graph"
+  http_timing "${BASE_URL}/api/graph/v1/runtime"
+  http_timing "${BASE_URL}/api/graph/v1/workspace"
+  http_timing "${BASE_URL}/grid-mini-sparkline"
+  http_timing "${BASE_URL}/measurement-db-status"
 
   section "HTTP / MEASUREMENT DB STATUS"
-  redacted_status_json "http://127.0.0.1:8080/measurement-db-status" "$INCLUDE_SENSITIVE"
+  redacted_status_json "${BASE_URL}/measurement-db-status" "$INCLUDE_SENSITIVE"
 
   section "RECENT DOWNLOAD ZIPS"
   ls -lah "$HOME/Downloads"/zendure_controller_*.zip 2>/dev/null | tail -n 20 || true

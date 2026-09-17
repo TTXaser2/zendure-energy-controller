@@ -69,6 +69,7 @@ class ValidationContext:
     unknown_keys_preserved: bool = True
     first_install: bool = False
     explicit_keys: Tuple[str, ...] = ()
+    web_port_candidate_available: Optional[bool] = None
 
 
 def _issue(code: str, severity: ValidationSeverity, keys: Sequence[str], blocking: bool = True, **params: Any) -> ValidationIssue:
@@ -226,6 +227,9 @@ def validate_candidate(values: Mapping[str, Any], context: Optional[ValidationCo
         issues.append(_issue("VAL-023", ValidationSeverity.ERROR, ("MQTT_PASSWORD",)))
     if not context.unknown_keys_preserved:
         issues.append(_issue("VAL-024", ValidationSeverity.ERROR, tuple()))
+
+    if _changed("WEB_PORT", values, context.previous) and context.web_port_candidate_available is False:
+        issues.append(_issue("VAL-027", ValidationSeverity.ERROR, ("WEB_PORT",), port=get("WEB_PORT")))
 
     if context.first_install:
         explicit = set(context.explicit_keys)

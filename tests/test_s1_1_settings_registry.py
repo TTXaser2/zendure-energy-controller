@@ -44,7 +44,7 @@ class TestS11SettingsRegistry(unittest.TestCase):
                 self.assertTrue(result.ok, result.issue)
 
     def test_dependency_and_validator_references_are_closed(self):
-        valid_rule_ids = {"VAL-{:03d}".format(number) for number in range(1, 27)}
+        valid_rule_ids = {"VAL-{:03d}".format(number) for number in range(1, 28)}
         for spec in SETTINGS:
             with self.subTest(key=spec.key):
                 self.assertTrue(set(spec.dependency_keys).issubset(SETTINGS_BY_KEY))

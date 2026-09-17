@@ -6,25 +6,15 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_v15_0_2_release_identity_and_exact_source():
-    assert version.APP_VERSION == "15.0.2"
-    assert version.APP_VERSION_LABEL == "V15.0.2"
-    assert version.APP_BUILD_ID == "v15.0.2-20260911"
-    script = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
-    for token in (
-        'EXPECTED_VERSION="v15_0_2"',
-        'EXPECTED_SOURCE_VERSION="15.0.1"',
-        'EXPECTED_SOURCE_BUILD_ID="v15.0.1-20260911"',
-        'EXPECTED_TARGET_VERSION="15.0.2"',
-        'EXPECTED_TARGET_BUILD_ID="v15.0.2-20260911"',
-        'SOURCE_MODE="V15_0_1"',
-        'V15_0_2_SOURCE_MANIFEST.sha256',
-        '/tmp/zec_v15_0_2_install_report.json',
-    ):
+    assert version.APP_VERSION == "16.0.1"
+    assert version.APP_VERSION_LABEL == "V16.0.1"
+    assert version.APP_BUILD_ID == "v16.0.1-20260915"
+    script = (ROOT / "tools/install_zendure_controller.sh").read_text(encoding="utf-8")
+    for token in ('EXPECTED_VERSION_ARG="v16_0_1"','EXPECTED_SOURCE_VERSION="15.0.3"','EXPECTED_SOURCE_BUILD_ID="v15.0.3-20260911"','EXPECTED_TARGET_VERSION="16.0.1"','EXPECTED_TARGET_BUILD_ID="v16.0.1-20260915"','SOURCE_MANIFEST="V16_0_1_SOURCE_MANIFEST.sha256"','/tmp/zec_v16_0_1_install_report.json'):
         assert token in script
 
-
 def test_v15_installer_preserves_config_runtime_and_graph_core_v3():
-    script = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
+    script = (ROOT / "tools/install_zendure_controller.sh").read_text(encoding="utf-8")
     assert "v14_cutover.py rebuild" not in script
     assert "graph_core_v3_preserved" in script
     assert "v14_cutover.py verify" in script
@@ -40,13 +30,13 @@ def test_v15_installer_preserves_config_runtime_and_graph_core_v3():
 def test_v15_field_acceptance_can_require_native_modbus_profile():
     tool = (ROOT / "tools/v15_field_acceptance.py").read_text(encoding="utf-8")
     for token in (
-        'EXPECTED_VERSION = "15.0.2"',
-        'EXPECTED_BUILD_ID = "v15.0.2-20260911"',
+        'EXPECTED_VERSION = "15.0.3"',
+        'EXPECTED_BUILD_ID = "v15.0.3-20260911"',
         '--expect-primary-profile',
         '"modbus_template"',
         '"modbus_tcp"',
         'primary_storage_source_expected',
-        '/tmp/zec_v15_0_2_install_report.json',
+        '/tmp/zec_v15_0_3_install_report.json',
     ):
         assert token in tool
     assert "commands_published_by_this_tool" in tool
@@ -54,9 +44,11 @@ def test_v15_field_acceptance_can_require_native_modbus_profile():
 
 
 def test_v15_keeps_v14_graph_contract_without_rebuild():
-    installer = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
-    field = (ROOT / "tools/v15_field_acceptance.py").read_text(encoding="utf-8")
-    for text in (installer, field):
-        assert 'data-greenfield-contract="v14.1.4"' in text
-        assert '/static/graph_v14_1.js' in text
-        assert '/api/graph/v1/workspace' in text
+    installer = (ROOT / "tools/install_zendure_controller.sh").read_text(encoding="utf-8")
+    field = (ROOT / "tools/v16_field_acceptance.py").read_text(encoding="utf-8")
+    page = (ROOT / "graph_ui/page.py").read_text(encoding="utf-8")
+    assert 'data-greenfield-contract="v14.1.4"' in page
+    assert '/static/graph_v14_1.js' in field
+    assert '/api/graph/v1/workspace' in field
+    assert 'v14_cutover.py verify' in installer
+    assert 'v14_cutover.py rebuild' not in installer

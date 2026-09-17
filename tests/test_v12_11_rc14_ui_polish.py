@@ -12,7 +12,7 @@ TOOLS = ROOT / "tools"
 
 class TestRC14UiPolish(unittest.TestCase):
     def test_version_label_rc14(self):
-        self.assertEqual(version.APP_VERSION_LABEL, "V15.0.2")
+        self.assertEqual(version.APP_VERSION_LABEL, "V16.0.1")
 
     def test_status_page_uses_neutral_night_context_and_svg_icons(self):
         cfg = {"UI_DARK_MODE":False, "NIGHT_DISCHARGE_ENABLED":True, "NIGHT_START_HOUR":21, "NIGHT_START_MINUTE":30, "NIGHT_END_HOUR":5, "NIGHT_END_MINUTE":30, "NIGHT_DISCHARGE_POWER_W":400}
@@ -40,12 +40,15 @@ class TestRC14UiPolish(unittest.TestCase):
         self.assertTrue(os.access(crash_tool, os.X_OK))
         subprocess.run(["bash", "-n", str(crash_tool)], check=True)
         tool_text = crash_tool.read_text(encoding="utf-8")
-        self.assertIn("journalctl -k", tool_text)
-        self.assertIn("mmc|blk|sda|usb", tool_text)
+        self.assertIn("zec_support_bundle.py", tool_text)
+        support_text = (TOOLS / "zec_support_bundle.py").read_text(encoding="utf-8")
+        self.assertIn("'journalctl','-k'", support_text)
+        self.assertIn("mmc|blk|sda|usb", support_text)
+        self.assertIn("config.redacted.json", support_text)
+        self.assertIn("RAW_CONFIG_FORBIDDEN_IN_SUPPORT_BUNDLE", support_text)
         shortcut_text = (TOOLS / "create_desktop_shortcuts.sh").read_text(encoding="utf-8")
         self.assertIn("ZEC_Crashpaket_erstellen.desktop", shortcut_text)
         self.assertIn("collect_zec_crash_package.sh --pause", shortcut_text)
-
 
 if __name__ == "__main__":
     unittest.main()

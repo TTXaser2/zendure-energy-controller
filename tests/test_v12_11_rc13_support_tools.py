@@ -11,7 +11,7 @@ TOOLS = ROOT / "tools"
 class TestRC13SupportTools(unittest.TestCase):
     def test_version_label_rc13(self):
         import version
-        self.assertEqual(version.APP_VERSION_LABEL, "V15.0.2")
+        self.assertEqual(version.APP_VERSION_LABEL, "V16.0.1")
 
     def test_support_tools_exist_and_are_shell_syntax_valid(self):
         for name in [
@@ -45,9 +45,8 @@ class TestRC13SupportTools(unittest.TestCase):
         self.assertIn("collect_zec_crash_package.sh --pause", text)
 
     def test_update_script_marks_shell_tools_executable(self):
-        text = (TOOLS / "update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn('find "$TARGET" -type f -name "*.sh" -exec chmod 750 {} \\;', text)
-
+        text = (TOOLS / "install_zendure_controller.sh").read_text(encoding="utf-8")
+        self.assertIn("find \"$TARGET\" -type f -name '*.sh' -exec chmod 750 {} \\;", text)
 
 if __name__ == "__main__":
     unittest.main()

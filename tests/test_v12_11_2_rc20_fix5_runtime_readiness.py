@@ -49,7 +49,7 @@ class Rc20Fix5RuntimeReadinessTests(unittest.TestCase):
             health = endpoint(app, "/health")()
             ready = endpoint(app, "/ready")()
             self.assertTrue(health["alive"])
-            self.assertEqual("15.0.2", health["version"])
+            self.assertEqual("16.0.1", health["version"])
             self.assertIsInstance(ready, dict)
             self.assertFalse(ready["ready"])
             self.assertIn("settings_runtime", ready)
@@ -78,12 +78,12 @@ class Rc20Fix5RuntimeReadinessTests(unittest.TestCase):
         self.assertEqual(set(), reads - fields - methods)
 
     def test_installer_runs_runtime_smoke_before_and_after_copy(self):
-        script = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
+        script = (ROOT / "tools/install_zendure_controller.sh").read_text(encoding="utf-8")
         self.assertIn("verify_runtime_readiness_smoke", script)
-        self.assertIn('verify_runtime_readiness_smoke "$DIR"', script)
+        self.assertIn('verify_runtime_readiness_smoke "$STAGED_ROOT"', script)
         self.assertIn('verify_runtime_readiness_smoke "$TARGET"', script)
-        self.assertGreaterEqual(script.count('PYTHONWARNINGS="error::ResourceWarning"'), 2)
-
+        self.assertIn('ZEC_INSTALLER_PREFLIGHT=1', script)
+        self.assertIn('PYTHONWARNINGS="error::ResourceWarning"', script)
 
 if __name__ == "__main__":
     unittest.main()

@@ -15,8 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class Rc20ReleaseIntegrationTests(unittest.TestCase):
     def test_version_is_rc20_without_measurement_schema_change(self):
-        self.assertEqual("15.0.2", version.APP_VERSION)
-        self.assertEqual("V15.0.2", version.APP_VERSION_LABEL)
+        self.assertEqual("16.0.1", version.APP_VERSION)
+        self.assertEqual("V16.0.1", version.APP_VERSION_LABEL)
         self.assertFalse(hasattr(version, "CSV_SCHEMA"))
 
     def test_migration_cli_check_apply_and_idempotence(self):
@@ -99,65 +99,60 @@ class Rc20ReleaseIntegrationTests(unittest.TestCase):
                     migrate_rc19_to_rc20({"ZENDURE_BATTERY_CAPACITY_KWH": legacy})
 
     def test_updater_is_exact_sequential_atomic_and_rollback_capable(self):
-        script = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_VERSION="v15_0_2"', script)
-        self.assertIn('EXPECTED_SOURCE_VERSION="15.0.1"', script)
-        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v15.0.1-20260911"', script)
-        self.assertIn('EXPECTED_TARGET_VERSION="15.0.2"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v15.0.2-20260911"', script)
-        self.assertIn('SOURCE_MODE="V15_0_1"', script)
-        self.assertIn('EXPECTED_TARGET_VERSION" ]', script)
-        self.assertIn("migrate_config_to_current.py", script)
-        self.assertIn("v14_cutover.py", script)
-        self.assertIn("collect_zec_install_diagnostics.sh", script)
-        self.assertIn("--check-only", script)
-        self.assertIn("recover_on_error", script)
-        self.assertIn('sudo tar -xzf "$BACKUP" -C /opt', script)
-        self.assertIn("evaluate_installation_readiness.py", script)
-        self.assertIn("weder ready=true noch einen stabilen sicheren Übergangszustand", script)
-        self.assertIn("zendure-controller-restart", script)
-        self.assertIn("visudo -cf", script)
-        self.assertIn("config-states/", script)
-        self.assertNotIn("EXPECTED_SOURCE_V12122_VERSION", script)
+        script = (ROOT / "tools/install_zendure_controller.sh").read_text(encoding="utf-8")
+        for marker in (
+            'EXPECTED_VERSION_ARG="v16_0_1"',
+            'EXPECTED_SOURCE_VERSION="15.0.3"',
+            'EXPECTED_SOURCE_BUILD_ID="v15.0.3-20260911"',
+            'EXPECTED_TARGET_VERSION="16.0.1"',
+            'EXPECTED_TARGET_BUILD_ID="v16.0.1-20260915"',
+            'SOURCE_MANIFEST="V16_0_1_SOURCE_MANIFEST.sha256"',
+            'SUPPORTED_UPDATE', 'CLEAN_FRESH_INSTALL', 'AMBIGUOUS_OR_PARTIAL_INSTALL',
+            'migrate_config_to_current.py', 'tools/v14_cutover.py verify',
+            'start_support_capture "pre_rollback"', 'finalize_support_capture',
+            'rollback_update', 'sudo tar -xzf "$BACKUP" -C /opt',
+            'evaluate_installation_readiness.py',
+            'weder ready=true noch einen stabilen sicheren Übergangszustand',
+            'zendure-controller-restart', 'visudo -cf', 'config-states/',
+        ):
+            self.assertIn(marker, script)
+        self.assertNotIn('SOURCE_MODE="V15_0_2"', script)
         self.assertNotIn("SERVICE_RESTART_COMMAND", script)
-
     def test_updater_has_no_mandatory_node_runtime_dependency(self):
-        script = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn("verify_source_manifest", script)
+        script = (ROOT / "tools/install_zendure_controller.sh").read_text(encoding="utf-8")
+        self.assertIn("verify_manifest_at", script)
         self.assertIn("command -v node", script)
-        self.assertIn("Node.js ist nicht installiert; keine Produktivabhängigkeit", script)
+        self.assertIn("Node.js ist nicht installiert; Manifestnachweis bleibt maßgeblich", script)
         self.assertEqual(3, script.count("node --check"))
-
     def test_preflight_failure_does_not_touch_productive_services(self):
-        script = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
-        branch = script.index('if [ "$INSTALLATION_STARTED" -eq 0 ]')
-        early_exit = script.index('exit "$exit_code"', branch)
-        service_stop = script.index("sudo systemctl stop", branch)
-        self.assertLess(early_exit, service_stop)
-        preflight_passed = script.index('echo "Paketpreflight und Config-Migrationspreflight bestanden."')
-        installation_start = script.index("INSTALLATION_STARTED=1")
-        regular_stop = script.index('echo "Stoppe Dienste..."')
-        self.assertLess(preflight_passed, installation_start)
-        self.assertLess(installation_start, regular_stop)
-
+        script = (ROOT / "tools/install_zendure_controller.sh").read_text(encoding="utf-8")
+        preflight = script.index('if [ "$PREFLIGHT_ONLY" -eq 1 ]')
+        mutation = script.index("INSTALLATION_STARTED=1")
+        regular_stop = script.index('echo "Stoppe bestehende ZEC-Dienste..."')
+        self.assertLess(preflight, mutation)
+        self.assertLess(mutation, regular_stop)
+        self.assertIn("PRODUCTIVE_CHANGES=NONE", script[:mutation])
+        error = script[script.index("on_error()"):script.index("trap 'on_error")]
+        self.assertIn('if [ "$INSTALLATION_STARTED" -eq 1 ]', error)
+        self.assertLess(error.index('start_support_capture "pre_rollback"'), error.index('if [ "$INSTALLATION_STARTED" -eq 1 ]'))
     def test_err_trap_is_not_inherited_into_preflight_subshell(self):
-        script = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn("set -euo pipefail", script)
-        self.assertNotIn("set -Eeuo pipefail", script)
-        self.assertIn("trap 'recover_on_error $?' ERR", script)
-        self.assertIn('${BASH_SUBSHELL:-0}', script)
-        self.assertGreaterEqual(script.count("trap - ERR"), 3)
-        self.assertNotIn("trap recover_on_error ERR", script)
-
+        script = (ROOT / "tools/install_zendure_controller.sh").read_text(encoding="utf-8")
+        self.assertIn("set -Eeuo pipefail", script)
+        self.assertIn("trap 'on_error $? $LINENO' ERR", script)
+        self.assertIn("trap 'on_error $? $LINENO' EXIT", script)
+        smoke = script[script.index("verify_runtime_readiness_smoke()"):script.index("package_preflight()")]
+        self.assertIn("trap - ERR", smoke)
+        preflight_exit = script[script.index('if [ "$PREFLIGHT_ONLY" -eq 1 ]'):script.index("INSTALLATION_STARTED=1")]
+        self.assertIn("trap - ERR EXIT", preflight_exit)
     def test_preflight_disables_real_restart_and_escalates_resource_warnings(self):
-        script = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
+        script = (ROOT / "tools/install_zendure_controller.sh").read_text(encoding="utf-8")
         self.assertIn('ZEC_INSTALLER_PREFLIGHT=1', script)
         self.assertIn('PYTHONWARNINGS="error::ResourceWarning"', script)
         web_ui = (ROOT / "web_ui.py").read_text(encoding="utf-8")
         self.assertIn('os.environ.get("ZEC_INSTALLER_PREFLIGHT") == "1"', web_ui)
 
     def test_release_manifest_must_not_ship_runtime_logs(self):
-        manifest = (ROOT / "V15_0_2_SOURCE_MANIFEST.sha256").read_text(encoding="utf-8")
+        manifest = (ROOT / "V15_0_3_SOURCE_MANIFEST.sha256").read_text(encoding="utf-8")
         self.assertNotIn("./logs/", manifest)
         self.assertNotIn(".sqlite3", manifest)
 

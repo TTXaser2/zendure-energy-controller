@@ -33,6 +33,7 @@ from settings_registry import (
     Editability,
     SettingSpec,
 )
+from tools.deployment_contract import BOOTSTRAP_NAME, load_bootstrap
 from settings_validation import (
     ParsedCandidate,
     ValidationContext,
@@ -750,6 +751,8 @@ class SettingsRuntimeManager:
         self._file_fingerprint: Optional[FileFingerprint] = None
         self._config_health = CONFIG_HEALTH_MISSING
         self._startup_mode = STARTUP_FIRST_INSTALL
+        self._process_started_first_install = False
+        self._first_install_bootstrap: Dict[str, Any] = {}
         self._effective_source = "defaults_first_install"
         self._primary_valid = False
         self._invalid_file_revision: Optional[str] = None
@@ -799,6 +802,8 @@ class SettingsRuntimeManager:
 
     def control_allowed(self) -> bool:
         with self._lock:
+            if self._process_started_first_install:
+                return False
             return self._startup_mode in (STARTUP_NORMAL, STARTUP_RECOVERY_ACTIVE)
 
     def startup_mode(self) -> str:
@@ -883,8 +888,23 @@ class SettingsRuntimeManager:
         if source == "external_reload":
             self._last_external_reload_at = _utc_now_iso()
 
+    def _first_install_bootstrap_path(self) -> str:
+        return os.path.join(os.path.dirname(self.path) or ".", BOOTSTRAP_NAME)
+
+    def _load_first_install_bootstrap(self) -> Dict[str, Any]:
+        try:
+            return dict(load_bootstrap(self._first_install_bootstrap_path()))
+        except ValueError as exc:
+            self._issues = self._issues + (RuntimeIssue(
+                "FIRST_INSTALL_BOOTSTRAP_INVALID", "error", ("WEB_PORT",),
+                params={"error": str(exc)}, source="first_install_bootstrap", blocking=True,
+            ),)
+            return {}
+
     def load(self) -> Dict[str, Any]:
         with self._lock:
+            self._process_started_first_install = False
+            self._first_install_bootstrap = {}
             file_result = stable_read(self.path)
             if file_result.status == "ok" and file_result.data is not None:
                 raw, decode_issues = decode_json_object(file_result.data)
@@ -927,13 +947,25 @@ class SettingsRuntimeManager:
                 return dict(self._effective)
 
             self._effective = registry_defaults(new_install=True)
+            first_install_candidate = (
+                file_result.status == "missing"
+                and not any(os.path.exists(self.last_good_store.config_path_for(slot)) for slot in ("A", "B"))
+            )
+            if first_install_candidate:
+                self._first_install_bootstrap = self._load_first_install_bootstrap()
+                if self._first_install_bootstrap:
+                    self._configured.update(self._first_install_bootstrap)
+                    self._effective.update(self._first_install_bootstrap)
+                    self._effective_source = "defaults_first_install_bootstrap"
+                else:
+                    self._effective_source = "defaults_first_install"
+                self._startup_mode = STARTUP_FIRST_INSTALL
+                self._process_started_first_install = True
+            else:
+                self._effective_source = "defaults_diagnostic_only"
+                self._startup_mode = STARTUP_CONFIG_ERROR
             self._startup_effective = dict(self._effective)
             self._effective_revision = typed_revision(self._effective)
-            self._effective_source = "defaults_diagnostic_only"
-            if file_result.status == "missing" and not any(os.path.exists(self.last_good_store.config_path_for(slot)) for slot in ("A", "B")):
-                self._startup_mode = STARTUP_FIRST_INSTALL
-            else:
-                self._startup_mode = STARTUP_CONFIG_ERROR
             return dict(self._effective)
 
     def _current_stat_fingerprint(self) -> Optional[FileFingerprint]:
@@ -1098,6 +1130,16 @@ class SettingsRuntimeManager:
                 raise RuntimeError("CONFIG_POST_WRITE_VERIFY_FAILED")
             before_effective = dict(self._effective)
             self._set_valid_primary(result, reread, startup=False, source="commit")
+            if first_install:
+                try:
+                    os.unlink(self._first_install_bootstrap_path())
+                except FileNotFoundError:
+                    pass
+                self._first_install_bootstrap = {}
+                # This process deliberately remains fail-closed until restart.
+                # Restart-required first-install values (DEVICE_ID/MQTT_BROKER/WEB_PORT)
+                # are only authoritative after a clean process start.
+                self._process_started_first_install = True
             self._runtime_change_pending = True
             self._last_commit_at = _utc_now_iso()
             apply_plan = build_apply_plan(result.configured, before_effective)
@@ -1201,7 +1243,13 @@ class SettingsRuntimeManager:
         configured source visible to the UI, so an explicit patch can repair it.
         """
         with self._lock:
-            return dict(self._invalid_raw) if self._invalid_raw is not None else dict(self._persisted)
+            if self._invalid_raw is not None:
+                return dict(self._invalid_raw)
+            if self._startup_mode == STARTUP_FIRST_INSTALL and not self._primary_valid:
+                # Deployment bootstrap values are part of the first-install draft
+                # even though no canonical config.json exists yet.
+                return dict(self._first_install_bootstrap)
+            return dict(self._persisted)
 
     def cas_revision(self) -> str:
         with self._lock:
@@ -1231,7 +1279,9 @@ class SettingsRuntimeManager:
                 "configured_file_valid": self._config_health == CONFIG_HEALTH_VALID,
                 "effective_config_valid": bool(self._effective),
                 "startup_mode": self._startup_mode,
-                "control_allowed": self._startup_mode in (STARTUP_NORMAL, STARTUP_RECOVERY_ACTIVE),
+                "control_allowed": (not self._process_started_first_install) and self._startup_mode in (STARTUP_NORMAL, STARTUP_RECOVERY_ACTIVE),
+                "first_install_restart_required": bool(self._process_started_first_install and self._primary_valid),
+                "first_install_bootstrap": dict(self._first_install_bootstrap),
                 "recovery_mode": self._startup_mode in (STARTUP_RECOVERY_WAITING, STARTUP_RECOVERY_ACTIVE),
                 "effective_source": self._effective_source,
                 "configured_revision": self._configured_revision,

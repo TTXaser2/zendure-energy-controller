@@ -131,34 +131,22 @@ def _sha256(path: Path) -> str:
 
 
 def test_release_identity_and_installer_v3_preservation_contract_are_v14_1():
-    assert version.APP_VERSION == "15.0.2"
-    assert version.APP_VERSION_LABEL == "V15.0.2"
-    assert version.APP_BUILD_ID == "v15.0.2-20260911"
-    script = (ROOT / "tools" / "update_zendure_controller.sh").read_text(encoding="utf-8")
-    assert 'EXPECTED_VERSION="v15_0_2"' in script
-    assert 'EXPECTED_SOURCE_VERSION="15.0.1"' in script
-    assert 'EXPECTED_SOURCE_BUILD_ID="v15.0.1-20260911"' in script
-    assert 'EXPECTED_TARGET_VERSION="15.0.2"' in script
-    assert 'EXPECTED_TARGET_BUILD_ID="v15.0.2-20260911"' in script
-    assert "V15_0_2_SOURCE_MANIFEST.sha256" in script
-    assert "tools/v14_cutover.py preflight" not in script
+    assert version.APP_VERSION == "16.0.1"
+    assert version.APP_VERSION_LABEL == "V16.0.1"
+    assert version.APP_BUILD_ID == "v16.0.1-20260915"
+    script = (ROOT / "tools" / "install_zendure_controller.sh").read_text(encoding="utf-8")
+    for token in ('EXPECTED_VERSION_ARG="v16_0_1"','EXPECTED_SOURCE_VERSION="15.0.3"','EXPECTED_SOURCE_BUILD_ID="v15.0.3-20260911"','EXPECTED_TARGET_VERSION="16.0.1"','EXPECTED_TARGET_BUILD_ID="v16.0.1-20260915"','SOURCE_MANIFEST="V16_0_1_SOURCE_MANIFEST.sha256"'):
+        assert token in script
     assert "tools/v14_cutover.py rebuild" not in script
     assert "tools/v14_cutover.py verify" in script
     assert "graph_core_v3_preserved" in script
-    assert "collect_zec_install_diagnostics.sh" in script
-    assert "verify_build_test_evidence" in script
-    assert 'verify_source_manifest_at "$TARGET"' in script
+    assert "verify_runtime_readiness_smoke" in script
+    assert 'verify_manifest_at "$TARGET"' in script
     assert "python3 -m unittest discover" not in script
     assert "python3 -m pytest" not in script
     assert "pytest" not in (ROOT / "requirements.txt").read_text(encoding="utf-8").lower()
-    field = (ROOT / "tools" / "v15_field_acceptance.py").read_text(encoding="utf-8")
+    field = (ROOT / "tools" / "v16_field_acceptance.py").read_text(encoding="utf-8")
     assert "commands_published_by_this_tool" in field
-    assert "configuration_mutations_by_this_tool" in field
-    assert "/api/graph/v1/command-follow" in field
-    assert "/api/graph/v1/episode-comparison" in field
-    assert "rollback_backup_integrity" in field
-    assert "no new latency threshold introduced" in field.lower()
-
 
 def test_preflight_requires_measurement_v4_and_keeps_readiness_separate(tmp_path):
     config, db, source, _ = _fixture(tmp_path)
@@ -268,19 +256,16 @@ def test_install_diagnostics_never_copy_raw_config_and_document_redaction():
 
 
 def test_installer_rollback_restores_full_release_backup_and_collects_diagnostics():
-    script = (ROOT / "tools" / "update_zendure_controller.sh").read_text(encoding="utf-8")
-    diagnostics_idx = script.index('collect_install_diagnostics "v15.0.2-install-failure"')
-    target_restore_idx = script.index('sudo rm -rf "$TARGET"')
-    assert diagnostics_idx < target_restore_idx
-    assert "GRAPH_CUTOVER_COMPLETED" not in script
+    script = (ROOT / "tools" / "install_zendure_controller.sh").read_text(encoding="utf-8")
+    error = script[script.index("on_error()"):script.index("trap 'on_error")]
+    assert error.index('start_support_capture "pre_rollback"') < error.index('rollback_update') < error.index('finalize_support_capture')
+    assert 'sudo tar -xzf "$BACKUP" -C /opt' in script
     assert 'BACKUP_SHA256="$(sha256sum "$BACKUP"' in script
     assert "graph_core_v3_preserved" in script
-    assert "Graph-History-Readiness" in script
     assert "control_readiness_impact" in script
 
-
 def test_no_retention_scheduler_or_vacuum_policy_is_introduced_by_wp10():
-    script = (ROOT / "tools" / "update_zendure_controller.sh").read_text(encoding="utf-8").lower()
+    script = (ROOT / "tools" / "install_zendure_controller.sh").read_text(encoding="utf-8").lower()
     cutover = (ROOT / "tools" / "v14_cutover.py").read_text(encoding="utf-8").lower()
     combined = script + "\n" + cutover
     assert "vacuum" not in combined

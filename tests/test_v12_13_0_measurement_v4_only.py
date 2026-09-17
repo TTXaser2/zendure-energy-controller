@@ -71,20 +71,18 @@ class V12130MeasurementV4OnlyTests(unittest.TestCase):
 
 
     def test_installer_accepts_v14_0_0_r2_and_targets_v14_1_3_preserving_v3(self):
-        script = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_VERSION="v15_0_2"', script)
-        self.assertIn('EXPECTED_SOURCE_VERSION="15.0.1"', script)
-        self.assertIn('EXPECTED_SOURCE_BUILD_ID="v15.0.1-20260911"', script)
-        self.assertIn('SOURCE_MODE="V15_0_1"', script)
-        self.assertIn('EXPECTED_TARGET_BUILD_ID="v15.0.2-20260911"', script)
-        self.assertIn('V15_0_2_SOURCE_MANIFEST.sha256', script)
-        self.assertNotIn('tools/v14_cutover.py preflight', script)
+        script = (ROOT / "tools/install_zendure_controller.sh").read_text(encoding="utf-8")
+        for marker in (
+            'EXPECTED_VERSION_ARG="v16_0_1"',
+            'EXPECTED_SOURCE_VERSION="15.0.3"',
+            'EXPECTED_SOURCE_BUILD_ID="v15.0.3-20260911"',
+            'EXPECTED_TARGET_BUILD_ID="v16.0.1-20260915"',
+            'SOURCE_MANIFEST="V16_0_1_SOURCE_MANIFEST.sha256"',
+            'tools/v14_cutover.py verify', 'graph_core_v3_preserved',
+        ):
+            self.assertIn(marker, script)
         self.assertNotIn('tools/v14_cutover.py rebuild', script)
-        self.assertIn('tools/v14_cutover.py verify', script)
-        self.assertIn('graph_core_v3_preserved', script)
         self.assertNotIn('python3 tools/backfill_graph_config_timeline.py', script)
-        self.assertNotIn('SOURCE_MODE="V12_12_2"', script)
-
     def test_release_migration_cli_moves_schema_3_to_4_and_then_noops(self):
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / "config.json"

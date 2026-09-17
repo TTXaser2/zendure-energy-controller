@@ -1,0 +1,9 @@
+{
+  "schema": "ZEC-DATASHEET-RELEASE-METADATA-V1",
+  "release_version": "16.0.1",
+  "release_label": "V16.0.1",
+  "build_id": "v16.0.1-20260915",
+  "status": "ENGINEERING_RELEASE_CANDIDATE",
+  "docx_sha256": "71b0824ee4a107c94ac6c6fafcbfd06457b728302055b00f9e868c0f1422c56b",
+  "pdf_sha256": "8cb8148d64ea180d50fa8ebdbd919f6f7cfb938cdefb85c56f82a9b3870cbdf6"
+}

@@ -5,6 +5,16 @@ set -euo pipefail
 DURATION_MINUTES=20
 INTERVAL_SECONDS=2
 OUTPUT_DIR="/home/pi/Downloads"
+INSTALL_DIR="/opt/zendure-controller"
+DEFAULT_WEB_PORT=8080
+BASE_URL="http://127.0.0.1:${DEFAULT_WEB_PORT}"
+if [[ -f "$INSTALL_DIR/tools/deployment_contract.py" ]]; then
+  resolved="$(python3 "$INSTALL_DIR/tools/deployment_contract.py" endpoint --target "$INSTALL_DIR" --json 2>/dev/null || true)"
+  if [[ -n "$resolved" ]]; then
+    resolved_port="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("port",8080))' "$resolved" 2>/dev/null || echo 8080)"
+    BASE_URL="http://127.0.0.1:${resolved_port}"
+  fi
+fi
 
 usage() {
   cat <<'TXT'
@@ -36,10 +46,10 @@ ARCHIVE="${WORK}.tar.gz"
 START_JOURNAL="$(date '+%Y-%m-%d %H:%M:%S')"
 mkdir -p "$WORK"
 
-curl -fsS --max-time 5 'http://127.0.0.1:8080/operational-events?days=2&limit=1000' \
+curl -fsS --max-time 5 "${BASE_URL}/operational-events?days=2&limit=1000" \
   > "$WORK/operational_events_before.json" 2> "$WORK/operational_events_before.err" || true
 
-python3 - "$WORK/status_samples.jsonl" "$DURATION_MINUTES" "$INTERVAL_SECONDS" <<'PY'
+python3 - "$WORK/status_samples.jsonl" "$DURATION_MINUTES" "$INTERVAL_SECONDS" "$BASE_URL" <<'PY'
 import datetime as dt
 import json
 import sys
@@ -49,6 +59,7 @@ import urllib.request
 out_path = sys.argv[1]
 duration_s = max(1.0, float(sys.argv[2]) * 60.0)
 interval_s = max(0.5, float(sys.argv[3]))
+base_url = sys.argv[4].rstrip("/")
 end_at = time.monotonic() + duration_s
 keys = (
     "operating_mode", "control_reason", "zendure_target_signed_power",
@@ -74,7 +85,7 @@ with open(out_path, "w", encoding="utf-8", buffering=1) as out:
         sample += 1
         row = {"captured_at": iso_now(), "sample": sample}
         try:
-            with urllib.request.urlopen("http://127.0.0.1:8080/status", timeout=3) as response:
+            with urllib.request.urlopen(base_url + "/status", timeout=3) as response:
                 data = json.loads(response.read().decode("utf-8", errors="replace"))
             for key in keys:
                 row[key] = data.get(key)
@@ -87,7 +98,7 @@ with open(out_path, "w", encoding="utf-8", buffering=1) as out:
             time.sleep(remaining)
 PY
 
-curl -fsS --max-time 5 'http://127.0.0.1:8080/operational-events?days=2&limit=1000' \
+curl -fsS --max-time 5 "${BASE_URL}/operational-events?days=2&limit=1000" \
   > "$WORK/operational_events_after.json" 2> "$WORK/operational_events_after.err" || true
 
 # Use journalctl's unambiguous local-time format. ISO strings containing T and

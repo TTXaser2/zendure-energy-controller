@@ -12,6 +12,7 @@ from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Tuple
 from settings_apply_policy import ApplyPlan, build_apply_plan
 from settings_registry import SETTINGS_BY_KEY, ApplyClass, Editability, ResetPolicy
 from settings_runtime import CandidateResult, SettingsRuntimeManager
+from tools.deployment_contract import is_tcp_port_available
 from settings_validation import ValidationContext, ValidationIssue, ValidationSeverity
 
 PREVIEW_TTL_SECONDS = 300.0
@@ -74,6 +75,8 @@ ISSUE_MESSAGES = {
     "FIRST_INSTALL_REQUIRED": "Diese Einstellung muss bei der Erstinbetriebnahme ausdrücklich festgelegt werden.",
     "FIRST_INSTALL_GRID_SOURCE_INCOMPLETE": "Die gewählte Netzleistungsquelle ist für die Erstinbetriebnahme noch unvollständig konfiguriert.",
     "VAL-025": "Bei aktivierter Nachtentladung muss eine feste Nachtleistung größer als 0 W bewusst festgelegt werden.",
+    "VAL-026": "Die gewählte direkte Modbus-Datenquelle ist unvollständig oder ungültig konfiguriert.",
+    "VAL-027": "Der gewählte Web-Port ist bereits belegt und kann nach dem Neustart nicht gebunden werden.",
 }
 
 
@@ -195,6 +198,12 @@ class SettingsService:
                 grid_ready = bool(candidate.get("SHELLY_IP"))
             else:
                 grid_ready = False
+        web_port_available = None
+        try:
+            if candidate.get("WEB_PORT") != current.get("WEB_PORT"):
+                web_port_available = is_tcp_port_available(int(candidate.get("WEB_PORT")), "0.0.0.0")
+        except Exception:
+            web_port_available = False
         return ValidationContext(
             previous=current,
             grid_source_candidate_ready=grid_ready,
@@ -203,6 +212,7 @@ class SettingsService:
             unknown_keys_preserved=all(key in candidate for key in current_persisted if key not in SETTINGS_BY_KEY),
             first_install=self.manager.is_first_install(),
             explicit_keys=tuple(explicit_keys if explicit_keys is not None else candidate.keys()),
+            web_port_candidate_available=web_port_available,
         )
 
     def _finalize_preview(

@@ -1,55 +1,191 @@
-# Installation – Zendure Energy Controller V14.1.4
+# Installation – Zendure Energy Controller V16.0.1
 
-**Release:** `V14.1.4`  
-**Build-ID:** `v14.1.4-20260908`
+**Release:** `V16.0.1`  
+**Build-ID:** `v16.0.1-20260915`
 
-## Supported source
+V16.0.1 besitzt einen gemeinsamen Deploymentpfad für ein strikt unterstütztes Update und einen Clean Fresh Install. Unklare oder partielle Installationen werden fail-closed abgewiesen.
 
-This installer accepts **only** the verified productive source:
+## 1. Voraussetzungen
 
-- Version `14.1.3`
-- Build-ID `v14.1.3-20260906`
+Der ZEC-Installer ist kein Betriebssystem-Bootstrapper. Vorausgesetzt werden insbesondere:
 
-It does not support downgrade, skip-update or alternate source identities.
+- Raspberry Pi OS/Linux mit `systemd`;
+- Benutzer und Gruppe `pi`, `/home/pi` und funktionsfähiges `sudo`;
+- Python 3 einschließlich der ZEC-Runtimeabhängigkeiten;
+- die vom Preflight geprüften lokalen Werkzeuge, u. a. `unzip`, `rsync`, `tar`, `curl`, `sha256sum`, `install`, `find` und `visudo`.
 
-## Install
+Fehlende Runtime-/Installerabhängigkeiten werden **nicht** automatisch per apt/pip installiert. Der Preflight bricht vor Produktivmutation ab und gibt einen konsolidierten Installationshinweis aus.
 
-Place the exact package in `/home/pi/Downloads` and verify its SHA256 against the value supplied with the final release. Then run:
+Ein lokaler `mosquitto.service` ist keine Installationsvoraussetzung. Für den normalen Regelbetrieb muss der konfigurierte MQTT-Broker erreichbar sein.
+
+## 2. Paket vorbereiten
+
+Das finale `zendure_controller_v16_0_1.zip` unter `/home/pi/Downloads` ablegen, den extern veröffentlichten SHA256 prüfen und anschließend:
 
 ```bash
 cd /home/pi/Downloads
-unzip -t zendure_controller_v14_1_4.zip
-rm -rf zendure_controller_v14_1_4
-unzip -q zendure_controller_v14_1_4.zip
-chmod +x zendure_controller_v14_1_4/tools/update_zendure_controller.sh
-bash zendure_controller_v14_1_4/tools/update_zendure_controller.sh v14_1_4
+unzip -t zendure_controller_v16_0_1.zip
+rm -rf zendure_controller_v16_0_1
+unzip -q zendure_controller_v16_0_1.zip
+chmod +x zendure_controller_v16_0_1/tools/install_zendure_controller.sh
 ```
 
-## Installer behavior
+Der kanonische Installer heißt ab V16.0.0:
 
-The installer performs package/source-manifest and build-evidence preflight before stopping the productive service. It then:
+```text
+tools/install_zendure_controller.sh
+```
 
-1. creates a complete hash-recorded rollback backup;
-2. preserves `config.json`, Last-Good files, config states, logs, SQLite databases and runtime data;
-3. runs the idempotent common config migration;
-4. verifies the existing Graph Core V3 database before installation;
-5. installs the V14.1.4 status/graph performance and UX changes without rebuilding or historically mutating Graph Core V3;
-6. verifies Graph Core V3 again in the final installed tree;
-7. starts ZEC and checks controller readiness, Graph V3 readiness and the delivered V14.1.4 UI contracts.
+`tools/update_zendure_controller.sh` bleibt nur als Kompatibilitätswrapper erhalten.
 
-The historical `OPERATING_MODE`/`CONTROL_INTENT` repair belongs to V14.1.3 and is **not rerun** by the V14.1.4 updater.
+## 3. Mutationsfreier Preflight
 
-## Productive field acceptance
+### Update einer vorhandenen V15.0.3-Installation
 
-After a successful install:
+```bash
+bash zendure_controller_v16_0_1/tools/install_zendure_controller.sh \
+  v16_0_1 --preflight-only
+```
+
+Erwartet wird unter anderem:
+
+```text
+INSTALL_MODE=SUPPORTED_UPDATE
+PREFLIGHT_RESULT=PASS
+PRODUCTIVE_CHANGES=NONE
+SAFE_TO_INSTALL=yes
+```
+
+### Clean Fresh Install
+
+Default-Webport 8080:
+
+```bash
+bash zendure_controller_v16_0_1/tools/install_zendure_controller.sh \
+  v16_0_1 --fresh-install --preflight-only
+```
+
+Alternativer Webport, z. B. 8088:
+
+```bash
+bash zendure_controller_v16_0_1/tools/install_zendure_controller.sh \
+  v16_0_1 --fresh-install --web-port 8088 --preflight-only
+```
+
+Unterstützter Bereich: `1024..65535`. Ein belegter oder nicht bindbarer Port wird vor Produktivmutation abgewiesen. Es erfolgt keine automatische Ersatzportwahl.
+
+Der Preflight ist read-only gegenüber den produktiven ZEC-Dateien, Diensten und der Produktivkonfiguration. Das persistente Installerlog ist ausdrücklich zulässige Diagnoseevidenz.
+
+## 4. Installation
+
+### Unterstütztes Update V15.0.3 -> V16.0.1
+
+Nach erfolgreichem Preflight:
+
+```bash
+bash zendure_controller_v16_0_1/tools/install_zendure_controller.sh v16_0_1
+```
+
+Der Updatepfad akzeptiert ausschließlich:
+
+- Version `15.0.3`
+- Build-ID `v15.0.3-20260911`
+
+Ein anderer, unvollständiger oder widersprüchlicher aktiver Installationszustand wird nicht automatisch als Fresh Install interpretiert.
+
+### Clean Fresh Install
+
+Nach erfolgreichem Fresh-Preflight:
+
+```bash
+bash zendure_controller_v16_0_1/tools/install_zendure_controller.sh \
+  v16_0_1 --fresh-install
+```
+
+oder mit abweichendem Port:
+
+```bash
+bash zendure_controller_v16_0_1/tools/install_zendure_controller.sh \
+  v16_0_1 --fresh-install --web-port 8088
+```
+
+Ein erfolgreicher erster Start endet absichtlich in `FIRST_INSTALL_SETUP`:
+
+```text
+service active
+/health alive=true
+/settings erreichbar
+config_health=missing
+control_allowed=false
+ready=false
+```
+
+`ready=false` ist in diesem Zustand korrekt. Der MQTT-Verbindungsaufbau wird bis zum ersten gültigen Settings-Commit ausgesetzt. Der gewählte Bootstrap-Webport ist im Settingsmodell sichtbar. Nach dem ersten gültigen Commit ist ein Neustart erforderlich; erst danach beginnt der normale Betriebsstart mit der kanonischen `config.json`.
+
+## 5. Dynamischer lokaler Webendpoint
+
+Installer, Field-Acceptance und Supportwerkzeuge verwenden den tatsächlich wirksamen `WEB_PORT` und setzen nicht fest `:8080` voraus. Maßgeblich sind Produktivkonfiguration, First-Install-Bootstrap oder der Defaultport 8080.
+
+## 6. Uninstaller / Fresh-Install-Reset
+
+Der kanonische Uninstaller ist:
+
+```text
+tools/uninstall_zendure_controller.sh
+```
+
+### Nur prüfen
 
 ```bash
 cd /opt/zendure-controller
-python3 tools/v14_field_acceptance.py \
-  --base-url http://127.0.0.1:8080 \
-  --install-report /tmp/zec_v14_1_4_install_report.json \
-  --output /tmp/ZEC_V14_1_4_FIELD_ACCEPTANCE.json \
-  --json
+bash tools/uninstall_zendure_controller.sh --fresh-install-reset --preflight-only
 ```
 
-The field tool is read-only: it publishes no commands, changes no configuration and performs no rollback.
+### Fresh-Install-Reset mit Standard-Benutzerdatensicherung
+
+```bash
+cd /opt/zendure-controller
+bash tools/uninstall_zendure_controller.sh --fresh-install-reset
+```
+
+Vor der Entfernung wird standardmäßig ein lokales, restore-orientiertes Benutzerdatenbackup erzeugt. Dieses Backup kann echte Secrets enthalten und ist **kein** extern teilbares Supportbundle.
+
+Optional:
+
+```text
+--backup-dir DIR
+--include-measurement-data
+--no-user-data-backup --confirm-no-user-data-backup
+--yes
+```
+
+Measurement-/Deep-Trace-Daten werden wegen ihrer möglichen Größe nur mit `--include-measurement-data` in das User-Data-Backup aufgenommen. `--fresh-install-reset` ist erst erfolgreich, wenn der gemeinsame Zustandsdetektor anschließend `CLEAN_FRESH_INSTALL_STATE=yes` bestätigt.
+
+Der Uninstaller entfernt keine Betriebssystempakete, keinen MQTT-Broker, kein EVCC, keine Netzwerk-Konfiguration und keine allgemeinen Python-/Systempakete.
+
+## 7. Support- und Fehlerdiagnose
+
+Jeder Installerlauf besitzt ein persistentes Installerlog. Bei Installerfehlern wird automatisch ein secretsicheres Supportbundle aufgebaut:
+
+1. Fehlerzustand vor Rollback erfassen;
+2. Rollback ausführen, soweit erforderlich;
+3. Rollbackresultat demselben Diagnosevorgang hinzufügen;
+4. genau ein finalisiertes Support-ZIP bereitstellen.
+
+Das standardmäßig extern teilbare Support-ZIP enthält keine rohe `config.json`. Für einen manuellen Supportfall steht zusätzlich der gemeinsame Supportbundle-Einstiegspunkt zur Verfügung.
+
+## 8. Feldabnahme
+
+Nach einem Update bzw. einem vollständig eingerichteten Normalstart:
+
+```bash
+cd /opt/zendure-controller
+python3 tools/v16_field_acceptance.py \
+  --install-report /tmp/zec_v16_0_1_install_report.json \
+  --expect-primary-profile modbus_template \
+  --output /tmp/ZEC_V16_0_1_FIELD_ACCEPTANCE.json
+```
+
+Das Tool ermittelt den lokalen Webendpoint dynamisch, sofern kein expliziter `--base-url` angegeben wird.
+
+Für PRODUCTIVE-PASS von V16.0.1 sind zusätzlich zwingend ein echter Update-Feldtest und mindestens ein echter Clean-Fresh-Install-Feldtest auf einem vorbereiteten Raspberry-Pi-OS-System ohne aktive ZEC-Installation erforderlich. Build-, Harness- und `--preflight-only`-Nachweise ersetzen diesen Realtest nicht.

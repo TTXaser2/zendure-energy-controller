@@ -266,7 +266,9 @@ if [[ -d "$RUNTIME_DIR" ]]; then
 fi
 
 WEB_PORT_FOR_STATUS="8080"
-if [[ -f "$INSTALL_DIR/config.json" ]]; then
+if [[ -f "$INSTALL_DIR/tools/deployment_contract.py" ]]; then
+  WEB_PORT_FOR_STATUS="$(python3 "$INSTALL_DIR/tools/deployment_contract.py" endpoint --target "$INSTALL_DIR" --json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("port",8080))' 2>/dev/null || echo 8080)"
+elif [[ -f "$INSTALL_DIR/config.json" ]]; then
   WEB_PORT_FOR_STATUS="$(python3 - <<PY 2>/dev/null || echo 8080
 import json
 cfg=json.load(open(${INSTALL_DIR@Q} + '/config.json', encoding='utf-8'))

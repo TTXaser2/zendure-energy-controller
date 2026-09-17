@@ -43,8 +43,8 @@ class V12112Rc8BacklogCompletionTests(unittest.TestCase):
         return controller
 
     def test_version(self):
-        self.assertEqual("15.0.2", version.APP_VERSION)
-        self.assertEqual("V15.0.2", version.APP_VERSION_LABEL)
+        self.assertEqual("16.0.1", version.APP_VERSION)
+        self.assertEqual("V16.0.1", version.APP_VERSION_LABEL)
 
     def test_neutral_fresh_actual_clears_only_stale_diagnostic_uncertainty(self):
         controller = self._controller_for_effect_monitor(actual=0, age=1.0)
@@ -158,16 +158,15 @@ class V12112Rc8BacklogCompletionTests(unittest.TestCase):
         self.assertNotIn("bezierCurveTo", js)
 
     def test_update_script_waits_for_valid_ready_json(self):
-        script = Path("tools/update_zendure_controller.sh").read_text(encoding="utf-8")
+        script = Path("tools/install_zendure_controller.sh").read_text(encoding="utf-8")
         self.assertIn("READY_DEADLINE=$((SECONDS + 90))", script)
         self.assertIn('while [ "$SECONDS" -lt "$READY_DEADLINE" ]', script)
         self.assertIn("python3 -m json.tool", script)
-        self.assertIn("Update abgeschlossen und Installations-Abnahme erfolgreich", script)
+        self.assertIn("V16.0.1 erfolgreich installiert", script)
         self.assertIn("weder ready=true noch einen stabilen sicheren Übergangszustand", script)
         self.assertIn("evaluate_installation_readiness.py", script)
         self.assertIn("TRANSITIONAL_STREAK", script)
-        self.assertNotIn('curl -s "http://127.0.0.1:8080/ready" | python3 -m json.tool || true', script)
-
+        self.assertNotIn('curl -s "http://127.0.0.1:8080/ready"', script)
     def test_fastapi_uses_lifespan_and_ui_test_closes_file(self):
         web = Path("web_ui.py").read_text(encoding="utf-8")
         old_test = Path("tests/test_v12_11_2_rc5_operations_dashboard.py").read_text(encoding="utf-8")

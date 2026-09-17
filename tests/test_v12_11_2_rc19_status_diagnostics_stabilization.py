@@ -73,8 +73,8 @@ def payload(cfg, snap):
 
 class Rc19StatusTextTests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual("15.0.2", version.APP_VERSION)
-        self.assertEqual("V15.0.2", version.APP_VERSION_LABEL)
+        self.assertEqual("16.0.1", version.APP_VERSION)
+        self.assertEqual("V16.0.1", version.APP_VERSION_LABEL)
 
     def test_discharge_path_is_not_misclassified_as_charge(self):
         snap = {
@@ -298,7 +298,7 @@ class Rc19LocalApiUiTests(unittest.TestCase):
 
 class Rc19InstallerTests(unittest.TestCase):
     def test_ready_check_requires_boolean_true_and_allows_real_startup_time(self):
-        script = Path("tools/update_zendure_controller.sh").read_text(encoding="utf-8")
+        script = Path("tools/install_zendure_controller.sh").read_text(encoding="utf-8")
         self.assertIn('tools/evaluate_installation_readiness.py', script)
         self.assertIn("SECONDS + 90", script)
         self.assertIn("Bevorzugt wird ready=true", script)

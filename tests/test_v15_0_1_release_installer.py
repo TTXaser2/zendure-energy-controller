@@ -6,50 +6,31 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_v15_0_2_identity_exact_upgrade_source_and_package_contract():
-    assert version.APP_VERSION == "15.0.2"
-    assert version.APP_VERSION_LABEL == "V15.0.2"
-    assert version.APP_BUILD_ID == "v15.0.2-20260911"
-    script = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
-    for token in (
-        'EXPECTED_VERSION="v15_0_2"',
-        'EXPECTED_SOURCE_VERSION="15.0.1"',
-        'EXPECTED_SOURCE_BUILD_ID="v15.0.1-20260911"',
-        'EXPECTED_TARGET_VERSION="15.0.2"',
-        'EXPECTED_TARGET_BUILD_ID="v15.0.2-20260911"',
-        'SOURCE_MODE="V15_0_1"',
-        'V15_0_2_SOURCE_MANIFEST.sha256',
-        '/tmp/zec_v15_0_2_install_report.json',
-    ):
+    assert version.APP_VERSION == "16.0.1"
+    assert version.APP_VERSION_LABEL == "V16.0.1"
+    assert version.APP_BUILD_ID == "v16.0.1-20260915"
+    script = (ROOT / "tools/install_zendure_controller.sh").read_text(encoding="utf-8")
+    for token in ('EXPECTED_VERSION_ARG="v16_0_1"','EXPECTED_SOURCE_VERSION="15.0.3"','EXPECTED_SOURCE_BUILD_ID="v15.0.3-20260911"','EXPECTED_TARGET_VERSION="16.0.1"','EXPECTED_TARGET_BUILD_ID="v16.0.1-20260915"','SOURCE_MANIFEST="V16_0_1_SOURCE_MANIFEST.sha256"','/tmp/zec_v16_0_1_install_report.json'):
         assert token in script
-
 
 def test_v15_0_2_installer_preserves_runtime_data_and_verifies_ui_bugfix_assets():
-    script = (ROOT / "tools/update_zendure_controller.sh").read_text(encoding="utf-8")
-    for token in (
-        "graph_core_v3_preserved",
-        "v14_cutover.py verify",
-        "--exclude 'config.json'",
-        "--exclude 'logs/'",
-        "--exclude '*.sqlite3'",
-        "Detailausschnitt",
-        "renderStateMagnifier(actual)",
-        "applyComparisonFocus",
-        "function primarySourceGuideHtml()",
-        "Direkt per Modbus ausgewählt",
-    ):
+    script = (ROOT / "tools/install_zendure_controller.sh").read_text(encoding="utf-8")
+    field = (ROOT / "tools/v16_field_acceptance.py").read_text(encoding="utf-8")
+    for token in ("graph_core_v3_preserved","v14_cutover.py verify","--exclude 'config.json'","--exclude 'logs/'","--exclude '*.sqlite3'"):
         assert token in script
+    for token in ("Detailausschnitt","renderStateMagnifier(actual)","applyComparisonFocus","function primarySourceGuideHtml()","Direkt per Modbus ausgewählt"):
+        assert token in field
     assert "v14_cutover.py rebuild" not in script
     assert "pip install" not in script
-
 
 def test_v15_0_2_field_acceptance_targets_new_release_and_ui_fix_contracts():
     tool = (ROOT / "tools/v15_field_acceptance.py").read_text(encoding="utf-8")
     for token in (
-        'EXPECTED_VERSION = "15.0.2"',
-        'EXPECTED_LABEL = "V15.0.2"',
-        'EXPECTED_BUILD_ID = "v15.0.2-20260911"',
-        'FORMAT = "ZEC_V15_0_2_FIELD_ACCEPTANCE_V1"',
-        '/tmp/zec_v15_0_2_install_report.json',
+        'EXPECTED_VERSION = "15.0.3"',
+        'EXPECTED_LABEL = "V15.0.3"',
+        'EXPECTED_BUILD_ID = "v15.0.3-20260911"',
+        'FORMAT = "ZEC_V15_0_3_FIELD_ACCEPTANCE_V1"',
+        '/tmp/zec_v15_0_3_install_report.json',
         'primary_storage_settings_guidance',
         'Detailausschnitt',
         'renderStateMagnifier(actual)',

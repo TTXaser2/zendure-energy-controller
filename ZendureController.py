@@ -12,7 +12,7 @@ Start:
     python3 ZendureController.py
 
 Webinterface:
-    http://<raspberry-ip>:8080
+    http://<raspberry-ip>:<WEB_PORT>
 """
 import os
 import sys
@@ -68,7 +68,11 @@ def main() -> None:
     state.ensure_graph_limit(int(config.get("GRAPH_HISTORY_LIMIT", 300)))
 
     mqtt_bridge = MqttBridge(state, config_manager.get, app_logger=app_logger)
-    mqtt_bridge.start()
+    first_install_setup = config_manager.startup_mode() == "FIRST_INSTALL_SETUP"
+    if first_install_setup:
+        app_logger.log(config, "[MQTT] FIRST_INSTALL_SETUP: Verbindungsaufbau bis zum erforderlichen Neustart ausgesetzt")
+    else:
+        mqtt_bridge.start()
 
     primary_storage_worker = None
     if bool(config.get("SECOND_BATTERY_INTEGRATION_ENABLED", False)) and str(config.get("SECOND_BATTERY_SOURCE_PROFILE", "evcc_standard") or "evcc_standard") == "modbus_template":

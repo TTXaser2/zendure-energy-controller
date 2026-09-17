@@ -1,71 +1,49 @@
-# Zendure Energy Controller V14.0.0
+# Zendure Energy Controller V16.0.1
 
-**Build-ID:** `v14.0.0-20260904-r2`
+**Build-ID:** `v16.0.1-20260915`
 
-V14.0.0 ist der produktive Integrationsrelease des in WP1–WP9 aufgebauten Graph-/History-Unterbaus. Ausgangsbasis ist ausschließlich der verifizierte Produktivstand V13.0.3 / `v13.0.3-20260814`.
+ZEC ist eine lokale Speichersteuerung für einen aktiv gesteuerten Zendure-Speicher – optional koordiniert mit einem Primärspeicher. V16.0.1 stellt den vollständigen Deploymentvertrag für Supported Update, Clean Fresh Install, Uninstall/Fresh-Reset und secretsicheren Support bereit und korrigiert die ausführbare Paketidentitätsprüfung des Installers.
 
-## 1. Hauptumfang
+## 1. Produktumfang
 
-- Graph Core V3 als kompakte permanente historische Basis.
-- V3 Query/Catalog, Entity-/Topology-Persistenz, Coverage/Evidence und Retention-Grundlagen.
-- Konsolidierte bestehende History-Pfade einschließlich historisch korrekter MAX-SOC-Verläufe.
-- Neuer Graph Workspace mit Guided-/Free-Modus.
-- Cursor-Inspector und Command-Follow / Cause-Effect mit expliziter `NOT_EVALUABLE`-Semantik.
-- Episodenvergleich Side-by-Side / Overlay mit persistierten Triggern und relativer `t=0`-Achse.
-- Produktiver V14-Cutover als Rebuild aus Measurement V4 in eine separate V3-Kandidaten-DB.
-- Atomarer Graphstore-Swap erst nach vollständiger Validierung.
-- Separates rollbackfähiges DB/WAL/SHM-Backup mit Größen-/SHA256-Verifikation.
-- Automatische Diagnosepakete bei Preflight- und Updatefehlern.
-- Read-only V14-Feldabnahmewerkzeug.
+- lokale automatische Netzleistungsregelung des Zendure-Speichers;
+- optionale Primärspeicherintegration einschließlich direktem Modbus-TCP-Referenzpfad;
+- SMA Energy Meter / Sunny Home Manager über Speedwire/UDP sowie Shelly Pro 3EM bzw. Shelly-kompatibles HTTP als unterstützte Netzleistungsmesspfade;
+- Graph Core V3, historische Graphen, Inspector, Command-Follow und Episodenvergleich;
+- Settings-/Konfigurationsstand-/Diagnosefunktionen;
+- Supported Update und Clean Fresh Install mit fail-closed Installationszustandsklassifikation;
+- mutationsfreier Installer-/Uninstaller-Preflight;
+- lokales User-Data-Backup beim Uninstall/Fresh-Reset;
+- secretsicheres Third-Party-Supportbundle ohne rohe `config.json`.
 
-## 2. Bewusst unverändert
+## 2. Deployment
 
-V14.0.0 ändert nicht die fachliche Regler-, Command-, Safety- oder Hardware-Semantik. Insbesondere bleiben AUTO/Harvest/Cross-Charge/NIGHT, aktive Neutralisierung, Command-Effect/Readback/Resync und die Primärspeicherpriorität geschützt.
-
-Measurement V4 bleibt unverändert bei 246 Standard- bzw. 249 Extended-Feldern und ist weiterhin die optionale Deep-Trace-/Rebuild-Evidenzschicht. Graph Core V3 und Measurement V4 besitzen getrennte Lifecycles.
-
-## 3. Produktiver Cutover
-
-Der Installer übernimmt keine Engineering-V3-Datenbank als Produktivwahrheit. Stattdessen:
-
-1. Paket-/Source-/Syntax-/Test-Preflight vor Dienststopp.
-2. vollständiges Rollback-Backup der V13.0.3-Installation und Root-Artefakte.
-3. separates Backup des bestehenden Graphstores einschließlich WAL/SHM.
-4. Rebuild von Graph Core V3 aus dem vorhandenen Measurement-V4-Bestand in eine Kandidaten-DB.
-5. vollständige V3-Validierung.
-6. atomare Aktivierung.
-7. lokale Verifikation und Dienststart.
-8. getrennte Prüfung von Controller-Readiness und Graph-History-Readiness.
-9. automatischer Rollback bei echtem Installationsfehler.
-
-## 4. Graph- und History-Vertrag
-
-- Graph-History-Readiness beeinflusst die Controller-Readiness nicht.
-- V3 ist der kanonische produktive History-Unterbau.
-- Legacy-Lesewege bleiben nur als ausdrücklich gekennzeichnete Kompatibilität erhalten.
-- Measurement V4 darf Graph/Inspector/Evidence anreichern, ist aber keine Voraussetzung für den normalen Graphbetrieb.
-- Fehlende historische Entity-/Coverage-/Evidence-Daten werden nicht erfunden oder zwischen Episoden imputiert.
-- Publish oder bloß gleichgerichtete Istleistung gelten nicht als Wirkungsnachweis.
-
-## 5. Nicht festgelegt
-
-V14.0.0 führt ausdrücklich keine eigenmächtig gewählte produktive Retentiondauer, keinen Retention-Scheduler und keine automatische VACUUM-Policy ein.
-
-## 6. Installation und Abnahme
-
-Verbindlich:
-
-- `README_INSTALLATION.md`
-- `RELEASE_INFO_V14_0_0.md`
-- `BUILD_VALIDATION_V14_0_0.md`
-- `V14_0_0_SOURCE_MANIFEST.sha256`
-
-Nach erfolgreicher Installation ist die reale Feldabnahme mit `tools/v14_field_acceptance.py` auszuführen. Build-PASS ist nicht Produktiv-PASS.
-
-## 7. Aktuelles Benutzerhandbuch
+Kanonische Werkzeuge:
 
 ```text
-docs/Zendure_Energy_Controller_Handbuch.pdf
+tools/install_zendure_controller.sh
+tools/uninstall_zendure_controller.sh
 ```
 
-Historische Release-, Spezifikations- und Validierungsdokumente bleiben im Paket als Entwicklungs-/Auditspur erhalten.
+`tools/update_zendure_controller.sh` bleibt als Kompatibilitätswrapper erhalten. Details einschließlich Fresh-Install- und Preflight-Semantik stehen in `README_INSTALLATION.md`.
+
+## 3. Schutzvertrag
+
+V16.0.1 ändert nicht die fachliche Regelstrategie. AUTO/Harvest/Cross-Charge/NIGHT, aktive Neutralisierung, Command-Effect/Readback/Resync, Primärspeicherpriorität, Measurement-Semantik und Hardware-Schonungslogik bleiben durch die kanonischen Control-&-Safety-Verträge geschützt.
+
+## 4. Dokumentation
+
+```text
+README_INSTALLATION.md
+RELEASE_INFO_V16_0_1.md
+TECHNICAL_NOTES_V16_0_1.md
+BUILD_VALIDATION_V16_0_1.md
+docs/ZEC_Technisches_Datenblatt.pdf
+docs/ZEC_Technisches_Datenblatt.docx
+```
+
+Das technische Datenblatt beschreibt ausschließlich den Ist-Zustand des ausgelieferten Releases und enthält keine Versionshistorie.
+
+## 5. Release- und Feldstatus
+
+TECHNICAL BUILD PASS wird erst nach finalem Source-Freeze und vollständigen Fresh-extract-Gates erteilt. Für PRODUCTIVE-PASS von V16.0.1 sind zusätzlich mindestens ein echter Update-Feldtest und ein echter Clean-Fresh-Install-Feldtest auf einem vorbereiteten Raspberry-Pi-OS-System erforderlich.
