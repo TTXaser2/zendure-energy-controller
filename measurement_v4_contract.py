@@ -110,6 +110,14 @@ STANDARD_HEADER: List[str] = [
     "second_battery_soc_fresh",
     "second_battery_soc_age_s",
     "second_battery_source",
+    "primary_discharge_floor_supported",
+    "primary_discharge_floor_soc_percent",
+    "primary_discharge_floor_valid",
+    "primary_discharge_floor_fresh",
+    "primary_discharge_floor_age_s",
+    "primary_discharge_floor_source",
+    "primary_usable_soc_percent",
+    "primary_usable_soc_valid",
     "scenario_grid_without_zendure_w",
     "scenario_grid_without_zendure_valid",
     "scenario_grid_without_zendure_source",
@@ -395,8 +403,24 @@ RC12_COMMAND_CONTRACT_FIELDS = {
     "zendure_power_balance_residual_w",
 }
 
+V16_1_SMA_DISCHARGE_FLOOR_FIELDS = {
+    "primary_discharge_floor_supported",
+    "primary_discharge_floor_soc_percent",
+    "primary_discharge_floor_valid",
+    "primary_discharge_floor_fresh",
+    "primary_discharge_floor_age_s",
+    "primary_discharge_floor_source",
+    "primary_usable_soc_percent",
+    "primary_usable_soc_valid",
+}
+
+# Historical RC header contracts must stay byte/column compatible.  New
+# V16.1 diagnostic capability fields belong only to the current V4 header and
+# must not leak into the reconstructed RC17-and-earlier schemas.
 RC17_STANDARD_HEADER: List[str] = [
-    field for field in STANDARD_HEADER if field not in RC18_ASYNC_LOCAL_API_FIELDS
+    field for field in STANDARD_HEADER
+    if field not in RC18_ASYNC_LOCAL_API_FIELDS
+    and field not in V16_1_SMA_DISCHARGE_FLOOR_FIELDS
 ]
 RC16_STANDARD_HEADER: List[str] = [
     field for field in RC17_STANDARD_HEADER if field not in RC17_HARVEST_ZERO_GRID_TARGET_FIELDS

@@ -59,6 +59,8 @@ class FakeClient:
             return ((raw >> 16) & 0xFFFF, raw & 0xFFFF)
         if address == 30845:
             return (0, 85)
+        if address == 31009:
+            return (0, 19)
         raise AssertionError(address)
 
     def close(self):
@@ -85,6 +87,9 @@ def test_sunny_island_template_contract():
     assert t.unit_id_default == 3
     assert (t.power.address, t.power.function_code, t.power.count, t.power.data_type) == (30775, 4, 2, "s32")
     assert (t.soc.address, t.soc.function_code, t.soc.count, t.soc.data_type) == (30845, 3, 2, "u32")
+    assert t.current_discharge_floor_soc is not None
+    assert (t.current_discharge_floor_soc.address, t.current_discharge_floor_soc.function_code, t.current_discharge_floor_soc.count, t.current_discharge_floor_soc.data_type) == (31009, 3, 2, "u32")
+    assert t.capability_poll_interval_s == 10.0
 
 
 def test_unknown_template_fails_closed():

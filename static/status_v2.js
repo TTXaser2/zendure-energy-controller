@@ -211,6 +211,13 @@
     text('primary.source', p.primary?.source);
     text('primary.source_health', p.primary?.source_health);
     text('primary.freshness_text', p.primary?.freshness_text);
+    text('primary.discharge_floor_text', p.primary?.discharge_floor_text);
+    text('primary.usable_soc_text', p.primary?.usable_soc_text);
+    const floorRow = $('[data-zec-row="primary.discharge_floor"]');
+    const usableRow = $('[data-zec-row="primary.usable_soc"]');
+    const showDeviceFloor = Boolean(p.primary?.discharge_floor_supported);
+    if (floorRow) floorRow.hidden = !showDeviceFloor;
+    if (usableRow) usableRow.hidden = !showDeviceFloor;
     const pf = $('[data-card="primary"] .zec-card-footer'); if (pf) setDot(pf, p.primary?.tone);
 
     text('source.name', p.source?.name);

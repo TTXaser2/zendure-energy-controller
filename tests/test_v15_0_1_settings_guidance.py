@@ -11,7 +11,7 @@ def text(rel):
 
 
 def test_primary_storage_sections_guide_active_source_immediately_after_selector():
-    order = SECTION_ORDER_OVERRIDES["Primärspeicher & SMA"]
+    order = SECTION_ORDER_OVERRIDES["Primärspeicher"]
     assert order[:6] == (
         "Integration & Status",
         "Integration & Identität",
@@ -20,8 +20,8 @@ def test_primary_storage_sections_guide_active_source_immediately_after_selector
         "MQTT-Datenquelle · EVCC Standard",
         "MQTT-Datenquelle · Benutzerdefiniert",
     )
-    assert "modbus" in CATEGORY_HELP_TEXT["Primärspeicher & SMA"].lower()
-    assert "Verbindungsparameter" in CATEGORY_HELP_TEXT["Primärspeicher & SMA"]
+    assert "modbus" in CATEGORY_HELP_TEXT["Primärspeicher"].lower()
+    assert "Verbindungsparameter" in CATEGORY_HELP_TEXT["Primärspeicher"]
 
 
 def test_modbus_template_is_presented_as_device_model_without_changing_key_or_contract():

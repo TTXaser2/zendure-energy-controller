@@ -214,13 +214,15 @@ def render_status_page_v2(
         primary_name = payload['primary'].get('name') or 'Primärspeicher'
         primary_card = f'''
       <article class="zec-card zec-primary-card" data-card="primary">
-        <header class="zec-card-header"><div class="zec-card-title">{_icon('primary')}<h2 data-zec="primary.name">{_e(primary_name)}</h2></div>{_info_button(str(primary_name),'Diese Karte zeigt den konfigurierten Primärspeicher. ZEC steuert ihn nicht direkt, berücksichtigt SOC und Lade-/Entladeleistung jedoch für Harvest, Cross-Charge-Schutz und die defensive Speicherpriorität.')}</header>
+        <header class="zec-card-header"><div class="zec-card-title">{_icon('primary')}<h2 data-zec="primary.name">{_e(primary_name)}</h2></div>{_info_button(str(primary_name),'Diese Karte zeigt den konfigurierten Primärspeicher. ZEC steuert ihn nicht direkt. Gerätespezifische Diagnosewerte wie die aktuelle SMA-Entlade-Untergrenze werden nur angezeigt, wenn das gewählte Profil sie bereitstellt; in diesem Release beeinflussen sie die Regelung noch nicht.')}</header>
         <div class="zec-storage-layout zec-storage-layout-single">
           {_ring('primary', str(primary_name), payload['primary'].get('soc'), 'SOC aktuell')}
           <div class="zec-storage-details">
             <div class="zec-detail-row"><span>Istleistung</span><strong data-zec="primary.actual">{_e(payload['primary'].get('actual'))}</strong></div>
             <div class="zec-detail-row"><span>Status</span><strong data-zec="primary.status">{_e(payload['primary'].get('status'))}</strong></div>
             <div class="zec-detail-row"><span>Quellenstatus</span><strong data-zec="primary.source_health">{_e(payload['primary'].get('source_health'))}</strong></div>
+            <div class="zec-detail-row" data-zec-row="primary.discharge_floor"{' ' if payload['primary'].get('discharge_floor_supported') else ' hidden'}><span>SMA Entlade-Untergrenze</span><strong data-zec="primary.discharge_floor_text">{_e(payload['primary'].get('discharge_floor_text'))}</strong></div>
+            <div class="zec-detail-row" data-zec-row="primary.usable_soc"{' ' if payload['primary'].get('discharge_floor_supported') else ' hidden'}><span>Nutzbarer SOC (normalisiert)</span><strong data-zec="primary.usable_soc_text">{_e(payload['primary'].get('usable_soc_text'))}</strong></div>
             <div class="zec-detail-row zec-harmony-row zec-detail-row-stacked"><span>Harmonisierung</span><strong data-zec="primary.line">{_e(payload['primary'].get('line'))}</strong></div>
             <div class="zec-detail-row zec-detail-row-stacked"><span>Harvest-Rechnung</span><strong data-zec="primary.harvest_calculation">{_e(payload['primary'].get('harvest_calculation'))}</strong></div>
           </div>

@@ -1,9 +1,10 @@
 {
   "schema": "ZEC-DATASHEET-RELEASE-METADATA-V1",
-  "release_version": "16.0.1",
-  "release_label": "V16.0.1",
-  "build_id": "v16.0.1-20260915",
+  "release_version": "16.1.0",
+  "release_label": "V16.1.0",
+  "build_id": "v16.1.0-20260919",
   "status": "ENGINEERING_RELEASE_CANDIDATE",
-  "docx_sha256": "71b0824ee4a107c94ac6c6fafcbfd06457b728302055b00f9e868c0f1422c56b",
-  "pdf_sha256": "8cb8148d64ea180d50fa8ebdbd919f6f7cfb938cdefb85c56f82a9b3870cbdf6"
+  "document_date": "20.09.2026",
+  "docx_sha256": "7c6cd335420d69816b0fa9957d98dbbc2b84a5e3025263c549fded72f22b87cd",
+  "pdf_sha256": "0c16e3af0875708acf65fd446157d41696984051638a967852f2e372836d3826"
 }

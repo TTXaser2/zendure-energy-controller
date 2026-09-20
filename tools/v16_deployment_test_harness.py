@@ -35,7 +35,7 @@ def _artifact(root: Path, absolute: str, content: str = "x") -> Path:
 def _supported_update_root(root: Path) -> None:
     target = _artifact(root, dc.TARGET)
     (target / "version.py").write_text(
-        'APP_VERSION="15.0.3"\nAPP_BUILD_ID="v15.0.3-20260911"\n', encoding="utf-8"
+        'APP_VERSION="16.0.1"\nAPP_BUILD_ID="v16.0.1-20260915"\n', encoding="utf-8"
     )
     (target / "config.json").write_text('{"WEB_PORT":8123}\n', encoding="utf-8")
     _artifact(root, "/etc/systemd/system/zendure-controller.service")
@@ -59,15 +59,15 @@ def run_harness() -> dict[str, Any]:
 
         _supported_update_root(root)
         supported = dc.classify_installation(
-            root=str(root), expected_update_version="15.0.3",
-            expected_update_build="v15.0.3-20260911", check_active_units=False,
+            root=str(root), expected_update_version="16.0.1",
+            expected_update_build="v16.0.1-20260915", check_active_units=False,
         )
         record("supported_update", supported["state"] == dc.STATE_SUPPORTED_UPDATE, supported["state"])
 
         (root / dc.TARGET.lstrip("/") / "config.json").unlink()
         partial = dc.classify_installation(
-            root=str(root), expected_update_version="15.0.3",
-            expected_update_build="v15.0.3-20260911", check_active_units=False,
+            root=str(root), expected_update_version="16.0.1",
+            expected_update_build="v16.0.1-20260915", check_active_units=False,
         )
         record("partial_fail_closed", partial["state"] == dc.STATE_AMBIGUOUS, partial["state"])
 

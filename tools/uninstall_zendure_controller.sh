@@ -103,7 +103,7 @@ if [ ! -e "$TARGET" ]; then
   fi
 fi
 case "$INSTALLED_VERSION/$INSTALLED_BUILD" in
-  "15.0.3/v15.0.3-20260911"|"16.0.0/v16.0.0-20260913"|"16.0.1/v16.0.1-20260915") ;;
+  "15.0.3/v15.0.3-20260911"|"16.0.0/v16.0.0-20260913"|"16.0.1/v16.0.1-20260915"|"16.0.2/v16.0.2-20260917"|"16.1.0/v16.1.0-20260919") ;;
   *) echo "FEHLER: Uninstaller verweigert unbekannte/partielle Installation: $INSTALLED_VERSION / $INSTALLED_BUILD"; false ;;
 esac
 STATE="$(python3 "$SCRIPT_DIR/deployment_contract.py" classify --expected-version "$INSTALLED_VERSION" --expected-build "$INSTALLED_BUILD" --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["state"])')"

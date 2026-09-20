@@ -37,6 +37,22 @@ def sma_power_meaning(value: float, deadband: float = 1.0) -> str:
     return "nahe 0 W"
 
 
+def primary_usable_soc_percent(raw_soc: Optional[float], discharge_floor_soc: Optional[float]) -> Optional[float]:
+    """Normalize raw primary-storage SOC to the currently usable discharge span.
+
+    This is diagnostic only in Block A. It must not replace raw SOC in physical
+    state detection or control decisions.
+    """
+    if raw_soc is None or discharge_floor_soc is None:
+        return None
+    raw = float(raw_soc)
+    floor = float(discharge_floor_soc)
+    if not 0.0 <= raw <= 100.0 or not 0.0 <= floor < 100.0:
+        return None
+    usable = ((raw - floor) / (100.0 - floor)) * 100.0
+    return max(0.0, min(100.0, usable))
+
+
 @dataclass
 class ControllerState:
     startup_epoch: float = field(default_factory=time.time)
@@ -334,6 +350,20 @@ class ControllerState:
     primary_storage_error_count: int = 0
     primary_storage_request_duration_ms: Optional[float] = None
     primary_storage_last_error_code: str = ""
+    # Optional device-profile capability. For V16.1.0 only the SMA Sunny Island
+    # template implements current_discharge_floor_soc via read-only Modbus.
+    primary_storage_current_discharge_floor_supported: bool = False
+    primary_storage_current_discharge_floor_soc_percent: Optional[float] = None
+    primary_storage_current_discharge_floor_source: str = ""
+    primary_storage_current_discharge_floor_last_poll_ok: Optional[bool] = None
+    primary_storage_current_discharge_floor_last_error_code: str = ""
+    primary_storage_current_discharge_floor_last_update_epoch: Optional[float] = None
+    primary_storage_current_discharge_floor_last_update_monotonic: Optional[float] = None
+    primary_storage_current_discharge_floor_age_seconds: Optional[int] = None
+    primary_storage_current_discharge_floor_fresh: bool = False
+    primary_storage_current_discharge_floor_valid: bool = False
+    primary_storage_usable_soc_percent: Optional[float] = None
+    primary_storage_usable_soc_valid: bool = False
     last_zendure_power_update_epoch: Optional[float] = None
     last_zendure_power_update_time: str = "-"
 
@@ -1408,6 +1438,44 @@ class ControllerState:
             self.second_battery_data_valid = second_status.valid
             self.second_battery_data_age_seconds = second_status.age_s
             self.second_battery_validity_reason = second_status.reason
+
+            floor_supported = bool(
+                self.primary_storage_current_discharge_floor_supported
+                and self.primary_storage_source_profile == "modbus_template"
+            )
+            floor_timestamp = (
+                self.primary_storage_current_discharge_floor_last_update_monotonic
+                if self.primary_storage_current_discharge_floor_last_update_monotonic is not None
+                else self.primary_storage_current_discharge_floor_last_update_epoch
+            )
+            floor_now = (
+                time.monotonic()
+                if self.primary_storage_current_discharge_floor_last_update_monotonic is not None
+                else now_epoch
+            )
+            floor_timeout = float(cfg.get("SECOND_BATTERY_STALE_TIMEOUT_SECONDS", cfg.get("EVCC_STALE_TIMEOUT_SECONDS", 30)) or 30)
+            floor_status = timestamp_status(
+                "primary_storage_current_discharge_floor",
+                floor_timestamp,
+                floor_timeout,
+                has_value=floor_supported and self.primary_storage_current_discharge_floor_soc_percent is not None,
+                used_for_control=False,
+                now_epoch=floor_now,
+                missing_reason=("PRIMARY_DISCHARGE_FLOOR_MISSING" if floor_supported else "PRIMARY_DISCHARGE_FLOOR_UNSUPPORTED"),
+                stale_reason="PRIMARY_DISCHARGE_FLOOR_STALE",
+            )
+            floor_value = self.primary_storage_current_discharge_floor_soc_percent
+            floor_range_ok = bool(floor_value is not None and 0.0 <= float(floor_value) < 100.0)
+            self.primary_storage_current_discharge_floor_age_seconds = floor_status.age_s
+            self.primary_storage_current_discharge_floor_fresh = bool(floor_supported and floor_status.fresh)
+            self.primary_storage_current_discharge_floor_valid = bool(floor_supported and floor_status.valid and floor_range_ok)
+            usable_soc = primary_usable_soc_percent(self.sma_battery_soc, floor_value)
+            self.primary_storage_usable_soc_valid = bool(
+                self.primary_storage_current_discharge_floor_valid
+                and second_status.valid
+                and usable_soc is not None
+            )
+            self.primary_storage_usable_soc_percent = usable_soc if self.primary_storage_usable_soc_valid else None
             if integration_enabled:
                 if not second_status.available:
                     self.primary_storage_source_health = "STARTING"
@@ -1557,6 +1625,14 @@ class ControllerState:
                 "raw_second_battery_power_w": round(self.sma_battery_power, 1),
                 "raw_second_battery_soc_percent": self.sma_battery_soc,
                 "raw_second_battery_capacity_kwh": self.sma_battery_capacity_kwh,
+                "primary_discharge_floor_supported": self.primary_storage_current_discharge_floor_supported,
+                "primary_discharge_floor_soc_percent": self.primary_storage_current_discharge_floor_soc_percent,
+                "primary_discharge_floor_valid": self.primary_storage_current_discharge_floor_valid,
+                "primary_discharge_floor_fresh": self.primary_storage_current_discharge_floor_fresh,
+                "primary_discharge_floor_age_s": self.primary_storage_current_discharge_floor_age_seconds,
+                "primary_discharge_floor_source": self.primary_storage_current_discharge_floor_source,
+                "primary_usable_soc_percent": self.primary_storage_usable_soc_percent,
+                "primary_usable_soc_valid": self.primary_storage_usable_soc_valid,
                 "raw_second_battery_source": (
                     "SMA" if self.primary_storage_source_profile == "modbus_template" and self.primary_storage_data_available
                     else ("EVCC/SMA" if (self.primary_storage_data_available or self.evcc_data_available) else "none")
@@ -2007,6 +2083,16 @@ class ControllerState:
                 "primary_storage_unit_id": self.primary_storage_unit_id,
                 "primary_storage_source_health": self.primary_storage_source_health,
                 "primary_storage_last_poll_ok": self.primary_storage_last_poll_ok,
+                "primary_storage_current_discharge_floor_supported": self.primary_storage_current_discharge_floor_supported,
+                "primary_storage_current_discharge_floor_soc_percent": self.primary_storage_current_discharge_floor_soc_percent,
+                "primary_storage_current_discharge_floor_source": self.primary_storage_current_discharge_floor_source,
+                "primary_storage_current_discharge_floor_last_poll_ok": self.primary_storage_current_discharge_floor_last_poll_ok,
+                "primary_storage_current_discharge_floor_last_error_code": self.primary_storage_current_discharge_floor_last_error_code,
+                "primary_storage_current_discharge_floor_age_seconds": self.primary_storage_current_discharge_floor_age_seconds,
+                "primary_storage_current_discharge_floor_fresh": self.primary_storage_current_discharge_floor_fresh,
+                "primary_storage_current_discharge_floor_valid": self.primary_storage_current_discharge_floor_valid,
+                "primary_storage_usable_soc_percent": self.primary_storage_usable_soc_percent,
+                "primary_storage_usable_soc_valid": self.primary_storage_usable_soc_valid,
                 "mqtt_command_path_available": self.mqtt_command_path_available,
                 "mqtt_command_path_fresh": self.mqtt_command_path_fresh,
                 "mqtt_command_path_valid": self.mqtt_command_path_valid,
@@ -2335,6 +2421,16 @@ class ControllerState:
                 "primary_storage_error_count": self.primary_storage_error_count,
                 "primary_storage_request_duration_ms": self.primary_storage_request_duration_ms,
                 "primary_storage_last_error_code": self.primary_storage_last_error_code,
+                "primary_storage_current_discharge_floor_supported": self.primary_storage_current_discharge_floor_supported,
+                "primary_storage_current_discharge_floor_soc_percent": self.primary_storage_current_discharge_floor_soc_percent,
+                "primary_storage_current_discharge_floor_source": self.primary_storage_current_discharge_floor_source,
+                "primary_storage_current_discharge_floor_last_poll_ok": self.primary_storage_current_discharge_floor_last_poll_ok,
+                "primary_storage_current_discharge_floor_last_error_code": self.primary_storage_current_discharge_floor_last_error_code,
+                "primary_storage_current_discharge_floor_age_seconds": self.primary_storage_current_discharge_floor_age_seconds,
+                "primary_storage_current_discharge_floor_fresh": self.primary_storage_current_discharge_floor_fresh,
+                "primary_storage_current_discharge_floor_valid": self.primary_storage_current_discharge_floor_valid,
+                "primary_storage_usable_soc_percent": self.primary_storage_usable_soc_percent,
+                "primary_storage_usable_soc_valid": self.primary_storage_usable_soc_valid,
                 "last_zendure_power_update_time": self.last_zendure_power_update_time,
                 "last_zendure_power_update_age_seconds": age_seconds(self.last_zendure_power_update_epoch),
                 "battery_soc": self.battery_soc,

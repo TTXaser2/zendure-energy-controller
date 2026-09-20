@@ -332,6 +332,21 @@ class MqttBridge:
             self.state.primary_storage_last_success_monotonic = now_monotonic
             self.state.primary_storage_consecutive_failures = 0
             self.state.primary_storage_last_error_code = ""
+            # Device-specific Modbus capabilities must never leak across a
+            # source/profile change.  MQTT primary-storage profiles do not
+            # expose the SMA Sunny Island discharge-floor capability.
+            self.state.primary_storage_current_discharge_floor_supported = False
+            self.state.primary_storage_current_discharge_floor_soc_percent = None
+            self.state.primary_storage_current_discharge_floor_source = ""
+            self.state.primary_storage_current_discharge_floor_last_poll_ok = None
+            self.state.primary_storage_current_discharge_floor_last_error_code = ""
+            self.state.primary_storage_current_discharge_floor_last_update_epoch = None
+            self.state.primary_storage_current_discharge_floor_last_update_monotonic = None
+            self.state.primary_storage_current_discharge_floor_age_seconds = None
+            self.state.primary_storage_current_discharge_floor_fresh = False
+            self.state.primary_storage_current_discharge_floor_valid = False
+            self.state.primary_storage_usable_soc_percent = None
+            self.state.primary_storage_usable_soc_valid = False
 
     def publish(self, topic: str, value: Any, force: bool = False, numeric: bool = True) -> bool:
         cfg = self.config_getter()

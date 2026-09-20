@@ -1,0 +1,67 @@
+{
+  "check_count": 11,
+  "checks": [
+    {
+      "detail": "CLEAN_FRESH_INSTALL",
+      "name": "clean_fresh_install",
+      "status": "PASS"
+    },
+    {
+      "detail": "temporary root unchanged",
+      "name": "classifier_read_only",
+      "status": "PASS"
+    },
+    {
+      "detail": "SUPPORTED_UPDATE",
+      "name": "supported_update",
+      "status": "PASS"
+    },
+    {
+      "detail": "AMBIGUOUS_OR_PARTIAL_INSTALL",
+      "name": "partial_fail_closed",
+      "status": "PASS"
+    },
+    {
+      "detail": "",
+      "name": "bootstrap_roundtrip",
+      "status": "PASS"
+    },
+    {
+      "detail": "",
+      "name": "privileged_port_blocked",
+      "status": "PASS"
+    },
+    {
+      "detail": "51501",
+      "name": "port_conflict_detected",
+      "status": "PASS"
+    },
+    {
+      "detail": "sudo apt update && sudo apt install -y rsync",
+      "name": "missing_dependency_has_install_hint",
+      "status": "PASS"
+    },
+    {
+      "detail": "",
+      "name": "broker_neutral_dependencies",
+      "status": "PASS"
+    },
+    {
+      "detail": "",
+      "name": "failure_capture_before_rollback",
+      "status": "PASS"
+    },
+    {
+      "detail": "",
+      "name": "no_production_fault_injection_flag",
+      "status": "PASS"
+    }
+  ],
+  "failure_count": 0,
+  "format": "ZEC_V16_DEPLOYMENT_TEST_HARNESS_V1",
+  "limitations": [
+    "No productive filesystem/systemd mutation is performed by this harness.",
+    "Real Raspberry Pi OS fresh-install and update field tests remain mandatory before PRODUCTIVE-PASS."
+  ],
+  "status": "PASS"
+}

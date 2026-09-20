@@ -1,0 +1,15 @@
+systemd/zendure-controller-restart: PASS
+tests/test_installer_root_artifact_transaction.sh: PASS
+tools/collect_resync_diagnostics.sh: PASS
+tools/collect_zec_crash_package.sh: PASS
+tools/collect_zec_install_diagnostics.sh: PASS
+tools/collect_zec_support_bundle.sh: PASS
+tools/collect_zec_trace.sh: PASS
+tools/create_desktop_shortcuts.sh: PASS
+tools/create_zec_analysis_package.sh: PASS
+tools/install_zendure_controller.sh: PASS
+tools/root_artifact_transaction.sh: PASS
+tools/run_zec_analysis_package_interactive.sh: PASS
+tools/uninstall_zendure_controller.sh: PASS
+tools/update_zendure_controller.sh: PASS
+14/14 PASS

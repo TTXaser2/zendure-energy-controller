@@ -74,6 +74,8 @@ class PrimaryStorageTemplate:
     unit_id_default: int
     power: RegisterDefinition
     soc: RegisterDefinition
+    current_discharge_floor_soc: Optional[RegisterDefinition] = None
+    capability_poll_interval_s: float = 10.0
 
 
 SMA_SUNNY_ISLAND_TEMPLATE = PrimaryStorageTemplate(
@@ -100,6 +102,15 @@ SMA_SUNNY_ISLAND_TEMPLATE = PrimaryStorageTemplate(
         scale=1.0,
         invalid_raw=0xFFFFFFFF,
     ),
+    current_discharge_floor_soc=RegisterDefinition(
+        address=31009,
+        function_code=FC_READ_HOLDING_REGISTERS,
+        count=2,
+        data_type="u32",
+        scale=1.0,
+        invalid_raw=0xFFFFFFFF,
+    ),
+    capability_poll_interval_s=10.0,
 )
 
 PRIMARY_STORAGE_TEMPLATES: Mapping[str, PrimaryStorageTemplate] = {
@@ -159,6 +170,15 @@ class PrimaryStoragePoll:
     endpoint: str
     unit_id: int
     request_duration_ms: float
+
+
+@dataclass(frozen=True)
+class OptionalCapabilityRead:
+    supported: bool
+    value: Optional[float]
+    ok: Optional[bool]
+    error_code: str = ""
+    source: str = ""
 
 
 class ModbusTcpReadOnlyClient:
@@ -283,6 +303,31 @@ def read_primary_storage_once(
     )
 
 
+def read_current_discharge_floor_soc(
+    client: ModbusTcpReadOnlyClient,
+    template: PrimaryStorageTemplate,
+) -> OptionalCapabilityRead:
+    """Read the optional current lower self-consumption discharge boundary.
+
+    Capability failures are deliberately isolated from the mandatory power/SOC
+    poll.  A device-specific diagnostic capability must never make an otherwise
+    healthy primary-storage source unusable for the existing controller paths.
+    """
+    definition = template.current_discharge_floor_soc
+    if definition is None:
+        return OptionalCapabilityRead(supported=False, value=None, ok=None, error_code="UNSUPPORTED")
+    source = f"{template.template_id}:modbus_register_{definition.address}"
+    try:
+        registers = client.read_registers(definition.function_code, definition.address, definition.count)
+        value = decode_register_value(registers, definition)
+        if not 0.0 <= value <= 100.0:
+            raise ModbusReadError("DISCHARGE_FLOOR_SOC_OUT_OF_RANGE", str(value))
+        return OptionalCapabilityRead(supported=True, value=value, ok=True, source=source)
+    except Exception as exc:
+        code = exc.code if isinstance(exc, ModbusReadError) else exc.__class__.__name__.upper()
+        return OptionalCapabilityRead(supported=True, value=None, ok=False, error_code=code, source=source)
+
+
 def probe_primary_storage_modbus(
     cfg: Mapping[str, Any],
     *,
@@ -294,6 +339,13 @@ def probe_primary_storage_modbus(
     client = client_factory(host, port, unit_id, timeout_s=1.5)
     try:
         poll = read_primary_storage_once(client, template)
+        floor = read_current_discharge_floor_soc(client, template)
+        usable_soc = None
+        if floor.ok and floor.value is not None and floor.value < 100.0:
+            usable_soc = max(0.0, min(100.0, ((poll.soc_percent - floor.value) / (100.0 - floor.value)) * 100.0))
+        function_codes = [template.power.function_code, template.soc.function_code]
+        if template.current_discharge_floor_soc is not None:
+            function_codes.append(template.current_discharge_floor_soc.function_code)
         return {
             "status": "ok",
             "read_only": True,
@@ -304,7 +356,13 @@ def probe_primary_storage_modbus(
             "power_w": poll.power_w,
             "soc_percent": poll.soc_percent,
             "response_time_ms": round(float(poll.request_duration_ms), 3),
-            "function_codes": [template.power.function_code, template.soc.function_code],
+            "function_codes": function_codes,
+            "current_discharge_floor_supported": floor.supported,
+            "current_discharge_floor_soc_percent": floor.value,
+            "current_discharge_floor_read_ok": floor.ok,
+            "current_discharge_floor_error_code": floor.error_code,
+            "current_discharge_floor_source": floor.source,
+            "usable_soc_percent": round(usable_soc, 3) if usable_soc is not None else None,
         }
     finally:
         client.close()
@@ -335,6 +393,7 @@ class PrimaryStorageModbusWorker:
         self._archived_connect_count = 0
         self._archived_request_count = 0
         self._archived_error_count = 0
+        self._last_capability_attempt_monotonic: Optional[float] = None
         self._publish_starting_state()
 
     def _publish_starting_state(self) -> None:
@@ -347,6 +406,21 @@ class PrimaryStorageModbusWorker:
             self.state.primary_storage_source_health = SOURCE_HEALTH_STARTING
             self.state.primary_storage_last_poll_ok = None
             self.state.primary_storage_last_error_code = ""
+            self.state.primary_storage_current_discharge_floor_supported = self.template.current_discharge_floor_soc is not None
+            self.state.primary_storage_current_discharge_floor_soc_percent = None
+            self.state.primary_storage_current_discharge_floor_source = (
+                f"{self.template.template_id}:modbus_register_{self.template.current_discharge_floor_soc.address}"
+                if self.template.current_discharge_floor_soc is not None else ""
+            )
+            self.state.primary_storage_current_discharge_floor_last_poll_ok = None
+            self.state.primary_storage_current_discharge_floor_last_error_code = ""
+            self.state.primary_storage_current_discharge_floor_last_update_epoch = None
+            self.state.primary_storage_current_discharge_floor_last_update_monotonic = None
+            self.state.primary_storage_current_discharge_floor_age_seconds = None
+            self.state.primary_storage_current_discharge_floor_fresh = False
+            self.state.primary_storage_current_discharge_floor_valid = False
+            self.state.primary_storage_usable_soc_percent = None
+            self.state.primary_storage_usable_soc_valid = False
 
     def start(self) -> None:
         if self._thread is not None and self._thread.is_alive():
@@ -398,7 +472,30 @@ class PrimaryStorageModbusWorker:
             self._publish_failure(code)
             raise
         self._publish_success(poll)
+        self._poll_optional_capabilities_if_due()
         return poll
+
+    def _poll_optional_capabilities_if_due(self) -> None:
+        definition = self.template.current_discharge_floor_soc
+        if definition is None or self._client is None:
+            return
+        now_mono = self._monotonic()
+        interval = max(1.0, float(self.template.capability_poll_interval_s))
+        if self._last_capability_attempt_monotonic is not None:
+            if max(0.0, now_mono - self._last_capability_attempt_monotonic) < interval:
+                return
+        self._last_capability_attempt_monotonic = now_mono
+        now_wall = self._wall_time()
+        result = read_current_discharge_floor_soc(self._client, self.template)
+        with self.state.lock:
+            self.state.primary_storage_current_discharge_floor_supported = result.supported
+            self.state.primary_storage_current_discharge_floor_source = result.source
+            self.state.primary_storage_current_discharge_floor_last_poll_ok = result.ok
+            self.state.primary_storage_current_discharge_floor_last_error_code = result.error_code
+            if result.ok and result.value is not None:
+                self.state.primary_storage_current_discharge_floor_soc_percent = float(result.value)
+                self.state.primary_storage_current_discharge_floor_last_update_epoch = now_wall
+                self.state.primary_storage_current_discharge_floor_last_update_monotonic = now_mono
 
     def _publish_success(self, poll: PrimaryStoragePoll) -> None:
         now_mono = self._monotonic()

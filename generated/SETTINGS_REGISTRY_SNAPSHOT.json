@@ -5,7 +5,7 @@
     "Leistungsgrenzen & SOC-Schutz",
     "AUTO-Regelung",
     "Nachtbetrieb",
-    "Primärspeicher & SMA",
+    "Primärspeicher",
     "Harvest / Restüberschuss",
     "Cross-Charge-Schutz",
     "Kommandowirkung & Resync",
@@ -2098,7 +2098,7 @@
       "apply_class": "live_next_cycle",
       "apply_text": "Wirksam im nächsten Regelzyklus; kein Dienstneustart",
       "bootstrap_value": 30,
-      "category": "Primärspeicher & SMA",
+      "category": "Primärspeicher",
       "codec_id": "int",
       "decision_status": "Bestätigt",
       "default_class": "product_default",
@@ -2119,13 +2119,13 @@
         "handbook": {
           "page": 8,
           "section_id": "primary-storage",
-          "section_title": "Primärspeicher und SMA"
+          "section_title": "Primärspeicher"
         },
         "level": "base",
         "search_terms": [
           "Daten-Timeout",
           "SECOND_BATTERY_STALE_TIMEOUT_SECONDS",
-          "Primärspeicher & SMA",
+          "Primärspeicher",
           "Freshness & Verfügbarkeit",
           "SECOND",
           "BATTERY",
@@ -2165,13 +2165,13 @@
       "apply_class": "live_next_cycle",
       "apply_text": "Sofort in der Oberfläche; kein Dienstneustart",
       "bootstrap_value": "",
-      "category": "Primärspeicher & SMA",
+      "category": "Primärspeicher",
       "codec_id": "str",
       "decision_status": "Bestätigt",
       "default_class": "installation",
       "default_help": "Installations-/anlagenabhängig · kein allgemeiner Standardwert",
-      "default_new_install": "SMA Sunny Island",
-      "default_rc19": "SMA Sunny Island",
+      "default_new_install": "",
+      "default_rc19": "",
       "dependency_keys": [
         "SECOND_BATTERY_SOURCE_PROFILE",
         "CROSS_CHARGE_ENABLED"
@@ -2183,13 +2183,13 @@
         "handbook": {
           "page": 8,
           "section_id": "primary-storage",
-          "section_title": "Primärspeicher und SMA"
+          "section_title": "Primärspeicher"
         },
         "level": "base",
         "search_terms": [
           "Primärspeicher-Anzeigename",
           "SECOND_BATTERY_DISPLAY_NAME",
-          "Primärspeicher & SMA",
+          "Primärspeicher",
           "Integration & Identität",
           "SECOND",
           "BATTERY",
@@ -2228,7 +2228,7 @@
       "apply_class": "restart_required",
       "apply_text": "Dienstneustart; danach Ready-/Freshness-/Preflight-Prüfung",
       "bootstrap_value": false,
-      "category": "Primärspeicher & SMA",
+      "category": "Primärspeicher",
       "codec_id": "bool",
       "decision_status": "Bestätigt",
       "default_class": "safe_sentinel",
@@ -2243,13 +2243,13 @@
         "handbook": {
           "page": 8,
           "section_id": "primary-storage",
-          "section_title": "Primärspeicher und SMA"
+          "section_title": "Primärspeicher"
         },
         "level": "base",
         "search_terms": [
           "Primärspeicher-Integration aktiv",
           "SECOND_BATTERY_INTEGRATION_ENABLED",
-          "Primärspeicher & SMA",
+          "Primärspeicher",
           "Integration & Status",
           "SECOND",
           "BATTERY",
@@ -2291,7 +2291,7 @@
       "apply_class": "restart_required",
       "apply_text": "Dienstneustart; aktive Primärspeicherquelle wird danach neu initialisiert",
       "bootstrap_value": "evcc_standard",
-      "category": "Primärspeicher & SMA",
+      "category": "Primärspeicher",
       "codec_id": "select",
       "decision_status": "Bestätigt",
       "default_class": "profile_preset",
@@ -2315,13 +2315,13 @@
         "handbook": {
           "page": 8,
           "section_id": "primary-storage",
-          "section_title": "Primärspeicher und SMA"
+          "section_title": "Primärspeicher"
         },
         "level": "base",
         "search_terms": [
           "Primärspeicher-Anbindung",
           "SECOND_BATTERY_SOURCE_PROFILE",
-          "Primärspeicher & SMA",
+          "Primärspeicher",
           "Anbindung",
           "SECOND",
           "BATTERY",
@@ -2376,7 +2376,7 @@
       "apply_class": "restart_required",
       "apply_text": "Dienstneustart; Geräteprofil wird danach neu initialisiert",
       "bootstrap_value": "sma_sunny_island",
-      "category": "Primärspeicher & SMA",
+      "category": "Primärspeicher",
       "codec_id": "select",
       "decision_status": "Bestätigt",
       "default_class": "profile_preset",
@@ -2396,13 +2396,13 @@
         "handbook": {
           "page": 8,
           "section_id": "primary-storage",
-          "section_title": "Primärspeicher und SMA"
+          "section_title": "Primärspeicher"
         },
         "level": "base",
         "search_terms": [
           "Gerät / Modell",
           "SECOND_BATTERY_MODBUS_TEMPLATE",
-          "Primärspeicher & SMA",
+          "Primärspeicher",
           "Gerät & Verbindung · Modbus",
           "SECOND",
           "BATTERY",
@@ -2448,7 +2448,7 @@
       "apply_class": "restart_required",
       "apply_text": "Dienstneustart; Verbindung wird danach mit dem neuen Endpoint aufgebaut",
       "bootstrap_value": "",
-      "category": "Primärspeicher & SMA",
+      "category": "Primärspeicher",
       "codec_id": "str",
       "decision_status": "Bestätigt",
       "default_class": "product_default",
@@ -2466,13 +2466,13 @@
         "handbook": {
           "page": 8,
           "section_id": "primary-storage",
-          "section_title": "Primärspeicher und SMA"
+          "section_title": "Primärspeicher"
         },
         "level": "base",
         "search_terms": [
           "Host / IP-Adresse",
           "SECOND_BATTERY_MODBUS_HOST",
-          "Primärspeicher & SMA",
+          "Primärspeicher",
           "Gerät & Verbindung · Modbus",
           "SECOND",
           "BATTERY",
@@ -2513,7 +2513,7 @@
       "apply_class": "restart_required",
       "apply_text": "Dienstneustart",
       "bootstrap_value": 502,
-      "category": "Primärspeicher & SMA",
+      "category": "Primärspeicher",
       "codec_id": "int",
       "decision_status": "Bestätigt",
       "default_class": "profile_preset",
@@ -2531,13 +2531,13 @@
         "handbook": {
           "page": 8,
           "section_id": "primary-storage",
-          "section_title": "Primärspeicher und SMA"
+          "section_title": "Primärspeicher"
         },
         "level": "base",
         "search_terms": [
           "Modbus-Port",
           "SECOND_BATTERY_MODBUS_PORT",
-          "Primärspeicher & SMA",
+          "Primärspeicher",
           "Gerät & Verbindung · Modbus",
           "SECOND",
           "BATTERY",
@@ -2578,7 +2578,7 @@
       "apply_class": "restart_required",
       "apply_text": "Dienstneustart",
       "bootstrap_value": 3,
-      "category": "Primärspeicher & SMA",
+      "category": "Primärspeicher",
       "codec_id": "int",
       "decision_status": "Bestätigt",
       "default_class": "profile_preset",
@@ -2596,13 +2596,13 @@
         "handbook": {
           "page": 8,
           "section_id": "primary-storage",
-          "section_title": "Primärspeicher und SMA"
+          "section_title": "Primärspeicher"
         },
         "level": "base",
         "search_terms": [
           "Unit-ID",
           "SECOND_BATTERY_MODBUS_UNIT_ID",
-          "Primärspeicher & SMA",
+          "Primärspeicher",
           "Gerät & Verbindung · Modbus",
           "SECOND",
           "BATTERY",
@@ -2643,7 +2643,7 @@
       "apply_class": "live_next_cycle",
       "apply_text": "Live-Reload; Dienstneustart nach Topicwechsel empfohlen",
       "bootstrap_value": "evcc/site/battery/devices/1/capacity",
-      "category": "Primärspeicher & SMA",
+      "category": "Primärspeicher",
       "codec_id": "str",
       "decision_status": "Bestätigt",
       "default_class": "profile_preset",
@@ -2663,13 +2663,13 @@
         "handbook": {
           "page": 8,
           "section_id": "primary-storage",
-          "section_title": "Primärspeicher und SMA"
+          "section_title": "Primärspeicher"
         },
         "level": "base",
         "search_terms": [
           "Kapazitäts-Topic",
           "SECOND_BATTERY_CAPACITY_TOPIC",
-          "Primärspeicher & SMA",
+          "Primärspeicher",
           "MQTT-Datenquelle · Benutzerdefiniert",
           "SECOND",
           "BATTERY",
@@ -2708,7 +2708,7 @@
       "apply_class": "live_next_cycle",
       "apply_text": "Live-Reload; Dienstneustart nach Topicwechsel empfohlen",
       "bootstrap_value": "evcc/site/battery/devices/1/power",
-      "category": "Primärspeicher & SMA",
+      "category": "Primärspeicher",
       "codec_id": "str",
       "decision_status": "Bestätigt",
       "default_class": "profile_preset",
@@ -2729,13 +2729,13 @@
         "handbook": {
           "page": 8,
           "section_id": "primary-storage",
-          "section_title": "Primärspeicher und SMA"
+          "section_title": "Primärspeicher"
         },
         "level": "base",
         "search_terms": [
           "Leistungs-Topic",
           "SECOND_BATTERY_POWER_TOPIC",
-          "Primärspeicher & SMA",
+          "Primärspeicher",
           "MQTT-Datenquelle · Benutzerdefiniert",
           "SECOND",
           "BATTERY",
@@ -2776,7 +2776,7 @@
       "apply_class": "live_next_cycle",
       "apply_text": "Live-Reload; Dienstneustart nach Topicwechsel empfohlen",
       "bootstrap_value": "evcc/site/battery/devices/1/soc",
-      "category": "Primärspeicher & SMA",
+      "category": "Primärspeicher",
       "codec_id": "str",
       "decision_status": "Bestätigt",
       "default_class": "profile_preset",
@@ -2795,13 +2795,13 @@
         "handbook": {
           "page": 8,
           "section_id": "primary-storage",
-          "section_title": "Primärspeicher und SMA"
+          "section_title": "Primärspeicher"
         },
         "level": "base",
         "search_terms": [
           "SOC-Topic",
           "SECOND_BATTERY_SOC_TOPIC",
-          "Primärspeicher & SMA",
+          "Primärspeicher",
           "MQTT-Datenquelle · Benutzerdefiniert",
           "SECOND",
           "BATTERY",
@@ -2842,7 +2842,7 @@
       "apply_class": "live_next_cycle",
       "apply_text": "Live-Reload; Dienstneustart nach Topicwechsel empfohlen",
       "bootstrap_value": "evcc/site/battery/devices/1",
-      "category": "Primärspeicher & SMA",
+      "category": "Primärspeicher",
       "codec_id": "str",
       "decision_status": "Bestätigt",
       "default_class": "profile_preset",
@@ -2860,13 +2860,13 @@
         "handbook": {
           "page": 8,
           "section_id": "primary-storage",
-          "section_title": "Primärspeicher und SMA"
+          "section_title": "Primärspeicher"
         },
         "level": "base",
         "search_terms": [
           "EVCC Batterie-Basis-Topic",
           "SECOND_BATTERY_EVCC_BASE_TOPIC",
-          "Primärspeicher & SMA",
+          "Primärspeicher",
           "MQTT-Datenquelle · EVCC Standard",
           "SECOND",
           "BATTERY",
@@ -2906,7 +2906,7 @@
       "apply_class": "live_next_cycle",
       "apply_text": "Live-Reload; Dienstneustart nach Parserwechsel empfohlen",
       "bootstrap_value": "capacity",
-      "category": "Primärspeicher & SMA",
+      "category": "Primärspeicher",
       "codec_id": "str",
       "decision_status": "Bestätigt",
       "default_class": "profile_preset",
@@ -2923,13 +2923,13 @@
         "handbook": {
           "page": 8,
           "section_id": "primary-storage",
-          "section_title": "Primärspeicher und SMA"
+          "section_title": "Primärspeicher"
         },
         "level": "base",
         "search_terms": [
           "Kapazität JSON-Feldpfad",
           "SECOND_BATTERY_CAPACITY_JSON_PATH",
-          "Primärspeicher & SMA",
+          "Primärspeicher",
           "MQTT-Payload · Benutzerdefiniert",
           "SECOND",
           "BATTERY",
@@ -2969,7 +2969,7 @@
       "apply_class": "live_next_cycle",
       "apply_text": "Live-Reload; Dienstneustart nach Parserwechsel empfohlen",
       "bootstrap_value": "number",
-      "category": "Primärspeicher & SMA",
+      "category": "Primärspeicher",
       "codec_id": "select",
       "decision_status": "Bestätigt",
       "default_class": "profile_preset",
@@ -2987,13 +2987,13 @@
         "handbook": {
           "page": 8,
           "section_id": "primary-storage",
-          "section_title": "Primärspeicher und SMA"
+          "section_title": "Primärspeicher"
         },
         "level": "base",
         "search_terms": [
           "Kapazitäts-Payload",
           "SECOND_BATTERY_CAPACITY_PAYLOAD_TYPE",
-          "Primärspeicher & SMA",
+          "Primärspeicher",
           "MQTT-Payload · Benutzerdefiniert",
           "SECOND",
           "BATTERY",
@@ -3042,7 +3042,7 @@
       "apply_class": "live_next_cycle",
       "apply_text": "Live-Reload; Dienstneustart nach Parserwechsel empfohlen",
       "bootstrap_value": "power",
-      "category": "Primärspeicher & SMA",
+      "category": "Primärspeicher",
       "codec_id": "str",
       "decision_status": "Bestätigt",
       "default_class": "profile_preset",
@@ -3059,13 +3059,13 @@
         "handbook": {
           "page": 8,
           "section_id": "primary-storage",
-          "section_title": "Primärspeicher und SMA"
+          "section_title": "Primärspeicher"
         },
         "level": "base",
         "search_terms": [
           "Leistung JSON-Feldpfad",
           "SECOND_BATTERY_POWER_JSON_PATH",
-          "Primärspeicher & SMA",
+          "Primärspeicher",
           "MQTT-Payload · Benutzerdefiniert",
           "SECOND",
           "BATTERY",
@@ -3105,7 +3105,7 @@
       "apply_class": "live_next_cycle",
       "apply_text": "Live-Reload; Dienstneustart nach Parserwechsel empfohlen",
       "bootstrap_value": "number",
-      "category": "Primärspeicher & SMA",
+      "category": "Primärspeicher",
       "codec_id": "select",
       "decision_status": "Bestätigt",
       "default_class": "profile_preset",
@@ -3123,13 +3123,13 @@
         "handbook": {
           "page": 8,
           "section_id": "primary-storage",
-          "section_title": "Primärspeicher und SMA"
+          "section_title": "Primärspeicher"
         },
         "level": "base",
         "search_terms": [
           "Leistungs-Payload",
           "SECOND_BATTERY_POWER_PAYLOAD_TYPE",
-          "Primärspeicher & SMA",
+          "Primärspeicher",
           "MQTT-Payload · Benutzerdefiniert",
           "SECOND",
           "BATTERY",
@@ -3178,7 +3178,7 @@
       "apply_class": "live_next_cycle",
       "apply_text": "Live-Reload; Dienstneustart nach Parserwechsel empfohlen",
       "bootstrap_value": "soc",
-      "category": "Primärspeicher & SMA",
+      "category": "Primärspeicher",
       "codec_id": "str",
       "decision_status": "Bestätigt",
       "default_class": "profile_preset",
@@ -3195,13 +3195,13 @@
         "handbook": {
           "page": 8,
           "section_id": "primary-storage",
-          "section_title": "Primärspeicher und SMA"
+          "section_title": "Primärspeicher"
         },
         "level": "base",
         "search_terms": [
           "SOC JSON-Feldpfad",
           "SECOND_BATTERY_SOC_JSON_PATH",
-          "Primärspeicher & SMA",
+          "Primärspeicher",
           "MQTT-Payload · Benutzerdefiniert",
           "SECOND",
           "BATTERY",
@@ -3241,7 +3241,7 @@
       "apply_class": "live_next_cycle",
       "apply_text": "Live-Reload; Dienstneustart nach Parserwechsel empfohlen",
       "bootstrap_value": "number",
-      "category": "Primärspeicher & SMA",
+      "category": "Primärspeicher",
       "codec_id": "select",
       "decision_status": "Bestätigt",
       "default_class": "profile_preset",
@@ -3259,13 +3259,13 @@
         "handbook": {
           "page": 8,
           "section_id": "primary-storage",
-          "section_title": "Primärspeicher und SMA"
+          "section_title": "Primärspeicher"
         },
         "level": "base",
         "search_terms": [
           "SOC-Payload",
           "SECOND_BATTERY_SOC_PAYLOAD_TYPE",
-          "Primärspeicher & SMA",
+          "Primärspeicher",
           "MQTT-Payload · Benutzerdefiniert",
           "SECOND",
           "BATTERY",
@@ -3314,7 +3314,7 @@
       "apply_class": "live_next_cycle",
       "apply_text": "Wirksam mit dem nächsten MQTT-Wert; kein Dienstneustart zwingend",
       "bootstrap_value": "kWh",
-      "category": "Primärspeicher & SMA",
+      "category": "Primärspeicher",
       "codec_id": "select",
       "decision_status": "Bestätigt",
       "default_class": "profile_preset",
@@ -3331,13 +3331,13 @@
         "handbook": {
           "page": 8,
           "section_id": "primary-storage",
-          "section_title": "Primärspeicher und SMA"
+          "section_title": "Primärspeicher"
         },
         "level": "base",
         "search_terms": [
           "Kapazitätseinheit",
           "SECOND_BATTERY_CAPACITY_UNIT",
-          "Primärspeicher & SMA",
+          "Primärspeicher",
           "Normalisierung",
           "SECOND",
           "BATTERY",
@@ -3385,7 +3385,7 @@
       "apply_class": "live_next_cycle",
       "apply_text": "Wirksam im nächsten Regelzyklus; kein Dienstneustart",
       "bootstrap_value": 1,
-      "category": "Primärspeicher & SMA",
+      "category": "Primärspeicher",
       "codec_id": "int",
       "decision_status": "Bestätigt",
       "default_class": "profile_preset",
@@ -3405,13 +3405,13 @@
         "handbook": {
           "page": 8,
           "section_id": "primary-storage",
-          "section_title": "Primärspeicher und SMA"
+          "section_title": "Primärspeicher"
         },
         "level": "base",
         "search_terms": [
           "Bedeutung des MQTT-Leistungsvorzeichens",
           "SECOND_BATTERY_DISCHARGE_SIGN",
-          "Primärspeicher & SMA",
+          "Primärspeicher",
           "Normalisierung",
           "SECOND",
           "BATTERY",
@@ -3450,7 +3450,7 @@
       "apply_class": "live_next_cycle",
       "apply_text": "Wirksam mit dem nächsten MQTT-Wert; kein Dienstneustart zwingend",
       "bootstrap_value": "W",
-      "category": "Primärspeicher & SMA",
+      "category": "Primärspeicher",
       "codec_id": "select",
       "decision_status": "Bestätigt",
       "default_class": "profile_preset",
@@ -3468,13 +3468,13 @@
         "handbook": {
           "page": 8,
           "section_id": "primary-storage",
-          "section_title": "Primärspeicher und SMA"
+          "section_title": "Primärspeicher"
         },
         "level": "base",
         "search_terms": [
           "Leistungseinheit",
           "SECOND_BATTERY_POWER_UNIT",
-          "Primärspeicher & SMA",
+          "Primärspeicher",
           "Normalisierung",
           "SECOND",
           "BATTERY",
@@ -3522,7 +3522,7 @@
       "apply_class": "live_next_cycle",
       "apply_text": "Wirksam im nächsten Regelzyklus; kein Dienstneustart",
       "bootstrap_value": null,
-      "category": "Primärspeicher & SMA",
+      "category": "Primärspeicher",
       "codec_id": "optional_int",
       "decision_status": "Bestätigt",
       "default_class": "installation",
@@ -3545,13 +3545,13 @@
         "handbook": {
           "page": 8,
           "section_id": "primary-storage",
-          "section_title": "Primärspeicher und SMA"
+          "section_title": "Primärspeicher"
         },
         "level": "base",
         "search_terms": [
           "Maximale Ladeleistung Primärspeicher",
           "SECOND_BATTERY_MAX_CHARGE_POWER_W",
-          "Primärspeicher & SMA",
+          "Primärspeicher",
           "Technische Leistungsdaten",
           "SECOND",
           "BATTERY",
@@ -3696,7 +3696,7 @@
         "when": "Die Bestätigungszeit läuft nur, solange die High-SOC-Freigabebedingungen zusammenhängend erfüllt bleiben. Profilfenster können spezifizierte abweichende Zeiten verwenden."
       },
       "key": "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS",
-      "label": "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS",
+      "label": "High-SOC Eintritt bestätigen",
       "lifecycle": "active",
       "maximum": null,
       "minimum": null,
@@ -3761,7 +3761,7 @@
         "when": "Die Haltezeit wird erst relevant, nachdem High-SOC-Harvest bereits aktiv war und eine Freigabebedingung kurzzeitig wegfällt. Harte Exit-/Schutzbedingungen können den Zustand trotzdem sofort beenden."
       },
       "key": "HARVEST_HIGH_SMA_SOC_HOLD_SECONDS",
-      "label": "HARVEST_HIGH_SMA_SOC_HOLD_SECONDS",
+      "label": "High-SOC Haltezeit",
       "lifecycle": "active",
       "maximum": null,
       "minimum": null,
@@ -3827,7 +3827,7 @@
         "when": "Der Schalter wirkt nur bei aktivierter Restüberschuss-Ernte. Für einen tatsächlichen High-SOC-Eintritt müssen zusätzlich Primärspeicher-SOC, Exportbedingung, Zeitprofil und Bestätigungszeit passen."
       },
       "key": "HARVEST_HIGH_SMA_SOC_ENABLED",
-      "label": "HARVEST_HIGH_SMA_SOC_ENABLED",
+      "label": "High-SOC Parallel-Harvest",
       "lifecycle": "active",
       "maximum": null,
       "minimum": null,
@@ -3892,11 +3892,11 @@
           "ENTER",
           "PERCENT"
         ],
-        "short": "SMA-SOC-Schwelle für den Eintritt in den High-SOC-Bereich. Zusammen mit dem niedrigeren Austrittswert bildet sie eine Hysterese.",
+        "short": "Primärspeicher-SOC-Schwelle für den Eintritt in den High-SOC-Bereich. Zusammen mit dem niedrigeren Austrittswert bildet sie eine Hysterese.",
         "when": "Die Eintrittsschwelle wird nur bei aktivem High-SOC-Parallel-Harvest und gültigem aktuellem Primärspeicher-SOC ausgewertet. Ein Eintritt benötigt zusätzlich die Export-/Zeit-/Bestätigungsbedingungen; der niedrigere Austrittswert beendet den Zustand wieder."
       },
       "key": "HARVEST_HIGH_SMA_SOC_ENTER_PERCENT",
-      "label": "HARVEST_HIGH_SMA_SOC_ENTER_PERCENT",
+      "label": "Primärspeicher High-SOC Eintritt",
       "lifecycle": "active",
       "maximum": null,
       "minimum": null,
@@ -3959,11 +3959,11 @@
           "EXIT",
           "PERCENT"
         ],
-        "short": "SMA-SOC-Schwelle zum Verlassen des High-SOC-Bereichs. Sie muss unter der Eintrittsschwelle liegen.",
+        "short": "Primärspeicher-SOC-Schwelle zum Verlassen des High-SOC-Bereichs. Sie muss unter der Eintrittsschwelle liegen.",
         "when": "Die Austrittsschwelle wird ausgewertet, wenn ein High-SOC-Harvestzustand aktiv ist. Fällt der Primärspeicher-SOC auf bzw. unter diese Grenze, wird der High-SOC-Zustand verlassen; der Abstand zur Eintrittsschwelle verhindert häufiges Hin- und Herschalten."
       },
       "key": "HARVEST_HIGH_SMA_SOC_EXIT_PERCENT",
-      "label": "HARVEST_HIGH_SMA_SOC_EXIT_PERCENT",
+      "label": "Primärspeicher High-SOC Austritt",
       "lifecycle": "active",
       "maximum": null,
       "minimum": null,
@@ -4031,7 +4031,7 @@
         "when": "Die Exportgrenze wird beim Eintritt in High-SOC-Harvest geprüft. Sie qualifiziert die Freigabe; sie ist ausdrücklich kein gewünschter Restexport nach der Regelung."
       },
       "key": "HARVEST_HIGH_SMA_SOC_MIN_EXPORT_W",
-      "label": "HARVEST_HIGH_SMA_SOC_MIN_EXPORT_W",
+      "label": "High-SOC Mindestexport",
       "lifecycle": "active",
       "maximum": null,
       "minimum": null,
@@ -4095,7 +4095,7 @@
         "when": "Die Schwelle wird für den Voll-/Idle-Zweig des Primärspeichers innerhalb Harvest ausgewertet. Sie ist nicht mit dem globalen Zendure-MAX-SOC gleichzusetzen."
       },
       "key": "HARVEST_SMA_FULL_SOC_PERCENT",
-      "label": "HARVEST_SMA_FULL_SOC_PERCENT",
+      "label": "Primärspeicher Voll-SOC Schwelle",
       "lifecycle": "active",
       "maximum": null,
       "minimum": null,
@@ -5418,7 +5418,7 @@
       ],
       "editability": "migration_only",
       "help": {
-        "extended": "Konfiguration für HARVEST_HIGH_SMA_SOC_TIME_PROFILE_ENABLED. Wirksamkeit nach Speichern: Wirksam im nächsten Regelzyklus; kein Dienstneustart. Die Einstellung steht in Beziehung zu: HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MORNING, HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY, HARVEST_PRIMARY_CHARGE_TARGET_SHARE_AFTERNOON, HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS.",
+        "extended": "Konfiguration für High-SOC Tageszeitprofil. Wirksamkeit nach Speichern: Wirksam im nächsten Regelzyklus; kein Dienstneustart. Die Einstellung steht in Beziehung zu: HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MORNING, HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY, HARVEST_PRIMARY_CHARGE_TARGET_SHARE_AFTERNOON, HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 9,
@@ -5427,6 +5427,7 @@
         },
         "level": "rich",
         "search_terms": [
+          "High-SOC Tageszeitprofil",
           "HARVEST_HIGH_SMA_SOC_TIME_PROFILE_ENABLED",
           "Harvest / Restüberschuss",
           "Tageszeitprofil",
@@ -5438,11 +5439,11 @@
           "PROFILE",
           "ENABLED"
         ],
-        "short": "Konfiguration für HARVEST_HIGH_SMA_SOC_TIME_PROFILE_ENABLED.",
+        "short": "Konfiguration für High-SOC Tageszeitprofil.",
         "when": null
       },
       "key": "HARVEST_HIGH_SMA_SOC_TIME_PROFILE_ENABLED",
-      "label": "HARVEST_HIGH_SMA_SOC_TIME_PROFILE_ENABLED",
+      "label": "High-SOC Tageszeitprofil",
       "lifecycle": "superseded_by_season_and_profiles",
       "maximum": null,
       "minimum": null,

@@ -215,12 +215,12 @@ class Rc18AsyncLocalApiTests(unittest.TestCase):
         self.assertEqual(0, client.calls)
         worker.request_stop(); worker.join(2)
 
-    def test_rc18_contract_preserves_exact_rc17_header(self):
-        self.assertEqual(246, len(STANDARD_HEADER))
-        self.assertEqual(249, len(EXTENDED_HEADER))
+    def test_rc18_contract_preserves_exact_rc17_header_with_current_additive_extension(self):
+        self.assertEqual(254, len(STANDARD_HEADER))
+        self.assertEqual(257, len(EXTENDED_HEADER))
         self.assertEqual(238, len(RC17_STANDARD_HEADER))
         self.assertEqual("192ccc890c2e1d80", header_hash(RC17_STANDARD_HEADER))
-        self.assertEqual("7842bfef39d47f93", header_hash(STANDARD_HEADER))
+        self.assertEqual("49ed5d132aa54a91", header_hash(STANDARD_HEADER))
 
     def test_eight_cycle_fields_are_present_and_populated(self):
         row = base_row()

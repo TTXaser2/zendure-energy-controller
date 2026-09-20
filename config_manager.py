@@ -113,7 +113,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # Cross-Charge-Schutz / externe Zusatzbatterie
     "CROSS_CHARGE_ENABLED": False,
     "SECOND_BATTERY_INTEGRATION_ENABLED": False,
-    "SECOND_BATTERY_DISPLAY_NAME": "SMA Sunny Island",
+    "SECOND_BATTERY_DISPLAY_NAME": "",
     "SECOND_BATTERY_SOURCE_PROFILE": "evcc_standard",
     "SECOND_BATTERY_MODBUS_TEMPLATE": "sma_sunny_island",
     "SECOND_BATTERY_MODBUS_HOST": "",

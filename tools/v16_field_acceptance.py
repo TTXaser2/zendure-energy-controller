@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Read-only productive field acceptance for ZEC V16.0.1 deployment modes.
+"""Read-only productive field acceptance for ZEC V16.1.0 deployment modes.
 
 This tool never publishes commands, changes configuration, mutates the graph
 store, or performs a rollback. It exercises the running HTTP/read-only graph
@@ -28,10 +28,10 @@ from version import APP_BUILD_ID, APP_VERSION, APP_VERSION_LABEL  # noqa: E402
 from tools.validate_release_datasheet import validate as validate_release_datasheet  # noqa: E402
 from tools.deployment_contract import effective_local_web_endpoint, load_bootstrap  # noqa: E402
 
-EXPECTED_VERSION = "16.0.1"
-EXPECTED_LABEL = "V16.0.1"
-EXPECTED_BUILD_ID = "v16.0.1-20260915"
-FORMAT = "ZEC_V16_0_1_FIELD_ACCEPTANCE_V1"
+EXPECTED_VERSION = "16.1.0"
+EXPECTED_LABEL = "V16.1.0"
+EXPECTED_BUILD_ID = "v16.1.0-20260919"
+FORMAT = "ZEC_V16_1_0_FIELD_ACCEPTANCE_V1"
 
 
 def _sha256(path: Path) -> str:
@@ -175,6 +175,30 @@ def run_acceptance(base_url: str, install_report: Path, expect_primary_profile: 
             if expect_primary_profile == "modbus_template":
                 source_ok = source_ok and str(source_check.get("source_type") or "") == "modbus_tcp" and str(source_check.get("source_health") or "") in {"OK", "DEGRADED"}
             _check(checks, "primary_storage_source_expected", source_ok, expected_profile=expect_primary_profile, source=source_check)
+            if expect_primary_profile == "modbus_template":
+                capability_ok = (
+                    source_check.get("current_discharge_floor_supported") is True
+                    and source_check.get("current_discharge_floor_valid") is True
+                    and source_check.get("current_discharge_floor_fresh") is True
+                    and source_check.get("current_discharge_floor_soc_percent") is not None
+                    and source_check.get("usable_soc_valid") is True
+                    and source_check.get("usable_soc_percent") is not None
+                )
+                _check(
+                    checks, "primary_storage_sma_discharge_floor_capability", capability_ok,
+                    detail="V16.1.0 field evidence for the optional SMA Sunny Island capability; this check is release acceptance only and does not alter controller readiness.",
+                    capability={
+                        "supported": source_check.get("current_discharge_floor_supported"),
+                        "floor_soc_percent": source_check.get("current_discharge_floor_soc_percent"),
+                        "fresh": source_check.get("current_discharge_floor_fresh"),
+                        "valid": source_check.get("current_discharge_floor_valid"),
+                        "last_poll_ok": source_check.get("current_discharge_floor_last_poll_ok"),
+                        "error_code": source_check.get("current_discharge_floor_last_error_code"),
+                        "source": source_check.get("current_discharge_floor_source"),
+                        "usable_soc_percent": source_check.get("usable_soc_percent"),
+                        "usable_soc_valid": source_check.get("usable_soc_valid"),
+                    },
+                )
         except Exception as exc:
             _check(checks, "primary_storage_source_expected", False, detail=f"{type(exc).__name__}: {exc}")
 
@@ -442,7 +466,7 @@ def run_acceptance(base_url: str, install_report: Path, expect_primary_profile: 
                 and mode in {"SUPPORTED_UPDATE", "CLEAN_FRESH_INSTALL"}
             )
             if mode == "SUPPORTED_UPDATE":
-                install_ok = install_ok and source.get("version") == "15.0.3" and source.get("build_id") == "v15.0.3-20260911"
+                install_ok = install_ok and source.get("version") == "16.0.1" and source.get("build_id") == "v16.0.1-20260915"
             _check(checks, "install_report", install_ok, install_mode=mode, source=source or None, target=target)
             if mode == "SUPPORTED_UPDATE":
                 backup = dict(report.get("release_backup") or {})
@@ -578,10 +602,10 @@ def run_first_install_acceptance(base_url: str, install_report: Path) -> Dict[st
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Read-only ZEC V16.0.1 field acceptance")
+    p = argparse.ArgumentParser(description="Read-only ZEC V16.1.0 field acceptance")
     p.add_argument("--base-url", default="", help="Default: resolve active local endpoint from config/bootstrap")
-    p.add_argument("--install-report", default="/tmp/zec_v16_0_1_install_report.json")
-    p.add_argument("--output", default="/tmp/ZEC_V16_0_1_FIELD_ACCEPTANCE.json")
+    p.add_argument("--install-report", default="/tmp/zec_v16_1_0_install_report.json")
+    p.add_argument("--output", default="/tmp/ZEC_V16_1_0_FIELD_ACCEPTANCE.json")
     p.add_argument("--expect-primary-profile", choices=("", "evcc_standard", "custom", "modbus_template"), default="")
     p.add_argument("--phase", choices=("auto", "normal", "first-install"), default="auto")
     p.add_argument("--json", action="store_true")

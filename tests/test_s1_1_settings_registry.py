@@ -58,7 +58,7 @@ class TestS11SettingsRegistry(unittest.TestCase):
                 "Leistungsgrenzen & SOC-Schutz",
                 "AUTO-Regelung",
                 "Nachtbetrieb",
-                "Primärspeicher & SMA",
+                "Primärspeicher",
                 "Harvest / Restüberschuss",
                 "Cross-Charge-Schutz",
                 "Kommandowirkung & Resync",

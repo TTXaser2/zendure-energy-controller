@@ -295,6 +295,18 @@ def build_ready_payload(cfg: Dict[str, Any], snap: Dict[str, Any]) -> Dict[str, 
             "last_poll_ok": snap.get("primary_storage_last_poll_ok"),
             "endpoint": snap.get("primary_storage_endpoint"),
             "unit_id": snap.get("primary_storage_unit_id"),
+            # Optional, device-specific diagnostics.  These values are
+            # deliberately informational and do not participate in readiness.
+            "current_discharge_floor_supported": bool(snap.get("primary_storage_current_discharge_floor_supported")),
+            "current_discharge_floor_soc_percent": snap.get("primary_storage_current_discharge_floor_soc_percent"),
+            "current_discharge_floor_fresh": bool(snap.get("primary_storage_current_discharge_floor_fresh")),
+            "current_discharge_floor_valid": bool(snap.get("primary_storage_current_discharge_floor_valid")),
+            "current_discharge_floor_age_seconds": snap.get("primary_storage_current_discharge_floor_age_seconds"),
+            "current_discharge_floor_last_poll_ok": snap.get("primary_storage_current_discharge_floor_last_poll_ok"),
+            "current_discharge_floor_last_error_code": snap.get("primary_storage_current_discharge_floor_last_error_code"),
+            "current_discharge_floor_source": snap.get("primary_storage_current_discharge_floor_source"),
+            "usable_soc_percent": snap.get("primary_storage_usable_soc_percent"),
+            "usable_soc_valid": bool(snap.get("primary_storage_usable_soc_valid")),
         }
 
     command_path_ok = bool(
@@ -4442,7 +4454,7 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
         primary_status = "voll / idle"
     else:
         primary_status = "nahe neutral"
-    harmony = "Speicherstrategie: SMA hat Vorrang"
+    harmony = "Speicherstrategie: Primärspeicher hat Vorrang"
     if bool(s.get("rest_surplus_harvest_active")):
         hreason = str(s.get("rest_surplus_harvest_reason") or "")
         harmony = "Harvest: Zendure übernimmt Restüberschuss" if "FULL" in hreason or (primary_soc is not None and primary_soc >= 99) else "Harvest: Parallel-Ernte aktiv · Primärspeicher bleibt priorisiert"
@@ -4466,7 +4478,7 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
         selected = str(s.get("harvest_target_selected_by") or "NOT_APPLICABLE")
         raw = _safe_float(s.get("harvest_candidate_raw_w")) or 0.0
         harvest_calculation = (
-            f"0-W-Netzziel: T {_zec_num(total, 'W')} · SMA {_zec_num(primary_share, 'W')} · "
+            f"0-W-Netzziel: T {_zec_num(total, 'W')} · Primär {_zec_num(primary_share, 'W')} · "
             f"Zendure-Share {_zec_num(share_target, 'W')} · Exportaufnahme {_zec_num(capture, 'W')} · "
             f"{selected} → {_zec_num(raw, 'W')}"
         )
@@ -4478,6 +4490,24 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
     primary_tone = _status_unit_tone(primary_soc, cfg, valid=primary_valid and primary_fresh)
     primary_age = _safe_float(_first_snapshot_value(s, "second_battery_data_age_seconds", "last_sma_battery_update_age_seconds"))
     primary_freshness = "aktuell" if primary_valid and primary_fresh and (primary_age is None or primary_age <= 10) else (f"verzögert, {int(primary_age)} s" if primary_valid and primary_age is not None else "nicht aktuell")
+    discharge_floor_supported = bool(s.get("primary_storage_current_discharge_floor_supported"))
+    discharge_floor = _safe_float(s.get("primary_storage_current_discharge_floor_soc_percent"))
+    discharge_floor_valid = bool(s.get("primary_storage_current_discharge_floor_valid"))
+    discharge_floor_fresh = bool(s.get("primary_storage_current_discharge_floor_fresh"))
+    discharge_floor_age = _safe_float(s.get("primary_storage_current_discharge_floor_age_seconds"))
+    usable_primary_soc = _safe_float(s.get("primary_storage_usable_soc_percent"))
+    usable_primary_soc_valid = bool(s.get("primary_storage_usable_soc_valid"))
+    if discharge_floor_supported and discharge_floor_valid and discharge_floor is not None:
+        discharge_floor_text = _zec_num(discharge_floor, "%")
+    elif discharge_floor_supported:
+        discharge_floor_text = "derzeit nicht verfügbar"
+    else:
+        discharge_floor_text = "nicht unterstützt"
+    usable_primary_soc_text = (
+        f"{_zec_num(usable_primary_soc, '%')} des aktuell freigegebenen Bereichs"
+        if usable_primary_soc_valid and usable_primary_soc is not None
+        else ("derzeit nicht berechenbar" if discharge_floor_supported else "nicht unterstützt")
+    )
 
     detected = int(_safe_float(s.get("sma_energy_meter_detected_device_count")) or 0)
     packets = int(round(_safe_float(s.get("sma_energy_meter_packet_rate_per_min")) or 0))
@@ -4779,6 +4809,16 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "unit_id": s.get("primary_storage_unit_id") if primary_present else None,
             "age": primary_age if primary_present else None,
             "freshness_text": primary_freshness if primary_present else "",
+            "discharge_floor_supported": discharge_floor_supported if primary_present else False,
+            "discharge_floor_soc_percent": discharge_floor if primary_present else None,
+            "discharge_floor_valid": discharge_floor_valid if primary_present else False,
+            "discharge_floor_fresh": discharge_floor_fresh if primary_present else False,
+            "discharge_floor_age": discharge_floor_age if primary_present else None,
+            "discharge_floor_text": discharge_floor_text if primary_present else "",
+            "discharge_floor_source": str(s.get("primary_storage_current_discharge_floor_source") or "") if primary_present else "",
+            "usable_soc_percent": usable_primary_soc if primary_present else None,
+            "usable_soc_valid": usable_primary_soc_valid if primary_present else False,
+            "usable_soc_text": usable_primary_soc_text if primary_present else "",
             "tone": primary_tone if primary_present else "unknown",
         },
         "source": {

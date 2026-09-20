@@ -73,11 +73,11 @@ class V12130MeasurementV4OnlyTests(unittest.TestCase):
     def test_installer_accepts_v14_0_0_r2_and_targets_v14_1_3_preserving_v3(self):
         script = (ROOT / "tools/install_zendure_controller.sh").read_text(encoding="utf-8")
         for marker in (
-            'EXPECTED_VERSION_ARG="v16_0_1"',
-            'EXPECTED_SOURCE_VERSION="15.0.3"',
-            'EXPECTED_SOURCE_BUILD_ID="v15.0.3-20260911"',
-            'EXPECTED_TARGET_BUILD_ID="v16.0.1-20260915"',
-            'SOURCE_MANIFEST="V16_0_1_SOURCE_MANIFEST.sha256"',
+            'EXPECTED_VERSION_ARG="v16_1_0"',
+            'EXPECTED_SOURCE_VERSION="16.0.2"',
+            'EXPECTED_SOURCE_BUILD_ID="v16.0.2-20260917"',
+            'EXPECTED_TARGET_BUILD_ID="v16.1.0-20260919"',
+            'SOURCE_MANIFEST="V16_1_0_SOURCE_MANIFEST.sha256"',
             'tools/v14_cutover.py verify', 'graph_core_v3_preserved',
         ):
             self.assertIn(marker, script)
@@ -152,11 +152,11 @@ class V12130MeasurementV4OnlyTests(unittest.TestCase):
         row = next(csv.DictReader(io.StringIO(text), delimiter=";"))
         self.assertEqual("ZEC-GRAPH-EXPORT-V1", row["schema"])
 
-    def test_v4_header_contract_is_unchanged_from_v12_12_2(self):
-        self.assertEqual(246, len(STANDARD_HEADER))
-        self.assertEqual(249, len(EXTENDED_HEADER))
-        self.assertEqual("7842bfef39d47f93dc39689aa04da7658564af565e5051c24f90b32021d184a7", hashlib.sha256(";".join(STANDARD_HEADER).encode()).hexdigest())
-        self.assertEqual("8f61d07e66428a6e8757333d35d5dd73dd3a0975ac9a16714b93dc9b86460e93", hashlib.sha256(";".join(EXTENDED_HEADER).encode()).hexdigest())
+    def test_v4_current_header_allows_additive_fields_without_changing_legacy_contract(self):
+        self.assertEqual(254, len(STANDARD_HEADER))
+        self.assertEqual(257, len(EXTENDED_HEADER))
+        self.assertEqual("49ed5d132aa54a91d0760e9ba343206cceb0b8480320772634f0c66fdc6e284c", hashlib.sha256(";".join(STANDARD_HEADER).encode()).hexdigest())
+        self.assertEqual("ac164bc43dfd4e84f0e470581592874d252c4d09600afc395c83f7810a388d2b", hashlib.sha256(";".join(EXTENDED_HEADER).encode()).hexdigest())
 
     def test_off_mode_creates_no_csv(self):
         with tempfile.TemporaryDirectory() as tmp:

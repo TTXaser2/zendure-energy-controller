@@ -39,7 +39,7 @@
     'Leistungsgrenzen & SOC-Schutz': '<path d="M12 3 4.5 6v5.5c0 4.5 3 7.4 7.5 9.5 4.5-2.1 7.5-5 7.5-9.5V6Z"/><path d="M8 13h8M12 9v8"/>',
     'Nachtbetrieb': '<path d="M19 15.5A8 8 0 0 1 8.5 5a7 7 0 1 0 10.5 10.5Z"/>',
     'AUTO-Regelung': '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M22 12h-3M12 22v-3M2 12h3"/>',
-    'Primärspeicher & SMA': '<rect x="3" y="6" width="17" height="12" rx="2"/><path d="M20 10h2v4h-2M7 10h6M10 7v6"/>',
+    'Primärspeicher': '<rect x="3" y="6" width="17" height="12" rx="2"/><path d="M20 10h2v4h-2M7 10h6M10 7v6"/>',
     'Harvest / Restüberschuss': '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9 7 7M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/>',
     'Cross-Charge-Schutz': '<path d="M4 8h13l-3-3M20 16H7l3 3"/>',
     'Kommandowirkung & Resync': '<path d="M4.5 9A8 8 0 0 1 18 5.5M18 2v4h-4M19.5 15A8 8 0 0 1 6 18.5M6 22v-4h4"/>',
@@ -550,8 +550,16 @@
       const data = await api('/settings/primary-storage-modbus-test', {method:'POST', body:JSON.stringify({draft})});
       const power = Number(data.power_w || 0);
       const powerText = `${power < 0 ? 'Ladung' : power > 0 ? 'Entladung' : 'Neutral'} ${Math.abs(power).toLocaleString('de-DE')} W`;
+      const floorSupported = Boolean(data.current_discharge_floor_supported);
+      let floorLine = '';
+      if (floorSupported && data.current_discharge_floor_read_ok) {
+        const usable = data.usable_soc_percent === null || data.usable_soc_percent === undefined ? 'nicht berechenbar' : `${Number(data.usable_soc_percent).toLocaleString('de-DE',{maximumFractionDigits:1})} %`;
+        floorLine = `<span>SMA Entlade-Untergrenze: ${esc(data.current_discharge_floor_soc_percent)} % · nutzbarer SOC normalisiert: ${esc(usable)}</span>`;
+      } else if (floorSupported) {
+        floorLine = `<span>SMA Entlade-Untergrenze: derzeit nicht lesbar (${esc(data.current_discharge_floor_error_code || 'UNKNOWN')})</span>`;
+      }
       result.className = 'modbus-test-result success';
-      result.innerHTML = `<b>Verbindung erfolgreich</b><span>Gerät: ${esc(data.device || data.template_id)}</span><span>Endpoint: ${esc(data.endpoint)} · Unit-ID ${esc(data.unit_id)}</span><span>Leistung: ${esc(powerText)} · SOC: ${esc(data.soc_percent)} %</span><span>Antwortzeit: ${esc(data.response_time_ms)} ms</span><small>Nur lesender Test – am Gerät und an der wirksamen ZEC-Konfiguration wurde nichts verändert.</small>`;
+      result.innerHTML = `<b>Verbindung erfolgreich</b><span>Gerät: ${esc(data.device || data.template_id)}</span><span>Endpoint: ${esc(data.endpoint)} · Unit-ID ${esc(data.unit_id)}</span><span>Leistung: ${esc(powerText)} · SOC: ${esc(data.soc_percent)} %</span>${floorLine}<span>Antwortzeit: ${esc(data.response_time_ms)} ms</span><small>Nur lesender Test – am Gerät und an der wirksamen ZEC-Konfiguration wurde nichts verändert. Gerätespezifische Zusatzdiagnosen beeinflussen die Regelung nicht.</small>`;
     } catch (error) {
       result.className = 'modbus-test-result error';
       result.innerHTML = `<b>Verbindungstest fehlgeschlagen</b><span>${esc(error.message)}</span><small>Der Test war ausschließlich lesend; Einstellungen und aktive Quelle wurden nicht verändert.</small>`;

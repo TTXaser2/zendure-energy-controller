@@ -62,7 +62,7 @@ class TestV1600DeploymentHardening(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             target = base / "target"; target.mkdir()
-            (target / "version.py").write_text('APP_VERSION="16.0.1"\nAPP_BUILD_ID="v16.0.1-20260915"\n', encoding="utf-8")
+            (target / "version.py").write_text('APP_VERSION="16.0.2"\nAPP_BUILD_ID="v16.0.2-20260917"\n', encoding="utf-8")
             cfg = target / "config.json"
             cfg.write_text(json.dumps({"MQTT_PASSWORD":"do-not-share", "MQTT_BROKER":"broker.local"}), encoding="utf-8")
             log = base / "installer.log"; log.write_text("failure\n", encoding="utf-8")
@@ -70,8 +70,8 @@ class TestV1600DeploymentHardening(unittest.TestCase):
                 output_dir=str(base), work_dir="", label="fault-test", target=str(target),
                 config=str(cfg), install_log=str(log), since_epoch="", stage="pre_rollback",
                 error_code="SIMULATED", package_sha256="abc", source_version="15.0.3",
-                source_build_id="v15.0.3-20260911", target_version="16.0.1",
-                target_build_id="v16.0.1-20260915", defer_finalize=True,
+                source_build_id="v15.0.3-20260911", target_version="16.0.2",
+                target_build_id="v16.0.2-20260917", defer_finalize=True,
             )
             def fake_run(work, name, command, timeout=15):
                 (work / f"{name}.txt").write_text("simulated\n", encoding="utf-8")
@@ -125,7 +125,7 @@ class TestV1600DeploymentHardening(unittest.TestCase):
         self.assertIn("else:\n        mqtt_bridge.start()", guard)
         self.assertNotIn("mqtt_bridge.start()\n    if first_install_setup", guard)
         field = (ROOT / "tools/v16_field_acceptance.py").read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_VERSION = "16.0.1"', field)
+        self.assertIn('EXPECTED_VERSION = "16.1.0"', field)
         self.assertIn('"FIRST_INSTALL_SETUP"', field)
         self.assertIn('"CLEAN_FRESH_INSTALL"', field)
         self.assertIn("effective_local_web_endpoint", field)

@@ -8,12 +8,12 @@ PACKAGE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck source=root_artifact_transaction.sh
 source "$SCRIPT_DIR/root_artifact_transaction.sh"
 
-EXPECTED_VERSION_ARG="v16_0_1"
-EXPECTED_SOURCE_VERSION="15.0.3"
-EXPECTED_SOURCE_BUILD_ID="v15.0.3-20260911"
-EXPECTED_TARGET_VERSION="16.0.1"
-EXPECTED_TARGET_BUILD_ID="v16.0.1-20260915"
-SOURCE_MANIFEST="V16_0_1_SOURCE_MANIFEST.sha256"
+EXPECTED_VERSION_ARG="v16_1_0"
+EXPECTED_SOURCE_VERSION="16.0.2"
+EXPECTED_SOURCE_BUILD_ID="v16.0.2-20260917"
+EXPECTED_TARGET_VERSION="16.1.0"
+EXPECTED_TARGET_BUILD_ID="v16.1.0-20260919"
+SOURCE_MANIFEST="V16_1_0_SOURCE_MANIFEST.sha256"
 TARGET="/opt/zendure-controller"
 BOOTSTRAP="$TARGET/.zec_first_install_bootstrap.json"
 DOWNLOAD_DIR="/home/pi/Downloads"
@@ -49,9 +49,9 @@ done
 
 STAMP="$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$DOWNLOAD_DIR" 2>/dev/null || true
-INSTALL_LOG="$DOWNLOAD_DIR/zec_v16_0_1_installer_${STAMP}.log"
+INSTALL_LOG="$DOWNLOAD_DIR/zec_v16_1_0_installer_${STAMP}.log"
 if ! touch "$INSTALL_LOG" 2>/dev/null; then
-  INSTALL_LOG="/tmp/zec_v16_0_1_installer_${STAMP}.log"
+  INSTALL_LOG="/tmp/zec_v16_1_0_installer_${STAMP}.log"
   touch "$INSTALL_LOG"
 fi
 exec > >(tee -a "$INSTALL_LOG") 2>&1
@@ -70,9 +70,9 @@ ROLLBACK_STARTED=0
 SUPPORT_WORK=""
 SUPPORT_ZIP=""
 BACKUP="$DOWNLOAD_DIR/zendure-controller-backup-${STAMP}.tar.gz"
-CONFIG_BACKUP="$DOWNLOAD_DIR/config.pre-v16.0.1.${STAMP}.json"
-ROOT_ARTIFACT_BACKUP="/var/backups/zec-v16.0.1-root-artifacts-${STAMP}"
-INSTALL_REPORT="/tmp/zec_v16_0_1_install_report.json"
+CONFIG_BACKUP="$DOWNLOAD_DIR/config.pre-v16.1.0.${STAMP}.json"
+ROOT_ARTIFACT_BACKUP="/var/backups/zec-v16.1.0-root-artifacts-${STAMP}"
+INSTALL_REPORT="/tmp/zec_v16_1_0_install_report.json"
 BACKUP_SHA256=""
 BACKUP_SIZE="0"
 CONTROLLER_WAS_ACTIVE=0
@@ -95,7 +95,7 @@ start_support_capture() {
   local tool="$SCRIPT_DIR/zec_support_bundle.py"
   [ -f "$tool" ] || return 0
   SUPPORT_WORK="$(python3 "$tool" collect \
-    --label "v16.0.1-installer-failure" --output-dir "$DOWNLOAD_DIR" \
+    --label "v16.1.0-installer-failure" --output-dir "$DOWNLOAD_DIR" \
     --target "$TARGET" --config "$TARGET/config.json" --install-log "$INSTALL_LOG" \
     --since-epoch "$INSTALL_START_EPOCH" --stage "$stage" --error-code "$code" \
     --package-sha256 "$PACKAGE_SHA256" --source-version "$EXPECTED_SOURCE_VERSION" \
@@ -151,7 +151,7 @@ on_error() {
   trap - ERR EXIT
   set +e
   echo
-  echo "FEHLER: V16.0.1 Installer abgebrochen (rc=$code, line=$line, mode=$INSTALL_MODE)."
+  echo "FEHLER: V16.1.0 Installer abgebrochen (rc=$code, line=$line, mode=$INSTALL_MODE)."
   start_support_capture "pre_rollback" "RC_${code}_LINE_${line}"
   local rollback_result="not_required_preflight"
   if [ "$INSTALLATION_STARTED" -eq 1 ]; then
@@ -186,17 +186,17 @@ verify_manifest_at() {
 
 verify_build_evidence_at() {
   local root="$1"
-  python3 - "$root/validation/V16_0_1_FULL_TEST.txt" "$root/validation/V16_0_1_RESOURCEWARNING_TEST.txt" <<'PY'
+  python3 - "$root/validation/V16_1_0_FULL_TEST.txt" "$root/validation/V16_1_0_RESOURCEWARNING_TEST.txt" <<'PY'
 from pathlib import Path
 import sys
 for path, markers in [
-    (Path(sys.argv[1]), ("RELEASE: V16.0.1", "STATUS: PASS")),
-    (Path(sys.argv[2]), ("RELEASE: V16.0.1", "STATUS: PASS", "RESOURCEWARNING: ERROR")),
+    (Path(sys.argv[1]), ("RELEASE: V16.1.0", "STATUS: PASS")),
+    (Path(sys.argv[2]), ("RELEASE: V16.1.0", "STATUS: PASS", "RESOURCEWARNING: ERROR")),
 ]:
     if not path.is_file(): raise SystemExit(f"FEHLER: Build-Testevidenz fehlt: {path}")
     text=path.read_text(encoding='utf-8')
     if any(m not in text for m in markers): raise SystemExit(f"FEHLER: Build-Testevidenz unvollständig: {path.name}")
-print("Build-Testevidenz für V16.0.1 verifiziert.")
+print("Build-Testevidenz für V16.1.0 verifiziert.")
 PY
 }
 
@@ -355,7 +355,11 @@ if [ "$INSTALL_MODE" = "SUPPORTED_UPDATE" ]; then
   BACKUP_CREATED=1
   BACKUP_SHA256="$(sha256sum "$BACKUP" | awk '{print $1}')"; BACKUP_SIZE="$(stat -c %s "$BACKUP")"
   cp "$TARGET/config.json" "$CONFIG_BACKUP"; chmod 600 "$CONFIG_BACKUP"
-  echo "Kopiere V16.0.1-Dateien; Benutzerdaten bleiben erhalten..."
+  echo "Bereinige obsolete, sicher regenerierbare Python-Caches..."
+  python3 "$STAGED_ROOT/tools/deployment_contract.py" cleanup-obsolete-caches \
+    --target "$TARGET" --staged-root "$STAGED_ROOT" --apply --json \
+    >"$STAGE_BASE/obsolete_cache_cleanup.json"
+  echo "Kopiere V16.1.0-Dateien; Benutzerdaten bleiben erhalten..."
   rsync -a --delete \
     --exclude 'config.json' --exclude 'config.json.last-good*' --exclude 'logs/' \
     --exclude 'config-states/' --exclude '*.sqlite3' --exclude 'zec_config_snapshots.json' \
@@ -366,7 +370,7 @@ if [ "$INSTALL_MODE" = "SUPPORTED_UPDATE" ]; then
   (cd "$TARGET" && python3 tools/migrate_config_to_current.py --config config.json --json >"$STAGE_BASE/migration_result.json")
   (cd "$TARGET" && python3 tools/v14_cutover.py verify --config "$TARGET/config.json" --runtime-root "$TARGET" --json >"$STAGE_BASE/graph_verify_prestart.json")
 else
-  echo "Erzeuge saubere V16.0.1-Fresh-Installation ohne config.json..."
+  echo "Erzeuge saubere V16.1.0-Fresh-Installation ohne config.json..."
   sudo install -d -o pi -g pi -m 0750 "$TARGET"
   rsync -a --exclude '__pycache__/' --exclude '.pytest_cache/' "$STAGED_ROOT/" "$TARGET/"
   sudo chown -R pi:pi "$TARGET"
@@ -480,7 +484,7 @@ else
     echo "WARNUNG: Controller ist noch nicht global ready=true, aber der Produktivstart ist sicher bestätigt."
     [ -s "$READY_JSON" ] && cat "$READY_JSON"
   else
-    echo "FEHLER: V16.0.1 erreichte weder ready=true noch einen stabilen sicheren Übergangszustand."
+    echo "FEHLER: V16.1.0 erreichte weder ready=true noch einen stabilen sicheren Übergangszustand."
     [ -s "$READY_JSON" ] && cat "$READY_JSON"
     false
   fi
@@ -499,7 +503,7 @@ python3 - "$INSTALL_REPORT" <<PY
 import json,time
 from pathlib import Path
 payload={
- 'format':'ZEC_V16_0_1_INSTALL_REPORT_V1','status':'ok','completed_epoch_s':time.time(),
+ 'format':'ZEC_V16_1_0_INSTALL_REPORT_V1','status':'ok','completed_epoch_s':time.time(),
  'install_mode':'$INSTALL_MODE','source':{'version':'$EXPECTED_SOURCE_VERSION','build_id':'$EXPECTED_SOURCE_BUILD_ID'} if '$INSTALL_MODE'=='SUPPORTED_UPDATE' else None,
  'target':{'version':'$EXPECTED_TARGET_VERSION','build_id':'$EXPECTED_TARGET_BUILD_ID'},
  'web_endpoint':{'host':'127.0.0.1','port':int('$EFFECTIVE_WEB_PORT')},
@@ -516,7 +520,7 @@ PY
 
 trap - ERR EXIT
 cleanup_stage
-echo "V16.0.1 erfolgreich installiert."
+echo "V16.1.0 erfolgreich installiert."
 echo "Installationsmodus: $INSTALL_MODE"
 [ "$INSTALL_MODE" = "SUPPORTED_UPDATE" ] && echo "Backup: $BACKUP" || true
 [ "$INSTALL_MODE" = "SUPPORTED_UPDATE" ] && echo "Backup-SHA256: $BACKUP_SHA256" || true

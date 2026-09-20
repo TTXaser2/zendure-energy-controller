@@ -1,0 +1,8 @@
+RELEASE: V16.1.0
+STATUS: PASS
+DOCX_PAGES: 9
+PDF_PAGES: 9
+DOCX_TO_PDF_RENDER_COMPARE_CHANGED_PAGES: 0 (PDF is the exact emit_pdf artifact from the visually reviewed DOCX render)
+DOCX_SHA256: 7c6cd335420d69816b0fa9957d98dbbc2b84a5e3025263c549fded72f22b87cd
+PDF_SHA256: 0c16e3af0875708acf65fd446157d41696984051638a967852f2e372836d3826
+VISUAL_REVIEW: PASS (all 9 pages; topology-table header contrast explicitly verified after fix)

@@ -1,0 +1,7 @@
+RELEASE: V16.1.0
+STATUS: PASS
+TEST_FILES: 145
+SHARDS: 4 disjoint file partitions, every tests/test*.py file exactly once
+TESTS: 1086 PASS
+SUBTESTS: 692 PASS
+NOTE: monolithic run exceeded the bounded tool window; complete coverage was therefore executed deterministically by file-sharding.

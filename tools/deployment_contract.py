@@ -175,6 +175,86 @@ def classify_installation(
     }
 
 
+def cleanup_obsolete_python_caches(
+    *, target: str | os.PathLike[str], staged_root: str | os.PathLike[str], apply: bool = False,
+) -> Dict[str, Any]:
+    """Remove safe Python caches whose parent source tree no longer exists in the staged release.
+
+    Only ``__pycache__`` directories below source parents absent from ``staged_root`` are eligible.
+    A cache is considered safe only when it contains regular ``.pyc``/``.pyo`` files (or is empty).
+    Symlinks, nested directories, or any other content block the whole operation before mutation.
+    """
+    target_path = Path(target)
+    staged_path = Path(staged_root)
+    result: Dict[str, Any] = {
+        "ok": True,
+        "target": str(target_path),
+        "staged_root": str(staged_path),
+        "apply": bool(apply),
+        "candidates": [],
+        "removed": [],
+        "blocked": [],
+        "skipped_active": [],
+    }
+    if not target_path.is_dir():
+        return result
+    if not staged_path.is_dir():
+        result["ok"] = False
+        result["error"] = "STAGED_ROOT_MISSING"
+        return result
+
+    for dirpath, dirnames, _filenames in os.walk(target_path, topdown=True, followlinks=False):
+        if "__pycache__" not in dirnames:
+            continue
+        cache = Path(dirpath) / "__pycache__"
+        dirnames.remove("__pycache__")
+        try:
+            parent_rel = cache.parent.relative_to(target_path)
+        except ValueError:
+            result["blocked"].append({"path": str(cache), "reason": "OUTSIDE_TARGET"})
+            continue
+        if (staged_path / parent_rel).exists():
+            result["skipped_active"].append(str(cache))
+            continue
+        if cache.is_symlink():
+            result["blocked"].append({"path": str(cache), "reason": "CACHE_SYMLINK"})
+            continue
+
+        unsafe: list[str] = []
+        try:
+            for child in cache.iterdir():
+                if child.is_symlink():
+                    unsafe.append(str(child))
+                elif child.is_dir():
+                    unsafe.append(str(child))
+                elif not child.is_file() or child.suffix not in {".pyc", ".pyo"}:
+                    unsafe.append(str(child))
+        except OSError as exc:
+            result["blocked"].append({"path": str(cache), "reason": f"CACHE_READ_ERROR:{exc}"})
+            continue
+        if unsafe:
+            result["blocked"].append({
+                "path": str(cache), "reason": "NON_CACHE_CONTENT", "entries": unsafe,
+            })
+            continue
+        result["candidates"].append(str(cache))
+
+    if result["blocked"]:
+        result["ok"] = False
+        result["error"] = "OBSOLETE_CACHE_CLEANUP_BLOCKED"
+        return result
+
+    if apply:
+        try:
+            for item in result["candidates"]:
+                shutil.rmtree(item)
+                result["removed"].append(item)
+        except OSError as exc:
+            result["ok"] = False
+            result["error"] = f"CACHE_REMOVE_ERROR:{exc}"
+    return result
+
+
 def validate_web_port(value: Any) -> int:
     if isinstance(value, bool):
         raise ValueError("WEB_PORT_BOOL_INVALID")
@@ -320,6 +400,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     p_identity.add_argument("--expected-version", required=True)
     p_identity.add_argument("--expected-build", required=True)
     p_identity.add_argument("--json", action="store_true")
+    p_cache = sub.add_parser("cleanup-obsolete-caches")
+    p_cache.add_argument("--target", required=True)
+    p_cache.add_argument("--staged-root", required=True)
+    p_cache.add_argument("--apply", action="store_true")
+    p_cache.add_argument("--json", action="store_true")
     p_port = sub.add_parser("port-check")
     p_port.add_argument("port", type=int)
     p_port.add_argument("--host", default="0.0.0.0")
@@ -344,6 +429,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         result = verify_release_identity(
             Path(args.version_file), expected_version=args.expected_version,
             expected_build=args.expected_build,
+        )
+    elif args.command == "cleanup-obsolete-caches":
+        result = cleanup_obsolete_python_caches(
+            target=args.target, staged_root=args.staged_root, apply=args.apply,
         )
     elif args.command == "bootstrap-write":
         try:

@@ -1,6 +1,6 @@
 # ZEC – Release & Handover Process
 
-Stand: 11.09.2026
+Stand: 19.09.2026
 Status: kanonisch – inklusive dauerhaftem Datenblatt-Releasevertrag
 
 ## 1. Entwicklungsblock starten
@@ -41,6 +41,7 @@ Pflichtausgabe mindestens:
 - Browser-/Integrationssmokes
 - Exit-Gate
 - bekannte Restpunkte
+- Master-Backlog-/Changelog-Delta und `BACKLOG_NO_DROP_GATE`-Status
 - Installationsbefehle
 - Rollbackhinweis
 - Git-Commit-/Tag-Vorschlag
@@ -96,9 +97,37 @@ Vor dem Wechsel Übergabepaket erstellen mit:
 
 Der neue Chat verwendet diese Übergabe als verbindlichen Startpunkt.
 
-## 7. Projektquellenpflege
+## 7. Projektquellenpflege und Backlog-Reconciliation
 
-Nach Abschluss größerer Blöcke prüfen, ob neue dauerhafte Entscheidungen in die kanonischen Quellen gehören. Versionsspezifische Releasebelege anschließend aus aktiven Projektquellen entfernen und extern archivieren, sobald ihre dauerhaften Aussagen kanonisiert wurden.
+Nach Abschluss größerer Blöcke prüfen, ob neue dauerhafte Entscheidungen in die kanonischen Quellen gehören. Versionsspezifische Releasebelege können anschließend extern archiviert werden, **aber erst nach bestandenem Reconciliation-Gate**.
+
+### 7.1 Master-Ledger
+
+`05_ZEC_BACKLOG_AND_ROADMAP.md` ist die persistente Ledger-Autorität. Die Roadmap wird daraus abgeleitet. Relevante Punkte werden bei Abschluss nicht gelöscht, sondern auf `CLOSED`, `SUPERSEDED` oder `REJECTED` gesetzt und behalten Provenienz/Releasebezug.
+
+### 7.2 BACKLOG_NO_DROP_GATE
+
+Vor dem Entfernen/Archivieren einer Übergabe, Spezifikation, Work-Chat-Delta-Datei oder früheren aktiven Quelle:
+
+1. Planungsmarker/IDs inventarisieren (`Backlog`, `Roadmap`, `offen`, `Restpunkt`, `später`, `perspektivisch`, `Nicht Bestandteil`, `TODO`, `Folgeblock`, `S1..S9` usw.);
+2. jeden Fund gegen das Master-Ledger reconciliieren;
+3. neue Punkte mit stabiler ID anlegen;
+4. erledigte/ersetzte/verwarfene Punkte mit Beleg erhalten;
+5. ungelöste Funde blockieren die Quellenbereinigung.
+
+Eine manuelle Aussage „die wichtigen Punkte sind übernommen“ ist kein ausreichender Nachweis.
+
+### 7.3 Master-Backlog als Releaseevidenz
+
+Ab dem ersten Release nach Kanonisierung dieses Vertrags muss der Release-Tree enthalten:
+
+```text
+docs/ZEC_Master_Backlog.md
+```
+
+Die Datei ist ein Snapshot des kanonischen Ledgers zum Releasezeitpunkt und muss durch Source-/Package-Manifest sowie Fresh-extract-Gates erfasst sein. Sie darf offene/DEFERRED/SPEC_NEEDED-Einträge enthalten.
+
+Ein nutzerlesbares Changelog kann aus den seit dem Vorgänger neu abgeschlossenen/releasezugeordneten Ledger-Einträgen abgeleitet werden. **Das Changelog ersetzt das Master-Ledger nicht.**
 
 ## 8. Technisches Datenblatt – dauerhafter Releasevertrag
 
@@ -225,3 +254,33 @@ Zusätzlich zu den allgemeinen Releasegates müssen Releases mit Änderungen an 
 - bestehende Diagnose-/Analysefunktionen bleiben regressionsfrei.
 
 Vor PRODUCTIVE-PASS eines erstmalig Fresh-Install-fähigen Hauptreleases ist zusätzlich mindestens ein echter Clean-Fresh-Install-Feldtest auf einem vorbereiteten Raspberry-Pi-OS-System ohne aktive ZEC-Installation Pflicht. Ein Build-/Harness-/Dry-Run-Nachweis ersetzt diesen realen Feldtest nicht.
+
+## 10. Persistente Installations- und Feldevidenz
+
+Maschinenlesbare Installationsreports und andere Nachweise, die für eine spätere Feldabnahme benötigt werden, dürfen nicht ausschließlich in flüchtigen Pfaden wie `/tmp` liegen.
+
+Verbindliches Ziel für künftige Deploymentänderungen:
+
+- persistenter Installationsreport neben dem persistenten Installerlog oder in einem ausdrücklich definierten persistenten Evidence-Verzeichnis;
+- `/tmp` höchstens als zusätzliche Arbeits-/Kompatibilitätskopie;
+- Feldabnahmetool kann den persistenten Report explizit verwenden bzw. bevorzugen;
+- Backup-Pfad, SHA256 und Größe werden aus realer Datei verifiziert;
+- fehlende Evidenz wird als WARN/FAIL gemäß Vertrag ausgewiesen und niemals synthetisch als Originalartefakt rekonstruiert.
+
+Nach einer realen Feldabnahme sind flüchtige `/tmp`-Artefakte vor Neustart, Cleanup oder destruktivem Test in ein persistentes, gehashtes Evidenzarchiv zu sichern.
+
+## 11. Externe Entwicklungscheckpoint-Pflicht
+
+Nach jedem größeren sourceverändernden Arbeitsblock ist sofort ein vollständiges extern bereitgestelltes Checkpoint-ZIP mit SHA256 zu erzeugen. Wenn seit dem letzten extern gesicherten Checkpoint wesentliche Änderungen erfolgt sind, dürfen längere Tests, Dokumentationsblöcke oder weitere Entwicklung erst nach dieser Sicherung fortgesetzt werden.
+
+## 12. Master-Backlog-/Changelog-Gate
+
+Für jeden Release nach Einführung dieses Vertrags gilt zusätzlich:
+
+- `docs/ZEC_Master_Backlog.md` existiert und ist nicht leer;
+- Snapshot und kanonisches Master-Ledger stimmen für den Releasefreeze in ID/Status/Provenienz überein;
+- alle im Entwicklungsblock neu entstandenen offenen Punkte sind im Ledger enthalten;
+- alle im Release abgeschlossenen Punkte besitzen Release-/Buildbezug;
+- `BACKLOG_NO_DROP_GATE=PASS` für alle im Zuge des Releases entfernten/archivierten Übergaben/Overlays;
+- Fresh-extract enthält den Snapshot und Manifestprüfung deckt ihn ab;
+- ein optionales Changelog wird aus dem Ledger abgeleitet und darf keine offenen/verworfenen Punkte aus dem Ledger löschen.

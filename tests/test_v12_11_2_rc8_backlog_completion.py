@@ -43,8 +43,8 @@ class V12112Rc8BacklogCompletionTests(unittest.TestCase):
         return controller
 
     def test_version(self):
-        self.assertEqual("16.0.1", version.APP_VERSION)
-        self.assertEqual("V16.0.1", version.APP_VERSION_LABEL)
+        self.assertEqual("16.1.0", version.APP_VERSION)
+        self.assertEqual("V16.1.0", version.APP_VERSION_LABEL)
 
     def test_neutral_fresh_actual_clears_only_stale_diagnostic_uncertainty(self):
         controller = self._controller_for_effect_monitor(actual=0, age=1.0)
@@ -162,7 +162,7 @@ class V12112Rc8BacklogCompletionTests(unittest.TestCase):
         self.assertIn("READY_DEADLINE=$((SECONDS + 90))", script)
         self.assertIn('while [ "$SECONDS" -lt "$READY_DEADLINE" ]', script)
         self.assertIn("python3 -m json.tool", script)
-        self.assertIn("V16.0.1 erfolgreich installiert", script)
+        self.assertIn("V16.1.0 erfolgreich installiert", script)
         self.assertIn("weder ready=true noch einen stabilen sicheren Übergangszustand", script)
         self.assertIn("evaluate_installation_readiness.py", script)
         self.assertIn("TRANSITIONAL_STREAK", script)
