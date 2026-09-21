@@ -73,11 +73,11 @@ class V12130MeasurementV4OnlyTests(unittest.TestCase):
     def test_installer_accepts_v14_0_0_r2_and_targets_v14_1_3_preserving_v3(self):
         script = (ROOT / "tools/install_zendure_controller.sh").read_text(encoding="utf-8")
         for marker in (
-            'EXPECTED_VERSION_ARG="v16_1_0"',
-            'EXPECTED_SOURCE_VERSION="16.0.2"',
-            'EXPECTED_SOURCE_BUILD_ID="v16.0.2-20260917"',
-            'EXPECTED_TARGET_BUILD_ID="v16.1.0-20260919"',
-            'SOURCE_MANIFEST="V16_1_0_SOURCE_MANIFEST.sha256"',
+            'EXPECTED_VERSION_ARG="v16_2_3"',
+            'EXPECTED_SOURCE_VERSION="16.2.0"',
+            'EXPECTED_SOURCE_BUILD_ID="v16.2.0-20260920"',
+            'EXPECTED_TARGET_BUILD_ID="v16.2.3-20260921"',
+            'SOURCE_MANIFEST="V16_2_3_SOURCE_MANIFEST.sha256"',
             'tools/v14_cutover.py verify', 'graph_core_v3_preserved',
         ):
             self.assertIn(marker, script)

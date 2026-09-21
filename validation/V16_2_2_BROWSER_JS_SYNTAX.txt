@@ -1,0 +1,2 @@
+Browser JavaScript syntax gate: PASS
+3/3 static JavaScript files passed node --check.

@@ -1,0 +1,25 @@
+V16.2.1 -> V16.2.2 hotfix delta (initial scope)
+version.py
+tools/deployment_contract.py
+tools/install_zendure_controller.sh
+tools/v16_field_acceptance.py
+tests/test_v16_2_2_installer_manifest_hygiene.py
+tests/* current-release identity expectations
+docs/ZEC_Master_Backlog.md
+README_INSTALLATION.md
+RELEASE_INFO_V16_2_2.md
+TECHNICAL_NOTES_V16_2_2.md
+BUILD_VALIDATION_V16_2_2.md
+docs/ZEC_Technisches_Datenblatt.*
+validation/V16_2_2_BASH_SYNTAX.txt
+validation/V16_2_2_BROWSER_JS_SYNTAX.txt
+validation/V16_2_2_COMPILEALL.txt
+validation/V16_2_2_CONTROLLER_LOGIC_SHA256.txt
+validation/V16_2_2_DATASHEET_GATE.txt
+validation/V16_2_2_DEPLOYMENT_HARNESS.json
+validation/V16_2_2_DEPLOYMENT_HOTFIX_TARGETED.txt
+validation/V16_2_2_FULL_TEST.txt
+validation/V16_2_2_RELEASE_HYGIENE_PRE_FREEZE.txt
+validation/V16_2_2_RESOURCEWARNING_TEST.txt
+validation/V16_2_2_ROOT_ARTIFACT_TRANSACTION.txt
+validation/V16_2_2_TEST_FILE_COUNT.txt

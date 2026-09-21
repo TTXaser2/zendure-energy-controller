@@ -4,7 +4,7 @@
 # This file is part of Zendure Energy Controller.
 # See LICENSE, NOTICE and DISCLAIMER.md for license, attribution and warranty information.
 
-APP_VERSION = "16.1.0"
-APP_VERSION_LABEL = "V16.1.0"
-APP_BUILD_ID = "v16.1.0-20260919"
+APP_VERSION = "16.2.3"
+APP_VERSION_LABEL = "V16.2.3"
+APP_BUILD_ID = "v16.2.3-20260921"
 __version__ = APP_VERSION

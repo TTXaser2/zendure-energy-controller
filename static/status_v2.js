@@ -147,6 +147,25 @@
     const d = document.createElement('div'); d.textContent = String(v ?? ''); return d.innerHTML;
   }
 
+  function updateStorageMetrics(key,data){
+    const remainingRow=$(`[data-zec-row="${key}.remaining"]`);
+    const limitRow=$(`[data-zec-row="${key}.soc_limit"]`);
+    const meter=$(`[data-zec-row="${key}.power_meter"]`);
+    const showRemaining=Boolean(data?.remaining_visible);
+    if(remainingRow)remainingRow.hidden=!showRemaining;
+    if(limitRow)limitRow.hidden=!showRemaining;
+    if(meter){
+      const visible=Boolean(data?.power_meter_visible); meter.hidden=!visible;
+      const direction=String(data?.power_meter_direction||'neutral');
+      meter.classList.toggle('is-charge',direction==='charge');
+      meter.classList.toggle('is-discharge',direction==='discharge');
+      const percent=Math.max(0,Math.min(100,Number(data?.power_meter_percent)||0));
+      meter.style.setProperty('--power-fill',`${percent}%`);
+      text(`${key}.power_meter_label`,direction==='discharge'?'Entladeleistung':'Ladeleistung');
+      text(`${key}.power_meter_text`,data?.power_meter_text||'');
+    }
+  }
+
   function applyStatus(p) {
     if (!p) return;
     updateSystemMenu(p.system);
@@ -182,8 +201,12 @@
 
     text('zendure.actual', p.zendure?.actual);
     text('zendure.state', p.zendure?.units?.[0]?.state_text);
+    text('zendure.remaining_label', p.zendure?.remaining_label);
     text('zendure.remaining_text', p.zendure?.remaining_text);
+    text('zendure.soc_limit_label', p.zendure?.soc_limit_label);
+    text('zendure.soc_limit_text', p.zendure?.soc_limit_text);
     text('zendure.max_soc_text', p.zendure?.max_soc_text);
+    updateStorageMetrics('zendure', p.zendure||{});
     text('zendure.system_soc_text', p.zendure?.system_soc_text);
     text('zendure.source', p.zendure?.source);
     const units = Array.isArray(p.zendure?.units) ? p.zendure.units : [];
@@ -213,11 +236,21 @@
     text('primary.freshness_text', p.primary?.freshness_text);
     text('primary.discharge_floor_text', p.primary?.discharge_floor_text);
     text('primary.usable_soc_text', p.primary?.usable_soc_text);
-    const floorRow = $('[data-zec-row="primary.discharge_floor"]');
-    const usableRow = $('[data-zec-row="primary.usable_soc"]');
-    const showDeviceFloor = Boolean(p.primary?.discharge_floor_supported);
-    if (floorRow) floorRow.hidden = !showDeviceFloor;
-    if (usableRow) usableRow.hidden = !showDeviceFloor;
+    text('primary.remaining_label', p.primary?.remaining_label);
+    text('primary.remaining_text', p.primary?.remaining_text);
+    text('primary.soc_limit_label', p.primary?.soc_limit_label);
+    text('primary.soc_limit_text', p.primary?.soc_limit_text);
+    updateStorageMetrics('primary', p.primary||{});
+    const primaryExpert=$('[data-storage-expert="primary"]');
+    if(primaryExpert){
+      primaryExpert.dataset.infoText=[
+        'Diese Karte zeigt den konfigurierten Primärspeicher. ZEC steuert ihn nicht direkt. SOC-Grenzen, Restenergie und Leistungsbalken verwenden nur belastbare aktuelle Geräte-/Quellenwerte und konfigurierte technische Fallbacks; sie besitzen keine Reglerwirkung.',
+        `Harmonisierung: ${p.primary?.line||'—'}`,
+        `Harvest-Rechnung: ${p.primary?.harvest_calculation||'—'}`,
+        `Nutzbarer SOC (normalisiert): ${p.primary?.usable_soc_text||'—'}`,
+        `Quellenstatus: ${p.primary?.source_health||'—'}`
+      ].join('\n\n');
+    }
     const pf = $('[data-card="primary"] .zec-card-footer'); if (pf) setDot(pf, p.primary?.tone);
 
     text('source.name', p.source?.name);
@@ -587,9 +620,14 @@
 
   let selectedDate=new Date(); let dayController=null; let dayRequestSequence=0;
   const dateString=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  const socDayCacheKey=date=>`zec:soc-day:v14.1.3:${date}`;
+  const socDayCacheKey=date=>`zec:soc-day:v16.2:${date}`;
   function readSocDayCache(date){
-    try{const raw=sessionStorage.getItem(socDayCacheKey(date));if(!raw)return null;const payload=JSON.parse(raw);return String(payload?.date||'')===String(date)?payload:null;}catch(_){return null;}
+    try{
+      const key=socDayCacheKey(date),raw=sessionStorage.getItem(key);if(!raw)return null;
+      const payload=JSON.parse(raw),roleToday=String(date)===dateString(new Date());
+      if(String(payload?.date||'')!==String(date)||Boolean(payload?.is_today)!==roleToday){sessionStorage.removeItem(key);return null;}
+      return payload;
+    }catch(_){return null;}
   }
   function writeSocDayCache(payload){
     try{if(payload?.date)sessionStorage.setItem(socDayCacheKey(payload.date),JSON.stringify(payload));}catch(_){/* cache is only a UX accelerator */}

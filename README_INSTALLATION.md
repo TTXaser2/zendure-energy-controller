@@ -1,9 +1,9 @@
-# Installation – Zendure Energy Controller V16.1.0
+# Installation – Zendure Energy Controller V16.2.3
 
-**Release:** `V16.1.0`  
-**Build-ID:** `v16.1.0-20260919`
+**Release:** `V16.2.3`  
+**Build-ID:** `v16.2.3-20260921`
 
-V16.1.0 besitzt einen gemeinsamen Deploymentpfad für ein strikt unterstütztes Update und einen Clean Fresh Install. Unklare oder partielle Installationen werden fail-closed abgewiesen.
+V16.2.3 besitzt einen gemeinsamen Deploymentpfad für ein strikt unterstütztes Update und einen Clean Fresh Install. Unklare oder partielle Installationen werden fail-closed abgewiesen. Der mutationsfreie Preflight verifiziert zusätzlich die kanonische maschinenlesbare Build-Evidenz `validation/V16_2_3_BUILD_EVIDENCE.json`; Freitextmarker sind keine Installer-Autorität.
 
 ## 1. Voraussetzungen
 
@@ -20,14 +20,14 @@ Ein lokaler `mosquitto.service` ist keine Installationsvoraussetzung. Für den n
 
 ## 2. Paket vorbereiten
 
-Das finale `zendure_controller_v16_1_0.zip` unter `/home/pi/Downloads` ablegen, den extern veröffentlichten SHA256 prüfen und anschließend:
+Das finale `zendure_controller_v16_2_3.zip` unter `/home/pi/Downloads` ablegen, den extern veröffentlichten SHA256 prüfen und anschließend:
 
 ```bash
 cd /home/pi/Downloads
-unzip -t zendure_controller_v16_1_0.zip
-rm -rf zendure_controller_v16_1_0
-unzip -q zendure_controller_v16_1_0.zip
-chmod +x zendure_controller_v16_1_0/tools/install_zendure_controller.sh
+unzip -t zendure_controller_v16_2_3.zip
+rm -rf zendure_controller_v16_2_3
+unzip -q zendure_controller_v16_2_3.zip
+chmod +x zendure_controller_v16_2_3/tools/install_zendure_controller.sh
 ```
 
 Der kanonische Installer heißt ab V16.0.0:
@@ -40,11 +40,11 @@ tools/install_zendure_controller.sh
 
 ## 3. Mutationsfreier Preflight
 
-### Update einer vorhandenen V16.0.2-Installation
+### Update einer vorhandenen V16.2.0-Installation
 
 ```bash
-bash zendure_controller_v16_1_0/tools/install_zendure_controller.sh \
-  v16_1_0 --preflight-only
+bash zendure_controller_v16_2_3/tools/install_zendure_controller.sh \
+  v16_2_3 --preflight-only
 ```
 
 Erwartet wird unter anderem:
@@ -61,15 +61,15 @@ SAFE_TO_INSTALL=yes
 Default-Webport 8080:
 
 ```bash
-bash zendure_controller_v16_1_0/tools/install_zendure_controller.sh \
-  v16_1_0 --fresh-install --preflight-only
+bash zendure_controller_v16_2_3/tools/install_zendure_controller.sh \
+  v16_2_3 --fresh-install --preflight-only
 ```
 
 Alternativer Webport, z. B. 8088:
 
 ```bash
-bash zendure_controller_v16_1_0/tools/install_zendure_controller.sh \
-  v16_1_0 --fresh-install --web-port 8088 --preflight-only
+bash zendure_controller_v16_2_3/tools/install_zendure_controller.sh \
+  v16_2_3 --fresh-install --web-port 8088 --preflight-only
 ```
 
 Unterstützter Bereich: `1024..65535`. Ein belegter oder nicht bindbarer Port wird vor Produktivmutation abgewiesen. Es erfolgt keine automatische Ersatzportwahl.
@@ -78,18 +78,18 @@ Der Preflight ist read-only gegenüber den produktiven ZEC-Dateien, Diensten und
 
 ## 4. Installation
 
-### Unterstütztes Update V16.0.2 -> V16.1.0
+### Unterstütztes Update V16.2.0 -> V16.2.3
 
 Nach erfolgreichem Preflight:
 
 ```bash
-bash zendure_controller_v16_1_0/tools/install_zendure_controller.sh v16_1_0
+bash zendure_controller_v16_2_3/tools/install_zendure_controller.sh v16_2_3
 ```
 
 Der Updatepfad akzeptiert ausschließlich:
 
-- Version `16.0.2`
-- Build-ID `v16.0.2-20260917`
+- Version `16.2.0`
+- Build-ID `v16.2.0-20260920`
 
 Ein anderer, unvollständiger oder widersprüchlicher aktiver Installationszustand wird nicht automatisch als Fresh Install interpretiert.
 
@@ -98,15 +98,15 @@ Ein anderer, unvollständiger oder widersprüchlicher aktiver Installationszusta
 Nach erfolgreichem Fresh-Preflight:
 
 ```bash
-bash zendure_controller_v16_1_0/tools/install_zendure_controller.sh \
-  v16_1_0 --fresh-install
+bash zendure_controller_v16_2_3/tools/install_zendure_controller.sh \
+  v16_2_3 --fresh-install
 ```
 
 oder mit abweichendem Port:
 
 ```bash
-bash zendure_controller_v16_1_0/tools/install_zendure_controller.sh \
-  v16_1_0 --fresh-install --web-port 8088
+bash zendure_controller_v16_2_3/tools/install_zendure_controller.sh \
+  v16_2_3 --fresh-install --web-port 8088
 ```
 
 Ein erfolgreicher erster Start endet absichtlich in `FIRST_INSTALL_SETUP`:
@@ -181,13 +181,13 @@ Nach einem Update bzw. einem vollständig eingerichteten Normalstart:
 ```bash
 cd /opt/zendure-controller
 python3 tools/v16_field_acceptance.py \
-  --install-report /tmp/zec_v16_1_0_install_report.json \
+  --install-report /tmp/zec_v16_2_3_install_report.json \
   --expect-primary-profile modbus_template \
-  --output /tmp/ZEC_V16_1_0_FIELD_ACCEPTANCE.json
+  --output /tmp/ZEC_V16_2_3_FIELD_ACCEPTANCE.json
 ```
 
-Das Tool ermittelt den lokalen Webendpoint dynamisch, sofern kein expliziter `--base-url` angegeben wird.
+Das Tool ermittelt den lokalen Webendpoint dynamisch, sofern kein expliziter `--base-url` angegeben wird. Die erwartete Updatequelle wird aus dem Installervertrag abgeleitet. Für den Startzustand gilt dieselbe READY/TRANSITIONAL/REJECT-Klassifikation wie im Installer; ein zulässiger `TRANSITIONAL`-Zustand wird transparent ausgewiesen und setzt Runtime-`/ready` nicht auf `true`.
 
-Ein `TECHNICAL BUILD PASS` bestätigt ausschließlich Build, Paketintegrität und Fresh-Extract-Gates; er ist keine reale Feldfreigabe. Für die releasespezifische V16.1.0-Feldfreigabe ist die reale Update-Feldabnahme V16.0.2 -> V16.1.0 einschließlich der SMA-Capability-Evidenz erforderlich.
+Ein `TECHNICAL BUILD PASS` bestätigt ausschließlich Build, Paketintegrität und Fresh-Extract-Gates; er ist keine reale Feldfreigabe. Für die releasespezifische V16.2.3-Feldfreigabe ist die reale Update-Feldabnahme V16.2.0 -> V16.2.3 einschließlich der SMA-Capability-Evidenz erforderlich.
 
-Der übergreifende vollständige `PRODUCTIVE-PASS` bleibt darüber hinaus solange unzulässig, wie die separat zurückgestellte reale Clean-Fresh-/FIRST_INSTALL_SETUP-/Uninstaller-Gesamtabnahme (`ZEC-EV-DEP-001`) offen ist. Eine erfolgreiche V16.1.0-Update-Feldabnahme schließt diesen separaten Deployment-Evidenzpunkt nicht automatisch. Build-, Harness- und `--preflight-only`-Nachweise ersetzen reale Feldtests nicht.
+Der übergreifende vollständige `PRODUCTIVE-PASS` bleibt darüber hinaus solange unzulässig, wie die separat zurückgestellte reale Clean-Fresh-/FIRST_INSTALL_SETUP-/Uninstaller-Gesamtabnahme (`ZEC-EV-DEP-001`) offen ist. Eine erfolgreiche V16.2.3-Update-Feldabnahme schließt diesen separaten Deployment-Evidenzpunkt nicht automatisch. Build-, Harness- und `--preflight-only`-Nachweise ersetzen reale Feldtests nicht.

@@ -1,10 +1,8 @@
 {
-  "schema": "ZEC-DATASHEET-RELEASE-METADATA-V1",
-  "release_version": "16.1.0",
-  "release_label": "V16.1.0",
-  "build_id": "v16.1.0-20260919",
-  "status": "ENGINEERING_RELEASE_CANDIDATE",
-  "document_date": "20.09.2026",
-  "docx_sha256": "7c6cd335420d69816b0fa9957d98dbbc2b84a5e3025263c549fded72f22b87cd",
-  "pdf_sha256": "0c16e3af0875708acf65fd446157d41696984051638a967852f2e372836d3826"
+  "build_id": "v16.2.3-20260921",
+  "docx_sha256": "21a0d0983e84d6814f6f93331fc81fabb3e531c38038461059b876db0a0d950e",
+  "pdf_sha256": "35d4cfe52f2be56a0a0d70094fe545e818cb0f0600cc521b5c1c24f8564fee07",
+  "release_label": "V16.2.3",
+  "release_version": "16.2.3",
+  "status": "TECHNICAL_BUILD_PASS"
 }

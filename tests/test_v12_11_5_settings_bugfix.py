@@ -72,9 +72,9 @@ class V12115SettingsBugfixTests(unittest.TestCase):
         self.app = create_app(self.manager, self.state)
 
     def test_release_identity_is_v12_12_1_without_measurement_schema_change(self):
-        self.assertEqual("16.1.0", version.APP_VERSION)
-        self.assertEqual("V16.1.0", version.APP_VERSION_LABEL)
-        self.assertEqual("v16.1.0-20260919", version.APP_BUILD_ID)
+        self.assertEqual("16.2.3", version.APP_VERSION)
+        self.assertEqual("V16.2.3", version.APP_VERSION_LABEL)
+        self.assertEqual("v16.2.3-20260921", version.APP_BUILD_ID)
         self.assertFalse(hasattr(version, "CSV_SCHEMA"))
 
     def test_desktop_scroll_contract_owns_vertical_scroll_in_content_pane(self):
@@ -181,11 +181,11 @@ class V12115SettingsBugfixTests(unittest.TestCase):
     def test_updater_accepts_only_v13_0_3_and_keeps_transitional_readback_gate(self):
         script = UPDATER.read_text(encoding="utf-8")
         for marker in (
-            'EXPECTED_VERSION_ARG="v16_1_0"',
-            'EXPECTED_SOURCE_VERSION="16.0.2"',
-            'EXPECTED_SOURCE_BUILD_ID="v16.0.2-20260917"',
-            'EXPECTED_TARGET_BUILD_ID="v16.1.0-20260919"',
-            'SOURCE_MANIFEST="V16_1_0_SOURCE_MANIFEST.sha256"',
+            'EXPECTED_VERSION_ARG="v16_2_3"',
+            'EXPECTED_SOURCE_VERSION="16.2.0"',
+            'EXPECTED_SOURCE_BUILD_ID="v16.2.0-20260920"',
+            'EXPECTED_TARGET_BUILD_ID="v16.2.3-20260921"',
+            'SOURCE_MANIFEST="V16_2_3_SOURCE_MANIFEST.sha256"',
             'TRANSITIONAL_STREAK', 'PYTHONWARNINGS="error::ResourceWarning"',
         ):
             self.assertIn(marker, script)

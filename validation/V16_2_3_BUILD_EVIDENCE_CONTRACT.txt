@@ -1,0 +1,5 @@
+V16.2.3 build-evidence contract targeted QA: PASS
+- focused installer/evidence/release-identity set: 150 tests + 10 subtests PASS
+- canonical machine-readable format: ZEC_BUILD_EVIDENCE_V1
+- installer delegates to deployment_contract.py verify-build-evidence
+- human-readable FULL_TEST/RESOURCEWARNING files are not parser authority

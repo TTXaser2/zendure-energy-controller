@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Read-only productive field acceptance for ZEC V16.1.0 deployment modes.
+"""Read-only productive field acceptance for ZEC V16.2.3 deployment modes.
 
 This tool never publishes commands, changes configuration, mutates the graph
 store, or performs a rollback. It exercises the running HTTP/read-only graph
@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sqlite3
 import subprocess
 import sys
@@ -27,11 +28,12 @@ if str(ROOT) not in sys.path:
 from version import APP_BUILD_ID, APP_VERSION, APP_VERSION_LABEL  # noqa: E402
 from tools.validate_release_datasheet import validate as validate_release_datasheet  # noqa: E402
 from tools.deployment_contract import effective_local_web_endpoint, load_bootstrap  # noqa: E402
+from tools.evaluate_installation_readiness import classify as classify_installation_readiness  # noqa: E402
 
-EXPECTED_VERSION = "16.1.0"
-EXPECTED_LABEL = "V16.1.0"
-EXPECTED_BUILD_ID = "v16.1.0-20260919"
-FORMAT = "ZEC_V16_1_0_FIELD_ACCEPTANCE_V1"
+EXPECTED_VERSION = "16.2.3"
+EXPECTED_LABEL = "V16.2.3"
+EXPECTED_BUILD_ID = "v16.2.3-20260921"
+FORMAT = "ZEC_V16_2_3_FIELD_ACCEPTANCE_V1"
 
 
 def _sha256(path: Path) -> str:
@@ -40,6 +42,19 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: fh.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _expected_update_source(installer_path: Optional[Path] = None) -> Dict[str, str]:
+    """Read the supported source identity from the canonical installer contract."""
+    path = installer_path or (ROOT / "tools" / "install_zendure_controller.sh")
+    text = path.read_text(encoding="utf-8")
+    values: Dict[str, str] = {}
+    for name in ("EXPECTED_SOURCE_VERSION", "EXPECTED_SOURCE_BUILD_ID"):
+        match = re.search(rf'^{name}="([^"]+)"$', text, flags=re.MULTILINE)
+        if not match:
+            raise RuntimeError(f"INSTALLER_CONTRACT_MISSING:{name}")
+        values[name] = match.group(1)
+    return {"version": values["EXPECTED_SOURCE_VERSION"], "build_id": values["EXPECTED_SOURCE_BUILD_ID"]}
 
 
 def _http(base: str, path: str, *, params: Optional[Mapping[str, Any]] = None, timeout: float = 30.0) -> Tuple[bytes, float]:
@@ -163,9 +178,20 @@ def run_acceptance(base_url: str, install_report: Path, expect_primary_profile: 
     try:
         ready, ms = _json(base_url, "/ready", timeout=5)
         metrics["ready_ms"] = round(ms, 3)
-        _check(checks, "controller_ready", ready.get("ready") is True, failed_checks=ready.get("failed_checks") or [])
+        readiness_class, readiness_reason = classify_installation_readiness(ready)
+        if readiness_class == "READY":
+            _check(checks, "controller_ready", True, detail=readiness_reason, failed_checks=[])
+        elif readiness_class == "TRANSITIONAL":
+            _warn(checks, "controller_ready", readiness_reason, runtime_ready=False, failed_checks=ready.get("failed_checks") or [])
+        else:
+            _check(checks, "controller_ready", False, detail=readiness_reason, failed_checks=ready.get("failed_checks") or [])
+        _check(
+            checks, "controller_readiness_acceptance", readiness_class in {"READY", "TRANSITIONAL"},
+            detail=f"{readiness_class}:{readiness_reason}", runtime_ready=ready.get("ready") is True,
+        )
     except Exception as exc:
         _check(checks, "controller_ready", False, detail=f"{type(exc).__name__}: {exc}")
+        _check(checks, "controller_readiness_acceptance", False, detail="READY_ENDPOINT_UNUSABLE")
 
     if expect_primary_profile:
         try:
@@ -465,9 +491,10 @@ def run_acceptance(base_url: str, install_report: Path, expect_primary_profile: 
                 and target.get("build_id") == EXPECTED_BUILD_ID
                 and mode in {"SUPPORTED_UPDATE", "CLEAN_FRESH_INSTALL"}
             )
+            expected_source = _expected_update_source() if mode == "SUPPORTED_UPDATE" else None
             if mode == "SUPPORTED_UPDATE":
-                install_ok = install_ok and source.get("version") == "16.0.1" and source.get("build_id") == "v16.0.1-20260915"
-            _check(checks, "install_report", install_ok, install_mode=mode, source=source or None, target=target)
+                install_ok = install_ok and source == expected_source
+            _check(checks, "install_report", install_ok, install_mode=mode, source=source or None, expected_source=expected_source, target=target)
             if mode == "SUPPORTED_UPDATE":
                 backup = dict(report.get("release_backup") or {})
                 backup_path = Path(str(backup.get("path") or ""))
@@ -602,10 +629,10 @@ def run_first_install_acceptance(base_url: str, install_report: Path) -> Dict[st
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Read-only ZEC V16.1.0 field acceptance")
+    p = argparse.ArgumentParser(description="Read-only ZEC V16.2.3 field acceptance")
     p.add_argument("--base-url", default="", help="Default: resolve active local endpoint from config/bootstrap")
-    p.add_argument("--install-report", default="/tmp/zec_v16_1_0_install_report.json")
-    p.add_argument("--output", default="/tmp/ZEC_V16_1_0_FIELD_ACCEPTANCE.json")
+    p.add_argument("--install-report", default="/tmp/zec_v16_2_2_install_report.json")
+    p.add_argument("--output", default="/tmp/ZEC_V16_2_0_FIELD_ACCEPTANCE.json")
     p.add_argument("--expect-primary-profile", choices=("", "evcc_standard", "custom", "modbus_template"), default="")
     p.add_argument("--phase", choices=("auto", "normal", "first-install"), default="auto")
     p.add_argument("--json", action="store_true")

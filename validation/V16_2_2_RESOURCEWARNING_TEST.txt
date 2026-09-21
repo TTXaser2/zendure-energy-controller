@@ -1,0 +1,7 @@
+V16.2.2 ResourceWarning regression
+Date: 2026-09-21
+Result: PASS
+Tests: 1106 passed
+Subtests: 698 passed
+Mode: pytest -W error::ResourceWarning
+Execution: same 147 test files in four disjoint shards.

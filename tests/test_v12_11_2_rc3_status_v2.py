@@ -72,7 +72,8 @@ class V12112Rc3StatusV2Tests(unittest.TestCase):
         cfg, s = self.sample()
         html = web_ui.build_status_page(cfg, s)
         self.assertIn('zec-storage-layout-single', html)
-        self.assertIn('Rest bis Max-SOC', html)
+        self.assertIn('Noch ladbar', html)
+        self.assertIn('Ladegrenze', html)
         s["zendure_units_json"] = [
             {"unit_id":"u1", "name":"Unit 1", "soc_percent":56, "actual_power_w":2400, "target_w":2400, "capacity_kwh":5.28},
             {"unit_id":"u2", "name":"Unit 2", "soc_percent":100, "actual_power_w":0, "target_w":0, "capacity_kwh":2.44, "execution_state":"STOP_HOLD"},
@@ -84,13 +85,20 @@ class V12112Rc3StatusV2Tests(unittest.TestCase):
         self.assertIn('System-SOC', html)
         self.assertIn('STOP_HOLD', html)
 
-    def test_primary_card_exposes_harvest_harmonisation_in_standard_mode(self):
+    def test_primary_card_keeps_harvest_harmonisation_out_of_standard_and_in_expert_context(self):
         cfg, s = self.sample()
         payload = web_ui.build_status_view_payload(cfg, s)
         self.assertIn('Parallel-Ernte aktiv', payload['primary']['line'])
         html = web_ui.build_status_page(cfg, s)
-        self.assertIn('Harmonisierung', html)
-        self.assertIn('Parallel-Ernte aktiv', html)
+        self.assertNotIn('Harmonisierung:', html)
+        self.assertNotIn('Harvest-Rechnung:', html)
+        self.assertNotIn('data-storage-expert="primary"', html)
+        cfg['UI_MODE'] = 'expert'
+        expert_html = web_ui.build_status_page(cfg, s)
+        self.assertIn('data-storage-expert="primary"', expert_html)
+        self.assertIn('Harmonisierung:', expert_html)
+        self.assertIn('Parallel-Ernte aktiv', expert_html)
+        self.assertIn('Harvest-Rechnung:', expert_html)
 
     def test_source_shows_packets_per_minute_and_multi_device_filter(self):
         cfg, s = self.sample()

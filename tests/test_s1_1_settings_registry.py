@@ -25,12 +25,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class TestS11SettingsRegistry(unittest.TestCase):
     def test_registry_has_all_target_settings_exactly_once(self):
-        self.assertEqual(215, len(SETTINGS))
+        self.assertEqual(217, len(SETTINGS))
         self.assertEqual(len(SETTINGS), len(SETTINGS_BY_KEY))
         self.assertEqual(list(range(len(SETTINGS))), [spec.order for spec in SETTINGS])
 
     def test_all_rc19_defaults_are_registered_and_parse(self):
-        self.assertEqual(186, len(config_manager.DEFAULT_CONFIG))
+        self.assertEqual(188, len(config_manager.DEFAULT_CONFIG))
         self.assertEqual(set(), set(config_manager.DEFAULT_CONFIG) - set(SETTINGS_BY_KEY))
         for key, value in config_manager.DEFAULT_CONFIG.items():
             with self.subTest(key=key):
@@ -73,7 +73,7 @@ class TestS11SettingsRegistry(unittest.TestCase):
         counts = {apply_class: 0 for apply_class in ApplyClass}
         for spec in SETTINGS:
             counts[spec.apply_class] += 1
-        self.assertEqual(182, counts[ApplyClass.LIVE_NEXT_CYCLE])
+        self.assertEqual(184, counts[ApplyClass.LIVE_NEXT_CYCLE])
         self.assertEqual(13, counts[ApplyClass.RESTART_REQUIRED])
         self.assertEqual(18, counts[ApplyClass.MIGRATION_ONLY])
         self.assertEqual(1, counts[ApplyClass.PROTECTED_ACTION])

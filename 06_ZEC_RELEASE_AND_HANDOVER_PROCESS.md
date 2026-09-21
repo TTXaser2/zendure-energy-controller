@@ -1,7 +1,7 @@
 # ZEC – Release & Handover Process
 
-Stand: 19.09.2026
-Status: kanonisch – inklusive dauerhaftem Datenblatt-Releasevertrag
+Stand: 21.09.2026
+Status: kanonisch – inklusive dauerhaftem Datenblatt-, Release-Hygiene- und Build-Evidence-Vertrag
 
 ## 1. Entwicklungsblock starten
 
@@ -201,6 +201,10 @@ Installer und Uninstaller müssen einen `--preflight-only`-Pfad besitzen. Dieser
 
 Für den Installer umfasst der Preflight mindestens Paket-/Manifest-/Datenblattintegrität, Installationszustand, erforderliche Systemwerkzeuge/Pythonmodule, Zielpfade, WEB_PORT-Vertrag und Portbelegung. Fehlende Pakete werden nicht automatisch installiert; stattdessen wird vor jeder Produktivmutation mit einem konsolidierten Copy-Paste-Installationshinweis abgebrochen.
 
+Ab V16.2.2 gehört zum Paket-/Manifestvertrag zusätzlich eine **fail-closed Release-Hygiene**: `.pytest_cache`, `__pycache__`, Python-Bytecode, sonstige volatile Toolcaches und Runtime-Datenbanken dürfen weder im freizugebenden Release-Tree noch im aktuellen Source-Manifest enthalten sein. Manifest-Erzeugung, Paket-Preflight und Zielprüfung müssen denselben Pfad-/Hygienevertrag verwenden. Ein Deployment darf nicht Dateien absichtlich ausschließen, die das anschließend geprüfte Zielmanifest weiterhin verlangt. Für Deployment-Suite-Änderungen ist dieser reale Copy-/Manifestvertrag für `SUPPORTED_UPDATE` und `CLEAN_FRESH_INSTALL` automatisiert nachzuweisen.
+
+Ab V16.2.3 besitzt die Build-Testevidenz zusätzlich einen **kanonischen maschinenlesbaren Vertrag** (`ZEC_BUILD_EVIDENCE_V1`). Installer und Paketgates dürfen human-readable QA-Dateien nicht als implizite Parser-API verwenden. Maßgeblich ist der gemeinsame Verifier `tools/deployment_contract.py verify-build-evidence`. Er prüft fail-closed mindestens Releaseversion, Label, Build-ID, globalen PASS-Status, positive Testdateianzahl, vollständige Regression, identische Test-/Subtestzahlen im `ResourceWarning=error`-Lauf und die explizite Warnungssemantik `error::ResourceWarning`. Der echte Installer-Preflight muss genau diesen Verifier auf dem finalen Fresh Extract aufrufen; ein isoliert getesteter Verifier ohne Preflight-Integration reicht nicht als Releasegate.
+
 ### 9.3 Clean Fresh Install
 
 Ein Clean Fresh Install erzeugt keine erfundene Produktivkonfiguration. Vor dem ersten gültigen Settings-Commit startet ZEC in `FIRST_INSTALL_SETUP` mit:
@@ -248,9 +252,11 @@ Zusätzlich zu den allgemeinen Releasegates müssen Releases mit Änderungen an 
 - erster Settings-Commit übernimmt Bootstrapwerte; Restart führt in NORMAL;
 - Update funktioniert mit Standard- und abweichendem WEB_PORT ohne harte `:8080`-Annahme;
 - Fehlerzustand wird vor Rollback erfasst und Rollbackresultat im selben Supportvorgang dokumentiert;
+- ein einzelner Installerfehler finalisiert Supportcapture/Rollback genau einmal; vererbte `ERR`-Traps aus Subshells dürfen keinen zweiten Diagnose-/Rollbackvorgang auslösen;
 - Standardsupportbundle enthält keine rohe Konfiguration/Secrets;
 - Uninstaller-Preflight ist mutationsfrei; Fresh-Reset endet in CLEAN_FRESH_INSTALL;
 - Benutzerdatenbackup und optionaler Measurement-Einschluss entsprechen ihrem Vertrag;
+- Build-Testevidenz wird über den kanonischen maschinenlesbaren Evidence-Vertrag geprüft; der echte Paket-Preflight ruft denselben Verifier auf und parst keine Freitextmarker;
 - bestehende Diagnose-/Analysefunktionen bleiben regressionsfrei.
 
 Vor PRODUCTIVE-PASS eines erstmalig Fresh-Install-fähigen Hauptreleases ist zusätzlich mindestens ein echter Clean-Fresh-Install-Feldtest auf einem vorbereiteten Raspberry-Pi-OS-System ohne aktive ZEC-Installation Pflicht. Ein Build-/Harness-/Dry-Run-Nachweis ersetzt diesen realen Feldtest nicht.

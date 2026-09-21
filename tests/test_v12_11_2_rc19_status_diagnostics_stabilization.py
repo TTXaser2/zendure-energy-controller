@@ -73,8 +73,8 @@ def payload(cfg, snap):
 
 class Rc19StatusTextTests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual("16.1.0", version.APP_VERSION)
-        self.assertEqual("V16.1.0", version.APP_VERSION_LABEL)
+        self.assertEqual("16.2.3", version.APP_VERSION)
+        self.assertEqual("V16.2.3", version.APP_VERSION_LABEL)
 
     def test_discharge_path_is_not_misclassified_as_charge(self):
         snap = {
@@ -160,7 +160,7 @@ class Rc19CapacityAndFixedModeTests(unittest.TestCase):
         })
         result = payload(cfg, snap)
         self.assertAlmostEqual(1.0032, result["zendure"]["remaining"], places=4)
-        self.assertEqual("1,00 kWh", result["zendure"]["remaining_text"])
+        self.assertEqual("19 % · 1,00 kWh", result["zendure"]["remaining_text"])
 
     def test_fixed_discharge_preserves_requested_and_applied_targets(self):
         cfg = base_cfg(

@@ -57,6 +57,15 @@ def _power_phrase(value: float) -> str:
     return f"{shown} {action}"
 
 
+
+def _power_value(value: float) -> str:
+    sign = "+" if value > 0 else ("−" if value < 0 else "")
+    amount = abs(value)
+    if amount >= 1000:
+        return f"{sign}{_de_number(amount / 1000.0, 2)} kW"
+    return f"{sign}{round(amount)} W"
+
+
 def _grid_value(value: float) -> str:
     sign = "+" if value > 0 else ("−" if value < 0 else "")
     amount = abs(value)
@@ -126,12 +135,24 @@ def build_preview_status_payload(scenario: Any, *, now_epoch: float | None = Non
         primary = {
             "present": True,
             "soc": primary_soc,
-            "actual": _power_phrase(primary_power),
+            "actual": _power_value(primary_power),
             "actual_raw": primary_power,
             "status": "lädt",
             "line": "Harvest: Parallel-Ernte aktiv · Primärspeicher bleibt priorisiert",
+            "harvest_calculation": "Vorschau: Parallel-Ernte aktiv",
             "source": "SMA Sunny Island",
+            "source_health": "OK",
             "freshness_text": "aktuell",
+            "remaining_visible": True,
+            "remaining_label": "Noch ladbar",
+            "remaining_text": f"{round(max(0.0, 100.0-primary_soc))} % · {_de_number(13.0*max(0.0,100.0-primary_soc)/100.0,2)} kWh",
+            "soc_limit_label": "Ladegrenze",
+            "soc_limit_text": "100 %",
+            "power_meter_visible": True,
+            "power_meter_direction": "charge",
+            "power_meter_percent": min(100.0, abs(primary_power)/4600.0*100.0),
+            "power_meter_text": f"{_power_value(abs(primary_power))} / 4,60 kW max",
+            "usable_soc_text": "nur Experten-Diagnose",
             "tone": "ok",
         }
 
@@ -203,11 +224,19 @@ def build_preview_status_payload(scenario: Any, *, now_epoch: float | None = Non
         "zendure": {
             "soc": system_soc,
             "system_soc_text": f"{_de_number(system_soc, 1)} % gewichtet" if len(units) > 1 else f"{round(system_soc)} %",
-            "actual": _power_phrase(actual_w),
+            "actual": _power_value(actual_w),
             "actual_raw": actual_w,
             "remaining": remaining,
-            "remaining_text": f"{_de_number(remaining, 2)} kWh",
+            "remaining_visible": True,
+            "remaining_label": "Noch ladbar",
+            "remaining_text": f"{round(max(0.0,99.0-system_soc))} % · {_de_number(remaining, 2)} kWh",
+            "soc_limit_label": "Ladegrenze",
+            "soc_limit_text": "99 %",
             "max_soc_text": "99 %",
+            "power_meter_visible": True,
+            "power_meter_direction": "charge",
+            "power_meter_percent": min(100.0, abs(actual_w)/2400.0*100.0),
+            "power_meter_text": f"{_power_value(abs(actual_w))} / 2,40 kW max",
             "source": "synthetische Unit-Telemetrie",
             "unit_count": len(units),
             "units": units,

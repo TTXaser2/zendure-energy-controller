@@ -3877,6 +3877,74 @@ def _signed_power_phrase(value: Any, neutral: str = "neutral") -> str:
     return f"0 W {neutral}"
 
 
+def _remaining_energy_view(
+    *,
+    soc_percent: Any,
+    capacity_kwh: Any,
+    signed_power_w: Any,
+    min_soc_percent: Any,
+    max_soc_percent: Any,
+    lower_label: str = "Entladegrenze",
+    upper_label: str = "Ladegrenze",
+) -> Dict[str, Any]:
+    """Build the common storage-card remaining-energy view.
+
+    The percentage is deliberately the *absolute SOC distance in percentage
+    points* to the active boundary, not a normalized share of the available
+    corridor.  Capacity is optional: when no trustworthy capacity is known the
+    percentage remains useful and only the kWh suffix is omitted.  No controller
+    decision is derived from this diagnostic view.
+    """
+    soc = _safe_float(soc_percent)
+    capacity = _safe_float(capacity_kwh)
+    power = _safe_float(signed_power_w)
+    lower = _safe_float(min_soc_percent)
+    upper = _safe_float(max_soc_percent)
+    discharging = power is not None and power < -30
+    limit = lower if discharging else upper
+    limit_label = lower_label if discharging else upper_label
+    remaining_label = "Noch entladbar" if discharging else "Noch ladbar"
+    if soc is None or limit is None:
+        return {
+            "visible": False, "label": remaining_label, "text": "",
+            "percent_points": None, "kwh": None,
+            "limit_label": limit_label, "limit_text": "",
+        }
+    delta = max(0.0, soc - limit) if discharging else max(0.0, limit - soc)
+    remaining = max(0.0, capacity * delta / 100.0) if capacity is not None and capacity > 0 else None
+    percent_text = _zec_num(delta, "%")
+    text = percent_text if remaining is None else f"{percent_text} · {_zec_num(remaining, 'kWh')}"
+    return {
+        "visible": True,
+        "label": remaining_label,
+        "text": text,
+        "percent_points": delta,
+        "kwh": remaining,
+        "limit_label": limit_label,
+        "limit_text": _zec_num(limit, "%"),
+    }
+
+
+def _power_meter_view(*, signed_power_w: Any, max_charge_w: Any, max_discharge_w: Any) -> Dict[str, Any]:
+    """Return an optional direction-aware power-bar view without control effect."""
+    power = _safe_float(signed_power_w)
+    if power is None or abs(power) <= 30:
+        return {"visible": False, "direction": "neutral", "percent": 0.0, "max_w": None, "power_w": None, "text": ""}
+    charging = power > 0
+    maximum = _safe_float(max_charge_w if charging else max_discharge_w)
+    direction = "charge" if charging else "discharge"
+    if maximum is None or maximum <= 0:
+        return {"visible": False, "direction": direction, "percent": 0.0, "max_w": None, "power_w": abs(power), "text": ""}
+    return {
+        "visible": True,
+        "direction": direction,
+        "percent": min(100.0, max(0.0, abs(power) / maximum * 100.0)),
+        "max_w": maximum,
+        "power_w": abs(power),
+        "text": f"{_zec_num(abs(power), 'W')} / {_zec_num(maximum, 'W')} max",
+    }
+
+
 def _mode_public_text(mode: str, target: Any) -> str:
     mode = str(mode or "-")
     if mode in {"AUTO_CHARGE", "CHARGE"}:
@@ -4418,20 +4486,23 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             weighted_den += cap
     system_soc = weighted_num / weighted_den if weighted_den > 0 else (_safe_float(units[0].get("soc")) if len(units) == 1 else None)
     max_soc = _safe_float(cfg.get("MAX_SOC_PERCENT")) or 99
-    # Derive the UI value from the current SOC/capacity snapshot so an earlier
-    # AUTO/Harvest value can never remain frozen in STOP_HOLD, SAFE_STATE,
-    # NIGHT or a fixed mode.  The controller also updates the shared state every
-    # cycle; this view-side calculation is an additional read-only safeguard.
-    remaining = None
-    if weighted_den > 0 and system_soc is not None:
-        remaining = max(0.0, weighted_den * max(0.0, max_soc - system_soc) / 100.0)
-    elif system_soc is not None:
+    min_soc = _safe_float(cfg.get("MIN_SOC_PERCENT"))
+    zendure_capacity_kwh = weighted_den if weighted_den > 0 else None
+    if zendure_capacity_kwh is None:
         capacity_wh = _safe_float(cfg.get("ZENDURE_BATTERY_CAPACITY_WH"))
-        capacity_kwh = (capacity_wh / 1000.0) if capacity_wh is not None and capacity_wh > 0 else None
-        if capacity_kwh is not None and capacity_kwh > 0:
-            remaining = max(0.0, capacity_kwh * max(0.0, max_soc - system_soc) / 100.0)
-    if remaining is None:
-        remaining = _safe_float(s.get("zendure_remaining_capacity_kwh"))
+        zendure_capacity_kwh = (capacity_wh / 1000.0) if capacity_wh is not None and capacity_wh > 0 else None
+    zendure_remaining = _remaining_energy_view(
+        soc_percent=system_soc,
+        capacity_kwh=zendure_capacity_kwh,
+        signed_power_w=actual,
+        min_soc_percent=min_soc,
+        max_soc_percent=max_soc,
+    )
+    zendure_power_meter = _power_meter_view(
+        signed_power_w=actual,
+        max_charge_w=cfg.get("MAX_CHARGE_POWER_W"),
+        max_discharge_w=cfg.get("MAX_DISCHARGE_POWER_W"),
+    )
     zendure_tone = "warn" if command_warning else (units[0].get("tone") if len(units) == 1 else ("warn" if any(u.get("tone") != "ok" for u in units) else "ok"))
 
     primary_power = _safe_float(_first_snapshot_value(
@@ -4507,6 +4578,26 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
         f"{_zec_num(usable_primary_soc, '%')} des aktuell freigegebenen Bereichs"
         if usable_primary_soc_valid and usable_primary_soc is not None
         else ("derzeit nicht berechenbar" if discharge_floor_supported else "nicht unterstützt")
+    )
+
+    primary_capacity_kwh = _safe_float(_first_snapshot_value(
+        s, "second_battery_capacity_kwh", "raw_second_battery_capacity_kwh", "sma_battery_capacity_kwh"
+    ))
+    if primary_capacity_kwh is None or primary_capacity_kwh <= 0:
+        primary_capacity_wh = _safe_float(cfg.get("SECOND_BATTERY_CAPACITY_WH"))
+        primary_capacity_kwh = (primary_capacity_wh / 1000.0) if primary_capacity_wh is not None and primary_capacity_wh > 0 else None
+    primary_lower_soc = discharge_floor if (discharge_floor_supported and discharge_floor_valid and discharge_floor_fresh and discharge_floor is not None) else None
+    primary_remaining = _remaining_energy_view(
+        soc_percent=primary_soc,
+        capacity_kwh=primary_capacity_kwh,
+        signed_power_w=primary_power,
+        min_soc_percent=primary_lower_soc,
+        max_soc_percent=100.0,
+    )
+    primary_power_meter = _power_meter_view(
+        signed_power_w=primary_power,
+        max_charge_w=cfg.get("SECOND_BATTERY_MAX_CHARGE_POWER_W"),
+        max_discharge_w=cfg.get("SECOND_BATTERY_MAX_DISCHARGE_POWER_W"),
     )
 
     detected = int(_safe_float(s.get("sma_energy_meter_detected_device_count")) or 0)
@@ -4781,11 +4872,21 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
         "zendure": {
             "soc": system_soc,
             "system_soc_text": f"{_zec_num(system_soc, '%')} gewichtet" if len(units) > 1 and system_soc is not None else _zec_num(system_soc, "%"),
-            "actual": _signed_power_phrase(actual),
+            "actual": _zec_num(actual, signed=True),
             "actual_raw": actual,
-            "remaining": remaining,
-            "remaining_text": _zec_num(remaining, "kWh") if remaining is not None else "nicht berechenbar",
+            "remaining": zendure_remaining.get("kwh"),
+            "remaining_percent_points": zendure_remaining.get("percent_points"),
+            "remaining_visible": zendure_remaining.get("visible"),
+            "remaining_label": zendure_remaining.get("label"),
+            "remaining_text": zendure_remaining.get("text"),
+            "soc_limit_label": zendure_remaining.get("limit_label"),
+            "soc_limit_text": zendure_remaining.get("limit_text"),
             "max_soc_text": _zec_num(max_soc, "%"),
+            "power_meter_visible": zendure_power_meter.get("visible"),
+            "power_meter_direction": zendure_power_meter.get("direction"),
+            "power_meter_percent": zendure_power_meter.get("percent"),
+            "power_meter_max_w": zendure_power_meter.get("max_w"),
+            "power_meter_text": zendure_power_meter.get("text"),
             "source": _storage_source_text(s),
             "unit_count": len(units),
             "units": units,
@@ -4796,7 +4897,7 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "present": primary_present,
             "name": second_battery_name(cfg) if primary_present else "",
             "soc": primary_soc if primary_present else None,
-            "actual": _signed_power_phrase(primary_power) if primary_present else "nicht konfiguriert",
+            "actual": _zec_num(primary_power, signed=True) if primary_present else "nicht konfiguriert",
             "actual_raw": primary_power if primary_present else None,
             "status": primary_status if primary_present else "nicht konfiguriert",
             "line": harmony if primary_present else "",
@@ -4819,6 +4920,18 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "usable_soc_percent": usable_primary_soc if primary_present else None,
             "usable_soc_valid": usable_primary_soc_valid if primary_present else False,
             "usable_soc_text": usable_primary_soc_text if primary_present else "",
+            "capacity_kwh": primary_capacity_kwh if primary_present else None,
+            "remaining_visible": bool(primary_present and primary_remaining.get("visible")),
+            "remaining_label": primary_remaining.get("label") if primary_present else "",
+            "remaining_text": primary_remaining.get("text") if primary_present else "",
+            "remaining_percent_points": primary_remaining.get("percent_points") if primary_present else None,
+            "soc_limit_label": primary_remaining.get("limit_label") if primary_present else "",
+            "soc_limit_text": primary_remaining.get("limit_text") if primary_present else "",
+            "power_meter_visible": bool(primary_present and primary_power_meter.get("visible")),
+            "power_meter_direction": primary_power_meter.get("direction") if primary_present else "neutral",
+            "power_meter_percent": primary_power_meter.get("percent") if primary_present else 0.0,
+            "power_meter_max_w": primary_power_meter.get("max_w") if primary_present else None,
+            "power_meter_text": primary_power_meter.get("text") if primary_present else "",
             "tone": primary_tone if primary_present else "unknown",
         },
         "source": {
@@ -5040,7 +5153,8 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
     snapshot_primary_present = _primary_storage_present(cfg, snap)
     status_units = _status_units(cfg, snap, snap.get("zendure_target_signed_power"), snap.get("zendure_system_signed_power"))
     snapshot_unit_count = min(2, max(1, len(status_units)))
-    cache_key = f"{day_start.date().isoformat()}|storage-wp6|{history_mode}|p{int(snapshot_primary_present)}|u{snapshot_unit_count}"
+    day_role = "today" if is_today else "history"
+    cache_key = f"{day_start.date().isoformat()}|storage-wp6|{history_mode}|p{int(snapshot_primary_present)}|u{snapshot_unit_count}|{day_role}"
     now_epoch = time.time()
     ttl = _STORAGE_DAY_TODAY_TTL_S if is_today else _STORAGE_DAY_HISTORY_TTL_S
     with _storage_day_lock:
@@ -5063,6 +5177,11 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
                 "payload": _storage_day_cache.get("payload"),
                 "built_epoch": float(_storage_day_cache.get("built_epoch") or 0),
             }
+        if entry and entry.get("payload") and bool(entry.get("payload", {}).get("is_today")) != is_today:
+            # A partial payload built while this date was "today" must never
+            # become a six-hour historical cache entry after midnight.
+            _storage_day_cache_entries.pop(cache_key, None)
+            entry = None
         if entry and entry.get("payload") and now_epoch - float(entry.get("built_epoch") or 0) < ttl:
             _storage_day_cache_entries[cache_key] = entry
             _storage_day_cache_entries.move_to_end(cache_key)

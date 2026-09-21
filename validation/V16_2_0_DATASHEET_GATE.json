@@ -1,0 +1,22 @@
+{
+  "datasheet": {
+    "docx": "docs/ZEC_Technisches_Datenblatt.docx",
+    "docx_bytes": 52179,
+    "docx_sha256": "6432ffe0ebcde8239de2c52dd6faab2e4225d856e44ea491e606feb919a88c8f",
+    "metadata": "docs/ZEC_Technisches_Datenblatt.release.json",
+    "pdf": "docs/ZEC_Technisches_Datenblatt.pdf",
+    "pdf_bytes": 171871,
+    "pdf_sha256": "4b8a4a870f6cf383b416ebc4c2e4d6b41f1a126cdb6f9ee0e2feb8ffa8c83d1d"
+  },
+  "errors": [],
+  "release": {
+    "build_id": "v16.2.0-20260920",
+    "release_label": "V16.2.0",
+    "release_version": "16.2.0"
+  },
+  "release_identities_in_docx": [
+    "V16.2.0"
+  ],
+  "required_text_count": 8,
+  "status": "PASS"
+}

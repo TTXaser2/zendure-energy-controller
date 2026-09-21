@@ -1,0 +1,8 @@
+RELEASE: V16.2.1
+STATUS: PASS
+DOCX_PAGES: 9
+DOCX_VISUAL_REVIEW: PASS (all 9 pages inspected after TECHNICAL BUILD PASS declaration)
+PDF_PAGES: 9
+PDF_RENDER_REVIEW: PASS (final PDF rendered independently; same DOCX-generated PDF visually reviewed across all 9 pages)
+DOCX_SHA256: 73c34b448afa3f3d3aa1b44ad378360bfb1156c9e4ba272cacce4e4c4d672ed1
+PDF_SHA256: 204cc1810a72eed0adc5ad5b8c6f1c09b6daffbfd117e5e58128210b5f01e485

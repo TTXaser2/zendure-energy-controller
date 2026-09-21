@@ -300,8 +300,12 @@ class Rc16RcbAbsoluteTargetTests(unittest.TestCase):
             payload = web_ui.build_status_view_payload(cfg, snapshot, events=[])
         self.assertEqual("0-W-Netzziel: 300 W + 600 W = 900 W", payload["primary"]["harvest_calculation"])
         html = status_page_v2.render_status_page_v2(cfg, payload, analysis_available=True, analysis_port=8090)
-        self.assertIn("Harvest-Rechnung", html)
-        self.assertIn("0-W-Netzziel: 300 W + 600 W", html)
+        self.assertNotIn("Harvest-Rechnung", html)
+        expert_cfg = dict(cfg)
+        expert_cfg["UI_MODE"] = "expert"
+        expert_html = status_page_v2.render_status_page_v2(expert_cfg, payload, analysis_available=True, analysis_port=8090)
+        self.assertIn("Harvest-Rechnung", expert_html)
+        self.assertIn("0-W-Netzziel: 300 W + 600 W", expert_html)
 
     def test_rc16_v4_contract_and_row_are_additive(self):
         self.assertEqual(217, len(RC15_STANDARD_HEADER))

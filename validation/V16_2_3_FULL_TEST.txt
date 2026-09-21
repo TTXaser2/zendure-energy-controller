@@ -1,0 +1,9 @@
+V16.2.3 full regression
+Date: 2026-09-21
+Test files: 148
+Result: PASS
+Tests: 1112 passed
+Subtests: 698 passed
+Execution: four disjoint shards; no test file omitted.
+Test-only paho-mqtt stub was external to the release tree because the validation runtime lacked paho-mqtt.
+Canonical installer authority: validation/V16_2_3_BUILD_EVIDENCE.json

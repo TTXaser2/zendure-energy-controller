@@ -1,0 +1,5 @@
+V16.2.2 deployment hotfix targeted QA: PASS
+- V16.2.2 manifest/rsync/error-handler regression: 6 passed
+- V16.0.2 cache-hygiene regression: 4 passed
+- additional installer/release-identity regression: 64 passed
+Real rsync semantics for SUPPORTED_UPDATE and CLEAN_FRESH_INSTALL are covered by the V16.2.2 hotfix regression.

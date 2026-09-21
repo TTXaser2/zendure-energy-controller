@@ -139,6 +139,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "SECOND_BATTERY_STALE_BLOCK_CHARGE": True,
     "REST_SURPLUS_HARVEST_ENABLED": False,
     "SECOND_BATTERY_MAX_CHARGE_POWER_W": None,
+    "SECOND_BATTERY_MAX_DISCHARGE_POWER_W": None,
+    "SECOND_BATTERY_CAPACITY_WH": None,
     "REST_SURPLUS_MIN_EXPORT_W": 80,
     "REST_SURPLUS_ENTRY_CONFIRM_SECONDS": 30,
     "SECOND_BATTERY_CHARGE_SATURATION_MARGIN_W": 100,
@@ -344,6 +346,8 @@ CONFIG_SCHEMA: Dict[str, Dict[str, Any]] = {
     "SECOND_BATTERY_STALE_BLOCK_CHARGE": {"group": "Zweitbatterie", "subgroup": "Cross-Charge-Schutz", "label": "Bei Daten-Timeout Ladung blockieren", "type": "bool", "description": "Konservativer Fallback: Wenn der Cross-Charge-Schutz aktiv ist, aber keine frischen Zusatzbatteriedaten vorliegen, wird Zendure-Ladung blockiert."},
     "REST_SURPLUS_HARVEST_ENABLED": {"group": "Zweitbatterie", "subgroup": "Restüberschuss-Ernte", "label": "Restüberschuss-Ernte aktivieren", "type": "bool", "description": "Aktiviert eine spezielle AUTO-Funktion: Wenn der Primärspeicher über längere Zeit nahe seiner Ladegrenze lädt und trotzdem Netzexport übrig bleibt, darf Zendure diesen Restüberschuss zusätzlich laden. Die Funktion startet nicht bei kurzen Spitzen und darf nur laden, niemals Entladung auslösen."},
     "SECOND_BATTERY_MAX_CHARGE_POWER_W": {"group": "Zweitbatterie", "subgroup": "Restüberschuss-Ernte", "label": "Maximale Ladeleistung Primärspeicher", "type": "optional_int", "min": 300, "max": 10000, "unit": "W", "description": "Maximale Ladeleistung des Primärspeichers bzw. der Zweitbatterie. Dieser Wert steht meist im Datenblatt des Wechselrichters/Batteriesystems. Leer bedeutet: Restüberschuss-Ernte bleibt nicht wirksam. Für SMA Sunny Island 3.0M-11 sind aus ZEC-Sicht 2300 W passend."},
+    "SECOND_BATTERY_MAX_DISCHARGE_POWER_W": {"group": "Primärspeicher", "subgroup": "Technische Leistungsdaten", "label": "Maximale Entladeleistung Primärspeicher", "type": "optional_int", "min": 300, "max": 10000, "unit": "W", "description": "Optionale technische Angabe für den Status-Leistungsbalken. Keine Sollwert-, Schutz- oder Reglergrenze. Leer blendet nur diese Anzeige aus."},
+    "SECOND_BATTERY_CAPACITY_WH": {"group": "Primärspeicher", "subgroup": "Technische Leistungsdaten", "label": "Kapazität Primärspeicher", "type": "optional_int", "min": 100, "max": 100000, "unit": "Wh", "description": "Optionale Kapazität als Status-/Diagnose-Fallback, wenn die aktive Primärspeicherquelle keine Kapazität liefert. Keine Reglerwirkung; Quelltelemetrie hat Vorrang."},
     "REST_SURPLUS_MIN_EXPORT_W": {"group": "Zweitbatterie", "subgroup": "Restüberschuss-Ernte", "label": "Mindest-Netzexport zur Aktivierung", "type": "int", "min": 20, "max": 1000, "unit": "W", "description": "Mindestexport am Netzanschlusspunkt, ab dem die Restüberschuss-Ernte für den Entry qualifiziert. Dieser Wert ist nur eine Aktivierungs-/Rauschschwelle, kein dauerhaft gewünschter Restexport. Default: 80 W."},
 
     "NIGHT_DISCHARGE_ENABLED": {"group": "Nachtmodus", "label": "Nachtmodus aktiv", "type": "bool", "description": "Aktiviert eine feste Entladeleistung im konfigurierten Zeitfenster."},

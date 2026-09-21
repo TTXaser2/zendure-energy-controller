@@ -180,7 +180,7 @@ def test_status_soc_fast_path_is_deliberately_lean_source_contract():
 
 def test_status_soc_browser_uses_stale_while_revalidate_cache():
     js = (ROOT / "static/status_v2.js").read_text(encoding="utf-8")
-    assert "zec:soc-day:v14.1.3:" in js
+    assert "zec:soc-day:v16.2:" in js
     assert "sessionStorage.getItem" in js
     assert "Gespeicherter Stand" in js
     assert "wird aktualisiert" in js

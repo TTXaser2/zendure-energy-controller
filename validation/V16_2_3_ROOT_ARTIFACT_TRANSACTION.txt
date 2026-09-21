@@ -1,0 +1,2 @@
+Root artifact rollback fixture: PASS
+Command: bash tests/test_installer_root_artifact_transaction.sh

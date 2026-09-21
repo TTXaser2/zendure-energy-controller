@@ -1,0 +1,15 @@
+V16.2.2 -> V16.2.3 hotfix delta (initial scope)
+version.py
+tools/install_zendure_controller.sh
+tools/deployment_contract.py
+tools/v16_field_acceptance.py
+tests/test_v16_2_3_build_evidence_contract.py
+rolling current-release expectation tests
+README_INSTALLATION.md
+RELEASE_INFO_V16_2_3.md
+TECHNICAL_NOTES_V16_2_3.md
+BUILD_VALIDATION_V16_2_3.md
+docs/ZEC_Master_Backlog.md
+docs/ZEC_Technisches_Datenblatt.docx
+docs/ZEC_Technisches_Datenblatt.pdf
+docs/ZEC_Technisches_Datenblatt.release.json
