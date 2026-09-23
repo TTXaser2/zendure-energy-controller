@@ -5,20 +5,32 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Mapping, Optional
 
-from settings_registry import SETTINGS, SETTINGS_BY_KEY, Visibility, ApplyClass, Editability, DefaultClass, ResetPolicy
+from settings_registry import (
+    SETTINGS_BY_KEY, Visibility, ApplyClass, Editability, DefaultClass, ResetPolicy,
+    Applicability, iter_operational_settings,
+)
 from settings_help import (CATEGORY_GROUPS, CATEGORY_DESCRIPTIONS, SECTION_ORDER_OVERRIDES, SETTING_ORDER_OVERRIDES, LABEL_OVERRIDES, DEPENDENCY_RULES, HANDBOOK_GLOSSARY, build_category_specs, build_section_specs)
 from settings_runtime import SettingsRuntimeManager
 from settings_service import ISSUE_MESSAGES
 
 CATEGORY_SPECS = build_category_specs()
+
+
 def _operational_specs():
-    return tuple(
-        spec for spec in SETTINGS
-        if spec.visibility not in (Visibility.HIDDEN_MIGRATION, Visibility.HIDDEN_TRANSITION)
-        and (spec.release_stage == "S1" or spec.origin == "RC19")
-        and not spec.lifecycle.startswith("remove_")
-        and spec.lifecycle not in ("reserved_inactive", "deployment_constant_not_config")
-    )
+    return tuple(iter_operational_settings())
+
+
+def _applicability_rule(spec: Any) -> Optional[Dict[str, Any]]:
+    if spec.applicability is Applicability.PRIMARY_STORAGE_ENABLED:
+        return {"key": "SECOND_BATTERY_INTEGRATION_ENABLED", "equals": True}
+    return None
+
+
+def _is_applicable(spec: Any, configured: Mapping[str, Any]) -> bool:
+    rule = _applicability_rule(spec)
+    if rule is None:
+        return True
+    return configured.get(rule["key"]) == rule["equals"]
 
 
 SECTION_SPECS = build_section_specs(tuple(dict.fromkeys((spec.category, spec.section) for spec in _operational_specs())))
@@ -122,19 +134,7 @@ def build_settings_model(
             issue_by_key.setdefault(key, []).append(issue)
 
     categories: Dict[str, Dict[str, Any]] = {}
-    for spec in SETTINGS:
-        # S1 shows the active RC19/S1 surface. Later-release target-only fields
-        # remain in the registry but are not presented as operational settings.
-        if spec.visibility in (
-            Visibility.HIDDEN_MIGRATION,
-            Visibility.HIDDEN_TRANSITION,
-        ):
-            continue
-        if spec.release_stage != "S1" and spec.origin != "RC19":
-            continue
-        if spec.lifecycle.startswith("remove_") or spec.lifecycle in ("reserved_inactive", "deployment_constant_not_config"):
-            continue
-
+    for spec in _operational_specs():
         category_spec = CATEGORY_SPECS.get(spec.category)
         category = categories.setdefault(spec.category, {
             "name": spec.category,
@@ -154,10 +154,10 @@ def build_settings_model(
         })
         configured_value = configured.get(spec.key, spec.default_new_install)
         effective_value = effective.get(spec.key, spec.default_new_install)
-        available = spec.release_stage == "S1" or spec.origin == "RC19"
+        available = True
+        applicable = _is_applicable(spec, configured)
         editable = bool(
-            available
-            and spec.editability is Editability.EDITABLE
+            spec.editability is Editability.EDITABLE
             and spec.apply_class not in (ApplyClass.PROTECTED_ACTION, ApplyClass.READ_ONLY, ApplyClass.MIGRATION_ONLY)
         )
         entry = {
@@ -189,6 +189,10 @@ def build_settings_model(
             "protected": spec.visibility is Visibility.PROTECTED_EXPERT,
             "editable": editable,
             "available": available,
+            "applicable": applicable,
+            "applicability": spec.applicability.value,
+            "applicability_rule": _applicability_rule(spec),
+            "surface_state": spec.surface_state.value,
             "apply_class": spec.apply_class.value,
             "apply_text": spec.apply_text,
             "risk": spec.risk,
@@ -244,6 +248,10 @@ def build_settings_model(
             "config_states": True,
             "config_import_export": True,
             "portable_profiles": True,
+        },
+        "topology": {
+            "zendure_unit_count": max(1, min(2, len((state_snapshot or {}).get("zendure_battery_details") or []))) if isinstance((state_snapshot or {}).get("zendure_battery_details"), list) else 1,
+            "primary_storage_enabled": bool(configured.get("SECOND_BATTERY_INTEGRATION_ENABLED", False)),
         },
         "runtime": {
             "current_mode": (state_snapshot or {}).get("current_mode"),

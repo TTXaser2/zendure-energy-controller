@@ -295,9 +295,21 @@
     if (Object.prototype.hasOwnProperty.call(rule, 'not_equals')) return !same(value, rule.not_equals);
     return true;
   }
+  function applicabilityVisible(s) {
+    if (s.applicable === false && !s.applicability_rule) return false;
+    const rule = s.applicability_rule;
+    if (!rule) return s.applicable !== false;
+    const dep = settingByKey(rule.key);
+    if (!dep) return false;
+    const value = currentValue(dep);
+    if (Object.prototype.hasOwnProperty.call(rule, 'equals')) return same(value, rule.equals);
+    if (Object.prototype.hasOwnProperty.call(rule, 'not_equals')) return !same(value, rule.not_equals);
+    return false;
+  }
   function settingVisibleInMode(s) {
     const firstInstallRequired = app.model?.status?.startup_mode === 'FIRST_INSTALL_SETUP' && s.required_first_install;
     if (firstInstallRequired) return true;
+    if (!applicabilityVisible(s)) return false;
     if (s.expert && app.mode !== 'expert') return false;
     if (!dependencyVisible(s) && app.mode === 'standard') return false;
     return true;
@@ -313,7 +325,7 @@
   }
   function expertHiddenCount(category) {
     const firstInstall = app.model?.status?.startup_mode === 'FIRST_INSTALL_SETUP';
-    return category.sections.reduce((total, section) => total + section.settings.filter(s => s.expert && !(firstInstall && s.required_first_install)).length, 0);
+    return category.sections.reduce((total, section) => total + section.settings.filter(s => s.expert && applicabilityVisible(s) && !(firstInstall && s.required_first_install)).length, 0);
   }
   function nightText(kind) {
     const pair = NIGHT_COMPOUNDS[kind];
@@ -579,7 +591,9 @@
   }
   function searchVisibleInMode(s) {
     const firstInstallRequired = app.model?.status?.startup_mode === 'FIRST_INSTALL_SETUP' && s.required_first_install;
-    return firstInstallRequired || !s.expert || app.mode === 'expert';
+    if (firstInstallRequired) return true;
+    if (!applicabilityVisible(s)) return false;
+    return !s.expert || app.mode === 'expert';
   }
   function searchHaystack(s) {
     const help = s.help || {};

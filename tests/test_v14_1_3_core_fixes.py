@@ -203,7 +203,7 @@ def test_zoom_selection_uses_integer_epoch_ms_and_commands_have_own_lane():
 def test_settings_controller_logic_remains_outside_core_fix_scope():
     # Guard the architectural boundary in this block: state projection happens
     # before persistence, not by modifying controller_logic.py semantics.
-    expected = "d243945adbb04dfa19fa915f8f32cafb375b7258888b2ecd6fb7a064cdea99ff"
+    expected = "113cb9cc60475cb59294bf07ab750e63580b59112f178948b7e386fd0539b031"
     import hashlib
     digest = hashlib.sha256((ROOT / "controller_logic.py").read_bytes()).hexdigest()
     assert digest == expected

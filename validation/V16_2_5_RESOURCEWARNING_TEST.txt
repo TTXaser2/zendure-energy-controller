@@ -1,0 +1,11 @@
+V16.2.5 ResourceWarning regression: PASS
+Warnings mode: error::ResourceWarning
+Basis: recovered and verified Checkpoint 04, complete rerun after recovery
+Test files: 152
+Total: 1132 tests + 698 subtests PASS
+Shards (disjoint test files):
+- shard 1: 318 tests + 626 subtests PASS
+- shard 2: 266 tests + 2 subtests PASS
+- shard 3: 257 tests + 41 subtests PASS
+- shard 4: 291 tests + 29 subtests PASS
+External paho-mqtt import shim used only in QA runtime outside release tree.

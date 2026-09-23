@@ -32,6 +32,7 @@ from settings_registry import (
     ApplyClass,
     Editability,
     SettingSpec,
+    SurfaceState,
 )
 from tools.deployment_contract import BOOTSTRAP_NAME, load_bootstrap
 from settings_validation import (
@@ -267,9 +268,11 @@ def parse_full_candidate(
             merged[spec.key] = defaults.get(spec.key)
             inherited.append(spec.key)
 
-    # RC19 has no explicit primary/second-battery integration switch.  Until
-    # its later release stage becomes operational, derive the inherited value
-    # from the two existing productive features without persisting a new key.
+    # Legacy RC19 configurations have no explicit primary/second-battery
+    # integration switch. Derive the inherited value from the two historical
+    # productive features so existing installations retain their behaviour.
+    # The key is now an operational Settings surface and is persisted on a
+    # canonical first install or when the user commits it explicitly.
     if "SECOND_BATTERY_INTEGRATION_ENABLED" not in raw:
         merged["SECOND_BATTERY_INTEGRATION_ENABLED"] = bool(
             merged.get("CROSS_CHARGE_ENABLED") or merged.get("REST_SURPLUS_HARVEST_ENABLED")
@@ -315,7 +318,7 @@ def parse_full_candidate(
             for spec in _active_registry_specs()
             if spec.key in known
             and (
-                (spec.lifecycle == "active" and (spec.release_stage == "S1" or spec.origin == "RC19")
+                (spec.lifecycle == "active" and spec.surface_state is SurfaceState.OPERATIONAL
                  and spec.apply_class not in (ApplyClass.MIGRATION_ONLY, ApplyClass.READ_ONLY, ApplyClass.PROTECTED_ACTION))
                 or spec.key == "MEASUREMENT_DB_PATH"
             )

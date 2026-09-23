@@ -97,6 +97,8 @@ class V12112Rc3StatusV2Tests(unittest.TestCase):
         expert_html = web_ui.build_status_page(cfg, s)
         self.assertIn('data-storage-expert="primary"', expert_html)
         self.assertIn('Harmonisierung:', expert_html)
+        self.assertIn('data-zec-expert-details="primary"', expert_html)
+        self.assertIn('data-zec="primary.harvest_calculation"', expert_html)
         self.assertIn('Parallel-Ernte aktiv', expert_html)
         self.assertIn('Harvest-Rechnung:', expert_html)
 

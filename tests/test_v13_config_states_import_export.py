@@ -35,7 +35,7 @@ class V13ConfigStateTests(unittest.TestCase):
 
     def test_every_managed_setting_has_explicit_portability(self):
         specs = managed_settings()
-        self.assertEqual(197, len(specs))
+        self.assertEqual(198, len(specs))
         self.assertTrue(all(spec.portability_class is not None for spec in specs))
         self.assertTrue(all(spec.portability_class is not PortabilityClass.SECRET or spec.is_secret for spec in specs))
 
@@ -52,7 +52,7 @@ class V13ConfigStateTests(unittest.TestCase):
         parsed = parse_bundle(data)
         self.assertEqual("portable_profile", parsed.payload["artifact_kind"])
         self.assertNotIn(b"super-secret", data)
-        self.assertEqual(55, len(parsed.scope["keys"]))
+        self.assertEqual(56, len(parsed.scope["keys"]))
         for key in parsed.scope["keys"]:
             from settings_registry import SETTINGS_BY_KEY
             self.assertIs(SETTINGS_BY_KEY[key].portability_class, PortabilityClass.PORTABLE_PROFILE)

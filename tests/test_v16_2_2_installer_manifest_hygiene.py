@@ -13,17 +13,17 @@ INSTALLER = ROOT / "tools" / "install_zendure_controller.sh"
 
 class TestV1622InstallerManifestHygiene(unittest.TestCase):
     def test_release_identity_and_supported_update_source(self):
-        self.assertEqual("16.2.3", version.APP_VERSION)
-        self.assertEqual("V16.2.3", version.APP_VERSION_LABEL)
-        self.assertEqual("v16.2.3-20260921", version.APP_BUILD_ID)
+        self.assertEqual("17.0.1", version.APP_VERSION)
+        self.assertEqual("V17.0.1", version.APP_VERSION_LABEL)
+        self.assertEqual("v17.0.1-20260922", version.APP_BUILD_ID)
         text = INSTALLER.read_text(encoding="utf-8")
         for token in (
-            'EXPECTED_VERSION_ARG="v16_2_3"',
-            'EXPECTED_SOURCE_VERSION="16.2.0"',
-            'EXPECTED_SOURCE_BUILD_ID="v16.2.0-20260920"',
-            'EXPECTED_TARGET_VERSION="16.2.3"',
-            'EXPECTED_TARGET_BUILD_ID="v16.2.3-20260921"',
-            'SOURCE_MANIFEST="V16_2_3_SOURCE_MANIFEST.sha256"',
+            'EXPECTED_VERSION_ARG="v17_0_1"',
+            'EXPECTED_SOURCE_VERSION="16.2.5"',
+            'EXPECTED_SOURCE_BUILD_ID="v16.2.5-20260922"',
+            'EXPECTED_TARGET_VERSION="17.0.1"',
+            'EXPECTED_TARGET_BUILD_ID="v17.0.1-20260922"',
+            'SOURCE_MANIFEST="V17_0_1_SOURCE_MANIFEST.sha256"',
         ):
             self.assertIn(token, text)
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Read-only productive field acceptance for ZEC V16.2.3 deployment modes.
+"""Read-only productive field acceptance for ZEC V16.2.5 deployment modes.
 
 This tool never publishes commands, changes configuration, mutates the graph
 store, or performs a rollback. It exercises the running HTTP/read-only graph
@@ -30,10 +30,82 @@ from tools.validate_release_datasheet import validate as validate_release_datash
 from tools.deployment_contract import effective_local_web_endpoint, load_bootstrap  # noqa: E402
 from tools.evaluate_installation_readiness import classify as classify_installation_readiness  # noqa: E402
 
-EXPECTED_VERSION = "16.2.3"
-EXPECTED_LABEL = "V16.2.3"
-EXPECTED_BUILD_ID = "v16.2.3-20260921"
-FORMAT = "ZEC_V16_2_3_FIELD_ACCEPTANCE_V1"
+EXPECTED_VERSION = "16.2.5"
+EXPECTED_LABEL = "V16.2.5"
+EXPECTED_BUILD_ID = "v16.2.5-20260922"
+FORMAT = "ZEC_V16_2_5_FIELD_ACCEPTANCE_V1"
+INSTALL_REPORT_FORMAT = "ZEC_V16_2_0_INSTALL_REPORT_V1"
+
+
+def _report_version_token(version: str = EXPECTED_VERSION) -> str:
+    return "v" + version.replace(".", "_")
+
+
+def _resolve_install_report(
+    explicit: str = "",
+    *,
+    persistent_dir: Path = Path("/home/pi/Downloads"),
+    compatibility_path: Optional[Path] = None,
+) -> Tuple[Path, str]:
+    """Resolve install evidence without silently overriding an explicit path."""
+    if explicit:
+        return Path(explicit).expanduser(), "explicit"
+    token = _report_version_token()
+    candidates = []
+    if persistent_dir.is_dir():
+        candidates = [p for p in persistent_dir.glob(f"zec_{token}_install_report_*.json") if p.is_file()]
+        candidates.sort(key=lambda p: (p.stat().st_mtime_ns, p.name), reverse=True)
+    if candidates:
+        return candidates[0], "persistent_latest"
+    compat = compatibility_path or Path(f"/tmp/zec_{token}_install_report.json")
+    return compat, "compatibility_fallback"
+
+
+def _settings_surface_contract(model: Mapping[str, Any]) -> Tuple[bool, Dict[str, Any]]:
+    entries = {
+        str(item.get("key")): item
+        for category in model.get("categories") or []
+        for section in category.get("sections") or []
+        for item in section.get("settings") or []
+        if isinstance(item, Mapping) and item.get("key")
+    }
+    required = (
+        "SECOND_BATTERY_INTEGRATION_ENABLED",
+        "SECOND_BATTERY_CAPACITY_WH",
+        "SECOND_BATTERY_MAX_DISCHARGE_POWER_W",
+    )
+    forbidden = (
+        "HARVEST_SEASON_MODE",
+        "MEASUREMENT_DB_MAINTENANCE_MODE",
+        "MEASUREMENT_LOG_MAINTENANCE_MODE",
+    )
+    required_state = {}
+    ok = True
+    for key in required:
+        item = entries.get(key) or {}
+        key_ok = bool(item) and item.get("available") is True and item.get("editable") is True and item.get("surface_state") == "operational"
+        if key != "SECOND_BATTERY_INTEGRATION_ENABLED":
+            rule = item.get("applicability_rule") or {}
+            key_ok = key_ok and rule.get("key") == "SECOND_BATTERY_INTEGRATION_ENABLED" and rule.get("equals") is True
+        required_state[key] = {
+            "present": bool(item),
+            "available": item.get("available"),
+            "editable": item.get("editable"),
+            "applicable": item.get("applicable"),
+            "surface_state": item.get("surface_state"),
+        }
+        ok = ok and key_ok
+    forbidden_present = [key for key in forbidden if key in entries]
+    ok = ok and not forbidden_present
+    topology = dict(model.get("topology") or {})
+    unit_count = topology.get("zendure_unit_count")
+    ok = ok and unit_count in (1, 2)
+    return ok, {
+        "required": required_state,
+        "forbidden_present": forbidden_present,
+        "topology": topology,
+        "setting_count": len(entries),
+    }
 
 
 def _sha256(path: Path) -> str:
@@ -315,6 +387,13 @@ def run_acceptance(base_url: str, install_report: Path, expect_primary_profile: 
             and "Verbindung testen" in settings_js_text
         )
         _check(checks, "primary_storage_settings_guidance", settings_guidance_ok, js_bytes=len(settings_js_body))
+        try:
+            settings_model, settings_model_ms = _json(base_url, "/settings/model", timeout=10)
+            metrics["settings_model_ms"] = round(settings_model_ms, 3)
+            surface_ok, surface_evidence = _settings_surface_contract(settings_model)
+            _check(checks, "primary_storage_settings_surface", surface_ok, **surface_evidence)
+        except Exception as exc:
+            _check(checks, "primary_storage_settings_surface", False, detail=f"{type(exc).__name__}: {exc}")
         interaction_ok = (
             "gfSelectMode" in js_text
             and "loadPeriodComparison" in js_text
@@ -486,7 +565,8 @@ def run_acceptance(base_url: str, install_report: Path, expect_primary_profile: 
             target = dict(report.get("target") or {})
             source = dict(report.get("source") or {}) if report.get("source") else {}
             install_ok = (
-                report.get("status") == "ok"
+                report.get("format") == INSTALL_REPORT_FORMAT
+                and report.get("status") == "ok"
                 and target.get("version") == EXPECTED_VERSION
                 and target.get("build_id") == EXPECTED_BUILD_ID
                 and mode in {"SUPPORTED_UPDATE", "CLEAN_FRESH_INSTALL"}
@@ -589,7 +669,8 @@ def run_first_install_acceptance(base_url: str, install_report: Path) -> Dict[st
             endpoint = dict(report.get("web_endpoint") or {})
             bootstrap_path = Path(str(report.get("first_install_bootstrap") or ""))
             report_ok = (
-                report.get("status") == "ok"
+                report.get("format") == INSTALL_REPORT_FORMAT
+                and report.get("status") == "ok"
                 and report.get("install_mode") == "CLEAN_FRESH_INSTALL"
                 and target.get("version") == EXPECTED_VERSION
                 and target.get("build_id") == EXPECTED_BUILD_ID
@@ -629,10 +710,10 @@ def run_first_install_acceptance(base_url: str, install_report: Path) -> Dict[st
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Read-only ZEC V16.2.3 field acceptance")
+    p = argparse.ArgumentParser(description="Read-only ZEC V16.2.5 field acceptance")
     p.add_argument("--base-url", default="", help="Default: resolve active local endpoint from config/bootstrap")
-    p.add_argument("--install-report", default="/tmp/zec_v16_2_2_install_report.json")
-    p.add_argument("--output", default="/tmp/ZEC_V16_2_0_FIELD_ACCEPTANCE.json")
+    p.add_argument("--install-report", default="", help="Explicit report path; default: newest persistent release report, then /tmp compatibility copy")
+    p.add_argument("--output", default=f"/tmp/ZEC_{EXPECTED_VERSION.replace('.', '_')}_FIELD_ACCEPTANCE.json")
     p.add_argument("--expect-primary-profile", choices=("", "evcc_standard", "custom", "modbus_template"), default="")
     p.add_argument("--phase", choices=("auto", "normal", "first-install"), default="auto")
     p.add_argument("--json", action="store_true")
@@ -641,7 +722,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv)
-    install_report = Path(args.install_report)
+    install_report, install_report_selection = _resolve_install_report(args.install_report)
     base_url = args.base_url.strip() or str(effective_local_web_endpoint(target="/opt/zendure-controller")["base_url"])
     phase = args.phase
     if phase == "auto":
@@ -657,6 +738,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             pass
     result = run_first_install_acceptance(base_url, install_report) if phase == "first-install" else run_acceptance(base_url, install_report, args.expect_primary_profile)
     result["phase"] = phase
+    result["install_report_path"] = str(install_report)
+    result["install_report_selection"] = install_report_selection
     output = Path(args.output).expanduser().resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")

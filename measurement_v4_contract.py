@@ -170,6 +170,25 @@ STANDARD_HEADER: List[str] = [
     "harvest_command_path_block_reason",
     "harvest_limiter_reason",
     "harvest_capacity_mode",
+    "fast_capture_mode",
+    "fast_capture_active",
+    "fast_capture_primary_state",
+    "fast_capture_block_reason",
+    "fast_capture_baseline_target_w",
+    "fast_capture_desired_overlay_w",
+    "fast_capture_overlay_w",
+    "fast_capture_combined_target_w",
+    "fast_capture_primary_reserve_w",
+    "fast_capture_full_idle_progress_s",
+    "fast_capture_observation_dt_s",
+    "fast_capture_observation_distinct",
+    "fast_capture_attack_limited",
+    "fast_capture_release_limited",
+    "fast_capture_forced_zero_reason",
+    "fast_capture_activation_count",
+    "fast_capture_forced_zero_count",
+    "fast_capture_effective_zendure_limit_w",
+    "fast_capture_primary_max_charge_w",
     "primary_remaining_capacity_kwh",
     "zendure_remaining_capacity_kwh",
     "control_deadband_active",
@@ -403,6 +422,28 @@ RC12_COMMAND_CONTRACT_FIELDS = {
     "zendure_power_balance_residual_w",
 }
 
+V17_FAST_CAPTURE_FIELDS = {
+    "fast_capture_mode",
+    "fast_capture_active",
+    "fast_capture_primary_state",
+    "fast_capture_block_reason",
+    "fast_capture_baseline_target_w",
+    "fast_capture_desired_overlay_w",
+    "fast_capture_overlay_w",
+    "fast_capture_combined_target_w",
+    "fast_capture_primary_reserve_w",
+    "fast_capture_full_idle_progress_s",
+    "fast_capture_observation_dt_s",
+    "fast_capture_observation_distinct",
+    "fast_capture_attack_limited",
+    "fast_capture_release_limited",
+    "fast_capture_forced_zero_reason",
+    "fast_capture_activation_count",
+    "fast_capture_forced_zero_count",
+    "fast_capture_effective_zendure_limit_w",
+    "fast_capture_primary_max_charge_w",
+}
+
 V16_1_SMA_DISCHARGE_FLOOR_FIELDS = {
     "primary_discharge_floor_supported",
     "primary_discharge_floor_soc_percent",
@@ -415,12 +456,13 @@ V16_1_SMA_DISCHARGE_FLOOR_FIELDS = {
 }
 
 # Historical RC header contracts must stay byte/column compatible.  New
-# V16.1 diagnostic capability fields belong only to the current V4 header and
-# must not leak into the reconstructed RC17-and-earlier schemas.
+# V16.1 diagnostic capability fields and V17 Fast Capture evidence belong only
+# to the current V4 header and must not leak into reconstructed RC17-and-earlier schemas.
 RC17_STANDARD_HEADER: List[str] = [
     field for field in STANDARD_HEADER
     if field not in RC18_ASYNC_LOCAL_API_FIELDS
     and field not in V16_1_SMA_DISCHARGE_FLOOR_FIELDS
+    and field not in V17_FAST_CAPTURE_FIELDS
 ]
 RC16_STANDARD_HEADER: List[str] = [
     field for field in RC17_STANDARD_HEADER if field not in RC17_HARVEST_ZERO_GRID_TARGET_FIELDS

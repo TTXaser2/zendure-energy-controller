@@ -15,6 +15,7 @@ NAME=""
 STOP_SERVICES=0
 LATEST_ONLY=0
 WITH_REPLAY_REPORT=0
+WITH_FAST_CAPTURE_REPORT=0
 NO_FALLBACK_LOGS=0
 WARNINGS=()
 
@@ -42,6 +43,8 @@ Options:
                           Default includes all non-empty primary zendure_measurements_v4*.csv files
   --with-replay-report    Optional: generate replay_report.txt with timeout and low priority
                           Default skips replay report to protect the Raspberry Pi
+  --with-fast-capture-report
+                          Optional: run the read-only Fast Capture field analyzer over included V4 data
   --no-replay-report      Deprecated compatibility option; replay report is skipped by default
   --no-fallback-logs      Do not include fallback log directory
   -h, --help              Show help
@@ -126,6 +129,7 @@ while [[ $# -gt 0 ]]; do
     --latest-only) LATEST_ONLY=1; shift ;;
     --with-replay-report) WITH_REPLAY_REPORT=1; shift ;;
     --no-replay-report) WITH_REPLAY_REPORT=0; shift ;;
+    --with-fast-capture-report) WITH_FAST_CAPTURE_REPORT=1; shift ;;
     --no-fallback-logs) NO_FALLBACK_LOGS=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) err "Unknown option: $1" ;;
@@ -351,6 +355,7 @@ output_dir=$OUTPUT_DIR
 stop_services=$STOP_SERVICES
 latest_only=$LATEST_ONLY
 with_replay_report=$WITH_REPLAY_REPORT
+with_fast_capture_report=$WITH_FAST_CAPTURE_REPORT
 primary_v4_file_count=$PRIMARY_COUNT
 fallback_v4_file_count=$FALLBACK_COUNT
 
@@ -392,6 +397,30 @@ if [[ $WITH_REPLAY_REPORT -eq 1 ]]; then
   fi
 else
   log "Skipping replay report by default; raw CSV/manifest/config/runtime files are included for offline analysis"
+fi
+
+
+if [[ $WITH_FAST_CAPTURE_REPORT -eq 1 ]]; then
+  FAST_ANALYZER="$INSTALL_DIR/tools/fast_capture_field_analysis.py"
+  if [[ -f "$FAST_ANALYZER" ]]; then
+    log "Generating optional read-only Fast Capture field report"
+    (
+      cd "$WORKDIR"
+      shopt -s nullglob
+      FAST_CSV=(primary_logs/zendure_measurements_v4*.csv fallback_logs/zendure_measurements_v4*.csv)
+      if [[ ${#FAST_CSV[@]} -eq 0 ]]; then
+        warn "No included V4 CSVs available for Fast Capture report"
+      else
+        FAST_ARGS=(python3 "$FAST_ANALYZER" --output fast_capture_field_analysis.json --human-output fast_capture_field_analysis.txt)
+        [[ -f zec_measurement_manifest.json ]] && FAST_ARGS+=(--manifest zec_measurement_manifest.json)
+        [[ -f zec_config_snapshots.json ]] && FAST_ARGS+=(--config-snapshots zec_config_snapshots.json)
+        FAST_ARGS+=("${FAST_CSV[@]}")
+        "${FAST_ARGS[@]}" || warn "Fast Capture report returned FAIL; raw evidence remains in package"
+      fi
+    )
+  else
+    warn "Fast Capture analyzer not found: $FAST_ANALYZER"
+  fi
 fi
 
 {

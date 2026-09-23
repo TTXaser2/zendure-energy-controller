@@ -1,6 +1,6 @@
 # ZEC – Release & Handover Process
 
-Stand: 21.09.2026
+Stand: 22.09.2026
 Status: kanonisch – inklusive dauerhaftem Datenblatt-, Release-Hygiene- und Build-Evidence-Vertrag
 
 ## 1. Entwicklungsblock starten
@@ -59,6 +59,7 @@ Das finale ZIP selbst erneut entpacken und daraus die Releasegates wiederholen b
 - bounded Installationsabnahme
 - automatischer Rollback bei echtem Fehler
 - Node.js darf auf dem Pi keine Produktivvoraussetzung sein, wenn JS buildseitig per Manifest abgesichert ist
+- **Regulärer Real-Update-Ablauf:** Paket-SHA/ZIP prüfen, frisch entpacken und den normalen Installer einmal starten. Dieser führt den vollständigen internen Preflight vor jeder Mutation aus und setzt bei PASS unmittelbar Backup/Installation/Abnahme fort. Ein separater `--preflight-only`-Zwischenschritt ist nur für gezielte mutationsfreie Diagnose-/Vertragsprüfungen erforderlich; der kombinierte Ablauf überspringt kein Preflight- oder Sicherheitsgate.
 
 ## 5. Feldabnahme
 
@@ -265,12 +266,13 @@ Vor PRODUCTIVE-PASS eines erstmalig Fresh-Install-fähigen Hauptreleases ist zus
 
 Maschinenlesbare Installationsreports und andere Nachweise, die für eine spätere Feldabnahme benötigt werden, dürfen nicht ausschließlich in flüchtigen Pfaden wie `/tmp` liegen.
 
-Verbindliches Ziel für künftige Deploymentänderungen:
+Ab V16.2.4 ist dieser Vertrag produktiv umgesetzt:
 
-- persistenter Installationsreport neben dem persistenten Installerlog oder in einem ausdrücklich definierten persistenten Evidence-Verzeichnis;
-- `/tmp` höchstens als zusätzliche Arbeits-/Kompatibilitätskopie;
-- Feldabnahmetool kann den persistenten Report explizit verwenden bzw. bevorzugen;
-- Backup-Pfad, SHA256 und Größe werden aus realer Datei verifiziert;
+- der Installer schreibt den maschinenlesbaren Installationsreport atomar und timestamped persistent in den bestehenden Download-/Evidence-Bereich `/home/pi/Downloads`;
+- `/tmp` ist ausschließlich zusätzliche Kompatibilitätskopie und keine primäre Evidenzquelle;
+- ein explizites `--install-report` des Feldabnahmetools gewinnt immer; ohne expliziten Pfad wird der neueste persistente releasespezifische Report bevorzugt, danach ausschließlich die definierte `/tmp`-Kompatibilitätskopie;
+- Reportformat, Zielrelease, Build-ID und Installationsmodus werden fail-closed geprüft;
+- bei Updates werden Backup-Pfad, SHA256 und Größe aus der realen referenzierten Datei verifiziert;
 - fehlende Evidenz wird als WARN/FAIL gemäß Vertrag ausgewiesen und niemals synthetisch als Originalartefakt rekonstruiert.
 
 Nach einer realen Feldabnahme sind flüchtige `/tmp`-Artefakte vor Neustart, Cleanup oder destruktivem Test in ein persistentes, gehashtes Evidenzarchiv zu sichern.

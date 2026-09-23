@@ -73,11 +73,11 @@ class V12130MeasurementV4OnlyTests(unittest.TestCase):
     def test_installer_accepts_v14_0_0_r2_and_targets_v14_1_3_preserving_v3(self):
         script = (ROOT / "tools/install_zendure_controller.sh").read_text(encoding="utf-8")
         for marker in (
-            'EXPECTED_VERSION_ARG="v16_2_3"',
-            'EXPECTED_SOURCE_VERSION="16.2.0"',
-            'EXPECTED_SOURCE_BUILD_ID="v16.2.0-20260920"',
-            'EXPECTED_TARGET_BUILD_ID="v16.2.3-20260921"',
-            'SOURCE_MANIFEST="V16_2_3_SOURCE_MANIFEST.sha256"',
+            'EXPECTED_VERSION_ARG="v17_0_1"',
+            'EXPECTED_SOURCE_VERSION="16.2.5"',
+            'EXPECTED_SOURCE_BUILD_ID="v16.2.5-20260922"',
+            'EXPECTED_TARGET_BUILD_ID="v17.0.1-20260922"',
+            'SOURCE_MANIFEST="V17_0_1_SOURCE_MANIFEST.sha256"',
             'tools/v14_cutover.py verify', 'graph_core_v3_preserved',
         ):
             self.assertIn(marker, script)
@@ -153,10 +153,10 @@ class V12130MeasurementV4OnlyTests(unittest.TestCase):
         self.assertEqual("ZEC-GRAPH-EXPORT-V1", row["schema"])
 
     def test_v4_current_header_allows_additive_fields_without_changing_legacy_contract(self):
-        self.assertEqual(254, len(STANDARD_HEADER))
-        self.assertEqual(257, len(EXTENDED_HEADER))
-        self.assertEqual("49ed5d132aa54a91d0760e9ba343206cceb0b8480320772634f0c66fdc6e284c", hashlib.sha256(";".join(STANDARD_HEADER).encode()).hexdigest())
-        self.assertEqual("ac164bc43dfd4e84f0e470581592874d252c4d09600afc395c83f7810a388d2b", hashlib.sha256(";".join(EXTENDED_HEADER).encode()).hexdigest())
+        self.assertEqual(273, len(STANDARD_HEADER))
+        self.assertEqual(276, len(EXTENDED_HEADER))
+        self.assertEqual("5a0c28b2f292a258d6c8ddcd2912eb5c5cfc5486e2cbd6792c0857790792f981", hashlib.sha256(";".join(STANDARD_HEADER).encode()).hexdigest())
+        self.assertEqual("0d82b629a5cb2c83c73feede5e8f3717fc845180def0e3adb76761934dab134a", hashlib.sha256(";".join(EXTENDED_HEADER).encode()).hexdigest())
 
     def test_off_mode_creates_no_csv(self):
         with tempfile.TemporaryDirectory() as tmp:

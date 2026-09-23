@@ -47,6 +47,18 @@ from primary_storage_source import (
 )
 
 
+FAST_CAPTURE_ATTACK_W_PER_S = 400.0
+FAST_CAPTURE_RELEASE_W_PER_S = 100.0
+FAST_CAPTURE_MIN_EXPORT_W = 100.0
+FAST_CAPTURE_IMPORT_ABORT_W = 100.0
+FAST_CAPTURE_FULL_SOC_PERCENT = 99.0
+FAST_CAPTURE_IDLE_POWER_W = 100.0
+FAST_CAPTURE_FULL_IDLE_CONFIRM_S = 15.0
+FAST_CAPTURE_NEAR_LIMIT_MARGIN_W = 150.0
+FAST_CAPTURE_MAX_OBSERVATION_GAP_S = 10.0
+FAST_CAPTURE_ZENDURE_POWER_MAX_AGE_S = 15.0
+
+
 class ZendureController:
     def __init__(
         self,
@@ -139,6 +151,13 @@ class ZendureController:
         # on distinct fresh source observations. Wall-clock changes never affect it.
         self._harvest_last_observation_token: Optional[Tuple[Optional[float], Optional[float]]] = None
         self._harvest_last_observation_monotonic: Optional[float] = None
+        # V17 Fast Capture has an independent distinct/fresh timeline. Harvest
+        # persistence cannot be reused because its eligibility/reset contract is
+        # deliberately different.
+        self._fast_capture_last_observation_token: Optional[Tuple[Optional[float], Optional[float], Optional[float], Optional[float]]] = None
+        self._fast_capture_last_observation_monotonic: Optional[float] = None
+        self._fast_capture_last_mode: str = "off"
+        self._fast_capture_return_to_baseline_pending: bool = False
 
     def log(self, message: str) -> None:
         cfg = self.config_manager.get()
@@ -861,14 +880,17 @@ class ZendureController:
             if not night_exit_neutralized:
                 self.state.reset_night_discharge_stop_reason()
 
+        fast_mode = self._fast_capture_prepare_mode(cfg)
         manual_mode = str(cfg.get("MANUAL_MODE", "AUTO"))
         if manual_mode != "AUTO":
+            self._fast_capture_force_zero("NON_AUTO_MODE")
             self._reset_rest_surplus_harvest("MODE_CHANGED")
             self._timed_phase("grid_display_read_ms", self.refresh_grid_power_for_display, cfg)
             self._timed_control_phase(self.handle_manual_mode, cfg, manual_mode)
             return
 
         if night_active:
+            self._fast_capture_force_zero("NIGHT_MODE")
             self._reset_rest_surplus_harvest("MODE_CHANGED")
             if not self.soc_is_fresh(cfg):
                 self._timed_phase("grid_display_read_ms", self.refresh_grid_power_for_display, cfg)
@@ -900,7 +922,25 @@ class ZendureController:
         self.update_rest_surplus_harvest_state(cfg, grid_power)
 
         if self.cross_charge_guard_corrects_existing_target(cfg):
+            self._fast_capture_force_zero("CROSS_CHARGE_ACTIVE")
             return
+
+        # Never reverse directly from a live Fast charge overlay into discharge.
+        # First remove/release O while preserving B; normal AUTO may choose the
+        # opposite direction on the following cycle.
+        with self.state.lock:
+            fast_overlay = int(self.state.fast_capture_overlay_w or 0)
+        if (
+            (fast_mode == "active" and fast_overlay > 0)
+            or self._fast_capture_return_to_baseline_pending
+        ):
+            if grid_power > FAST_CAPTURE_IMPORT_ABORT_W:
+                self._fast_capture_force_zero("GRID_IMPORT_ABORT")
+                self._timed_control_phase(self.handle_charge, cfg, grid_power)
+                return
+            if grid_power >= -FAST_CAPTURE_MIN_EXPORT_W:
+                self._timed_control_phase(self.handle_charge, cfg, grid_power)
+                return
 
         if abs(grid_power) <= cfg["DEADBAND_W"]:
             # High-SOC/Parallel-Harvest darf im Deadband weiter allokieren:
@@ -3257,6 +3297,343 @@ class ZendureController:
             return False, gate_state
         return True, ""
 
+    @staticmethod
+    def _fast_capture_mode(cfg: Dict[str, Any]) -> str:
+        value = str(cfg.get("HARVEST_FAST_CAPTURE_MODE", "off") or "off").strip().lower()
+        return value if value in {"off", "shadow", "active"} else "off"
+
+    def _fast_capture_effective_zendure_limit_w(self, cfg: Dict[str, Any]) -> int:
+        config_limit = max(0, int(cfg.get("MAX_CHARGE_POWER_W", 0) or 0))
+        if config_limit <= 0:
+            return 0
+        max_age_s = max(5.0, float(cfg.get("ZENDURE_COMMAND_STATE_FRESH_SECONDS", 30) or 30))
+        now = time.time()
+        with self.state.lock:
+            device_limit = self.state.zendure_device_charge_max_limit_w
+            device_epoch = self.state.zendure_device_charge_max_limit_updated_epoch
+        try:
+            device_limit = int(device_limit) if device_limit is not None else None
+            device_fresh = device_epoch is not None and max(0.0, now - float(device_epoch)) <= max_age_s
+        except Exception:
+            device_limit = None
+            device_fresh = False
+        if device_fresh and device_limit is not None and device_limit > 0:
+            return min(config_limit, device_limit)
+        return config_limit
+
+    def _fast_capture_zendure_power_fresh(self) -> bool:
+        with self.state.lock:
+            valid = bool(self.state.actual_zendure_power_valid)
+            epoch = self.state.zendure_power_observation_updated_epoch
+            direction = str(self.state.zendure_power_observation_direction or "UNKNOWN").upper()
+        if not valid or epoch is None or direction == "CONFLICT":
+            return False
+        try:
+            return max(0.0, time.time() - float(epoch)) <= FAST_CAPTURE_ZENDURE_POWER_MAX_AGE_S
+        except Exception:
+            return False
+
+    def _fast_capture_command_ready(self) -> Tuple[bool, str]:
+        eligible, reason = self._harvest_command_path_diagnostics()
+        if not eligible:
+            return False, reason or "COMMAND_PATH_NOT_READY"
+        with self.state.lock:
+            if self.state.command_uncertain_mqtt_active:
+                return False, "COMMAND_UNCERTAIN_MQTT"
+            if self.state.command_neutralization_active:
+                return False, "COMMAND_NEUTRALIZATION_ACTIVE"
+            if self.state.command_late_effect_guard_active:
+                return False, "LATE_EFFECT_GUARD_ACTIVE"
+            if self.state.cross_charge_guard_latched:
+                return False, "CROSS_CHARGE_ACTIVE"
+        return True, ""
+
+    def _fast_capture_reset_observation_continuity(self) -> None:
+        self._fast_capture_last_observation_token = None
+        self._fast_capture_last_observation_monotonic = None
+        with self.state.lock:
+            self.state.fast_capture_full_idle_progress_s = 0.0
+            self.state.fast_capture_observation_dt_s = 0.0
+            self.state.fast_capture_observation_distinct = False
+
+    def _fast_capture_force_zero(
+        self,
+        reason: str,
+        *,
+        reset_persistence: bool = True,
+        count: bool = True,
+    ) -> None:
+        with self.state.lock:
+            had_overlay = int(self.state.fast_capture_overlay_w or 0) > 0
+            self.state.fast_capture_active = False
+            self.state.fast_capture_desired_overlay_w = 0
+            self.state.fast_capture_overlay_w = 0
+            self.state.fast_capture_combined_target_w = max(
+                0, int(self.state.fast_capture_baseline_target_w or 0)
+            )
+            self.state.fast_capture_attack_limited = False
+            self.state.fast_capture_release_limited = False
+            self.state.fast_capture_forced_zero_reason = str(reason or "FAST_CAPTURE_ABORT")
+            self.state.fast_capture_block_reason = str(reason or "FAST_CAPTURE_ABORT")
+            if had_overlay and count:
+                self.state.fast_capture_forced_zero_count += 1
+        if reset_persistence:
+            self._fast_capture_reset_observation_continuity()
+
+    def _fast_capture_prepare_mode(self, cfg: Dict[str, Any]) -> str:
+        mode = self._fast_capture_mode(cfg)
+        previous = self._fast_capture_last_mode
+        if mode != previous:
+            with self.state.lock:
+                previous_overlay = int(self.state.fast_capture_overlay_w or 0)
+            if previous == "active" and mode != "active" and previous_overlay > 0:
+                self._fast_capture_return_to_baseline_pending = True
+            self._fast_capture_force_zero(
+                "MODE_ACTIVATED" if mode == "active" else "MODE_CHANGED",
+                reset_persistence=True,
+                count=(previous == "active" and mode != "active"),
+            )
+            self._fast_capture_last_mode = mode
+        with self.state.lock:
+            self.state.fast_capture_mode = mode
+            if mode == "off":
+                self.state.fast_capture_block_reason = "MODE_OFF"
+        return mode
+
+    def _fast_capture_observation_timing(self) -> Tuple[bool, float, bool]:
+        now_monotonic = time.monotonic()
+        with self.state.lock:
+            token = (
+                self.state.grid_power_sample_epoch,
+                self.state.last_sma_battery_update_epoch,
+                self.state.last_soc_update_epoch,
+                self.state.zendure_power_observation_updated_epoch,
+            )
+        complete = all(value is not None for value in token)
+        distinct = bool(complete and token != self._fast_capture_last_observation_token)
+        dt_s = 0.0
+        continuity_broken = False
+        if distinct:
+            if self._fast_capture_last_observation_monotonic is not None:
+                dt_s = max(0.0, now_monotonic - float(self._fast_capture_last_observation_monotonic))
+                continuity_broken = dt_s <= 0.0 or dt_s > FAST_CAPTURE_MAX_OBSERVATION_GAP_S
+            self._fast_capture_last_observation_token = token
+            self._fast_capture_last_observation_monotonic = now_monotonic
+        with self.state.lock:
+            self.state.fast_capture_observation_distinct = distinct
+            self.state.fast_capture_observation_dt_s = round(dt_s, 3)
+        return distinct, dt_s, continuity_broken
+
+    def _fast_capture_step(
+        self,
+        cfg: Dict[str, Any],
+        grid_power: float,
+        baseline_target_w: int,
+    ) -> int:
+        """Return B+O in active mode while keeping the slow baseline B isolated."""
+        mode = self._fast_capture_prepare_mode(cfg)
+        baseline = max(0, int(baseline_target_w or 0))
+        with self.state.lock:
+            previous_overlay = max(0, int(self.state.fast_capture_overlay_w or 0))
+            previous_primary_state = str(
+                self.state.fast_capture_primary_state or "RESERVE_UNKNOWN"
+            )
+            self.state.fast_capture_baseline_target_w = baseline
+            self.state.fast_capture_combined_target_w = baseline
+            self.state.fast_capture_forced_zero_reason = ""
+            self.state.fast_capture_attack_limited = False
+            self.state.fast_capture_release_limited = False
+
+        zendure_limit = self._fast_capture_effective_zendure_limit_w(cfg)
+        primary_max_value = self._optional_int(
+            cfg.get("SECOND_BATTERY_MAX_CHARGE_POWER_W")
+        )
+        primary_max = max(0, int(primary_max_value or 0))
+        with self.state.lock:
+            self.state.fast_capture_effective_zendure_limit_w = zendure_limit
+            self.state.fast_capture_primary_max_charge_w = primary_max
+
+        if mode == "off":
+            self._fast_capture_force_zero("MODE_OFF", reset_persistence=True, count=False)
+            with self.state.lock:
+                self.state.fast_capture_baseline_target_w = baseline
+                self.state.fast_capture_combined_target_w = baseline
+            return baseline
+
+        if not primary_storage_integration_enabled(cfg):
+            self._fast_capture_force_zero("PRIMARY_STORAGE_DISABLED")
+            return baseline
+        if not bool(cfg.get("REST_SURPLUS_HARVEST_ENABLED", False)):
+            self._fast_capture_force_zero("HARVEST_DISABLED")
+            return baseline
+        if not cross_charge_enabled(cfg):
+            self._fast_capture_force_zero("CROSS_CHARGE_DISABLED")
+            return baseline
+
+        with self.state.lock:
+            grid_valid = bool(self.state.grid_power_valid)
+            grid_epoch = self.state.grid_power_sample_epoch
+            primary_valid = bool(
+                self.state.second_battery_data_valid and self.state.second_battery_data_fresh
+            )
+            primary_soc = self.state.sma_battery_soc
+            primary_power = float(self.state.sma_battery_display_power or 0.0)
+            zendure_soc = self.state.battery_soc
+        grid_timeout_key = (
+            "SMA_ENERGY_METER_STALE_TIMEOUT_SECONDS"
+            if str(cfg.get("GRID_METER_SOURCE", "shelly_http")) == "sma_energy_meter_udp"
+            else "SHELLY_STALE_TIMEOUT_SECONDS"
+        )
+        try:
+            grid_timeout_s = float(cfg.get(grid_timeout_key, 15) or 15)
+            grid_fresh = grid_epoch is not None and max(0.0, time.time() - float(grid_epoch)) <= grid_timeout_s
+        except Exception:
+            grid_fresh = False
+
+        if not grid_valid or not grid_fresh:
+            self._fast_capture_force_zero("GRID_STALE_OR_INVALID")
+            return baseline
+        if not primary_valid:
+            self._fast_capture_force_zero("PRIMARY_STALE_OR_INVALID")
+            return baseline
+        if zendure_soc is None or not self.soc_is_fresh(cfg):
+            self._fast_capture_force_zero("ZENDURE_SOC_STALE")
+            return baseline
+        if float(zendure_soc) >= float(cfg.get("MAX_SOC_PERCENT", 100)):
+            self._fast_capture_force_zero("MAX_SOC_LIMIT")
+            return baseline
+        if not self._fast_capture_zendure_power_fresh():
+            self._fast_capture_force_zero("ZENDURE_POWER_STALE_OR_INVALID")
+            return baseline
+        command_ready, command_reason = self._fast_capture_command_ready()
+        if not command_ready:
+            self._fast_capture_force_zero(command_reason or "COMMAND_PATH_NOT_READY")
+            return baseline
+        if float(grid_power or 0.0) > FAST_CAPTURE_IMPORT_ABORT_W:
+            self._fast_capture_force_zero("GRID_IMPORT_ABORT")
+            return baseline
+        if primary_max <= 0:
+            self._fast_capture_force_zero("PRIMARY_MAX_CHARGE_UNKNOWN")
+            return baseline
+        if zendure_limit <= 0:
+            self._fast_capture_force_zero("ZENDURE_CHARGE_LIMIT_UNKNOWN")
+            return baseline
+
+        with self.state.lock:
+            export_w = float(self.state.effective_export_power or 0.0) if self.state.effective_export_power_valid else 0.0
+        export_w = max(0.0, export_w)
+        distinct, dt_s, continuity_broken = self._fast_capture_observation_timing()
+        if continuity_broken:
+            previous_overlay = 0
+            with self.state.lock:
+                self.state.fast_capture_full_idle_progress_s = 0.0
+                self.state.fast_capture_overlay_w = 0
+
+        full_candidate = bool(
+            primary_soc is not None
+            and float(primary_soc) >= FAST_CAPTURE_FULL_SOC_PERCENT
+            and abs(primary_power) <= FAST_CAPTURE_IDLE_POWER_W
+            and export_w >= FAST_CAPTURE_MIN_EXPORT_W
+        )
+        near_candidate = bool(
+            primary_power > 0.0
+            and primary_power >= float(primary_max) - FAST_CAPTURE_NEAR_LIMIT_MARGIN_W
+            and export_w >= FAST_CAPTURE_MIN_EXPORT_W
+        )
+
+        with self.state.lock:
+            if full_candidate and distinct:
+                if continuity_broken or dt_s <= 0.0:
+                    self.state.fast_capture_full_idle_progress_s = 0.0
+                else:
+                    self.state.fast_capture_full_idle_progress_s = min(
+                        FAST_CAPTURE_FULL_IDLE_CONFIRM_S,
+                        float(self.state.fast_capture_full_idle_progress_s or 0.0) + dt_s,
+                    )
+            elif not full_candidate:
+                self.state.fast_capture_full_idle_progress_s = 0.0
+            full_progress = float(self.state.fast_capture_full_idle_progress_s or 0.0)
+
+        if full_candidate and full_progress >= FAST_CAPTURE_FULL_IDLE_CONFIRM_S:
+            primary_state = "FULL_IDLE"
+            reserve_w = 0
+            desired_raw = export_w
+            block_reason = ""
+        elif near_candidate:
+            primary_state = "NEAR_LIMIT"
+            reserve_w = max(
+                0, int(round(float(primary_max) - max(0.0, primary_power)))
+            )
+            desired_raw = max(0.0, export_w - float(reserve_w))
+            block_reason = ""
+        else:
+            primary_state = "RESERVE_UNKNOWN"
+            reserve_w = 0
+            desired_raw = 0.0
+            block_reason = "FULL_IDLE_CONFIRMING" if full_candidate else "RESERVE_UNKNOWN"
+
+        # A previously proven FULL_IDLE/NEAR_LIMIT episode may decay with R100
+        # when export disappears. This is distinct from RESERVE_UNKNOWN while
+        # export is still present, which is an immediate zero by contract.
+        controlled_release = bool(
+            export_w < FAST_CAPTURE_MIN_EXPORT_W
+            and previous_overlay > 0
+            and previous_primary_state in {"FULL_IDLE", "NEAR_LIMIT"}
+        )
+        if controlled_release:
+            primary_state = previous_primary_state
+            reserve_w = 0
+            desired_raw = 0.0
+            block_reason = "CONTROLLED_RELEASE_NO_EXPORT"
+
+        headroom_w = max(0, zendure_limit - baseline)
+        desired = max(0, min(int(round(desired_raw)), headroom_w))
+        with self.state.lock:
+            self.state.fast_capture_primary_state = primary_state
+            self.state.fast_capture_primary_reserve_w = reserve_w
+            self.state.fast_capture_desired_overlay_w = desired
+            self.state.fast_capture_block_reason = block_reason
+
+        if primary_state == "RESERVE_UNKNOWN":
+            self._fast_capture_force_zero(
+                block_reason or "RESERVE_UNKNOWN",
+                reset_persistence=False,
+            )
+            with self.state.lock:
+                self.state.fast_capture_primary_state = primary_state
+                self.state.fast_capture_baseline_target_w = baseline
+                self.state.fast_capture_combined_target_w = baseline
+            return baseline
+
+        overlay = previous_overlay
+        if distinct:
+            if dt_s <= 0.0 or continuity_broken:
+                overlay = 0
+            elif desired > overlay:
+                allowed = max(0, int(FAST_CAPTURE_ATTACK_W_PER_S * dt_s))
+                new_overlay = min(desired, overlay + allowed)
+                with self.state.lock:
+                    self.state.fast_capture_attack_limited = new_overlay < desired
+                overlay = new_overlay
+            elif desired < overlay:
+                allowed = max(0, int(FAST_CAPTURE_RELEASE_W_PER_S * dt_s))
+                new_overlay = max(desired, overlay - allowed)
+                with self.state.lock:
+                    self.state.fast_capture_release_limited = new_overlay > desired
+                overlay = new_overlay
+
+        combined = min(zendure_limit, baseline + max(0, overlay))
+        effective_overlay = max(0, combined - baseline)
+        with self.state.lock:
+            was_active = bool(self.state.fast_capture_active)
+            self.state.fast_capture_overlay_w = effective_overlay
+            self.state.fast_capture_combined_target_w = combined
+            self.state.fast_capture_active = bool(mode == "active" and effective_overlay > 0)
+            if self.state.fast_capture_active and not was_active:
+                self.state.fast_capture_activation_count += 1
+
+        return combined if mode == "active" else baseline
+
     def _harvest_physical_reference(self, cfg: Dict[str, Any], now: float) -> Dict[str, Any]:
         """Validate the independent Zendure AC grid-port observation.
 
@@ -3492,6 +3869,7 @@ class ZendureController:
         return last_input > 0 and second_power < thresholds["critical_floor"]
 
     def safe_state(self, reason: str) -> None:
+        self._fast_capture_force_zero("SAFE_STATE")
         self._reset_rest_surplus_harvest("SAFE_STATE")
         with self.state.lock:
             neutral_mode = "Output mode" if self.state.last_output_power > 0 else ("Input mode" if self.state.last_input_power > 0 else self._last_non_neutral_ac_mode)
@@ -3513,6 +3891,7 @@ class ZendureController:
         self.state.add_event(f"Safe-State: {reason}")
 
     def soc_limit_hold(self, reason: str, limiter: str, *, technical_path: str) -> None:
+        self._fast_capture_force_zero("SOC_LIMIT")
         """Neutralize at a configured SOC boundary without declaring a fault.
 
         Reaching MIN_SOC/MAX_SOC is an expected protective operating outcome.  It
@@ -3562,6 +3941,7 @@ class ZendureController:
         self.handle_manual_fixed_charge(cfg)
 
     def stop_hold(self, reason: str, technical_path: str = "MANUAL -> STOP_HOLD", action: str = "STOP_HOLD -> 0 W") -> None:
+        self._fast_capture_force_zero("STOP_HOLD")
         with self.state.lock:
             neutral_mode = "Output mode" if self.state.last_output_power > 0 else ("Input mode" if self.state.last_input_power > 0 else self._last_non_neutral_ac_mode)
 
@@ -3896,6 +4276,7 @@ class ZendureController:
         self.state.set_mode("NIGHT_DISCHARGE")
 
     def handle_discharge(self, cfg: Dict[str, Any], grid_power: float) -> None:
+        self._fast_capture_force_zero("DISCHARGE_DIRECTION")
         with self.state.lock:
             soc = self.state.battery_soc
             last_input = self.state.last_input_power
@@ -3959,18 +4340,31 @@ class ZendureController:
             self.log(f"[CTRL] Entladen: raw={raw_target} smooth={target_smoothed} ramp={target_ramped} final={signed_final}")
 
     def handle_charge(self, cfg: Dict[str, Any], grid_power: float) -> None:
+        mode = self._fast_capture_prepare_mode(cfg)
         with self.state.lock:
             soc = self.state.battery_soc
-            last_input = self.state.last_input_power
-            last_output = self.state.last_output_power
-            effective = self.state.effective_export_power
-            sma_discharge = self.state.sma_battery_discharge_power
+            physical_last_input = int(self.state.last_input_power or 0)
+            last_output = int(self.state.last_output_power or 0)
+            effective = int(self.state.effective_export_power or 0)
+            stored_baseline = int(self.state.fast_capture_baseline_target_w or 0)
+            stored_overlay = int(self.state.fast_capture_overlay_w or 0)
+
+        # Active Fast commands B+O. The next slow baseline must continue from B,
+        # never from the physically commanded combined target B+O. The same
+        # isolated B is used for one cycle when leaving active mode.
+        use_isolated_baseline = bool(
+            (mode == "active" and stored_overlay > 0)
+            or self._fast_capture_return_to_baseline_pending
+        )
+        last_input = stored_baseline if use_isolated_baseline else physical_last_input
 
         if soc is None:
+            self._fast_capture_force_zero("ZENDURE_SOC_STALE")
             self.state.add_limiter("SOC_STALE")
             self.safe_state("Ladung blockiert: Zendure SOC fehlt")
             return
         if soc >= cfg["MAX_SOC_PERCENT"]:
+            self._fast_capture_force_zero("MAX_SOC_LIMIT")
             self.state.add_limiter("MAX_SOC")
             self.soc_limit_hold(
                 "Ladung beendet: Maximal-SOC erreicht",
@@ -3980,7 +4374,11 @@ class ZendureController:
             return
 
         if last_output > 0:
-            self.ramp_down_discharge(cfg, "Wechsel auf Ladung: Entladeleistung wird erst reduziert")
+            self._fast_capture_force_zero("DIRECTION_TRANSITION")
+            self.ramp_down_discharge(
+                cfg,
+                "Wechsel auf Ladung: Entladeleistung wird erst reduziert",
+            )
             return
 
         harvest_active = self._rest_surplus_is_active()
@@ -3988,95 +4386,209 @@ class ZendureController:
         export_w = max(0.0, -float(grid_power or 0.0))
         with self.state.lock:
             second_power = float(self.state.sma_battery_display_power or 0.0)
-        harvest_near_saturation = bool(harvest_active and second_power >= thresholds.get("saturation", 0) and export_w > 0)
+        harvest_near_saturation = bool(
+            harvest_active
+            and second_power >= thresholds.get("saturation", 0)
+            and export_w > 0
+        )
 
-        if not harvest_active and effective < cfg.get("MIN_EFFECTIVE_SURPLUS_FOR_CHARGE_W", 150):
+        low_surplus = bool(
+            not harvest_active
+            and effective < cfg.get("MIN_EFFECTIVE_SURPLUS_FOR_CHARGE_W", 150)
+        )
+        fast_candidate_range = bool(
+            mode in {"shadow", "active"}
+            and effective >= FAST_CAPTURE_MIN_EXPORT_W
+        )
+        fast_release_needed = bool(mode == "active" and stored_overlay > 0)
+
+        # Exact V16.2.5 path when Fast cannot matter. Shadow may still calculate
+        # diagnostics, but the real command remains the old ramp-down path.
+        if (
+            low_surplus
+            and not fast_candidate_range
+            and not fast_release_needed
+            and not self._fast_capture_return_to_baseline_pending
+        ):
+            if mode == "shadow":
+                step = int(
+                    cfg.get(
+                        "SMA_GUARD_RAMP_DOWN_W",
+                        cfg.get("MAX_POWER_STEP_W", 150),
+                    )
+                )
+                shadow_baseline = max(0, last_input - step)
+                self._fast_capture_step(cfg, grid_power, shadow_baseline)
             self.state.add_limiter("LOW_EFFECTIVE_SURPLUS")
-            self.ramp_down_charge(cfg, "Keine sichere PV-Überschussladung nach Zusatzbatterie-/Cross-Charge-Abzug")
+            self.ramp_down_charge(
+                cfg,
+                "Keine sichere PV-Überschussladung nach Zusatzbatterie-/Cross-Charge-Abzug",
+            )
             return
 
-        if harvest_active:
-            self.state.add_limiter("REST_SURPLUS_HARVEST")
-            harvest_target = self._rest_surplus_charge_pressure_target(cfg, grid_power, int(last_input or 0))
-            harvest_reason = str(harvest_target.get("reason") or "NONE")
-            if harvest_reason in {"SMA_NEAR_LIMIT", "HIGH_SMA_SOC", "HIGH_SMA_SOC_SMA_NEAR_LIMIT", "SMA_FULL_OR_IDLE", "EXPORT_HOLD"}:
-                raw_target = int(harvest_target.get("target", 0))
-                if raw_target <= 0 and export_w >= thresholds.get("min_export", 80):
-                    # RC17 latch recovery remains branch-correct.  With a valid
-                    # physical reference, the helper already returned C+E or
-                    # max(share, C+E).  With uncertain evidence it returned the
-                    # incremental fallback.  Never replace that by naked E when
-                    # C may already be positive.
-                    raw_target = int(harvest_target.get("target", 0))
-                    with self.state.lock:
-                        self.state.harvest_limiter_reason = "LATCH_RECOVERY"
-                semantics = str(harvest_target.get("target_semantics") or "")
-                selected = str(harvest_target.get("target_selected_by") or "")
-                if semantics == "INCREMENTAL_FALLBACK":
-                    control_reason = (
-                        f"Restüberschuss-Ernte: {harvest_reason} mit inkrementellem AUTO-Fallback "
-                        f"({harvest_target.get('fallback_reason') or 'Referenz unsicher'})"
-                    )
-                else:
-                    control_reason = (
-                        f"Restüberschuss-Ernte: {harvest_reason}, 0-W-Netzziel, "
-                        f"Auswahl {selected or 'EXPORT_CAPTURE'}"
-                    )
-            elif harvest_near_saturation:
-                # Defensive compatibility path; normally SMA_NEAR_LIMIT is now
-                # handled by the unified physical-reference calculation above.
-                raw_target = int(harvest_target.get("target", 0))
-                control_reason = "Restüberschuss-Ernte: Primärspeicher nahe Ladegrenze, 0-W-Netzziel"
-            else:
-                # RC1: kein blindes 0-W-Halten mehr, wenn echter Export im aktiven
-                # Harvest-State vorhanden ist. Ohne gültigen High-SOC-/Near-Limit-
-                # Grund darf normale AUTO-Exportregelung wieder entscheiden.
-                if export_w >= thresholds.get("min_export", 80):
-                    raw_target = last_input + int(effective * cfg.get("CONTROL_GAIN", 0.30))
-                    self._reset_rest_surplus_harvest("LATCH_RECOVERY_TO_AUTO_GRID_EXPORT")
-                    control_reason = "Restüberschuss-Ernte: Latch-Recovery, AUTO_GRID_EXPORT übernimmt"
-                else:
-                    raw_target = last_input
-                    control_reason = "Restüberschuss-Ernte: Ladeziel wird gehalten; kein bestätigter Export-/High-SOC-Grund"
+        if low_surplus:
+            # Preserve V16.2.5 baseline semantics below the 150-W threshold.
+            # Only O may still capture a real 100..149-W export.
+            step = int(
+                cfg.get(
+                    "SMA_GUARD_RAMP_DOWN_W",
+                    cfg.get("MAX_POWER_STEP_W", 150),
+                )
+            )
+            raw_target = max(0, last_input - step)
+            target = raw_target
+            target_smoothed = target
+            target_ramped = target
+            power_limit_reason = "NONE"
+            control_reason = "Keine sichere PV-Überschussladung; Baseline wird reduziert"
+            self.state.add_limiter("LOW_EFFECTIVE_SURPLUS")
         else:
-            raw_target = last_input + int(effective * cfg.get("CONTROL_GAIN", 0.30))
-            control_reason = "PV-Überschuss erkannt -> Zendure lädt"
-        target = max(0, min(raw_target, int(cfg["MAX_CHARGE_POWER_W"])))
-        power_limit_reason = "CONFIG_MAX_CHARGE_POWER" if target != max(0, raw_target) else "NONE"
-        if power_limit_reason != "NONE":
-            self.state.add_limiter(power_limit_reason)
-        target_smoothed = self.smooth_transition(last_input, target, cfg)
-        target_ramped = self.limit_power_step(last_input, target_smoothed, cfg)
+            if harvest_active:
+                self.state.add_limiter("REST_SURPLUS_HARVEST")
+                harvest_target = self._rest_surplus_charge_pressure_target(
+                    cfg,
+                    grid_power,
+                    int(last_input or 0),
+                )
+                harvest_reason = str(harvest_target.get("reason") or "NONE")
+                if harvest_reason in {
+                    "SMA_NEAR_LIMIT",
+                    "HIGH_SMA_SOC",
+                    "HIGH_SMA_SOC_SMA_NEAR_LIMIT",
+                    "SMA_FULL_OR_IDLE",
+                    "EXPORT_HOLD",
+                }:
+                    raw_target = int(harvest_target.get("target", 0))
+                    if raw_target <= 0 and export_w >= thresholds.get("min_export", 80):
+                        raw_target = int(harvest_target.get("target", 0))
+                        with self.state.lock:
+                            self.state.harvest_limiter_reason = "LATCH_RECOVERY"
+                    semantics = str(harvest_target.get("target_semantics") or "")
+                    selected = str(harvest_target.get("target_selected_by") or "")
+                    if semantics == "INCREMENTAL_FALLBACK":
+                        control_reason = (
+                            f"Restüberschuss-Ernte: {harvest_reason} mit inkrementellem AUTO-Fallback "
+                            f"({harvest_target.get('fallback_reason') or 'Referenz unsicher'})"
+                        )
+                    else:
+                        control_reason = (
+                            f"Restüberschuss-Ernte: {harvest_reason}, 0-W-Netzziel, "
+                            f"Auswahl {selected or 'EXPORT_CAPTURE'}"
+                        )
+                elif harvest_near_saturation:
+                    raw_target = int(harvest_target.get("target", 0))
+                    control_reason = (
+                        "Restüberschuss-Ernte: Primärspeicher nahe Ladegrenze, 0-W-Netzziel"
+                    )
+                else:
+                    if export_w >= thresholds.get("min_export", 80):
+                        raw_target = last_input + int(
+                            effective * cfg.get("CONTROL_GAIN", 0.30)
+                        )
+                        self._reset_rest_surplus_harvest(
+                            "LATCH_RECOVERY_TO_AUTO_GRID_EXPORT"
+                        )
+                        control_reason = (
+                            "Restüberschuss-Ernte: Latch-Recovery, AUTO_GRID_EXPORT übernimmt"
+                        )
+                    else:
+                        raw_target = last_input
+                        control_reason = (
+                            "Restüberschuss-Ernte: Ladeziel wird gehalten; "
+                            "kein bestätigter Export-/High-SOC-Grund"
+                        )
+            else:
+                raw_target = last_input + int(
+                    effective * cfg.get("CONTROL_GAIN", 0.30)
+                )
+                control_reason = "PV-Überschuss erkannt -> Zendure lädt"
 
-        signed_before_cross = int(target_ramped)
-        correction = self._apply_symmetric_cross_charge_limit(cfg, signed_before_cross)
-        signed_final = int(correction.get("target", signed_before_cross))
-        final_input = max(0, signed_final)
+            target = max(0, min(raw_target, int(cfg["MAX_CHARGE_POWER_W"])))
+            power_limit_reason = (
+                "CONFIG_MAX_CHARGE_POWER"
+                if target != max(0, raw_target)
+                else "NONE"
+            )
+            if power_limit_reason != "NONE":
+                self.state.add_limiter(power_limit_reason)
+            target_smoothed = self.smooth_transition(last_input, target, cfg)
+            target_ramped = self.limit_power_step(last_input, target_smoothed, cfg)
 
-        signed_final = self._publish_signed_target(signed_final, force_zero=(signed_final == 0 and correction.get("active")), reason=("CROSS_CHARGE_NEUTRALIZATION" if signed_final == 0 and correction.get("active") else "AUTO_CHARGE"))
+        baseline_target = max(0, int(target_ramped))
+        combined_target = self._fast_capture_step(
+            cfg,
+            grid_power,
+            baseline_target,
+        )
+
+        correction = self._apply_symmetric_cross_charge_limit(
+            cfg,
+            int(combined_target),
+        )
+        if correction.get("active"):
+            # Cross-Charge outranks Fast. Remove O and re-evaluate the existing
+            # protection against B only; never leave a hidden residual overlay.
+            self._fast_capture_force_zero("CROSS_CHARGE_ACTIVE")
+            correction = self._apply_symmetric_cross_charge_limit(
+                cfg,
+                int(baseline_target),
+            )
+        signed_final = int(correction.get("target", baseline_target))
+
+        signed_final = self._publish_signed_target(
+            signed_final,
+            force_zero=(signed_final == 0 and correction.get("active")),
+            reason=(
+                "CROSS_CHARGE_NEUTRALIZATION"
+                if signed_final == 0 and correction.get("active")
+                else "AUTO_CHARGE"
+            ),
+        )
         final_input = max(0, signed_final)
+        self._fast_capture_return_to_baseline_pending = False
 
         with self.state.lock:
             self.state.last_output_power = max(0, -signed_final)
             self.state.last_input_power = final_input
-            self.state.current_target_power = max(self.state.last_input_power, self.state.last_output_power)
+            self.state.current_target_power = max(
+                self.state.last_input_power,
+                self.state.last_output_power,
+            )
             self.state.last_target_before_smoothing = raw_target
             self.state.last_target_after_power_limit = target
             self.state.target_power_limit_reason = power_limit_reason
             self.state.last_target_after_smoothing = target_smoothed
             self.state.last_target_after_ramp = self.state.current_target_power
-            self.state.control_reason = correction.get("reason") if correction.get("active") else control_reason
+            self.state.control_reason = (
+                correction.get("reason")
+                if correction.get("active")
+                else control_reason
+            )
             if correction.get("active"):
-                self.state.technical_control_path = "GRID -> CROSS_CHARGE -> CHARGE_CONTROL -> INPUT"
+                self.state.technical_control_path = (
+                    "GRID -> CROSS_CHARGE -> CHARGE_CONTROL -> INPUT"
+                )
+            elif mode == "active" and self.state.fast_capture_overlay_w > 0:
+                self.state.technical_control_path = (
+                    "GRID -> FAST_CAPTURE -> CHARGE_CONTROL -> INPUT"
+                )
             elif harvest_active:
-                self.state.technical_control_path = "GRID -> REST_SURPLUS_HARVEST -> CHARGE_CONTROL -> INPUT"
+                self.state.technical_control_path = (
+                    "GRID -> REST_SURPLUS_HARVEST -> CHARGE_CONTROL -> INPUT"
+                )
             else:
                 self.state.technical_control_path = "GRID -> CHARGE_CONTROL -> INPUT"
             self.state.last_control_action = f"CHARGE -> {signed_final} W"
-        self.state.set_mode("HOLD" if signed_final == 0 and correction.get("active") else "CHARGE")
+        self.state.set_mode(
+            "HOLD" if signed_final == 0 and correction.get("active") else "CHARGE"
+        )
 
         if cfg.get("LOG_CONTROL", False):
-            self.log(f"[CTRL] Laden: effective={effective} raw={raw_target} smooth={target_smoothed} ramp={target_ramped} final={signed_final}")
+            self.log(
+                f"[CTRL] Laden: effective={effective} raw={raw_target} "
+                f"smooth={target_smoothed} ramp={target_ramped} "
+                f"fast={self.state.fast_capture_overlay_w} final={signed_final}"
+            )
 
     def ramp_down_charge(self, cfg: Dict[str, Any], reason: str) -> None:
         with self.state.lock:

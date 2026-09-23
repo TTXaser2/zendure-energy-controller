@@ -11,9 +11,9 @@ from tools.validate_release_datasheet import validate
 
 
 def test_v15_0_3_datasheet_release_identity_and_stable_paths():
-    assert version.APP_VERSION == "16.2.3"
-    assert version.APP_VERSION_LABEL == "V16.2.3"
-    assert version.APP_BUILD_ID == "v16.2.3-20260921"
+    assert version.APP_VERSION == "17.0.1"
+    assert version.APP_VERSION_LABEL == "V17.0.1"
+    assert version.APP_BUILD_ID == "v17.0.1-20260922"
     for rel in (
         "docs/ZEC_Technisches_Datenblatt.pdf",
         "docs/ZEC_Technisches_Datenblatt.docx",
@@ -27,7 +27,7 @@ def test_v15_0_3_datasheet_release_identity_and_stable_paths():
 def test_v15_0_3_datasheet_gate_passes_current_product_contract():
     result = validate(ROOT)
     assert result["status"] == "PASS", result
-    assert result["release_identities_in_docx"] == ["V16.2.3"]
+    assert result["release_identities_in_docx"] == ["V17.0.1"]
     assert result["required_text_count"] >= 8
 
 
@@ -48,6 +48,6 @@ def test_v15_0_3_canonical_release_process_makes_datasheet_mandatory():
 
 def test_v15_0_3_datasheet_metadata_hashes_current_files():
     meta = json.loads((ROOT / "docs/ZEC_Technisches_Datenblatt.release.json").read_text(encoding="utf-8"))
-    assert meta["release_version"] == "16.2.3"
-    assert meta["release_label"] == "V16.2.3"
-    assert meta["build_id"] == "v16.2.3-20260921"
+    assert meta["release_version"] == "17.0.1"
+    assert meta["release_label"] == "V17.0.1"
+    assert meta["build_id"] == "v17.0.1-20260922"

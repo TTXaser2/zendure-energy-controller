@@ -7,7 +7,7 @@ import version
 
 class TestRC15UiGraphPolish(unittest.TestCase):
     def test_version_label_rc15(self):
-        self.assertEqual(version.APP_VERSION_LABEL, "V16.2.3")
+        self.assertEqual(version.APP_VERSION_LABEL, "V17.0.1")
 
     def test_zendure_mqtt_warning_is_card_local_not_global_strip(self):
         cfg = {"UI_DARK_MODE": False, "NIGHT_DISCHARGE_ENABLED": False}
@@ -15,7 +15,7 @@ class TestRC15UiGraphPolish(unittest.TestCase):
         html = web_ui.build_status_page(cfg, snap)
         self.assertIn('class="zec-storage-layout', html)
         self.assertIn('class="zec-soc-ring', html)
-        self.assertIn('data-zec="zendure.command_warning"', html)
+        self.assertIn('data-zec-warning="zendure"', html)
         self.assertIn('Zendure Live-Status', html)
         self.assertIn('Zendure-App', html)
         self.assertNotIn('zec-alert-strip', html)

@@ -1,0 +1,8 @@
+V16.2.5 build-evidence contract targeted QA: PASS
+- 152 test files
+- full regression: 1132 tests + 698 subtests PASS
+- ResourceWarning regression: 1132 tests + 698 subtests PASS
+- canonical machine-readable format: ZEC_BUILD_EVIDENCE_V1
+- installer delegates to deployment_contract.py verify-build-evidence
+- human-readable FULL_TEST/RESOURCEWARNING files are not parser authority
+- package/manifest/Fresh-extract gates remain separate and pending at this checkpoint

@@ -4453,6 +4453,7 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
     system_status = "Safe-State" if mode == "SAFE_STATE" else (f"Warnung {len(warnings)}" if warnings else "System OK")
 
     command_warning = ""
+    command_warning_title = "Zendure-Warnung"
     mqtt_overall = str(s.get("zendure_mqtt_overall_status") or "").upper()
     mqtt_live_confirmed = bool(s.get("zendure_mqtt_live_confirmed", s.get("zendure_live_confirmed", True)))
     mqtt_resave_required = (
@@ -4463,16 +4464,22 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
     if mqtt_resave_required:
         warnings.append("Zendure Live-Status fehlt: MQTT in der Zendure-App erneut speichern/aktivieren")
     if s.get("command_not_effective_active"):
+        command_warning_title = "Sollwertwirkung prüfen"
         command_warning = str(s.get("command_not_effective_reason") or "Sollwert nicht wirksam: Ziel und Istleistung stimmen nicht plausibel überein.")
     elif active_command_intent and not bool(s.get("zendure_flash_protection_active")):
+        command_warning_title = "SmartMode nicht bestätigt"
         command_warning = str(s.get("zendure_flash_protection_reason") or "smartMode=1 ist nicht frisch bestätigt; dynamische Leistungskommandos warten.")
     elif active_command_intent and not bool(s.get("zendure_command_state_complete")):
+        command_warning_title = "Command-State ausstehend"
         command_warning = str(s.get("zendure_command_state_reason") or "Zendure-Command-State wird rückgelesen.")
     elif str(effect_state_for_warning) == "COMMAND_CHARGE_ACCEPTANCE_LIMITED":
+        command_warning_title = "Ladeannahme begrenzt"
         command_warning = str(s.get("command_effect_state_reason") or s.get("command_effect_reason") or "Ladeannahme bei hohem SOC begrenzt.")
     elif s.get("command_uncertain_mqtt_active"):
+        command_warning_title = "MQTT-Zustand unsicher"
         command_warning = str(s.get("command_uncertain_mqtt_reason") or "Letzter aktiver Sollwert wurde bei unsicherem Zendure-MQTT-Zustand gesendet.")
     elif mqtt_resave_required:
+        command_warning_title = "Zendure Live-Status fehlt"
         command_warning = "Zendure Live-Status fehlt. MQTT in der Zendure-App erneut speichern/aktivieren; ZEC synchronisiert den aktiven Sollwert nach der Recovery erneut."
 
     units = _status_units(cfg, s, target, actual)
@@ -4891,6 +4898,7 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "unit_count": len(units),
             "units": units,
             "command_warning": command_warning,
+            "command_warning_title": command_warning_title,
             "tone": zendure_tone,
         },
         "primary": {

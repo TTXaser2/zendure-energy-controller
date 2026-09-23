@@ -5,11 +5,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_v15_0_2_identity_exact_upgrade_source_and_package_contract():
-    assert version.APP_VERSION == "16.2.3"
-    assert version.APP_VERSION_LABEL == "V16.2.3"
-    assert version.APP_BUILD_ID == "v16.2.3-20260921"
+    assert version.APP_VERSION == "17.0.1"
+    assert version.APP_VERSION_LABEL == "V17.0.1"
+    assert version.APP_BUILD_ID == "v17.0.1-20260922"
     script = (ROOT / "tools/install_zendure_controller.sh").read_text(encoding="utf-8")
-    for token in ('EXPECTED_VERSION_ARG="v16_2_3"','EXPECTED_SOURCE_VERSION="16.2.0"','EXPECTED_SOURCE_BUILD_ID="v16.2.0-20260920"','EXPECTED_TARGET_VERSION="16.2.3"','EXPECTED_TARGET_BUILD_ID="v16.2.3-20260921"','SOURCE_MANIFEST="V16_2_3_SOURCE_MANIFEST.sha256"','/tmp/zec_v16_2_3_install_report.json'):
+    for token in ('EXPECTED_VERSION_ARG="v17_0_1"','EXPECTED_SOURCE_VERSION="16.2.5"','EXPECTED_SOURCE_BUILD_ID="v16.2.5-20260922"','EXPECTED_TARGET_VERSION="17.0.1"','EXPECTED_TARGET_BUILD_ID="v17.0.1-20260922"','SOURCE_MANIFEST="V17_0_1_SOURCE_MANIFEST.sha256"','INSTALL_REPORT="$DOWNLOAD_DIR/zec_${VERSION}_install_report_${STAMP}.json"','INSTALL_REPORT_COMPAT="/tmp/zec_${VERSION}_install_report.json"'):
         assert token in script
 
 def test_v15_0_2_installer_probes_exact_visual_followup_contracts():

@@ -1,0 +1,8 @@
+V16.2.4 ResourceWarning regression
+Date: 2026-09-21
+Result: PASS
+Tests: 1123 passed
+Subtests: 698 passed
+Mode: pytest -W error::ResourceWarning
+Execution: same 150 test files in four disjoint shards.
+Canonical installer authority: validation/V16_2_4_BUILD_EVIDENCE.json

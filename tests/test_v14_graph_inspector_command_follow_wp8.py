@@ -13,7 +13,7 @@ from web_ui import build_graph_page, create_app
 from tests.test_v14_graph_query_service_wp3 import _row, _v3
 
 
-EXPECTED_CONTROLLER_SHA256 = "d243945adbb04dfa19fa915f8f32cafb375b7258888b2ecd6fb7a064cdea99ff"
+EXPECTED_CONTROLLER_SHA256 = "113cb9cc60475cb59294bf07ab750e63580b59112f178948b7e386fd0539b031"
 
 
 def _route_endpoint(app, path):

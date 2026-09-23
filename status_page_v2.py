@@ -73,7 +73,6 @@ def _ring(key: str, label: str, soc: Any, subtitle: str = "SOC aktuell") -> str:
 
 
 def _storage_quick_metrics(key: str, payload: Dict[str, Any]) -> str:
-    remaining_visible = bool(payload.get("remaining_visible"))
     meter_visible = bool(payload.get("power_meter_visible"))
     direction = str(payload.get("power_meter_direction") or "neutral")
     try:
@@ -83,16 +82,22 @@ def _storage_quick_metrics(key: str, payload: Dict[str, Any]) -> str:
     meter_label = "Ladeleistung" if direction == "charge" else "Entladeleistung"
     return f"""
       <div class="zec-storage-quickmetrics">
-        <div class="zec-remaining-metric" data-zec-row="{_e(key)}.remaining"{' ' if remaining_visible else ' hidden'}>
-          <span data-zec="{_e(key)}.remaining_label">{_e(payload.get('remaining_label'))}</span>
-          <strong data-zec="{_e(key)}.remaining_text">{_e(payload.get('remaining_text'))}</strong>
-        </div>
         <div class="zec-power-meter is-{_e(direction)}" data-zec-row="{_e(key)}.power_meter"{' ' if meter_visible else ' hidden'} style="--power-fill:{fill:.2f}%">
           <div class="zec-power-meter-head"><span data-zec="{_e(key)}.power_meter_label">{meter_label}</span><strong data-zec="{_e(key)}.power_meter_text">{_e(payload.get('power_meter_text'))}</strong></div>
           <div class="zec-power-meter-track"><i></i></div>
         </div>
       </div>
     """
+
+
+def _storage_remaining_row(key: str, payload: Dict[str, Any]) -> str:
+    remaining_visible = bool(payload.get("remaining_visible"))
+    return (
+        f'<div class="zec-detail-row zec-remaining-row" data-zec-row="{_e(key)}.remaining"'
+        f"{' ' if remaining_visible else ' hidden'}>"
+        f'<span data-zec="{_e(key)}.remaining_label">{_e(payload.get("remaining_label"))}</span>'
+        f'<strong data-zec="{_e(key)}.remaining_text">{_e(payload.get("remaining_text"))}</strong></div>'
+    )
 
 
 def _unit_rows(units: Iterable[Dict[str, Any]]) -> str:
@@ -220,6 +225,7 @@ def render_status_page_v2(
               <div class="zec-detail-row zec-actual-row"><span>Istleistung</span><strong data-zec="zendure.actual">{_e(payload['zendure'].get('actual'))}</strong></div>
               <div class="zec-detail-row"><span>Zustand</span><strong data-zec="zendure.state">{_e(unit.get('state_text') or '—')}</strong></div>
               <div class="zec-detail-row" data-zec-row="zendure.soc_limit"{' ' if payload['zendure'].get('remaining_visible') else ' hidden'}><span data-zec="zendure.soc_limit_label">{_e(payload['zendure'].get('soc_limit_label'))}</span><strong data-zec="zendure.soc_limit_text">{_e(payload['zendure'].get('soc_limit_text'))}</strong></div>
+              {_storage_remaining_row('zendure', payload['zendure'])}
             </div>
           </div>
         '''
@@ -253,8 +259,20 @@ def render_status_page_v2(
                 f"\nQuellenstatus: {payload['primary'].get('source_health') or '—'}"
             )
             primary_info_attrs = 'data-storage-expert="primary"'
+        primary_expert_block = ""
+        primary_card_class = "zec-card zec-primary-card"
+        if expert_mode:
+            primary_card_class += " has-expert-details"
+            primary_expert_block = f'''
+        <section class="zec-storage-expert-details" data-zec-expert-details="primary" aria-label="Strategie und Diagnose Primärspeicher">
+          <div><span>Harmonisierung</span><strong data-zec="primary.line">{_e(payload['primary'].get('line') or '—')}</strong></div>
+          <div><span>Harvest / Strategie</span><strong data-zec="primary.harvest_calculation">{_e(payload['primary'].get('harvest_calculation') or '—')}</strong></div>
+          <div><span>Nutzbarer SOC · Diagnose</span><strong data-zec="primary.usable_soc_text">{_e(payload['primary'].get('usable_soc_text') or '—')}</strong></div>
+          <div><span>Quellenstatus</span><strong data-zec="primary.source_health">{_e(payload['primary'].get('source_health') or '—')}</strong></div>
+        </section>
+            '''
         primary_card = f'''
-      <article class="zec-card zec-primary-card" data-card="primary">
+      <article class="{primary_card_class}" data-card="primary">
         <header class="zec-card-header"><div class="zec-card-title">{_icon('primary')}<h2 data-zec="primary.name">{_e(primary_name)}</h2></div>{_info_button(str(primary_name), primary_info_text, extra_attrs=primary_info_attrs)}</header>
         <div class="zec-storage-layout zec-storage-layout-single">
           <div class="zec-storage-visual">
@@ -265,8 +283,10 @@ def render_status_page_v2(
             <div class="zec-detail-row zec-actual-row"><span>Istleistung</span><strong data-zec="primary.actual">{_e(payload['primary'].get('actual'))}</strong></div>
             <div class="zec-detail-row"><span>Zustand</span><strong data-zec="primary.status">{_e(payload['primary'].get('status'))}</strong></div>
             <div class="zec-detail-row" data-zec-row="primary.soc_limit"{' ' if payload['primary'].get('remaining_visible') else ' hidden'}><span data-zec="primary.soc_limit_label">{_e(payload['primary'].get('soc_limit_label'))}</span><strong data-zec="primary.soc_limit_text">{_e(payload['primary'].get('soc_limit_text'))}</strong></div>
+            {_storage_remaining_row('primary', payload['primary'])}
           </div>
         </div>
+        {primary_expert_block}
         <footer class="zec-card-footer"><span class="zec-status-dot { _e(payload['primary'].get('tone','ok')) }"></span><span><b data-zec="primary.source">{_e(payload['primary'].get('source'))}</b> · <span data-zec="primary.freshness_text">{_e(payload['primary'].get('freshness_text'))}</span></span></footer>
       </article>
         '''
@@ -341,9 +361,8 @@ def render_status_page_v2(
       </article>
 
       <article class="zec-card zec-zendure-card" data-card="zendure">
-        <header class="zec-card-header"><div class="zec-card-title">{_icon('battery')}<h2>{'Zendure-System' if len(units)>1 else 'Zendure / Batterie'}</h2></div>{_info_button('Zendure / Batterie','Diese Karte zeigt SOC und tatsächliche Leistung des Zendure-Speichers. Bei zwei Headunits werden beide Units separat dargestellt; beide folgen weiterhin dem gemeinsamen systemischen Operating Mode.')}</header>
+        <header class="zec-card-header"><div class="zec-card-title">{_icon('battery')}<h2>{'Zendure-System' if len(units)>1 else 'Zendure / Batterie'}</h2></div><div class="zec-card-actions"><button type="button" class="zec-warning-chip" data-zec-warning="zendure" data-info-title="{_e(payload['zendure'].get('command_warning_title') or 'Zendure-Warnung')}" data-info-text="{_e(payload['zendure'].get('command_warning'))}" aria-haspopup="dialog" aria-controls="zecInfoPopover" aria-label="Aktive Zendure-Warnung anzeigen" {'hidden' if not payload['zendure'].get('command_warning') else ''}><span class="zec-warning-dot" aria-hidden="true"></span><span data-zec-warning-label="zendure">Ladeannahme</span></button>{_info_button('Zendure / Batterie','Diese Karte zeigt SOC und tatsächliche Leistung des Zendure-Speichers. Bei zwei Headunits werden beide Units separat dargestellt; beide folgen weiterhin dem gemeinsamen systemischen Operating Mode.')}</div></header>
         {zendure_body}
-        <div class="zec-inline-warning" data-zec="zendure.command_warning" {'hidden' if not payload['zendure'].get('command_warning') else ''}>{_e(payload['zendure'].get('command_warning'))}</div>
         <footer class="zec-card-footer"><span class="zec-status-dot { _e(payload['zendure'].get('tone','ok')) }"></span><span>Telemetrie: <b data-zec="zendure.source">{_e(payload['zendure'].get('source'))}</b></span></footer>
       </article>
 

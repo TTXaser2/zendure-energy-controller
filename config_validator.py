@@ -444,6 +444,58 @@ def validate_config_semantics(
         if profile == PROFILE_CUSTOM and topics.get("soc") == "" and topics.get("capacity") == "":
             issues.append(_issue("INFO", "SOC- und Kapazitäts-Topic sind nicht konfiguriert. Die Primärspeicher-Diagnose funktioniert weiterhin über die Leistungsmessung; Status- und Diagnoseanzeige bleiben für diese Zusatzwerte leer.", ["SECOND_BATTERY_SOC_TOPIC", "SECOND_BATTERY_CAPACITY_TOPIC"], "Zweitbatterie", "SECOND_BATTERY_OPTIONAL_VALUES_EMPTY"))
 
+    # V17 Fast Capture: enum contract and active-mode commit prerequisites.
+    fast_capture_mode = _str_value(cfg, "HARVEST_FAST_CAPTURE_MODE").lower() or "off"
+    if fast_capture_mode not in {"off", "shadow", "active"}:
+        issues.append(_issue(
+            "ERROR",
+            "Fast Capture muss auf Aus, Shadow oder Aktiv stehen.",
+            ["HARVEST_FAST_CAPTURE_MODE"],
+            "Harvest / Restüberschuss",
+            "FAST_CAPTURE_MODE_INVALID",
+        ))
+    elif fast_capture_mode == "active":
+        if not _bool_value(cfg.get("REST_SURPLUS_HARVEST_ENABLED", False)):
+            issues.append(_issue(
+                "ERROR",
+                "Fast Capture Aktiv benötigt die aktivierte Restüberschuss-Ernte. Shadow kann zur reinen Diagnose ohne aktive Sollwertwirkung verwendet werden.",
+                ["HARVEST_FAST_CAPTURE_MODE", "REST_SURPLUS_HARVEST_ENABLED"],
+                "Harvest / Restüberschuss",
+                "FAST_CAPTURE_ACTIVE_NEEDS_HARVEST",
+            ))
+        if not cross_charge_enabled(cfg):
+            issues.append(_issue(
+                "ERROR",
+                "Fast Capture Aktiv benötigt den Cross-Charge-Schutz; Fast Capture darf Gegenfluss-Schutz und dessen Priorität nicht umgehen.",
+                ["HARVEST_FAST_CAPTURE_MODE", "CROSS_CHARGE_ENABLED"],
+                "Harvest / Restüberschuss",
+                "FAST_CAPTURE_ACTIVE_NEEDS_CROSS_CHARGE",
+            ))
+        if not second_battery_integration_enabled(cfg):
+            issues.append(_issue(
+                "ERROR",
+                "Fast Capture Aktiv benötigt eine aktive Primärspeicher-Integration.",
+                ["HARVEST_FAST_CAPTURE_MODE", "SECOND_BATTERY_INTEGRATION_ENABLED"],
+                "Harvest / Restüberschuss",
+                "FAST_CAPTURE_ACTIVE_NEEDS_PRIMARY_STORAGE",
+            ))
+        if (_optional_int_value(cfg, "SECOND_BATTERY_MAX_CHARGE_POWER_W") or 0) <= 0:
+            issues.append(_issue(
+                "ERROR",
+                "Fast Capture Aktiv benötigt eine positive maximale Ladeleistung des Primärspeichers, damit NEAR_LIMIT und Leistungsreserve eindeutig berechnet werden können.",
+                ["HARVEST_FAST_CAPTURE_MODE", "SECOND_BATTERY_MAX_CHARGE_POWER_W"],
+                "Harvest / Restüberschuss",
+                "FAST_CAPTURE_ACTIVE_NEEDS_PRIMARY_MAX_CHARGE",
+            ))
+        if _int_value(cfg, "MAX_CHARGE_POWER_W", 0) <= 0:
+            issues.append(_issue(
+                "ERROR",
+                "Fast Capture Aktiv benötigt eine positive Zendure-Maximalladeleistung.",
+                ["HARVEST_FAST_CAPTURE_MODE", "MAX_CHARGE_POWER_W"],
+                "Harvest / Restüberschuss",
+                "FAST_CAPTURE_ACTIVE_NEEDS_ZENDURE_MAX_CHARGE",
+            ))
+
     # Restüberschuss-Ernte: harte Abhängigkeiten und verständliche Querhinweise.
     harvest_enabled = _bool_value(cfg.get("REST_SURPLUS_HARVEST_ENABLED", False))
     if harvest_enabled:

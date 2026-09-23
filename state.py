@@ -132,6 +132,29 @@ class ControllerState:
     cross_charge_guard_latched: bool = False
     cross_charge_last_direction: str = ""
 
+    # V17 Fast Capture A400/R100. Baseline and overlay stay separate so the
+    # fast export-capture increment can never feed back into the strategic/AUTO
+    # baseline on the following cycle.
+    fast_capture_mode: str = "off"
+    fast_capture_active: bool = False
+    fast_capture_primary_state: str = "RESERVE_UNKNOWN"
+    fast_capture_block_reason: str = "MODE_OFF"
+    fast_capture_baseline_target_w: int = 0
+    fast_capture_desired_overlay_w: int = 0
+    fast_capture_overlay_w: int = 0
+    fast_capture_combined_target_w: int = 0
+    fast_capture_primary_reserve_w: int = 0
+    fast_capture_full_idle_progress_s: float = 0.0
+    fast_capture_observation_dt_s: float = 0.0
+    fast_capture_observation_distinct: bool = False
+    fast_capture_attack_limited: bool = False
+    fast_capture_release_limited: bool = False
+    fast_capture_forced_zero_reason: str = ""
+    fast_capture_activation_count: int = 0
+    fast_capture_forced_zero_count: int = 0
+    fast_capture_effective_zendure_limit_w: int = 0
+    fast_capture_primary_max_charge_w: int = 0
+
     # Restüberschuss-Ernte: zustandsbehaftete Diagnosefelder.
     # Der Modus darf nur in AUTO laden, startet erst nach bestätigtem
     # SMA-Ladelimit+Export-Zustand und bleibt danach bewusst großzügig aktiv,
@@ -2161,6 +2184,11 @@ class ControllerState:
 
             return {
                 "uptime_seconds": int(now_epoch - self.startup_epoch),
+                "instance_owner_active": self.instance_owner_active,
+                "instance_owner_pid": self.instance_owner_pid,
+                "instance_owner_build_id": self.instance_owner_build_id,
+                "instance_owner_since_utc": self.instance_owner_since_utc,
+                "instance_owner_lock_path": self.instance_owner_lock_path,
                 "raw_grid_power": self.raw_grid_power,
                 "grid_power": self.grid_power,
                 "current_rule_deviation": self.current_rule_deviation,
@@ -2203,6 +2231,25 @@ class ControllerState:
                 "actual_zendure_power_age_s": self.actual_zendure_power_age_s,
                 "actual_zendure_power_validity_reason": self.actual_zendure_power_validity_reason,
                 "current_target_power": self.current_target_power,
+                "fast_capture_mode": self.fast_capture_mode,
+                "fast_capture_active": self.fast_capture_active,
+                "fast_capture_primary_state": self.fast_capture_primary_state,
+                "fast_capture_block_reason": self.fast_capture_block_reason,
+                "fast_capture_baseline_target_w": self.fast_capture_baseline_target_w,
+                "fast_capture_desired_overlay_w": self.fast_capture_desired_overlay_w,
+                "fast_capture_overlay_w": self.fast_capture_overlay_w,
+                "fast_capture_combined_target_w": self.fast_capture_combined_target_w,
+                "fast_capture_primary_reserve_w": self.fast_capture_primary_reserve_w,
+                "fast_capture_full_idle_progress_s": self.fast_capture_full_idle_progress_s,
+                "fast_capture_observation_dt_s": self.fast_capture_observation_dt_s,
+                "fast_capture_observation_distinct": self.fast_capture_observation_distinct,
+                "fast_capture_attack_limited": self.fast_capture_attack_limited,
+                "fast_capture_release_limited": self.fast_capture_release_limited,
+                "fast_capture_forced_zero_reason": self.fast_capture_forced_zero_reason,
+                "fast_capture_activation_count": self.fast_capture_activation_count,
+                "fast_capture_forced_zero_count": self.fast_capture_forced_zero_count,
+                "fast_capture_effective_zendure_limit_w": self.fast_capture_effective_zendure_limit_w,
+                "fast_capture_primary_max_charge_w": self.fast_capture_primary_max_charge_w,
                 "zendure_target_signed_power": current_signed_target,
                 "target_raw_w": signed_target_stage(self.last_target_before_smoothing),
                 "target_after_power_limit_w": signed_target_stage(self.last_target_after_power_limit),

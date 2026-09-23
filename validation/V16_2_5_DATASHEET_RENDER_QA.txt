@@ -1,0 +1,8 @@
+V16.2.5 DATASHEET RENDER QA: PASS
+DOCX: docs/ZEC_Technisches_Datenblatt.docx
+PDF: docs/ZEC_Technisches_Datenblatt.pdf
+Pages: 10/10 visually inspected after final V16.2.5 wording cleanup.
+Result: no clipping, overlap, broken tables, missing glyphs, or unintended blank reflow page.
+Page 10 is the intentional short closing page for the normative source basis.
+Status line: V16.2.5 · TECHNICAL BUILD PASS · reale Feldabnahme ausstehend.
+Older release identity V16.2.4 removed from the current-release datasheet; predecessor provenance remains in canonical release evidence, not in the product datasheet.

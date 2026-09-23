@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Canonical ZEC V16 installer: supported update + clean fresh install.
+# Canonical ZEC V17 installer: supported update + clean fresh install.
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -8,12 +8,12 @@ PACKAGE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck source=root_artifact_transaction.sh
 source "$SCRIPT_DIR/root_artifact_transaction.sh"
 
-EXPECTED_VERSION_ARG="v16_2_3"
-EXPECTED_SOURCE_VERSION="16.2.0"
-EXPECTED_SOURCE_BUILD_ID="v16.2.0-20260920"
-EXPECTED_TARGET_VERSION="16.2.3"
-EXPECTED_TARGET_BUILD_ID="v16.2.3-20260921"
-SOURCE_MANIFEST="V16_2_3_SOURCE_MANIFEST.sha256"
+EXPECTED_VERSION_ARG="v17_0_1"
+EXPECTED_SOURCE_VERSION="16.2.5"
+EXPECTED_SOURCE_BUILD_ID="v16.2.5-20260922"
+EXPECTED_TARGET_VERSION="17.0.1"
+EXPECTED_TARGET_BUILD_ID="v17.0.1-20260922"
+SOURCE_MANIFEST="V17_0_1_SOURCE_MANIFEST.sha256"
 TARGET="/opt/zendure-controller"
 BOOTSTRAP="$TARGET/.zec_first_install_bootstrap.json"
 DOWNLOAD_DIR="/home/pi/Downloads"
@@ -49,9 +49,9 @@ done
 
 STAMP="$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$DOWNLOAD_DIR" 2>/dev/null || true
-INSTALL_LOG="$DOWNLOAD_DIR/zec_v16_2_3_installer_${STAMP}.log"
+INSTALL_LOG="$DOWNLOAD_DIR/zec_${VERSION}_installer_${STAMP}.log"
 if ! touch "$INSTALL_LOG" 2>/dev/null; then
-  INSTALL_LOG="/tmp/zec_v16_2_3_installer_${STAMP}.log"
+  INSTALL_LOG="/tmp/zec_${VERSION}_installer_${STAMP}.log"
   touch "$INSTALL_LOG"
 fi
 exec > >(tee -a "$INSTALL_LOG") 2>&1
@@ -71,9 +71,10 @@ ROLLBACK_STARTED=0
 SUPPORT_WORK=""
 SUPPORT_ZIP=""
 BACKUP="$DOWNLOAD_DIR/zendure-controller-backup-${STAMP}.tar.gz"
-CONFIG_BACKUP="$DOWNLOAD_DIR/config.pre-v16.2.3.${STAMP}.json"
-ROOT_ARTIFACT_BACKUP="/var/backups/zec-v16.2.3-root-artifacts-${STAMP}"
-INSTALL_REPORT="/tmp/zec_v16_2_3_install_report.json"
+CONFIG_BACKUP="$DOWNLOAD_DIR/config.pre-v17.0.1.${STAMP}.json"
+ROOT_ARTIFACT_BACKUP="/var/backups/zec-v17.0.1-root-artifacts-${STAMP}"
+INSTALL_REPORT="$DOWNLOAD_DIR/zec_${VERSION}_install_report_${STAMP}.json"
+INSTALL_REPORT_COMPAT="/tmp/zec_${VERSION}_install_report.json"
 BACKUP_SHA256=""
 BACKUP_SIZE="0"
 CONTROLLER_WAS_ACTIVE=0
@@ -96,7 +97,7 @@ start_support_capture() {
   local tool="$SCRIPT_DIR/zec_support_bundle.py"
   [ -f "$tool" ] || return 0
   SUPPORT_WORK="$(python3 "$tool" collect \
-    --label "v16.2.3-installer-failure" --output-dir "$DOWNLOAD_DIR" \
+    --label "v17.0.1-installer-failure" --output-dir "$DOWNLOAD_DIR" \
     --target "$TARGET" --config "$TARGET/config.json" --install-log "$INSTALL_LOG" \
     --since-epoch "$INSTALL_START_EPOCH" --stage "$stage" --error-code "$code" \
     --package-sha256 "$PACKAGE_SHA256" --source-version "$EXPECTED_SOURCE_VERSION" \
@@ -159,7 +160,7 @@ on_error() {
   trap - ERR EXIT
   set +e
   echo
-  echo "FEHLER: V16.2.3 Installer abgebrochen (rc=$code, line=$line, mode=$INSTALL_MODE)."
+  echo "FEHLER: V17.0.1 Installer abgebrochen (rc=$code, line=$line, mode=$INSTALL_MODE)."
   start_support_capture "pre_rollback" "RC_${code}_LINE_${line}"
   local rollback_result="not_required_preflight"
   if [ "$INSTALLATION_STARTED" -eq 1 ]; then
@@ -184,6 +185,7 @@ require_basic_contract() {
   getent group pi >/dev/null || { echo "FEHLER: Gruppe pi fehlt."; return 1; }
   [ -d /home/pi ] || { echo "FEHLER: /home/pi fehlt."; return 1; }
   [ -d "$DOWNLOAD_DIR" ] || { echo "FEHLER: $DOWNLOAD_DIR fehlt."; return 1; }
+  [ -w "$DOWNLOAD_DIR" ] || { echo "FEHLER: $DOWNLOAD_DIR ist nicht beschreibbar; persistente Installations-/Rollback-Evidenz kann nicht erzeugt werden."; return 1; }
 }
 
 verify_manifest_at() {
@@ -202,10 +204,10 @@ verify_release_tree_hygiene_at() {
 verify_build_evidence_at() {
   local root="$1"
   PYTHONDONTWRITEBYTECODE=1 python3 "$root/tools/deployment_contract.py" verify-build-evidence \
-    --root "$root" --evidence "validation/V16_2_3_BUILD_EVIDENCE.json" \
-    --expected-version "$EXPECTED_TARGET_VERSION" --expected-label "V16.2.3" \
+    --root "$root" --evidence "validation/V17_0_1_BUILD_EVIDENCE.json" \
+    --expected-version "$EXPECTED_TARGET_VERSION" --expected-label "V17.0.1" \
     --expected-build "$EXPECTED_TARGET_BUILD_ID" --json >/dev/null
-  echo "Build-Testevidenz für V16.2.3 verifiziert."
+  echo "Build-Testevidenz für V17.0.1 verifiziert."
 }
 
 verify_js_at() {
@@ -368,7 +370,7 @@ if [ "$INSTALL_MODE" = "SUPPORTED_UPDATE" ]; then
   python3 "$STAGED_ROOT/tools/deployment_contract.py" cleanup-obsolete-caches \
     --target "$TARGET" --staged-root "$STAGED_ROOT" --apply --json \
     >"$STAGE_BASE/obsolete_cache_cleanup.json"
-  echo "Kopiere V16.2.3-Dateien; Benutzerdaten bleiben erhalten..."
+  echo "Kopiere V17.0.1-Dateien; Benutzerdaten bleiben erhalten..."
   rsync -a --delete \
     --exclude 'config.json' --exclude 'config.json.last-good*' --exclude 'logs/' \
     --exclude 'config-states/' --exclude '*.sqlite3' --exclude 'zec_config_snapshots.json' \
@@ -379,7 +381,7 @@ if [ "$INSTALL_MODE" = "SUPPORTED_UPDATE" ]; then
   (cd "$TARGET" && python3 tools/migrate_config_to_current.py --config config.json --json >"$STAGE_BASE/migration_result.json")
   (cd "$TARGET" && python3 tools/v14_cutover.py verify --config "$TARGET/config.json" --runtime-root "$TARGET" --json >"$STAGE_BASE/graph_verify_prestart.json")
 else
-  echo "Erzeuge saubere V16.2.3-Fresh-Installation ohne config.json..."
+  echo "Erzeuge saubere V17.0.1-Fresh-Installation ohne config.json..."
   sudo install -d -o pi -g pi -m 0750 "$TARGET"
   rsync -a --exclude '__pycache__/' --exclude '.pytest_cache/' "$STAGED_ROOT/" "$TARGET/"
   sudo chown -R pi:pi "$TARGET"
@@ -493,7 +495,7 @@ else
     echo "WARNUNG: Controller ist noch nicht global ready=true, aber der Produktivstart ist sicher bestätigt."
     [ -s "$READY_JSON" ] && cat "$READY_JSON"
   else
-    echo "FEHLER: V16.2.3 erreichte weder ready=true noch einen stabilen sicheren Übergangszustand."
+    echo "FEHLER: V17.0.1 erreichte weder ready=true noch einen stabilen sicheren Übergangszustand."
     [ -s "$READY_JSON" ] && cat "$READY_JSON"
     false
   fi
@@ -508,8 +510,8 @@ assert wr.get('read_mode') == 'V3_NATIVE' and wr.get('workspace_ready') is True
 PY
 fi
 
-python3 - "$INSTALL_REPORT" <<PY
-import json,time
+python3 - "$INSTALL_REPORT" "$INSTALL_REPORT_COMPAT" <<PY
+import json,os,sys,time
 from pathlib import Path
 payload={
  'format':'ZEC_V16_2_0_INSTALL_REPORT_V1','status':'ok','completed_epoch_s':time.time(),
@@ -524,15 +526,36 @@ payload={
  'graph_core_v3_preserved': True if '$INSTALL_MODE'=='SUPPORTED_UPDATE' else None,
  'graph_control_state_backfill': ({'status':'not_run','reason':'COMPLETED_IN_SOURCE_RELEASE_V14_1_3','inserted_intervals':{}} if '$INSTALL_MODE'=='SUPPORTED_UPDATE' else None),
 }
-Path('$INSTALL_REPORT').write_text(json.dumps(payload,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+data=(json.dumps(payload,indent=2,sort_keys=True)+'\n').encode('utf-8')
+def atomic_write(raw_path):
+    path=Path(raw_path)
+    path.parent.mkdir(parents=True,exist_ok=True)
+    tmp=path.with_name(f'.{path.name}.{os.getpid()}.tmp')
+    try:
+        with tmp.open('wb') as fh:
+            fh.write(data); fh.flush(); os.fsync(fh.fileno())
+        os.chmod(tmp,0o600)
+        os.replace(tmp,path)
+        dir_fd=os.open(str(path.parent),os.O_RDONLY)
+        try: os.fsync(dir_fd)
+        finally: os.close(dir_fd)
+    finally:
+        try: tmp.unlink()
+        except FileNotFoundError: pass
+atomic_write(sys.argv[1])
+try:
+    atomic_write(sys.argv[2])
+except OSError as exc:
+    print(f'WARNUNG: /tmp-Kompatibilitätskopie des Installationsreports konnte nicht geschrieben werden: {exc}',file=sys.stderr)
 PY
 
 trap - ERR EXIT
 cleanup_stage
-echo "V16.2.3 erfolgreich installiert."
+echo "V17.0.1 erfolgreich installiert."
 echo "Installationsmodus: $INSTALL_MODE"
 [ "$INSTALL_MODE" = "SUPPORTED_UPDATE" ] && echo "Backup: $BACKUP" || true
 [ "$INSTALL_MODE" = "SUPPORTED_UPDATE" ] && echo "Backup-SHA256: $BACKUP_SHA256" || true
-echo "Installationsreport: $INSTALL_REPORT"
+echo "Persistenter Installationsreport: $INSTALL_REPORT"
+echo "Kompatibilitätskopie Installationsreport: $INSTALL_REPORT_COMPAT"
 echo "Persistentes Installerlog: $INSTALL_LOG"
 echo "Settings: http://<PI-IP>:${EFFECTIVE_WEB_PORT}/settings"

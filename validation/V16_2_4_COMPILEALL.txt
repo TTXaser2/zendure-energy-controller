@@ -1,0 +1,2 @@
+Python compileall gate: PASS
+Pycache output redirected outside the release tree.

@@ -125,7 +125,7 @@ class V1291StabilizationTests(unittest.TestCase):
         html = build_status_page(cfg, s)
         self.assertIn("Zendure Live-Status", html)
         self.assertIn("Zendure-App", html)
-        self.assertIn('data-zec="zendure.command_warning"', html)
+        self.assertIn('data-zec-warning="zendure"', html)
 
     def test_update_script_cleans_stale_tests_but_not_v2_logs(self):
         script = (Path(__file__).resolve().parents[1] / "tools" / "install_zendure_controller.sh").read_text(encoding="utf-8")

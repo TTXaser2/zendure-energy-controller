@@ -284,3 +284,34 @@ html[data-theme="dark"] body.zec-settings-v2 .primary-source-jump{background:var
   body.zec-settings-v2.search-open .save-bar{visibility:hidden;pointer-events:none}
   body.zec-settings-v2 .search-drawer{height:100dvh;max-height:100dvh}
 }
+
+/* V16.2.5 mobile Settings: no unreachable horizontal content. */
+@media(max-width:820px){
+  body.zec-settings-v2 .settings-contextbar,
+  body.zec-settings-v2 .settings-app,
+  body.zec-settings-v2 .settings-main,
+  body.zec-settings-v2 .category-panel,
+  body.zec-settings-v2 .section-block,
+  body.zec-settings-v2 .settings-grid,
+  body.zec-settings-v2 .setting-row,
+  body.zec-settings-v2 .setting-copy,
+  body.zec-settings-v2 .setting-editor,
+  body.zec-settings-v2 .setting-control,
+  body.zec-settings-v2 .field-issues,
+  body.zec-settings-v2 .field-issue{min-width:0;max-width:100%;width:100%}
+  body.zec-settings-v2 .settings-main{overflow-x:hidden;touch-action:pan-y pinch-zoom}
+  body.zec-settings-v2 .mode-toggle{min-width:0;width:100%;max-width:100%}
+  body.zec-settings-v2 .mode-toggle button{min-width:0;overflow-wrap:anywhere}
+  body.zec-settings-v2 .setting-key,
+  body.zec-settings-v2 .setting-help,
+  body.zec-settings-v2 .field-issue,
+  body.zec-settings-v2 .meta-pill{white-space:normal;overflow-wrap:anywhere;word-break:break-word}
+  body.zec-settings-v2 .field-meta{min-width:0;max-width:100%}
+}
+@media(max-width:520px){
+  body.zec-settings-v2 .settings-main{padding-left:8px;padding-right:8px}
+  body.zec-settings-v2 .section-block{padding-left:10px;padding-right:10px}
+  body.zec-settings-v2 .setting-row{padding-left:10px;padding-right:10px}
+  body.zec-settings-v2 .setting-control{grid-template-columns:minmax(0,1fr)}
+  body.zec-settings-v2 .unit{min-width:0;width:max-content;max-width:100%;padding:0 12px;justify-self:start}
+}

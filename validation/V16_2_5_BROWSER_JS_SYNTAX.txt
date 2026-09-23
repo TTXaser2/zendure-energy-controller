@@ -1,0 +1,2 @@
+V16.2.5 browser JavaScript syntax: 3/3 PASS
+Files: static/settings_v2.js, static/status_v2.js, static/graph_v14_1.js

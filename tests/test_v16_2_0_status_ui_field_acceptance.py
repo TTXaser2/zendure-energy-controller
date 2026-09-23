@@ -53,8 +53,8 @@ def _snap(zendure_power=1200, primary_power=2300):
     }
 
 
-def test_release_identity_is_v16_2_3():
-    assert (APP_VERSION, APP_VERSION_LABEL, APP_BUILD_ID) == ("16.2.3", "V16.2.3", "v16.2.3-20260921")
+def test_release_identity_is_v17_0_1():
+    assert (APP_VERSION, APP_VERSION_LABEL, APP_BUILD_ID) == ("17.0.1", "V17.0.1", "v17.0.1-20260922")
 
 
 def test_directional_remaining_energy_and_power_bars_charge():
@@ -138,9 +138,10 @@ def test_storage_cards_share_common_standard_information_contract():
     assert 'data-zec-row="primary.usable_soc"' not in html
     assert 'SMA Entlade-Untergrenze</span>' not in html
     assert 'data-storage-expert="primary"' not in html
+    assert 'data-zec-expert-details="primary"' not in html
 
 
-def test_primary_strategy_remains_available_through_expert_info_without_card_overflow_rows():
+def test_primary_strategy_is_visible_as_compact_expert_superset():
     cfg = _cfg(UI_MODE="expert")
     payload = build_status_view_payload(cfg, _snap())
     payload["primary"]["line"] = "Speicherstrategie: Primärspeicher hat Vorrang"
@@ -149,8 +150,11 @@ def test_primary_strategy_remains_available_through_expert_info_without_card_ove
     assert 'data-storage-expert="primary"' in html
     assert 'Harmonisierung:' in html
     assert 'Harvest-Rechnung:' in html
-    assert 'class="zec-detail-row zec-harmony-row' not in html
-    assert 'data-zec="primary.harvest_calculation"' not in html
+    assert 'data-zec-expert-details="primary"' in html
+    assert 'data-zec="primary.line"' in html
+    assert 'data-zec="primary.harvest_calculation"' in html
+    assert 'data-zec="primary.usable_soc_text"' in html
+    assert 'data-zec="primary.source_health"' in html
 
 
 def test_status_css_top_aligns_storage_and_has_directional_power_meter():
@@ -235,4 +239,4 @@ def test_midnight_rebuilds_previous_day_instead_of_reusing_partial_today_cache()
 
 
 def test_field_tool_derives_supported_update_source_from_installer_contract():
-    assert _expected_update_source() == {"version": "16.2.0", "build_id": "v16.2.0-20260920"}
+    assert _expected_update_source() == {"version": "16.2.5", "build_id": "v16.2.5-20260922"}

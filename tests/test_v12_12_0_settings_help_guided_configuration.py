@@ -10,32 +10,24 @@ from settings_registry import (
     SETTINGS_BY_KEY,
     DefaultClass,
     Visibility,
+    iter_operational_settings,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def operational_settings():
-    out = []
-    for spec in SETTINGS:
-        if spec.visibility in (Visibility.HIDDEN_MIGRATION, Visibility.HIDDEN_TRANSITION):
-            continue
-        if spec.release_stage != "S1" and spec.origin != "RC19":
-            continue
-        if spec.lifecycle.startswith("remove_") or spec.lifecycle in ("reserved_inactive", "deployment_constant_not_config"):
-            continue
-        out.append(spec)
-    return out
+    return list(iter_operational_settings())
 
 
 class V12110SettingsHelpContractTests(unittest.TestCase):
     def test_registry_help_coverage_and_depth(self):
         ops = operational_settings()
-        self.assertEqual(217, len(SETTINGS))
-        self.assertEqual(175, len(ops))
+        self.assertEqual(218, len(SETTINGS))
+        self.assertEqual(179, len(ops))
         self.assertEqual(12, len({s.category for s in ops}))
-        self.assertEqual(70, len({(s.category, s.section) for s in ops}))
-        self.assertEqual(62, sum(s.help.help_level == "rich" for s in ops))
+        self.assertEqual(72, len({(s.category, s.section) for s in ops}))
+        self.assertEqual(63, sum(s.help.help_level == "rich" for s in ops))
         self.assertTrue(all(s.help.short_help.strip() for s in ops))
         self.assertTrue(all(s.help.extended_help.strip() for s in ops))
         self.assertTrue(all(s.help.handbook_ref is not None for s in ops))

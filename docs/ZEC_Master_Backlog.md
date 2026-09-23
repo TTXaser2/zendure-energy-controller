@@ -1,8 +1,8 @@
 # ZEC – Master-Backlog & Roadmap
 
-**Stand:** 21.09.2026  
+**Stand:** 22.09.2026  
 **Status:** kanonische, persistente Entwicklungsledger- und Roadmap-Autorität  
-**Produktbasis:** V16.2.3 / `v16.2.3-20260921` (TECHNICAL BUILD PASS; reale V16.2.3-Update-Feldabnahme noch offen; Build-Evidence-/Preflight-Hotfix nach realem mutationsfreiem V16.2.2-Preflight-Fail; letzte reale Feldbasis V16.2.0)
+**Produktbasis:** V16.2.5 / `v16.2.5-20260922` (**TECHNICAL BUILD PASS + REAL UPDATE PASS + AUTOMATED FIELD PASS + MANUAL ACCEPTED WITH KNOWN UI FOLLOW-UPS**; `TRANSITIONAL:LIMIT_READBACK_CONVERGENCE` zulässig; Kartenlayout/Mobile Settings/Instance Owner/Graph-Linienbreak/Warnungsfunktion real bestätigt; zwei nicht blockierende Frontend-Restpunkte werden in den nächsten ohnehin anstehenden Release integriert)
 
 ## 1. Zweck und Persistenzvertrag
 
@@ -27,22 +27,28 @@ Zusätzlich kann `implementation_state` beispielsweise `none`, `partial` oder `i
 
 ## 3. Aktuelle Roadmap – priorisierte Sicht
 
-**Roadmapentscheidung vom 20.09.2026:** Die bisher getrennten Punkte `ZEC-BL-CTRL-S3-001`, `ZEC-BL-CTRL-001` und `ZEC-BL-CTRL-CAP-001` werden für die nächste Controllerentwicklung unter `ZEC-BL-CTRL-ADAPTIVE-001` als gemeinsamer Entwicklungsblock geführt. Die drei Child-IDs bleiben vollständig erhalten und müssen beim Abschluss einzeln reconciliiert werden. Hintergrund ist die laufende Lernmodell-/Pretrainer-Konzeption im Projektchat **„Installierte PV Anlage“**, in der saisonale Faktoren, dynamische Tagesprofile, SOC-/Ertragsstrategie und Kapazitätsgewichtung gemeinsam modelliert werden. Ein separater vorgelagerter S3-Release soll dadurch vermieden werden.
+**Roadmapstand 22.09.2026 nach abgeschlossener V16.2.5-Feldentscheidung:** Das Update V16.2.4 → V16.2.5 ist real erfolgreich. Der konsolidierte automatische Feldlauf ist PASS; `controller_ready` war wegen `LIMIT_READBACK_CONVERGENCE` transient, `controller_readiness_acceptance=PASS TRANSITIONAL:LIMIT_READBACK_CONVERGENCE`. Instance Owner, Speicherstatuskarten-Geometrie, Mobile Settings, sichtbare Graph-Linienunterbrechung sowie die funktionale ein-/ausklappbare High-SOC-/Command-Warnung sind real beobachtet.
 
-Die priorisierte Reihenfolge lautet ab dieser Entscheidung:
+Die reale Sichtprüfung hat zwei klar isolierte Frontend-Restpunkte ergeben: (1) `ZEC-BL-GRAPH-GAP-001`: Cursor/Tooltip/Inspector müssen innerhalb bestätigter Evidence-Gaps einen ehrlichen Gap-/Empty-State statt Nearest-Sample-Werten bzw. Epoch-Nullzeit zeigen; (2) `ZEC-BL-UI-STATUS-003`: der persistente Warnhinweis soll im kompakten Zustand höhenneutral als Warning-Chip im Kartenkopf erscheinen, während Details Desktop als verankertes Popover und mobil als Bottom-Sheet/Modal außerhalb des normalen Kartenflows geöffnet werden. Der Nutzer hat am 22.09.2026 ausdrücklich entschieden, für diese zwei kleinen, bereits klar abgegrenzten UI-Härtungen **keinen separaten Hotfix-Zyklus** zu erzwingen. Sie werden im nächsten ohnehin anstehenden Release als eigenständige, regressionsgeprüfte Frontend-Subscopes mitgeführt und sind **keine Sequencing-Blocker**.
 
-1. **ZEC-BL-CTRL-ADAPTIVE-001 – gemeinsamer adaptiver Reglerblock (`S3 + CTRL-001 + CTRL-CAP-001`).** Die finale Implementierung beginnt erst nach einer belastbaren Übergabe der laufenden Lernmodell-/Pretrainer-Konzeption. S3 wird dabei nicht gestrichen, sondern als verpflichtender Compatibility-/Migrationsteil aufgenommen. Der produktive allgemeine Simulator `SIM-001` ist kein zwingender Vorläufer; der Entwicklungsblock selbst benötigt jedoch belastbare Offline-/Replay-/Pretrainer-/Shadow-/Differential-Evidenz.
-2. **ZEC-BL-BATCARE-001 – Battery Care / Winter- und Reserve-SOC-Erhaltung.** Wegen der zeitnahen Winterrelevanz unmittelbar nach dem adaptiven Block. Vor Implementierung ist aus dem erhaltenen Brainstorming eine explizit freigegebene Spezifikation zu erstellen.
-3. **ZEC-BL-STORAGE-001 – Measurement-/SQLite-Storage-Lifecycle.** S4/S5/S6/S7/S9 gegen die aktuelle Codebasis inventarisieren und in sicheren Stufen umsetzen; kein destruktives Enforcement vor nachgewiesener Restore-/Protection-/Coverage-Sicherheit.
-4. **ZEC-BL-ANALYSIS-HANDOFF-001 – Graph → Analyse-Service.** Markierte reale Zeitfenster reproduzierbar an den bestehenden Analysedienst übergeben.
-5. **ZEC-BL-SIM-001 – kontrafaktische Regler-Simulation.** Reale historische Situationen mit alternativen Reglerparametern durchspielen und Reality-vs-Simulation vergleichbar machen.
-6. **ZEC-BL-SCENARIO-001 – allgemeiner Szenarioeditor** für synthetische Situationen, getrennt von historischer Counterfactual-Simulation.
-7. **ZEC-BL-MULTI-001 – echter Multi-Zendure-Command-/Regelpfad.** Darstellung mehrerer Entities existiert; echte Befehlsverteilung bleibt separat.
-8. **ZEC-BL-REL-001 – repo-zentrierter/reproduzierbarer Releaseprozess / CI.** Perspektivisch automatisieren, ohne aktuelle Sicherheitsgates abzuschwächen.
+Das Sequencing-Gate ist am 22.09.2026 durch ausdrückliche Nutzerentscheidung geschlossen: **`ZEC-BL-CTRL-FASTCAP-001` wird als nächster Controllerblock umgesetzt; Fast Capture wird technisch und fachlich von `ZEC-BL-CTRL-ADAPTIVE-001` entkoppelt.** Die eingefrorene A400/R100-Spezifikation wurde gegen die reale V16.2.5-Codebasis revalidiert (`PASS_WITH_V16_2_5_INTEGRATION_DELTAS`). `controller_logic.py`, `ZendureController.py`, `command_lifecycle.py`, `config_validator.py` und `primary_storage_source.py` sind zwischen V16.0.2 und V16.2.5 byteidentisch; die notwendigen Deltas betreffen vor allem State-/Settings-/Measurement-/UI- und Feldevidenzverträge. Die revalidierte Spezifikation `ZEC_FAST_CAPTURE_A400_R100_PRODUKTIONSSPEZIFIKATION_V16_2_5_REVALIDATED.md` ist Blockautorität. Der V17.0.0-Makro-Implementierungsscope wurde anschließend ausdrücklich freigegeben. Checkpoint A (Controllerkern/State/Differential-/Safetytests) ist fokussiert PASS mit 110 Tests + 11 Subtests; Checkpoint B (Settings/Validation, Measurement V4, Fast-Feldanalyse und V17-Feldabnahme) ist fokussiert PASS mit 114 Tests + 640 Subtests. Ein TECHNICAL BUILD PASS liegt noch nicht vor.
 
-Querschnittlich bleiben `ZEC-BL-DEP-002`, `ZEC-BL-PRIMARY-METADATA-001`, Diagnose-/Command-Langzeitevidenz, Lernwerkzeugabgleich und Storage-Langzeitperformance mitzunehmen. `ZEC-BL-DEP-002` erhält weiterhin keinen eigenen Release und wird beim nächsten geeigneten Implementierungsrelease gebündelt.
+Adaptive bleibt vollständig erhalten, ist aber kein Vorläufer für Fast Capture. Nach Bereitstellung des Fast-Capture-Releases beginnt ein eigener Adaptive-Spezifikationsblock; reale Fast-Episoden dürfen dabei als Evidenzinput dienen. Adaptive-Controller-Sourcearbeit benötigt weiterhin Lernzustand/Persistenz/Reset, Confidence/Fallback, S3-Mapping, Capacity-Weighting-Vertrag und eigene explizite Freigabe.
 
-`ZEC-BL-UI-STATUS-EXPERT-001` ist als wiederhergestellter offener UI-Completion-Punkt dauerhaft im Ledger enthalten, erhält aber **noch keine Position in der priorisierten Reihenfolge**, solange der Nutzer seine Einordnung gegenüber den oben priorisierten Entwicklungsblöcken nicht ausdrücklich festgelegt hat.
+Aktuelle priorisierte Sicht:
+
+1. **`ZEC-BL-CTRL-FASTCAP-001` – Fast Capture A400/R100:** **IN_PROGRESS**; V17.0.0-Makro-Scope ausdrücklich freigegeben. Checkpoint A und Checkpoint B sind fokussiert PASS; Checkpoint C mit den zwei bereits freigegebenen isolierten UI-Follow-ups ist fokussiert PASS mit 12 Tests; vollständige Releasegates stehen noch aus. Der Release muss die Fast-spezifische read-only Feldanalyse gleich mitliefern.
+2. **Verbindliche UI-Follow-ups im selben nächsten ohnehin anstehenden Release:** `ZEC-BL-GRAPH-GAP-001` Gap-aware Cursor/Tooltip/Inspector sowie `ZEC-BL-UI-STATUS-003` höhenneutraler Warning-Chip + Desktop-Popover/Mobile-Bottom-Sheet. Beide als isolierte Frontend-Deltas mit eigener Regression; keine Kopplung an Fast-Reglerlogik.
+3. **`ZEC-BL-CTRL-ADAPTIVE-001` – Adaptive-Spezifikationsblock nach Fast-Capture-Release:** S3 + adaptive Strategie + weiche Kapazitätsgewichtung vollständig spezifizieren; produktive Sourcearbeit erst separat freigeben.
+4. **ZEC-BL-BATCARE-001 – Battery Care / Winter- und Reserve-SOC-Erhaltung** folgt gemäß bestehender Roadmap nach dem adaptiven Block; vor Implementierung ist aus dem erhaltenen Brainstorming eine explizit freigegebene Spezifikation zu erstellen.
+5. **ZEC-BL-STORAGE-001 – Measurement-/SQLite-Storage-Lifecycle.** S4/S5/S6/S7/S9 gegen die aktuelle Codebasis inventarisieren und in sicheren Stufen umsetzen.
+6. **ZEC-BL-ANALYSIS-HANDOFF-001 – Graph → Analyse-Service.**
+7. **ZEC-BL-SIM-001 – kontrafaktische Regler-Simulation.**
+8. **ZEC-BL-SCENARIO-001 – allgemeiner Szenarioeditor.**
+9. **ZEC-BL-MULTI-001 – echter Multi-Zendure-Command-/Regelpfad.** Darstellung mehrerer Entities ist keine aktive Dual-Headunit-Regelung.
+10. **ZEC-BL-REL-001 – repo-zentrierter/reproduzierbarer Releaseprozess / CI.**
+
+Querschnittlich bleiben `ZEC-BL-PRIMARY-METADATA-001`, `ZEC-BL-UI-STATUS-EXPERT-001`, Diagnose-/Command-Langzeitevidenz, Lernwerkzeugabgleich und Storage-Langzeitperformance erhalten.
 
 ### 3.1 Historische S1–S9-Stufen – vollständige Reconciliation
 
@@ -64,10 +70,10 @@ Damit ist keine historische S1–S9-Stufe mehr nur implizit oder unaufgelöst.
 
 ### ZEC-BL-CTRL-ADAPTIVE-001 – gemeinsamer adaptiver Reglerblock (S3 + adaptive Strategie + Kapazitätsgewichtung)
 
-- **Status:** OPEN; Controller-Implementierung noch nicht begonnen, Design-/Lernmodellarbeit läuft als Vorarbeit im Projektchat **„Installierte PV Anlage“**.
+- **Status:** SPEC_NEEDED / OPEN; Controller-Implementierung noch nicht begonnen. Nach Nutzerentscheidung vom 22.09.2026 ist Adaptive von Fast Capture entkoppelt und folgt als eigener Spezifikationsblock nach Bereitstellung des Fast-Capture-Releases.
 - **Rolle:** Roadmap-/Umbrella-Eintrag für `ZEC-BL-CTRL-S3-001`, `ZEC-BL-CTRL-001` und `ZEC-BL-CTRL-CAP-001`. Die Child-IDs bleiben eigenständig erhalten und dürfen durch die Zusammenführung nicht verschwinden.
 - **Entscheidung 20.09.2026:** S3 nicht separat vorab implementieren. Saisonale Faktoren und dynamische Tagesprofile sollen mit der adaptiven Lade-/SOC-/Ertragsstrategie sowie der weichen Kapazitätsgewichtung in einem konsistenten Regelmodell zusammengeführt werden, sofern die finale Lernmodell-Übergabe dies bestätigt.
-- **Pflicht vor Sourceänderung:** Die Übergabe aus der Lernmodell-/Pretrainer-Arbeit muss mindestens eine Mapping-Matrix liefern: vorhandene S3-Settings → weiter aktive Nutzervorgabe / Modellinput / deterministischer Fallback / deprecated; Abdeckung von `CTRL-001`; Abdeckung von `CTRL-CAP-001`; Lernzustand/Persistenz/Reset; Confidence/Fallback; Offline-/Replay-/Shadow-/Differential-Evidenz; Safety-/Hardwaregrenzen.
+- **Pflicht vor Sourceänderung:** Es existiert nach aktueller Quellenprüfung keine weitere verlorene/finale Adaptive-Spezifikation. Der nächste Adaptive-Arbeitsschritt ist daher bewusst **Spezifikation**, nicht Suche nach einem vorausgesetzten Artefakt. Neu zu erstellen sind mindestens: Mapping-Matrix vorhandene S3-Settings → aktive Nutzervorgabe / Modellinput / deterministischer Fallback / deprecated; Abdeckung von `CTRL-001` und `CTRL-CAP-001`; konkretes Optimierungsziel und Aktionsraum; Lernzustand/Persistenz/Versionierung/Reset; Inputvertrag; Confidence/Fallback; Hardwarewechsel-/Invalidierungsvertrag; Offline-/Replay-/Shadow-/Differential-Evidenz; Safety-/Hardwaregrenzen und reproduzierbare Entscheidungsprovenienz.
 - **Simulation/Evidenz:** Der spätere produktive allgemeine Counterfactual-Simulator `ZEC-BL-SIM-001` bleibt ein eigener Roadmappunkt und ist nicht zwingende Vorbedingung für diesen Block. Vor produktiver Reglerwirkung sind dennoch belastbare simulationsnahe bzw. replay-/pretrainer-/shadowbasierte Nachweise auf realen Daten erforderlich.
 - **Normative Grenzen:** Die bestehende Grundinvariante „aktuell vermeidbare Einspeisung vor strategischer Ladeverteilung“ bleibt erhalten. Adaptive/gelernte Logik darf harte Safety-, SOC-, Command-, Recovery-, Cross-Charge- und Hardwareschonungsregeln nicht überstimmen.
 - **Versionsklasse:** erst mit finalem Runtime-Scope festlegen; ein echter neuer produktiver Lern-/Adaptionslayer ist nach `01_ZEC_PROJECT_RULES.md` als neues Entwicklungsthema zu bewerten, eine rein statische Parameternutzung gegebenenfalls anders.
@@ -165,12 +171,14 @@ Damit ist keine historische S1–S9-Stufe mehr nur implizit oder unaufgelöst.
 
 ### ZEC-BL-CTRL-FASTCAP-001 – Fast Capture A400/R100
 
-- **Status:** OPEN; `implementation_state=none`, Produktionsspezifikation vollständig.
-- **Provenienz:** Pretrainer V0.5 -> V0.6.1 und Freeze-Spezifikation vom 19.09.2026.
-- **Scope:** Fast-Overlay ausschließlich für `FULL_IDLE` und `NEAR_LIMIT`; `RESERVE_UNKNOWN` bleibt im normalen Baseline-Regelpfad. Produktionskandidat A400/R100.
-- **Evidenz:** V0.6.1 Vollhistorie mit 2.141.031/2.141.031 Rows und exakter Replay-Parität; Replay ist keine Closed-Loop-Feldevidenz.
-- **Vor Implementierung:** Spezifikation gegen die dann aktuelle Sourcebasis revalidieren; Block A/V16.1.0 darf nicht durch parallele ungesicherte Working-Trees überschrieben werden.
-- **Exit:** Build-/Differential-PASS -> reale Shadow-Abnahme -> begrenzte Active-Feldabnahme; Safety, Command-Effect und Hardware-Schonung separat belegen.
+- **Status:** IN_PROGRESS / TECHNICAL_BUILD_PASS / FIELD_PENDING; `implementation_state=implemented`; `sequencing=ACTIVE`; `spec_state=REVALIDATED_V16_2_5`; V17.0.1 ist der korrigierte Releasekandidat nach fail-closed Packaging-Reject von V17.0.0. Checkpoint A (Controllerkern/State/Differential-/Safetytests) fokussiert PASS: 110 Tests + 11 Subtests. Checkpoint B (Settings/Validation, Measurement V4, Fast-Feldanalyse, V17-Feldabnahme) fokussiert PASS: 114 Tests + 640 Subtests. Kein TECHNICAL BUILD PASS; Checkpoint C/UI-Follow-ups sind fokussiert PASS (12 Tests), vollständige Releasegates stehen noch aus.
+- **Provenienz:** Pretrainer V0.5 -> V0.6.1, Freeze-Spezifikation vom 19.09.2026 und V16.2.5-Revalidierung vom 22.09.2026. Aktive Blockautorität: `ZEC_FAST_CAPTURE_A400_R100_PRODUKTIONSSPEZIFIKATION_V16_2_5_REVALIDATED.md`.
+- **Scope:** Fast-Overlay ausschließlich für `FULL_IDLE` und `NEAR_LIMIT`; `RESERVE_UNKNOWN` bleibt im normalen Baseline-Regelpfad. Produktionskandidat A400/R100. Strategische Baseline `B` und kurzfristiger Fast-Overlay `O` sind strikt getrennte Schichten.
+- **Evidenz:** V0.6.1 Vollhistorie mit 2.141.031/2.141.031 Rows und exakter Replay-Parität; Replay ist keine Closed-Loop-Feldevidenz. Die V16.2.5-Revalidierung bestätigt den Reglerkern byteidentisch zur ursprünglichen Spezifikationsbasis und definiert die notwendigen Settings-/Measurement-/UI-/Evidence-Deltas.
+- **Analysewerkzeug-Audit:** `tools/v16_field_acceptance.py`, `tools/create_zec_analysis_package.sh` sowie `tools/replay_core.py`/`replay_report.py` sind als Basis wertvoll, aber allein nicht ausreichend für Zustand/Rechnung/physikalische Wirkung/Recovery des neuen Fast-Pfads. Der initiale Fast-Capture-Release muss deshalb ein releasegekoppeltes read-only Fast-Analysewerkzeug samt Tests und maschinenlesbarem Report mitliefern; fehlende natürliche Fast-Episoden sind `NOT_EVALUABLE`, niemals synthetischer PASS.
+- **Feldevidenzvertrag:** Build/Differential-PASS -> reale Shadow-Abnahme -> begrenzte Active-Feldabnahme. Shadow muss Klassifikation, Mathematik und Mutationsfreiheit belegen. Active muss zusätzlich reale Exportreduktion bzw. transparent nicht bewertbare Episoden, Import-Guard/Recovery, Command-Readback/Effect, Cross-Charge und Hardwareschonung episodespezifisch auswerten.
+- **Sequenzgrenze:** Nach Bereitstellung des Fast-Capture-Releases darf die Adaptive-Spezifikation beginnen, während Fast-Feldevidenz weiter gesammelt wird. Adaptive-Sourcearbeit bleibt separat freigabepflichtig und darf Fast Capture nicht stillschweigend verändern.
+- **Exit:** vollständiger Build-/Differentialnachweis, ausgelieferte Fast-Verifikationslogik, reale Shadow-Evidenz und anschließend begrenzte Active-Evidenz nach `ZEC_ANALYSE_REGELWERK_V1.1.md`; Safety, Command-Effect und Hardware-Schonung separat belegen.
 
 ### ZEC-BL-PRIMARY-SMA-FLOOR-001 – Sunny-Island Entladeuntergrenze als Capability
 
@@ -267,13 +275,17 @@ Damit ist keine historische S1–S9-Stufe mehr nur implizit oder unaufgelöst.
 
 ### ZEC-BL-DEP-002 – persistente Installationsreports
 
-- **Status:** OPEN, **kein eigener Entwicklungsrelease**.
-- Beim nächsten geeigneten Implementierungsrelease mit erledigen: persistenter maschinenlesbarer Installationsreport neben Installerlog/Evidence; `/tmp` höchstens Zusatzkopie; Feldtool bevorzugt persistenten Report; reale Backup-Datei mit Pfad/Größe/SHA256 verifizieren.
-- Reglerkernänderung nicht vorgesehen.
+- **Status:** CLOSED / REAL_FIELD_PASS; `implementation_state=implemented`; Release `V16.2.4 / v16.2.4-20260921`.
+- **Umsetzung V16.2.4:** Der Installer schreibt den maschinenlesbaren Installationsreport atomar und timestamped persistent unter `/home/pi/Downloads`; `/tmp/zec_v16_2_4_install_report.json` bleibt ausschließlich Kompatibilitätskopie.
+- **Feldtool-Vertrag:** Ein explizites `--install-report` gewinnt immer. Ohne expliziten Pfad wird der neueste persistente releasespezifische Report bevorzugt; nur wenn keiner vorhanden ist, darf die definierte `/tmp`-Kompatibilitätskopie verwendet werden.
+- **Integrität:** Reportformat, Release-/Buildidentität und Installationsmodus werden fail-closed validiert. Beim Update wird die im Report referenzierte reale Rollback-Datei weiterhin über Pfad, Größe und SHA256 verifiziert.
+- **Abgrenzung:** keine Änderung an Rollback-, Supportcapture-, Installationszustands-, Regler-, Command-, Safety- oder Recoverysemantik.
+- **Technischer Exit V16.2.4:** vollständige Regression `1123 Tests + 698 Subtests PASS` über 150 Testdateien; identischer Lauf mit `ResourceWarning=error`; Bash `13/13`, Browser-JS `3/3`, Compileall, Deployment-Harness `11/11`, Root-Artefakt-Transaktion, Datenblatt-, Build-Evidence-, Manifest-/Hygiene- und Fresh-extract-Gates PASS.
+- **Realer Exit 22.09.2026:** Update V16.2.3 → V16.2.4 erfolgreich; persistenter Report `/home/pi/Downloads/zec_v16_2_4_install_report_20260921_232843.json` real gefunden und vom Feldtool ohne explizites `--install-report` bevorzugt; Report-SHA256 `778b0716fba2c79ff6f77f26e11b818fb08cee96b9e0630f7cbf8624280b5260`; reale Rollback-Datei SHA256 `8e541acdc71fffb4e97bb9ec0428eab575eba526eeacf4d1f32c28b0fbf77150`; `rollback_backup_integrity=RELEASE_BACKUP_EXACT`; Gesamtfeldlauf PASS. Damit CLOSED / REAL_FIELD_PASS.
 
 ### ZEC-BL-DEP-003 – V16.2.1 Manifest-/Deploymentvertrag und einmalige Fehlerbehandlung
 
-- **Status:** EVIDENCE_PENDING; `implementation_state=implemented`; Technical Build PASS in `V16.2.2 / v16.2.2-20260921`; reale Update-Feldabnahme V16.2.0 → V16.2.3 noch offen.
+- **Status:** CLOSED / REAL_FIELD_PASS; `implementation_state=implemented`; technischer Fix ab V16.2.2, realer Exit mit `V16.2.3 / v16.2.3-20260921`.
 - **Realer Fund 21.09.2026:** V16.2.1 bestand Package-/Fresh-Extract-Gates, enthielt aber fünf `.pytest_cache`-Dateien im Source-Manifest. Der Installer schließt `.pytest_cache/` beim Update/Fresh-Install bewusst aus und prüfte anschließend das unveränderte vollständige Manifest im Ziel; dadurch brach der reale Updatepfad V16.2.0 → V16.2.1 nach Backup und Copy mit fehlenden Manifestdateien ab.
 - **Rollback-Evidenz:** automatischer Update-Rollback stellte V16.2.0 wieder her; `/health` meldete V16.2.0 alive=true, `/ready` true und keine failed_checks. V16.2.1 erhält daher keinen Real-Field-PASS.
 - **Zweiter bestätigter Befund:** `set -E` vererbt den `ERR`-Trap in Subshells. Ein Fehler im Manifest-Subshell konnte Supportcapture/Rollback dort und anschließend nochmals im Hauptprozess auslösen; dies erklärt die zwei Diagnosepakete des realen Fehlversuchs.
@@ -281,7 +293,7 @@ Damit ist keine historische S1–S9-Stufe mehr nur implizit oder unaufgelöst.
 - **Abgrenzung:** keine UI-, Regler-, Command-, Safety- oder Recoverysemantikänderung; `controller_logic.py` muss byteidentisch bleiben. `ZEC-BL-DEP-002` wird in diesem Hotfix nicht stillschweigend mit umgesetzt.
 - **Pre-Freeze-Evidenz:** vollständige Regression `1106 Tests + 698 Subtests PASS`, identischer Lauf mit `ResourceWarning=error`, Bash `13/13`, Browser-JS `3/3`, Compileall, Deployment-Harness `11/11`, Root-Rollback, Datenblatt und reale rsync/Manifest-Regression für Update/Fresh PASS. Das neue Hygiene-Gate erkannte ein während QA entstandenes Runtime-SQLite-Artefakt fail-closed; dieses wurde vor Manifest/Paketbau entfernt.
 - **Technical Exit:** paketierter Fresh-Extract ohne volatile Artefakte, Manifest/Hygiene, vollständige Regression `1106 + 698`, identischer ResourceWarning-Lauf, statische Gates, Deployment-Harness und Root-Rollback PASS.
-- **Realer Exit:** erfolgreiche Update-Feldabnahme V16.2.0 → V16.2.3; erst danach CLOSED / REAL_FIELD_PASS.
+- **Realer Exit 21.09.2026:** V16.2.3-Preflight und Update V16.2.0 → V16.2.3 erfolgreich; konsolidierte Feldabnahme insgesamt PASS. Exaktes Rollback-Backup SHA256 `d860ad8d3af8cdd31d6e568357509f6320258c2ef5d79e699e1a33e11ed8d518`. Damit ist der Manifest-/rsync-/Single-Finalization-Vertrag real bestätigt.
 
 ### ZEC-BL-UI-STATUS-002 – V16.2.0 Status-/SOC-Day-/Mobile-Settings-Härtung
 
@@ -294,37 +306,76 @@ Damit ist keine historische S1–S9-Stufe mehr nur implizit oder unaufgelöst.
 
 ### ZEC-BL-DEP-004 – kanonischer maschinenlesbarer Build-Evidence-/Preflight-Vertrag
 
-- **Status:** EVIDENCE_PENDING; `implementation_state=implemented`; V16.2.3 Technical Build PASS; reales Update weiterhin offen.
+- **Status:** CLOSED / REAL_FIELD_PASS; `implementation_state=implemented`; Release `V16.2.3 / v16.2.3-20260921`.
 - **Fund 21.09.2026:** realer V16.2.2-`--preflight-only`-Lauf auf V16.2.0 brach vor jeder Produktivmutation ab, weil der Installer nicht vorhandene Freitextmarker in den vorhandenen grünen QA-Dateien verlangte. Diagnosebundle belegte `installed_identity=V16.2.0` und `rollback_result=not_required_preflight`.
 - **Root Cause:** Build-Erzeugung und Installer hatten keinen gemeinsamen maschinenlesbaren Evidence-Vertrag; human-readable QA-Texte wurden als implizite Parser-API missbraucht.
 - **V16.2.3-Scope:** `ZEC_BUILD_EVIDENCE_V1`; gemeinsamer `deployment_contract.py verify-build-evidence`; Installerdelegation ohne Freitextparsing; fail-closed Release-/Count-/ResourceWarning-Prüfung; finales Paketgate muss den Evidence-Teil des echten Installer-Preflights aus dem Fresh Extract ausführen.
 - **Abgrenzung:** keine UI-, Regler-, Command-, Safety- oder Recoveryänderung; `controller_logic.py` bleibt byteidentisch. `ZEC-BL-DEP-002` bleibt separat offen.
-- **Realer Exit:** erfolgreicher mutationsfreier V16.2.3-Preflight und anschließende kompakte reale Update-Feldabnahme V16.2.0 → V16.2.3.
+- **Realer Exit 21.09.2026:** mutationsfreier V16.2.3-Preflight PASS; anschließendes Update V16.2.0 → V16.2.3 erfolgreich; Installationsreport SHA256 `7f727963537ca81c78184bdd28933ce24f5654f78a3c86126e5f0e66a98097ff`; Feldartefakt SHA256 `cd82a345765186104b9b6fbb485e69d0f43740f83d8bf81f70d104c95db5eab7`; Feldlauf insgesamt PASS. Damit ist der maschinenlesbare Build-Evidence-/Preflight-Vertrag real bestätigt.
 
-### ZEC-BL-UI-STATUS-003 – V16.2.1 Speicherstatuskarten-Konsolidierung
+### ZEC-BL-UI-SETTINGS-001 – Settings-Webmodell unterdrückt aktuelle produktive Releasefelder
 
-- **Status:** EVIDENCE_PENDING; `implementation_state=implemented`; ursprünglich in `V16.2.1 / v16.2.1-20260921` technisch gebaut, wegen realem Installer-Fail nicht feldabgenommen; unverändert über V16.2.2 in V16.2.3 übernommen und dort erneut feldabzunehmen.
-- **Provenienz:** reale V16.2.0-Nutzung / Nutzerbefunde vom 21.09.2026 nach erfolgreichem V16.2.0-Feld-PASS.
-- **Befund:** Die V16.2.0-Primärspeicherkarte war trotz funktionaler Zusatzanzeigen visuell überladen; der SOC-Ring-/Detailbereich und Harmonisierung/Harvest konkurrierten um die feste Kartenhöhe. Zusätzlich war die normalisierte usable-SOC-Prozentzahl in der Standardansicht mathematisch korrekt, aber neben dem Roh-SOC nicht intuitiv genug.
-- **Freigegebener Scope:** gemeinsamer Standardkartenvertrag für Zendure und Primärspeicher; große signierte Istleistung ohne zusätzliche ausgeschriebene Richtung; einteiliger Leistungsbalken mit Laden grün links→rechts und Entladen orange rechts→links; konkrete Leistung/Maximalleistung statt Prozentlabel; gemeinsame Bezeichnungen `Zustand`, `Ladegrenze`/`Entladegrenze`; `Noch ladbar`/`Noch entladbar` als SOC-Prozentpunkte und, bei belastbarer Kapazität, zusätzlich kWh.
-- **Kapazitätsvertrag:** reale/source-seitige usable/effective Kapazität hat Vorrang, sofern belastbar vorhanden; danach andere belastbare Geräte-/Templatewerte, danach manueller Fallback. Fehlt eine belastbare Kapazität, bleibt die Prozentpunkt-Angabe erhalten und nur die kWh-Angabe entfällt. `ZEC-BL-PRIMARY-METADATA-001` bleibt für die spätere automatische Geräte-/Template-Ermittlung offen.
-- **Diagnoseabgrenzung:** `primary_usable_soc_percent` bleibt intern/API-/Measurement-seitig diagnostisch erhalten, wird aber aus der Standardkarte entfernt. Harmonisierung/Harvest/Quellen- und usable-SOC-Details bleiben im Expertenkontext zugänglich. Dies schließt den vollständigen Statusseiten-Expertenmodus `ZEC-BL-UI-STATUS-EXPERT-001` nicht.
-- **Safety:** reine UI-/Diagnose-/Settingsdarstellung; keine Regler-, Command-, Safety- oder Recoveryänderung; `controller_logic.py` muss byteidentisch bleiben.
-- **Pre-Freeze-Nachweis:** fokussierte Regression `71 Tests + 10 Subtests PASS`; vollständige Regression `1100 Tests + 698 Subtests PASS`; identischer Lauf mit `ResourceWarning=error`; Bash `13/13`, Browser-JS `3/3`, Compileall, Deployment-Harness `11/11`, Root-Rollback und Datenblatt-Gate PASS.
-- **Technischer Exit:** Source-Manifest und vollständiger paketierter Fresh-extract einschließlich Regression, ResourceWarning-, Syntax/Compile-, Deployment-, Root-Rollback- und Datenblatt-Gates PASS.
-- **Offen:** kompakte reale Update-Feldabnahme des unverändert übernommenen UI-Scopes mit V16.2.0 → V16.2.3.
+- **Status:** CLOSED / REAL_FIELD_PASS; `implementation_state=implemented`; Release `V16.2.4 / v16.2.4-20260921`.
+- **Realer Fund 21.09.2026:** Nach erfolgreichem V16.2.3-Update fehlten `SECOND_BATTERY_CAPACITY_WH` und `SECOND_BATTERY_MAX_DISCHARGE_POWER_W` auf der realen Settings-Webseite. Bei der Sourceverifikation wurde zusätzlich bestätigt, dass auch der produktive Aktivierungsschalter `SECOND_BATTERY_INTEGRATION_ENABLED` vom selben historischen S1/RC19-Filter betroffen war.
+- **Root Cause:** Provenienzmetadaten `release_stage`/`origin` wurden fälschlich als Produkt-Surface-Autorität verwendet.
+- **Umsetzung V16.2.4:** `SettingsRegistry` trennt explizit `SurfaceState` (`operational`/`target_only`) und Hardware-/Konfigurations-`Applicability`. `settings_model.py` und First-Install-Persistenz verwenden dieselbe zentrale operative Surface-Autorität. Nichtlegacy-Settings müssen explizit klassifiziert sein; unbekannte aktive/visible Kandidaten schlagen fail-closed fehl.
+- **Hardwarevariabilität:** `SECOND_BATTERY_INTEGRATION_ENABLED` bleibt als operativer Einstieg unabhängig vom aktuellen Primärspeicherzustand erreichbar. Untergeordnete Primärspeicherfelder sind produktiv freigegeben, werden aber abhängig vom aktuellen Browser-Draft der Integration sichtbar. Die Topologie kann 1 oder 2 Zendure-Entities ausweisen; daraus entstehen ausdrücklich keine zweite Zendure-Commandkonfiguration und keine Freigabe von `ZEC-BL-MULTI-001`.
+- **Negativvertrag:** spätere S3/S4/S6/S7-Zielsettings bleiben `target_only` und dürfen auch bei passender Hardware nicht produktiv exponiert werden.
+- **Feldtool-Lücke geschlossen:** Die V16.2.4-Feldabnahme prüft live `/settings/model`, die drei erwarteten Primärspeicher-Controls, deren Surface-/Applicability-Vertrag sowie Negativproben für target-only Settings.
+- **Safety:** keine Regler-, Command-, Safety- oder Recoveryänderung; `controller_logic.py` bleibt byteidentisch.
+- **Realer Exit 22.09.2026:** konsolidierter V16.2.4-Feldlauf PASS; `primary_storage_settings_surface=PASS`; `SECOND_BATTERY_INTEGRATION_ENABLED`, `SECOND_BATTERY_CAPACITY_WH` und `SECOND_BATTERY_MAX_DISCHARGE_POWER_W` jeweils real `available=True`, `editable=True`, `applicable=True`, `surface_state=operational`. Manuelle UI-Prüfung bestätigte Kapazitätsvalidation und die daraus resultierende kWh-/Maximalleistungsanzeige auf der Sunny-Island-Karte. Damit CLOSED / REAL_FIELD_PASS.
+
+### ZEC-BL-UI-SETTINGS-MOBILE-001 – Mobile Settings ohne horizontalen Content-Overflow
+
+- **Status:** CLOSED / REAL_FIELD_PASS; `implementation_state=implemented`; `technical_state=TECHNICAL_BUILD_PASS`; Release `V16.2.5 / v16.2.5-20260922`.
+- **Implementierungsstand 22.09.2026:** responsiver Viewport-/Intrinsic-Width-Vertrag umgesetzt; Input/Einheit stapeln auf kleinen Viewports, lange Keys/Fehler/Meta-Pills brechen, Pinch-Zoom bleibt zulässig aber nicht erforderlich. Fokussierte UI-/Diagnose-Regression und vollständige Build-/Fresh-extract-Gates PASS.
+- **Reale Feldabnahme 22.09.2026:** auf realem iPhone im Expertenmodus geprüft. Input, Einheit, langer technischer Key, Validierungsfehler, Meta-Pills, Standard/Experte-Umschalter und die feste Änderungsleiste bleiben innerhalb des nutzbaren Settings-Viewports erreichbar; der gezeigte absichtlich ungültige Draftwert wird vollständig und ohne horizontal abgeschnittenen Content dargestellt. Kein Commit des Testwerts.
+- **Realer Fund 22.09.2026:** Auf dem iPhone laufen Settings-Controls, Einheit, Validierungsbox und teilweise der Standard/Experte-Umschalter rechts über den Viewport hinaus. Die Seite ist absichtlich nicht horizontal scrollbar; dadurch wird Inhalt abgeschnitten und ist nicht erreichbar.
+- **Root-Cause-Richtung:** der mobile Scrollcontainer ist auf vertikale Interaktion begrenzt (`overflow-x:hidden` / vertikaler Touch-Pfad), während einzelne Settings-Layoutzeilen eine Mindest-/Intrinsic-Breite oberhalb des Viewports behalten.
+- **Zielvertrag V16.2.5:** Settings-Content muss bei 320/375/390/430 CSS-Pixel vollständig innerhalb des Viewports bleiben; horizontales Scrollen oder Pinch-Zoom sind kein Ersatz für responsives Layout. Lange Keys, Fehlermeldungen, Einheiten, Meta-Pills und Standard/Experte-Umschalter müssen umbrechen bzw. in eine mobile Layoutvariante wechseln. `scrollWidth <= clientWidth` ist als Regression-Gate abzudecken.
+- **Abgrenzung:** keine Settings-Semantik-, Validation-, Persistenz- oder Regleränderung.
+
+### ZEC-BL-UI-STATUS-003 – Speicherstatuskarten-Konsolidierung und reale Layout-Completion
+
+- **Status:** OPEN / REAL_FIELD_PASS_WITH_UI_FOLLOWUP; `implementation_state=implemented_v16_2_5_plus_followup`; `technical_state=TECHNICAL_BUILD_PASS`; Releasebasis `V16.2.5 / v16.2.5-20260922`.
+- **Standardkartenvertrag:** große signierte Istleistung ohne zusätzliche Richtungsbeschriftung; einteiliger Leistungsbalken Laden grün links→rechts / Entladen orange rechts→links; W/kW relativ zur belastbaren Maximalleistung ohne Prozentlabel; `Ladegrenze`/`Entladegrenze`; `Noch ladbar`/`Noch entladbar` als SOC-Prozentpunkte plus kWh nur bei belastbarer Kapazität.
+- **Kapazitätspriorität:** reale/source-seitige usable/effective Kapazität → belastbare Geräte-/Templatekapazität → manueller Fallback → keine kWh. Keine scheinpräzisen Ersatzwerte.
+- **V16.2.5 real bestätigt:** Desktop und reales iPhone zeigen keine Footer-/Content-Überdeckung; `Noch ladbar` steht lesbar in der rechten Detailspalte, Leistungsbeschriftung/-balken bleiben lesbar. Eine reale aktive `HIGH_SOC_CHARGE_LIMITED`-/Ladeannahme-Warnung wurde am 22.09.2026 sowohl eingeklappt als auch ausgeklappt beobachtet: Warnung bleibt sichtbar, Details sind lesbar und auf-/zuklappbar, regulärer Inhalt wird nicht überdeckt.
+- **Neues reales UX-Finding 22.09.2026:** Bereits die eingeklappte V16.2.5-Warnungsbox vergrößert die Speicherkarte und dadurch die gesamte obere Kartenreihe deutlich. Das widerspricht dem erreichten Ziel hoher vertikaler Informationsdichte, obwohl die funktionale Warnungs-Evidenz selbst PASS ist.
+- **Freigegebener Follow-up-Vertrag:** aktiver Warnzustand höhenneutral als Warning-Chip im vorhandenen Kartenkopf, vorzugsweise mit fachlicher Kurzbezeichnung (`Begrenzt`, `Ladeannahme` o. ä.); bei mehreren aktiven Warnungen aggregierter Hinweis/Anzahl. Details werden außerhalb des normalen Kartenflows geöffnet: Desktop als an der Karte verankertes nicht-layoutverschiebendes Popover, mobil als touch-taugliches Bottom-Sheet bzw. kompaktes Modal. Schließen der Details darf die aktive Warnung nicht verbergen. Hover allein reicht nicht; Touch/Tastatur müssen funktionieren. Keine schwebende Box darf regulären Karteninhalt verdecken.
+- **Sequencing-/Releaseentscheidung:** Für diesen Follow-up wird kein eigener Hotfix-Zyklus erzwungen. Er ist verbindlicher isolierter Frontend-Subscope des nächsten ohnehin anstehenden Releases und blockiert die Fast-Capture-vs.-Adaptive-Entscheidung nicht.
+- **Expert-Slice:** der V16.2.4-Primärspeicher-Slice `Strategie & Diagnose` bleibt erhalten; der vollständige kartenübergreifende Expertenmodus bleibt unter `ZEC-BL-UI-STATUS-EXPERT-001` offen.
+- **Safety:** reine UI-/Diagnosedarstellung; keine Regler-, Command-, Safety- oder Recoveryänderung; bis zu einem Controllerrelease-spezifisch anders freigegebenen Scope bleibt die bestehende Reglersemantik unberührt.
+- **Follow-up-Exit:** eingeklappte aktive Warnung erzeugt keine zusätzliche Karten-/Gridhöhe; geöffnete Details verschieben das Seitenlayout nicht; Warnexistenz bleibt permanent sichtbar; Desktop/Mobile/Keyboard/Touch und Mehrfachwarnungsfall regressionsgetestet.
+
+### ZEC-BL-DIAG-OWNER-001 – Produktive Instance-Owner-Evidenz im Statussnapshot
+
+- **Status:** CLOSED / REAL_FIELD_PASS; `implementation_state=implemented`; `technical_state=TECHNICAL_BUILD_PASS`; Release `V16.2.5 / v16.2.5-20260922`.
+- **Implementierungsstand 22.09.2026:** die fünf Instance-Owner-Felder sind im allgemeinen `ControllerState.snapshot()` ergänzt; Lock-/Owner-Semantik unverändert. Fokussierte Regression sowie vollständige Build-/Fresh-extract-Gates PASS.
+- **Realer Exit 22.09.2026:** produktiver Snapshot bestätigt `INSTANCE_OWNER_ACTIVE=True`, `INSTANCE_OWNER_PID=39159`, `INSTANCE_OWNER_BUILD_ID=v16.2.5-20260922`. Damit ist der V16.2.4-Falschzustand `Owner nicht bestätigt` im realen V16.2.5-Pfad behoben, ohne Änderung der Instance-Lock-/Single-Owner-Semantik.
+- **Realer Fund 22.09.2026:** Die produktive V16.2.4-Instanz läuft gesund und `ready=true`, aber `Controller & Schnittstellen` zeigt `Owner nicht bestätigt`, `Prozess —`, `Build —`. Der Feldsnapshot bestätigt `instance_owner_active=False`, `instance_owner_pid=None`, leere Build-ID.
+- **Sourceverifikation:** `ZendureController.py` setzt Owner-Status/PID/Build-ID beim erfolgreichen Instance-Lock; `readiness_snapshot()` exportiert sie. Der allgemeine `ControllerState.snapshot()`-Pfad für `/status-view-data` übernimmt diese Felder jedoch nicht vollständig, wodurch ein falscher Diagnosezustand entsteht.
+- **Zielvertrag V16.2.5:** Instance-Owner-Evidenz muss in allen relevanten Status-/Readiness-Snapshots konsistent sein; die UI darf eine real bestätigte produktive Instanz nicht als unbestätigt darstellen. Keine Lock-/Single-Owner-Semantikänderung, nur Snapshot-/Diagnosekonsistenz.
+- **Exit:** Regression über `/health`, `/ready`, `/status` und `/status-view-data` bzw. deren reale Datenpfade; produktive Ownerdaten konsistent, fehlende Ownerdaten weiterhin ehrlich als unbestätigt dargestellt.
+
+### ZEC-BL-GRAPH-GAP-001 – echte Datenlücken unterbrechen numerische Graphlinien
+
+- **Status:** OPEN / REAL_FIELD_PASS_WITH_UI_FOLLOWUP; `implementation_state=partial`; `technical_state=TECHNICAL_BUILD_PASS`; Releasebasis `V16.2.5 / v16.2.5-20260922`.
+- **V16.2.5 real bestätigt:** bestätigte Nicht-AVAILABLE-Evidence erzeugt renderseitige `null`-Breaks; über bekannter Controller-Downtime ist die numerische Linie tatsächlich sichtbar unterbrochen. Es entstehen keine synthetischen Messwerte. Damit ist der primäre Graph-Gap-Fix real PASS.
+- **Verbleibender Interaktionsfehler:** Beim Hover/Klick innerhalb einer bestätigten Lücke zeigt das synchronisierte Cursor-/Tooltip-Overlay weiterhin Werte des nächsten realen Messpunkts außerhalb der Lücke; der Inspector liefert zwar keine Messwerte, rendert bei `actual_ms=null` aber `01.01.1970, 01:00:00` statt eines ehrlichen Gap-/Empty-States.
+- **Sourceverifikation:** `syncPlugin` und `updateCursorCards()` verwenden `nearestDatasetPoint()`/`nearestIndex()` ohne Evidence-Gap-Gate; die `y:null`-Breaks verhindern die Linie, nicht das Nearest-Sample-Overlay. `renderInspector()` wandelt `null` über `Number(null)` in `0` und erzeugt damit den Epoch-Zeitwert.
+- **Follow-up-Zielvertrag:** Innerhalb bestätigter `GAP`/`NOT_INSTRUMENTED`/`PURGED_BY_RETENTION`-Intervalle dürfen Cursor, Tooltip, Marker und Inspector keinen realen Nachbarpunkt an den Cursorzeitpunkt projizieren. Stattdessen Gap-/Empty-State ohne synthetische Werte; außerhalb bestätigter Lücken bleibt die bisherige Nearest-Interaktion unverändert. Normale Sampling-Jittertoleranz darf nicht unnötig in Gap-Semantik umklassifiziert werden.
+- **Sequencing-/Releaseentscheidung:** Der Restfehler ist ein isolierter UI-/Interaktionsdefekt und kein Daten-, Regler-, Command-, Safety- oder Recoveryfehler. Wegen der real bereits korrekten Linienunterbrechung wird kein eigener V16.2.6-Hotfix-Zyklus erzwungen. Der Fix ist verbindlicher, eigenständig regressionsgeprüfter Frontend-Subscope des nächsten ohnehin anstehenden Releases und blockiert die Fast-Capture-vs.-Adaptive-Entscheidung nicht.
+- **Exit:** Query-/Frontend-Regression mit Vorher-/Nachherpunkten und echtem Gap; Linie, Hover/Cursor, Tooltip, Inspector und Coverage/Evidence semantisch konsistent; im nicht verfügbaren Intervall keine Nearest-Sample-Werte oder Marker am Cursor; kein Epoch-Nullzeit-Fallback; außerhalb des Gaps unveränderte Interaktion.
 
 ### ZEC-BL-UI-STATUS-EXPERT-001 – vollständiger Statusseiten-Experten-/Diagnosemodus
 
-- **Status:** OPEN; `implementation_state=partial`; Roadmapposition noch nicht festgelegt.
-- **Provenienz:** historische UI-Arbeit seit V12.8.x/V12.11.x (`kein vollständiger Standard-/Expertenmodus`, `Experten-/Diagnoseansicht` als Restpunkt), Projektchat **„Redesign Statusseite“** sowie der weiterhin aktive `UI_MODE`-Vertrag. Die historische Diskussion ist Provenienz; der hier festgehaltene Scope wird gegen V16.2.0 neu verankert.
-- **V16.2.0 Ist-Befund:** `UI_MODE=standard|expert` ist in `SettingsRegistry`/Config/Help vorhanden. `status_page_v2.py` rendert ein Experten-/Diagnose-Navigationsmenü mit Links u. a. zu MQTT-Diagnose, Messdaten und Legacy-Status, wertet `UI_MODE` aber nicht als Darstellungsmodus der V2-Statuskarten aus. Das vorhandene Menü ist daher nicht gleichbedeutend mit dem vollständigen Statusseiten-Expertenmodus.
-- **Zielvertrag:** Expertenmodus bleibt Superset des Standardmodus. Kernstatus, Warnungen und handlungsrelevante Informationen bleiben unverändert sichtbar; zusätzliche technische Details werden vertiefend zugänglich, ohne die Standardkarten dauerhaft zu überladen.
-- **Historisch recoverter Inhaltsrahmen:** vollständiger/vertiefter Status-Snapshot; Rohstatus und Quelle relevanter Daten; Freshness/Validity/Datenalter; Reason-/Limiter- und Sollwertpipeline; Command-Effect/Readback/Resync; Timing-/Runtime-Diagnose; letzte relevante Runtime-Events; kontextbezogene Links zu Graph, Analyse und Settings. Nur vorhandene belastbare Daten dürfen dargestellt werden.
-- **Interaktion:** vertiefende Diagnose über klar erkennbare Detailzugänge bzw. aufklappbare/kontextsensitive Detailflächen; Hover allein darf keine notwendige Diagnoseinformation tragen. Die konkrete responsive Modal-/Sidepanel-/Inline-Ausprägung wird vor Implementierung gegen die aktuelle Statusseite festgelegt.
-- **Safety/Privacy:** reine UI-/Diagnosefunktion; keine Regler-/Commandwirkung, keine neue externe I/O im Regelzyklus, keine Secret-Exposition.
-- **Vor Umsetzung:** V16.2.0-Karten-/ViewModel-Inventar erstellen; je Karte Standardkern vs. Expertendetails mappen; `UI_MODE`-Wirksamkeit und Reload-/Persistenzvertrag festlegen; Desktop/Mobile/Keyboard-/Accessibility-Verhalten definieren; bestehendes Experten-Navigationsmenü sauber vom Darstellungsmodus abgrenzen.
-- **Exit:** `UI_MODE=standard|expert` wirkt nachweisbar auf der Statusseite; Expert ist vollständiges Superset; kritische Warnungen/Standardinformationen bleiben identisch; technische Details nutzen reale Snapshot-/Diagnosedaten; responsive/Accessibility-/Regressionstests decken beide Modi und Moduswechsel ab.
+- **Status:** OPEN; `implementation_state=partial`; Roadmapposition nach V16.2.4 weiterhin nicht automatisch festgelegt.
+- **V16.2.4-Stand:** `UI_MODE=standard|expert` steuert nun auf der Primärspeicherkarte einen echten sichtbaren Superset-Slice. Im Expertenmodus werden `Strategie & Diagnose` mit Harmonisierung, Harvest/Strategie, diagnostischem usable SOC und Quellenstatus kompakt gerendert; die Standardkarte bleibt unverändert schlank.
+- **Vertrag:** Expert bleibt Superset von Standard. Kritische Warnungen und Standardinformationen verschwinden nicht; der Modus ändert niemals Regler-/Command-/Safety-Semantik und erzeugt keine neue externe I/O.
+- **Weiter offen:** der kartenübergreifende Completion-Scope mit vertieftem Status-Snapshot, Freshness/Validity, Reason-/Limiter-/Sollwertpipeline, Command-Effect/Readback/Resync, Timing/Runtime, Events und kontextbezogenen Diagnosezugängen. Nur vorhandene belastbare Daten dürfen exponiert werden.
+- **Interaktion/Privacy:** technische Details benötigen erkennbare responsive Zugänge; Hover allein reicht nicht. Secrets und rohe vertrauliche Konfiguration bleiben ausgeschlossen.
+- **Exit des Gesamtpunkts:** `UI_MODE` wirkt nachweisbar kartenübergreifend; Expert ist vollständiges Superset; responsive/Accessibility-/Regressionstests decken beide Modi und Moduswechsel ab.
 
 ### ZEC-BL-DIAG-FIELD-001 – Feldabnahme-Tool an Release- und Readinessvertrag synchronisieren
 
@@ -449,12 +500,95 @@ Begründung für die Zusammenführung des ersten Blocks: Im parallelen Projektch
 
 ## 10. Projektquellen-Reconciliation 21.09.2026
 
-Ausgangspunkt ist der V16.2.0-Releasefreeze mit 76 eindeutigen Ledger-IDs und die danach in der kanonischen Projektquelle fortgeschriebene reale Feldabnahme. Die Quellenbereinigung/replacement vom 21.09.2026 erhält sämtliche 76 IDs unverändert und ergänzt genau zwei Planungs-IDs:
+Der V16.2.3-Technical-Freeze-Stand enthält maschinell inventarisiert **81 eindeutige stabile `ZEC-BL`/`ZEC-EV`/`ZEC-HIST`-IDs**. Die Post-Freeze-Reconciliation nach realer V16.2.3-Installation und manueller UI-Prüfung erhält sämtliche 81 IDs und ergänzt genau eine neue ID:
 
-1. `ZEC-BL-CTRL-ADAPTIVE-001` – persistente Abbildung der Nutzerentscheidung zur gemeinsamen Entwicklung von S3, adaptiver Strategie und Kapazitätsgewichtung; die drei Child-IDs bleiben erhalten.
-2. `ZEC-BL-UI-STATUS-EXPERT-001` – Recovery des historisch vorgesehenen, in V16.2.0 nur teilweise vorbereiteten Statusseiten-Expertenmodus.
+1. `ZEC-BL-UI-SETTINGS-001` – real bestätigter Settings-Webmodell-/Availability-Defekt für aktuelle produktive V16.2.0-Felder.
 
-Damit enthält dieses Ledger **78 eindeutige IDs**. Kein V16.2.0-Release-/Feldpunkt und keine frühere Ledger-ID wurde entfernt. Der Expertenmodus erhält bewusst noch keine priorisierte Roadmapposition.
+Fortgeschrieben, aber nicht entfernt oder umbenannt wurden insbesondere:
+
+- `ZEC-BL-DEP-003` → `CLOSED / REAL_FIELD_PASS` durch erfolgreichen V16.2.3-Updatepfad;
+- `ZEC-BL-DEP-004` → `CLOSED / REAL_FIELD_PASS` durch erfolgreichen V16.2.3-Preflight/Update;
+- `ZEC-BL-UI-STATUS-003` → `OPEN`, `implementation_state=partial`, weil die manuelle UI-Prüfung nach automatischem PASS einen realen Surface-Defekt fand;
+- `ZEC-BL-UI-STATUS-EXPERT-001` bleibt `OPEN / partial` und erhält den realen Primärspeicher-Superset-Befund;
+- `ZEC-BL-CTRL-FASTCAP-001`, `ZEC-BL-CTRL-ADAPTIVE-001` und alle Child-/Folgepunkte bleiben vollständig erhalten; ihre nächste Reihenfolge wird nach dem unmittelbaren UI-/Settings-Bugfix explizit entschieden.
+
+Damit enthält dieses Ledger nach Kanonisierung **82 eindeutige stabile IDs**. Keine Vorgänger-ID wurde entfernt. Die im Handover inventarisierten Planungsmarker sind entweder einem bestehenden Eintrag oder `ZEC-BL-UI-SETTINGS-001` zugeordnet.
 
 **BACKLOG_NO_DROP_GATE = PASS**
 
+### V16.2.4 Build-Reconciliation 21.09.2026
+
+Der freigegebene V16.2.4-Block erzeugt **keine neue Ledger-ID**. Alle 82 zuvor kanonisierten stabilen IDs bleiben erhalten. Fortgeschrieben werden ausschließlich bestehende Punkte: `ZEC-BL-UI-SETTINGS-001`, `ZEC-BL-UI-STATUS-003`, `ZEC-BL-UI-STATUS-EXPERT-001` und `ZEC-BL-DEP-002`. Fast Capture, Adaptive samt Child-IDs, usable-SOC Block B, Primary Metadata und Battery Care bleiben unverändert recoverbar.
+
+**BACKLOG_NO_DROP_GATE = PASS (82/82 IDs erhalten)**
+
+### V16.2.4 Real-Field-/V16.2.5-Hotfix-Reconciliation 22.09.2026
+
+Die reale V16.2.4-Abnahme erhält alle bisherigen **82** stabilen IDs und ergänzt für die manuell bestätigten neuen Defektklassen genau drei IDs:
+
+1. `ZEC-BL-UI-SETTINGS-MOBILE-001`;
+2. `ZEC-BL-DIAG-OWNER-001`;
+3. `ZEC-BL-GRAPH-GAP-001`.
+
+`ZEC-BL-UI-SETTINGS-001` und `ZEC-BL-DEP-002` werden durch reale V16.2.4-Evidenz auf `CLOSED / REAL_FIELD_PASS` fortgeschrieben. `ZEC-BL-UI-STATUS-003` bleibt erhalten und wird wegen der realen Karten-/Warnungsbefunde in den freigegebenen V16.2.5-Hotfix überführt. `ZEC-BL-UI-STATUS-EXPERT-001` bleibt `OPEN / partial`. Fast Capture, Adaptive samt Child-IDs, usable-SOC Block B, Primary Metadata, Battery Care und alle übrigen Vorgängerpunkte bleiben unverändert recoverbar.
+
+Damit enthält das Ledger **85 eindeutige stabile IDs**. Keine Vorgänger-ID wurde entfernt oder umbenannt.
+
+**BACKLOG_NO_DROP_GATE = PASS (82/82 Vorgänger-IDs erhalten; 3 neue IDs; Gesamt 85)**
+
+### V16.2.5 Real-Field-Reconciliation 22.09.2026
+
+Die reale Installation V16.2.4 → V16.2.5 und der konsolidierte automatische Feldlauf sind PASS. Die übergebene Evidence weist `controller_ready=WARN LIMIT_READBACK_CONVERGENCE`, aber `controller_readiness_acceptance=PASS TRANSITIONAL:LIMIT_READBACK_CONVERGENCE` aus; das entspricht dem bestehenden Readinessvertrag. Evidence-Archiv-SHA256: `b8b188f487f05eac5fcba8d94614ecb17731c88389708e84425113cf43cad239`.
+
+Die anschließende manuelle Sichtprüfung und Nutzerentscheidung führen ohne neue Ledger-ID zu folgenden Fortschreibungen:
+
+- `ZEC-BL-UI-SETTINGS-MOBILE-001` → `CLOSED / REAL_FIELD_PASS`;
+- `ZEC-BL-DIAG-OWNER-001` → `CLOSED / REAL_FIELD_PASS`;
+- `ZEC-BL-UI-STATUS-003` → funktionale V16.2.5-Warnungsdarstellung real PASS; neuer UX-Follow-up für höhenneutralen Header-Warning-Chip mit Desktop-Popover/Mobile-Bottom-Sheet bleibt `OPEN`;
+- `ZEC-BL-GRAPH-GAP-001` → sichtbare Linienunterbrechung real PASS; Gap-aware Cursor-/Tooltip-/Inspector-Semantik bleibt `OPEN`.
+
+Der Nutzer entscheidet am 22.09.2026 ausdrücklich, für die beiden isolierten UI-Restpunkte keinen eigenen Hotfix-Zyklus zu erzwingen. Beide werden verbindlich im nächsten ohnehin anstehenden Release separat regressionsgeprüft mitgeführt und blockieren die Fast-Capture-vs.-Adaptive-Sequencing-Entscheidung nicht. Damit ist das Sequencing-Gate freigegeben, ohne eine Reihenfolge vorwegzunehmen.
+
+Alle bisherigen **85** stabilen IDs bleiben erhalten; keine ID wird entfernt, umbenannt oder durch die neue Feldbeobachtung ersetzt.
+
+**BACKLOG_NO_DROP_GATE = PASS (85/85 IDs erhalten; 0 neue IDs)**
+
+### Fast-Capture-Sequencing-/Revalidation-Reconciliation 22.09.2026
+
+Die neutrale Gegenüberstellung Fast Capture versus Adaptive ist abgeschlossen. Der Nutzer bestätigt die technische Entkopplung und legt **Fast Capture A400/R100 als nächsten Controllerblock** fest. Die eingefrorene Produktionsspezifikation wurde gegen V16.2.5 revalidiert und um die releaseintegrierte Feldverifikationspflicht ergänzt. Adaptive bleibt mit sämtlichen Child-IDs erhalten und wird nach Bereitstellung des Fast-Capture-Releases als eigener Spezifikationsblock fortgeführt.
+
+Es entsteht keine neue Ledger-ID: Die Verifikationslogik ist Bestandteil des Exit-/Evidenzvertrags von `ZEC-BL-CTRL-FASTCAP-001`, und die Adaptive-Spezifikationslücke bleibt unter `ZEC-BL-CTRL-ADAPTIVE-001` samt Child-IDs erhalten. Alle bisherigen **85** stabilen IDs bleiben unverändert.
+
+**BACKLOG_NO_DROP_GATE = PASS (85/85 IDs erhalten; 0 neue IDs)**
+
+
+
+### V17.0.0 Fast-Capture Checkpoint A/B Reconciliation 22.09.2026
+
+Der freigegebene V17.0.0-Fast-Capture-Block bleibt unter der bestehenden ID `ZEC-BL-CTRL-FASTCAP-001`; es entsteht keine neue Ledger-ID. Checkpoint A implementiert Controllerkern/State und bestand die fokussierte Differential-/Safetyregression mit **110 Tests + 11 Subtests PASS**. Checkpoint B ergänzt Settings-/Validationvertrag, Measurement-V4-Evidenz, `tools/fast_capture_field_analysis.py`, `tools/v17_field_acceptance.py` und die Analysis-Package-Integration; die fokussierte Checkpoint-B-Regression bestand mit **114 Tests + 640 Subtests PASS**.
+
+Die V16.2.5-Produktivbasis bleibt bis Release-/Feldfreigabe unverändert. Die zwei bekannten Frontend-Follow-ups bleiben unter `ZEC-BL-GRAPH-GAP-001` und `ZEC-BL-UI-STATUS-003` erhalten und bilden den nächsten isolierten Entwicklungscheckpoint. Vollständige Regression, ResourceWarning-, Syntax-, Manifest-, Fresh-extract- und Releasegates sind noch ausstehend; daher **kein TECHNICAL BUILD PASS**.
+
+Checkpoint C setzt die zwei separat freigegebenen Frontend-Follow-ups um: Gap-aware Cursor/Marker/Inspector/Command-Follow/Comparison-Hover sowie den höhenneutralen Zendure-Warning-Chip mit Desktop-Popover/Mobile-Bottom-Sheet. Die fokussierte Checkpoint-C-Regression besteht mit **12 Tests PASS**.
+
+**BACKLOG_NO_DROP_GATE = PASS (85/85 IDs erhalten; 0 neue IDs)**
+
+
+### V17.0.0 Technical-Build-Pass Reconciliation 22.09.2026
+
+Der freigegebene Fast-Capture-Releaseblock erreicht **TECHNICAL BUILD PASS**. Vollständige Regression: **156 Testdateien / 1162 Tests + 706 Subtests PASS**; identischer `-W error::ResourceWarning`-Lauf ebenfalls **1162 + 706 PASS**. Bash-Syntax 13/13, Browser-JS 3/3, Python-Compileall, Deployment-Harness 11/11, Datenblatt-Gate, Build-Evidence, Release-Hygiene, Source-Manifest und Fresh-extract-Manifestverifikation sind PASS.
+
+Finales Paket: `zendure_controller_v17_0_0.zip`, SHA256 `5f8a72edd00c32f0c6ce71871b51cfe479dc1cf465636402bc364e9608c45712`. `controller_logic.py` SHA256 `113cb9cc60475cb59294bf07ab750e63580b59112f178948b7e386fd0539b031`.
+
+`ZEC-BL-CTRL-FASTCAP-001` bleibt bis realer Shadow-/Active-Wirkungsevidenz **IN_PROGRESS / TECHNICAL_BUILD_PASS / FIELD_PENDING**. Die beiden UI-Follow-ups sind technisch im Release enthalten, reale Sichtprüfung nach Installation bleibt Feldgate. V16.2.5 bleibt bis erfolgreicher V17.0.0-Installation die reale Runtimebasis. Adaptive bleibt unverändert als nachgelagerter Spezifikationsblock erhalten.
+
+**BACKLOG_NO_DROP_GATE = PASS (85/85 IDs erhalten; 0 neue IDs)**
+
+
+### V17.0.0 Packaging-Reject / V17.0.1 Technical-Build-Pass Reconciliation 22.09.2026
+
+`ZEC-BL-CTRL-FASTCAP-001` bleibt dieselbe stabile Ledger-ID; es entsteht keine neue Produkt-ID. Der erste reale V17.0.0-Installerlauf auf der V16.2.5-Runtime wurde im Paket-Preflight **vor jeder Produktivmutation** abgewiesen, weil das ausgelieferte ZIP den vom Installervertrag geforderten Root `zendure_controller_v17_0_0/` nicht enthielt. V17.0.0 ist damit zurückgezogen. Der Befund erweitert den bestehenden Deployment-/Release-Evidenzvertrag, ohne Fast-Capture-Semantik zu ändern.
+
+V17.0.1 korrigiert Releaseidentität, Packaging und Paketgate. `tools/release_package.py` erzwingt beim Build und Verify den kanonischen ZIP-Root; Regression enthält Positiv- und rootless-Negativtest. Technical Exit: **157 Testdateien, 1164 Tests + 706 Subtests PASS**, identischer ResourceWarning-Lauf, Datenblatt/Build-Evidence/Hygiene/Manifest/Browser-JS/Bash/Compile/Deployment-Harness PASS sowie finales Fresh-Extract mit erwarteter Rootstruktur und 921/921 Manifestdateien PASS. `ZEC-BL-CTRL-FASTCAP-001` bleibt bis realer Shadow-/Active-Wirkungsevidenz **IN_PROGRESS / TECHNICAL_BUILD_PASS / FIELD_PENDING**. V16.2.5 bleibt bis erfolgreicher V17.0.1-Installation reale Runtimebasis.
+
+**BACKLOG_NO_DROP_GATE: PASS – 85/85 stabile IDs erhalten; keine neue ID erforderlich.**

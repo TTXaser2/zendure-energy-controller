@@ -150,7 +150,7 @@ SECTION_ORDER_OVERRIDES = {
     "Primärspeicher": ("Integration & Status", "Integration & Identität", "Anbindung", "Gerät & Verbindung · Modbus", "MQTT-Datenquelle · EVCC Standard", "MQTT-Datenquelle · Benutzerdefiniert", "MQTT-Payload · Benutzerdefiniert", "Normalisierung", "Freshness & Verfügbarkeit", "Technische Leistungsdaten"),
     "Betriebsart & manuelle Steuerung": ("Betriebsart", "Profil Feste Entladung", "Profil Feste Ladung"),
     "Nachtbetrieb": ("Aktivierung", "Zeitfenster", "Feste Basisentladung", "Reserve & Folgeverhalten"),
-    "Harvest / Restüberschuss": ("Master & Zielbild", "High-SOC & Vollspeicher", "Entry & Hysterese", "Near-Limit-Entry", "Primärspeicher-Schwellen", "Tageszeitprofil"),
+    "Harvest / Restüberschuss": ("Master & Zielbild", "Fast Capture", "High-SOC & Vollspeicher", "Entry & Hysterese", "Near-Limit-Entry", "Primärspeicher-Schwellen", "Tageszeitprofil"),
     "Messdaten & Speicherung": ("Measurement-V4", "Speicherziel", "CSV-Messdaten & Rotation", "Schreibstrategie", "Speicherschutz", "Fallback", "SQLite-Graphstore", "SQLite-Graphspeicher", "SQLite-Retention", "Tageskurve & RAM-Historie", "V4-Archivpflege", "V4-Manifest & I/O", "Legacy-Kompatibilität"),
     "Schnittstellen & Datenquellen": ("MQTT-Verbindung", "Netzleistung · aktive Quelle", "Netzleistung · Shelly-kompatibel", "Netzleistung · SMA Direkt", "Netzleistung · SMA Diagnose", "MQTT-Diagnose", "Zendure Local API", "Zendure Local API · Timeouts"),
     "System & Diagnose": ("Darstellung", "Runtime-Logging", "Runtime-Logging · Detailkanäle", "Safe-State & Datenqualität", "Zendure MQTT-Datenqualität", "Analyse-/Replay-Service", "Webserver & Zugriff", "Administrative Aktionen"),
@@ -162,6 +162,7 @@ SETTING_ORDER_OVERRIDES = {
     "MIN_SOC_PERCENT": 10, "MAX_SOC_PERCENT": 20,
     "NIGHT_START_HOUR": 10, "NIGHT_START_MINUTE": 11, "NIGHT_END_HOUR": 20, "NIGHT_END_MINUTE": 21,
     "REST_SURPLUS_HARVEST_ENABLED": 1,
+    "HARVEST_FAST_CAPTURE_MODE": 1,
     "HARVEST_PRIMARY_CHARGE_FLOOR_RATIO": 10, "HARVEST_PRIMARY_CHARGE_FLOOR_W": 11,
     "HARVEST_PRIMARY_CHARGE_RESTART_RATIO": 20, "HARVEST_PRIMARY_CHARGE_RESTART_W": 21,
     "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_RATIO": 30, "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_W": 31,
@@ -222,6 +223,7 @@ DEPENDENCY_RULES: Dict[str, Dict[str, Any]] = {
     "SECOND_BATTERY_MODBUS_UNIT_ID": {"key": "SECOND_BATTERY_SOURCE_PROFILE", "equals": "modbus_template"},
     "REST_SURPLUS_ENTRY_CONFIRM_SECONDS": {"key": "REST_SURPLUS_HARVEST_ENABLED", "equals": True},
     "REST_SURPLUS_MIN_EXPORT_W": {"key": "REST_SURPLUS_HARVEST_ENABLED", "equals": True},
+    "HARVEST_FAST_CAPTURE_MODE": {"key": "SECOND_BATTERY_INTEGRATION_ENABLED", "equals": True},
     "HARVEST_HIGH_SMA_SOC_ENABLED": {"key": "REST_SURPLUS_HARVEST_ENABLED", "equals": True},
     "HARVEST_HIGH_SMA_SOC_ENTER_PERCENT": {"key": "REST_SURPLUS_HARVEST_ENABLED", "equals": True},
     "HARVEST_HIGH_SMA_SOC_EXIT_PERCENT": {"key": "REST_SURPLUS_HARVEST_ENABLED", "equals": True},
@@ -302,6 +304,7 @@ SHORT_HELP = {
     'SECOND_BATTERY_POWER_UNIT': 'Einheit des Leistungswerts der Zusatzbatterie. Intern wird immer auf Watt normalisiert.',
     'SECOND_BATTERY_MAX_CHARGE_POWER_W': 'Maximale Ladeleistung des Primärspeichers bzw. der Zweitbatterie. Dieser Wert steht meist im Datenblatt des Wechselrichters/Batteriesystems. Leer bedeutet: Restüberschuss-Ernte bleibt nicht wirksam. Für SMA Sunny Island 3.0M-11 sind aus ZEC-Sicht 2300 W passend.',
     'REST_SURPLUS_HARVEST_ENABLED': 'Aktiviert eine spezielle AUTO-Funktion: Wenn der Primärspeicher über längere Zeit nahe seiner Ladegrenze lädt und trotzdem Netzexport übrig bleibt, darf Zendure diesen Restüberschuss zusätzlich laden. Die Funktion startet nicht bei kurzen Spitzen und darf nur laden, niemals Entladung auslösen.',
+    'HARVEST_FAST_CAPTURE_MODE': 'Wählt das A400/R100 Fast-Capture-Verhalten: Aus, Shadow nur für Diagnose oder Aktiv mit realer zusätzlicher Exportaufnahme in bestätigten FULL_IDLE-/NEAR_LIMIT-Situationen.',
     'REST_SURPLUS_MIN_EXPORT_W': 'Mindestexport am Netzanschlusspunkt, ab dem die Restüberschuss-Ernte für den Entry qualifiziert. Dieser Wert ist nur eine Aktivierungs-/Rauschschwelle, kein dauerhaft gewünschter Restexport. Default: 80 W.',
     'CROSS_CHARGE_ENABLED': 'Aktiviert den Cross-Charge-Schutz auf Basis der bereits separat konfigurierten Primärspeicher-Integration. Die Datenquelle selbst wird über „Primärspeicher-Integration aktiv“ gesteuert.',
     'SECOND_BATTERY_STALE_BLOCK_CHARGE': 'Konservativer Fallback: Wenn der Cross-Charge-Schutz aktiv ist, aber keine frischen Zusatzbatteriedaten vorliegen, wird Zendure-Ladung blockiert.',
@@ -475,6 +478,7 @@ RICH_EXTENDED = {
     "NIGHT_DISCHARGE_POWER_W": "Feste Entladeleistung im Nachtmodus. Sie wird nicht fortlaufend an die aktuelle Haus-Netzleistung angepasst. Ein zu hoher Wert kann deshalb bei geringer Hauslast Einspeisung verursachen und muss zur eigenen Anlage passen.",
     "NIGHT_DISCHARGE_STOP_SOC_PERCENT": "Optionale zusätzliche Nachtreserve. Bei Erreichen wird die feste Nacht-Basisentladung pausiert; normale AUTO-Regelung darf im selben Nachtfenster weiterarbeiten, solange globale Schutzbedingungen dies zulassen.",
     "REST_SURPLUS_HARVEST_ENABLED": "Masterfreigabe der Restüberschuss-Ernte. Die Funktion darf zusätzliche Ladung nutzen, wenn die spezifizierten Harvestbedingungen erfüllt sind, darf aber keine Entladung auslösen und die Primärspeicherpriorität nicht strategisch verletzen.",
+    "HARVEST_FAST_CAPTURE_MODE": "Fast Capture ist ein strikt zusätzliches Overlay auf der bestehenden langsamen Baseline. FULL_IDLE und NEAR_LIMIT dürfen A400/R100 nutzen; RESERVE_UNKNOWN erzeugt kein Fast-Overlay. Shadow berechnet dieselbe Kandidatenlogik, verändert aber weder Zielwert noch Command. Roh-SOC, unabhängige Leistungsbeobachtung, Cross-Charge, Command-Safety und vorhandene Gerätegrenzen bleiben autoritativ.",
     "HARVEST_HIGH_SMA_SOC_ENABLED": "Schaltet den High-SOC-Parallel-Harvest innerhalb der Gesamt-Harvestlogik frei. Eintritt, Hysterese, Export und Zeitprofil bestimmen, wann er tatsächlich aktiv werden darf.",
     "HARVEST_HIGH_SMA_SOC_ENTER_PERCENT": "Eintrittsschwelle der High-SOC-Hysterese. Sie muss oberhalb des Austrittswerts und höchstens an der Voll-SOC-Schwelle liegen.",
     "HARVEST_HIGH_SMA_SOC_EXIT_PERCENT": "Austrittsschwelle der High-SOC-Hysterese. Der Abstand zur Eintrittsschwelle verhindert unmittelbares Flattern um einen einzelnen SOC-Wert.",
@@ -552,6 +556,7 @@ RICH_WHEN = {
     "NIGHT_END_HOUR": "Endstunde und Endminute bilden gemeinsam die logische Endzeit des Nachtfensters. Beim Verlassen des Fensters ist eine aktive 0-W-Neutralisierung Teil des Sicherheitsvertrags.",
     "NIGHT_END_MINUTE": "Endstunde und Endminute bilden gemeinsam die logische Endzeit des Nachtfensters. Beim Verlassen des Fensters ist eine aktive 0-W-Neutralisierung Teil des Sicherheitsvertrags.",
     "REST_SURPLUS_HARVEST_ENABLED": "Die Masterfreigabe wird nur in AUTO-Betrieb berücksichtigt. Erst zusätzliche Harvest-Freigabebedingungen wie Primärspeicherzustand, Export, Zeitprofil und Schutzgrenzen entscheiden, ob tatsächlich zusätzliche Zendure-Ladung angefordert wird.",
+    "HARVEST_FAST_CAPTURE_MODE": "Fast Capture wird ausschließlich in AUTO mit frischen, gültigen Netz-, Primärspeicher-, Zendure-SOC- und unabhängigen Zendure-Leistungsdaten bewertet. Aktiv darf erst nach erfolgreicher Shadow-Evidenz produktiv verwendet werden; Hard-Aborts, Cross-Charge und Command-Recovery besitzen Vorrang.",
     "HARVEST_HIGH_SMA_SOC_ENABLED": "Der Schalter wirkt nur bei aktivierter Restüberschuss-Ernte. Für einen tatsächlichen High-SOC-Eintritt müssen zusätzlich Primärspeicher-SOC, Exportbedingung, Zeitprofil und Bestätigungszeit passen.",
     "HARVEST_HIGH_SMA_SOC_ENTER_PERCENT": "Die Eintrittsschwelle wird nur bei aktivem High-SOC-Parallel-Harvest und gültigem aktuellem Primärspeicher-SOC ausgewertet. Ein Eintritt benötigt zusätzlich die Export-/Zeit-/Bestätigungsbedingungen; der niedrigere Austrittswert beendet den Zustand wieder.",
     "HARVEST_HIGH_SMA_SOC_EXIT_PERCENT": "Die Austrittsschwelle wird ausgewertet, wenn ein High-SOC-Harvestzustand aktiv ist. Fällt der Primärspeicher-SOC auf bzw. unter diese Grenze, wird der High-SOC-Zustand verlassen; der Abstand zur Eintrittsschwelle verhindert häufiges Hin- und Herschalten.",
@@ -658,6 +663,7 @@ EFFECT_ENABLE = {
     "SECOND_BATTERY_STALE_BLOCK_CHARGE": "Blockiert konservativ neue Ladung, wenn die erforderliche Zweitbatteriebewertung veraltet ist.",
     "NIGHT_DISCHARGE_ENABLED": "Erlaubt die feste Nacht-Basisentladung im gültigen Fenster, sofern MANUAL_MODE=AUTO und Schutzbedingungen erfüllt sind.",
     "REST_SURPLUS_HARVEST_ENABLED": "Erlaubt die spezifizierten Harvestzweige; die einzelnen Eintritts- und Schutzbedingungen gelten weiterhin.",
+    "HARVEST_FAST_CAPTURE_MODE": "Shadow aktiviert nur Kandidaten-/Evidenzberechnung; Aktiv erlaubt zusätzlich das A400/R100-Overlay innerhalb aller bestehenden Schutz- und Headroomgrenzen.",
     "HARVEST_HIGH_SMA_SOC_ENABLED": "Erlaubt zusätzlich den High-SOC-Harvestzweig innerhalb der Master-Harvestlogik.",
     "COMMAND_RESYNC_ON_MQTT_RECOVERY_ALWAYS": "Erweitert das Legacy-/Notfall-Resyncverhalten nach MQTT-Recovery.",
 }
@@ -666,6 +672,7 @@ EFFECT_DISABLE = {
     "SECOND_BATTERY_STALE_BLOCK_CHARGE": "Entfernt den konservativen Stale-Block und reduziert damit einen Schutzmechanismus.",
     "NIGHT_DISCHARGE_ENABLED": "Die Nachtwerte bleiben gespeichert, erzeugen aber keine feste Nacht-Basisentladung.",
     "REST_SURPLUS_HARVEST_ENABLED": "Alle davon abhängigen Harvestwerte bleiben gespeichert, sind aber derzeit ohne Wirkung.",
+    "HARVEST_FAST_CAPTURE_MODE": "Aus entfernt jede Fast-Capture-Wirkung und setzt ein bestehendes Overlay sicher auf die normale Baseline zurück.",
     "HARVEST_HIGH_SMA_SOC_ENABLED": "Deaktiviert nur den High-SOC-Zweig; andere freigegebene Harvestzweige können weiterhin arbeiten.",
 }
 
@@ -710,6 +717,7 @@ RELATION_OVERRIDES = {
     "HARVEST_PRIMARY_CHARGE_FLOOR_W": (("OVERRIDES", "HARVEST_PRIMARY_CHARGE_FLOOR_RATIO"),),
     "HARVEST_PRIMARY_CHARGE_RESTART_W": (("OVERRIDES", "HARVEST_PRIMARY_CHARGE_RESTART_RATIO"),),
     "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_W": (("OVERRIDES", "HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_RATIO"),),
+    "HARVEST_FAST_CAPTURE_MODE": (("GATES", "REST_SURPLUS_HARVEST_ENABLED"), ("GATES", "CROSS_CHARGE_ENABLED"), ("GATES", "SECOND_BATTERY_INTEGRATION_ENABLED"), ("LIMITS", "SECOND_BATTERY_MAX_CHARGE_POWER_W"), ("LIMITS", "MAX_CHARGE_POWER_W")),
     "CROSS_CHARGE_SIGNIFICANT_W": (("GATES", "CROSS_CHARGE_ENABLED"),),
     "COMMAND_EFFECT_TOLERANCE_W": (("PAIRED_WITH", "COMMAND_EFFECT_TOLERANCE_PERCENT"),),
     "COMMAND_EFFECT_TOLERANCE_PERCENT": (("PAIRED_WITH", "COMMAND_EFFECT_TOLERANCE_W"),),
@@ -740,6 +748,7 @@ VERY_HIGH_EXTRA = frozenset({
 })
 
 RISK_HELP = {
+    "HARVEST_FAST_CAPTURE_MODE": "Aktiv verändert die reale Ladeanforderung schneller als die normale Baseline. Deshalb bleiben A400/R100 fest, Schutz-/Cross-Charge-/Command-Gates übergeordnet und der Rollout erfolgt über Shadow vor Aktiv.",
     "SECOND_BATTERY_DISCHARGE_SIGN": "Falsches Vorzeichen kann Lade- und Entladerichtung der Zweitbatterie falsch interpretieren und damit den Cross-Charge-Schutz entwerten.",
     "GRID_METER_SOURCE": "Eine falsche oder nicht verfügbare Netzleistungsquelle verhindert eine korrekte Regelabweichung und kann Ready/Safety blockieren.",
     "MAX_CONSECUTIVE_ERRORS": "Sehr niedrige Werte können Safe-State früh auslösen; sehr hohe Werte verzögern die Reaktion auf anhaltende Fehler.",
@@ -750,6 +759,7 @@ RISK_HELP = {
 }
 
 OPTION_HELP = {
+    "HARVEST_FAST_CAPTURE_MODE": (("off", "Keine Fast-Capture-Berechnung mit Sollwertwirkung; sicherer Ausgangszustand."), ("shadow", "FULL_IDLE/NEAR_LIMIT, Reserve, Headroom und A400/R100-Overlay werden berechnet und protokolliert, Zielwert und Commands bleiben unverändert."), ("active", "Das berechnete Fast-Overlay darf zusätzlich zur bestehenden Baseline wirken; alle Safety-, Cross-Charge-, Readback- und Headroom-Gates bleiben autoritativ.")),
     "MANUAL_MODE": (("AUTO", "Normale Netzleistungsregelung."), ("STOP_HOLD", "Aktive Neutralität mit 0-W-Ziel."), ("FIXED_DISCHARGE", "Feste Entladung bis Ziel-SOC."), ("FIXED_CHARGE", "Feste Ladung bis Ziel-SOC.")),
     "MEASUREMENT_LOG_MODE": (("off", "Keine neuen Measurement-V4-Zeilen schreiben."), ("standard", "Produktive Regler-/Diagnosedaten mit begrenztem Feldumfang."), ("extended", "Zusätzliche Detailfelder für tiefe Analyse/Simulation; höheres Datenvolumen.")),
 }
@@ -847,6 +857,7 @@ def build_section_specs(category_sections: Sequence[Tuple[str, str]]) -> Mapping
     overrides = {
         ("Betriebsart & manuelle Steuerung", "Betriebsart"): "Wählt die aktive Steuerungspriorität. Schutzbedingungen bleiben über jedem manuellen oder automatischen Modus.",
         ("Nachtbetrieb", "Zeitfenster"): "Start und Ende bilden ein logisches HH:MM-Zeitfenster; ein Verlauf über Mitternacht ist zulässig.",
+        ("Harvest / Restüberschuss", "Fast Capture"): "Fast Capture beschleunigt ausschließlich die zusätzliche Aufnahme bestätigten Restexports. Shadow ist mutationsfrei; Aktiv setzt A400/R100 nur innerhalb frischer FULL_IDLE-/NEAR_LIMIT-Evidenz, Headroom und bestehender Schutzgates ein.",
         ("Harvest / Restüberschuss", "Primärspeicher-Schwellen"): "Floor <= Restart <= Near-Limit <= Pmax. Positive absolute W-Overrides ersetzen jeweils den zugehörigen Ratio-Wert.",
         ("Harvest / Restüberschuss", "High-SOC & Vollspeicher"): "High-SOC Enter/Exit bilden eine Hysterese; Full-SOC grenzt den Voll-/Idle-Zweig ab. Exportwerte sind Eintrittsschwellen, keine Restexportziele.",
         ("Harvest / Restüberschuss", "Tageszeitprofil"): "Die Profilanteile verändern die Strategieallokation zwischen Primärspeicher und Zendure. Sie sind keine direkten Zendure-Sollwerte.",

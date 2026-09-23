@@ -5,6 +5,7 @@
   const $$ = (s, root=document) => Array.from(root.querySelectorAll(s));
   const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   const previewScenario = bootstrap.preview?.active ? String(bootstrap.preview?.scenario || '') : '';
+  let infoPopoverController = null;
   function apiUrl(path) {
     if (!previewScenario) return path;
     const sep = path.includes('?') ? '&' : '?';
@@ -221,8 +222,18 @@
         text(`zendure.units.${index}.detail`, unit.detail);
       });
     }
-    const zw = $('[data-zec="zendure.command_warning"]');
-    if (zw) { zw.textContent = p.zendure?.command_warning || ''; zw.hidden = !p.zendure?.command_warning; }
+    const zwChip = $('[data-zec-warning="zendure"]');
+    const zwText = String(p.zendure?.command_warning || '');
+    const zwTitle = String(p.zendure?.command_warning_title || 'Zendure-Warnung');
+    if (zwChip) {
+      zwChip.hidden = !zwText;
+      zwChip.dataset.infoTitle = zwTitle;
+      zwChip.dataset.infoText = zwText;
+      zwChip.setAttribute('aria-label', `${zwTitle}: Details anzeigen`);
+      const shortLabel = zwTitle.replace(/\s+begrenzt$/i,'').trim() || 'Warnung';
+      const labelNode = $('[data-zec-warning-label="zendure"]', zwChip); if (labelNode) labelNode.textContent = shortLabel;
+      if (infoPopoverController?.isCurrent(zwChip)) { if (zwText) infoPopoverController.refresh(zwChip); else infoPopoverController.close(); }
+    }
     const zf = $('[data-card="zendure"] .zec-card-footer'); if (zf) setDot(zf, p.zendure?.tone);
 
     setRing('primary', p.primary?.soc, p.primary?.tone);
@@ -567,7 +578,7 @@
   function setupInfoPopovers(){
     const pop=$('#zecInfoPopover'), title=$('#zecInfoTitle'), body=$('#zecInfoText'), closeButton=$('#zecInfoClose');let current=null;
     const mobileQuery=window.matchMedia('(max-width:620px)');
-    const close=()=>{pop.hidden=true;pop.classList.remove('is-mobile-panel');pop.style.left='';pop.style.top='';current=null;};
+    const close=()=>{pop.hidden=true;pop.classList.remove('is-mobile-panel','is-warning-panel');pop.style.left='';pop.style.top='';current=null;};
     const humanApiMode=value=>({"Fallback-only":"Nur als Rückfallquelle","fallback-only":"Nur als Rückfallquelle","primary":"Primärquelle","disabled":"Deaktiviert"})[String(value||'')]||String(value||'—');
     const humanWorker=value=>({"IDLE":"wartet / inaktiv","RUNNING":"aktiv","BACKOFF":"wartet nach Fehler","DISABLED":"deaktiviert"})[String(value||'').toUpperCase()]||String(value||'—');
     const renderBody=(button)=>{
@@ -591,12 +602,13 @@
       body.scrollTop=0;
     };
     const positionDesktop=(button)=>{const r=button.getBoundingClientRect();const pr=pop.getBoundingClientRect();let left=r.right-pr.width;let top=r.bottom+8;if(left<12)left=12;if(left+pr.width>innerWidth-12)left=innerWidth-pr.width-12;if(top+pr.height>innerHeight-12)top=r.top-pr.height-8;pop.style.left=`${Math.max(12,left)}px`;pop.style.top=`${Math.max(12,top)}px`;};
-    const open=(button)=>{current=button;title.textContent=button.dataset.infoTitle||'Information';renderBody(button);pop.hidden=false;pop.classList.toggle('is-mobile-panel',mobileQuery.matches);pop.style.left='';pop.style.top='';requestAnimationFrame(()=>{body.scrollTop=0;if(!mobileQuery.matches)positionDesktop(button);});};
-    $$('.zec-info-button').forEach(btn=>{btn.addEventListener('click',e=>{e.stopPropagation();current===btn&&!pop.hidden?close():open(btn);});});
+    const open=(button)=>{current=button;title.textContent=button.dataset.infoTitle||'Information';renderBody(button);pop.hidden=false;pop.classList.toggle('is-mobile-panel',mobileQuery.matches);pop.classList.toggle('is-warning-panel',button.classList.contains('zec-warning-chip'));pop.style.left='';pop.style.top='';requestAnimationFrame(()=>{body.scrollTop=0;if(!mobileQuery.matches)positionDesktop(button);});};
+    $$('.zec-info-button,.zec-warning-chip').forEach(btn=>{btn.addEventListener('click',e=>{e.stopPropagation();current===btn&&!pop.hidden?close():open(btn);});});
     closeButton?.addEventListener('click',e=>{e.stopPropagation();close();});
-    document.addEventListener('click',e=>{if(!e.target.closest('.zec-info-button')&&!e.target.closest('#zecInfoPopover'))close();});
+    document.addEventListener('click',e=>{if(!e.target.closest('.zec-info-button,.zec-warning-chip')&&!e.target.closest('#zecInfoPopover'))close();});
     window.addEventListener('resize',close);
     document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!pop.hidden)close();});
+    return {close,refresh:(button)=>{if(current===button&&!pop.hidden){title.textContent=button.dataset.infoTitle||'Information';renderBody(button);}},isCurrent:(button)=>current===button&&!pop.hidden};
   }
   function setupMenus(){
     const systemButton=$('#systemStatusButton'), systemMenu=$('#systemStatusMenu');
@@ -689,7 +701,7 @@
   $('#dayToday').addEventListener('click',()=>{selectedDate=new Date();refreshSocDay();});
   const dayPicker=$('#socDayPicker'),dayPickerButton=$('#socDayPickerButton');if(dayPicker){dayPicker.addEventListener('change',()=>{const chosen=localDateFromString(dayPicker.value);if(chosen&&dateString(chosen)<=dateString(new Date())){selectedDate=chosen;refreshSocDay();}});const openDayPicker=()=>{try{if(typeof dayPicker.showPicker==='function'){dayPicker.showPicker();return;}}catch(_){}try{dayPicker.focus({preventScroll:true});dayPicker.click();}catch(_){dayPicker.focus();}};if(dayPickerButton){dayPickerButton.addEventListener('click',openDayPicker);dayPickerButton.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openDayPicker();}});}}
 
-  setupInfoPopovers(); setupMenus(); startClock(); applyStatus(bootstrap);
+  infoPopoverController=setupInfoPopovers(); setupMenus(); startClock(); applyStatus(bootstrap);
   statusPoll.start(Math.floor(Math.random()*700)); miniPoll.start(Math.floor(Math.random()*1000)); refreshSocDay();
   setInterval(()=>{if(dateString(selectedDate)===dateString(new Date()))refreshSocDay();},60000);
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){statusPoll.run();miniPoll.run();refreshSocDay();}});

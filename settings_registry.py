@@ -82,6 +82,16 @@ class ResetPolicy(Enum):
     NONE = "none"
 
 
+class SurfaceState(Enum):
+    OPERATIONAL = "operational"
+    TARGET_ONLY = "target_only"
+
+
+class Applicability(Enum):
+    ALWAYS = "always"
+    PRIMARY_STORAGE_ENABLED = "primary_storage_enabled"
+
+
 @dataclass(frozen=True)
 class SettingSpec:
     key: str
@@ -111,6 +121,8 @@ class SettingSpec:
     release_stage: str
     release_text: Optional[str]
     lifecycle: str
+    surface_state: SurfaceState
+    applicability: Applicability
     secret_policy: SecretPolicy
     decision_status: Optional[str]
     portability_class: PortabilityClass
@@ -2040,6 +2052,39 @@ _ROWS = [{'key': 'MANUAL_MODE',
   'lifecycle': 'active',
   'secret_policy': 'NONE',
   'decision_status': 'Bestätigt'},
+ {'key': 'HARVEST_FAST_CAPTURE_MODE',
+  'order': 62.5,
+  'origin': 'V17.0.1',
+  'category': 'Harvest / Restüberschuss',
+  'section': 'Fast Capture',
+  'visibility': 'EXPERT',
+  'label': 'Fast Capture',
+  'value_type': 'ENUM',
+  'codec_id': 'select',
+  'default_new_install': 'off',
+  'default_rc19': 'off',
+  'minimum': None,
+  'maximum': None,
+  'unit': None,
+  'options': (('off', 'Aus'), ('shadow', 'Shadow (nur Diagnose)'), ('active', 'Aktiv')),
+  'apply_class': 'LIVE_NEXT_CYCLE',
+  'editability': 'EDITABLE',
+  'apply_text': 'Wirksam im nächsten Regelzyklus; Aktivierung startet immer mit Overlay 0',
+  'dependency_keys': ('REST_SURPLUS_HARVEST_ENABLED',
+                      'CROSS_CHARGE_ENABLED',
+                      'SECOND_BATTERY_INTEGRATION_ENABLED',
+                      'SECOND_BATTERY_MAX_CHARGE_POWER_W',
+                      'MAX_CHARGE_POWER_W'),
+  'dependency_text': 'Aktiv benötigt Harvest, Cross-Charge, Primärspeicherintegration sowie positive Primär- und Zendure-Ladegrenzen; Shadow bleibt ohne Sollwertwirkung',
+  'validator_ids': ('VAL-006', 'VAL-007', 'VAL-009'),
+  'validation_text': 'off | shadow | active; active nur mit vollständigen Harvest-/Cross-Charge-/Primärspeicher-Voraussetzungen',
+  'migration_text': 'Bei bestehenden Installationen als sicherer Sentinel off ergänzen',
+  'risk': 'Hoch',
+  'release_stage': 'V17.0.1',
+  'release_text': 'V17.0.1 – Fast Capture A400/R100',
+  'lifecycle': 'active',
+  'secret_policy': 'NONE',
+  'decision_status': 'Freigegeben'},
  {'key': 'REST_SURPLUS_HARVEST_ENABLED',
   'order': 57,
   'origin': 'RC19',
@@ -6616,7 +6661,7 @@ PROFILE_PRESET_DEFAULT_KEYS = frozenset({
 SAFE_SENTINEL_DEFAULT_KEYS = frozenset({
     "MANUAL_MODE", "MANUAL_FIXED_DISCHARGE_POWER_W", "MANUAL_FIXED_CHARGE_POWER_W",
     "NIGHT_DISCHARGE_ENABLED", "NIGHT_DISCHARGE_POWER_W", "SECOND_BATTERY_INTEGRATION_ENABLED",
-    "REST_SURPLUS_HARVEST_ENABLED", "CROSS_CHARGE_ENABLED", "MEASUREMENT_LOG_MODE",
+    "REST_SURPLUS_HARVEST_ENABLED", "HARVEST_FAST_CAPTURE_MODE", "CROSS_CHARGE_ENABLED", "MEASUREMENT_LOG_MODE",
     "MEASUREMENT_DB_MAINTENANCE_MODE", "MEASUREMENT_DB_RAW_RETENTION_MODE",
     "MEASUREMENT_DB_1MIN_RETENTION_MODE", "MEASUREMENT_LOG_MAINTENANCE_MODE",
     "MEASUREMENT_LOG_RETENTION_MODE", "MQTT_TOPIC_DIAGNOSTIC_ENABLED",
@@ -6794,6 +6839,7 @@ PORTABILITY_BY_KEY: Mapping[str, PortabilityClass] = MappingProxyType({
     'HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY': PortabilityClass.PORTABLE_PROFILE,
     'HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MORNING': PortabilityClass.PORTABLE_PROFILE,
     'HARVEST_SEASON_MODE': PortabilityClass.PORTABLE_PROFILE,
+    'HARVEST_FAST_CAPTURE_MODE': PortabilityClass.PORTABLE_PROFILE,
     'HARVEST_SEASON_PARALLEL_END_MM_DD': PortabilityClass.PORTABLE_PROFILE,
     'HARVEST_SEASON_PARALLEL_START_MM_DD': PortabilityClass.PORTABLE_PROFILE,
     'HARVEST_SMA_FULL_SOC_PERCENT': PortabilityClass.PORTABLE_PROFILE,
@@ -6937,6 +6983,72 @@ PORTABILITY_BY_KEY: Mapping[str, PortabilityClass] = MappingProxyType({
 })
 
 
+# Product-surface lifecycle is deliberately orthogonal to historical provenance.
+# S1/RC19 remains operational for backwards compatibility, while every visible,
+# active setting introduced outside that legacy surface must be classified here.
+# Missing classifications fail closed during module import so a future roadmap
+# setting cannot become productive merely because hardware/config happens to fit.
+_NONLEGACY_SURFACE_STATE_BY_KEY: Mapping[str, SurfaceState] = MappingProxyType({
+    "SECOND_BATTERY_INTEGRATION_ENABLED": SurfaceState.OPERATIONAL,
+    "SECOND_BATTERY_CAPACITY_WH": SurfaceState.OPERATIONAL,
+    "SECOND_BATTERY_MAX_DISCHARGE_POWER_W": SurfaceState.OPERATIONAL,
+    "HARVEST_FAST_CAPTURE_MODE": SurfaceState.OPERATIONAL,
+    "HARVEST_SEASON_MODE": SurfaceState.TARGET_ONLY,
+    "HARVEST_SEASON_PARALLEL_END_MM_DD": SurfaceState.TARGET_ONLY,
+    "HARVEST_SEASON_PARALLEL_START_MM_DD": SurfaceState.TARGET_ONLY,
+    "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_AFTERNOON_SECONDS": SurfaceState.TARGET_ONLY,
+    "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_MIDDAY_SECONDS": SurfaceState.TARGET_ONLY,
+    "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_MORNING_SECONDS": SurfaceState.TARGET_ONLY,
+    "HARVEST_HIGH_SMA_SOC_PROFILE_AFTERNOON_START_TIME": SurfaceState.TARGET_ONLY,
+    "HARVEST_HIGH_SMA_SOC_PROFILE_END_TIME": SurfaceState.TARGET_ONLY,
+    "HARVEST_HIGH_SMA_SOC_PROFILE_MIDDAY_START_TIME": SurfaceState.TARGET_ONLY,
+    "HARVEST_HIGH_SMA_SOC_PROFILE_START_TIME": SurfaceState.TARGET_ONLY,
+    "MEASUREMENT_DB_1MIN_RETENTION_DAYS": SurfaceState.TARGET_ONLY,
+    "MEASUREMENT_DB_1MIN_RETENTION_MODE": SurfaceState.TARGET_ONLY,
+    "MEASUREMENT_DB_MAINTENANCE_MODE": SurfaceState.TARGET_ONLY,
+    "MEASUREMENT_DB_RAW_RETENTION_DAYS": SurfaceState.TARGET_ONLY,
+    "MEASUREMENT_DB_RAW_RETENTION_MODE": SurfaceState.TARGET_ONLY,
+    "MEASUREMENT_LOG_COMPRESSION_MIN_AGE_MINUTES": SurfaceState.TARGET_ONLY,
+    "MEASUREMENT_LOG_MAINTENANCE_MODE": SurfaceState.TARGET_ONLY,
+    "MEASUREMENT_LOG_RETENTION_MODE": SurfaceState.TARGET_ONLY,
+})
+
+
+def _surface_state_for_row(row: Mapping[str, Any]) -> SurfaceState:
+    key = str(row["key"])
+    if key in _NONLEGACY_SURFACE_STATE_BY_KEY:
+        return _NONLEGACY_SURFACE_STATE_BY_KEY[key]
+    if row.get("release_stage") == "S1" or row.get("origin") == "RC19":
+        return SurfaceState.OPERATIONAL
+    visible = row.get("visibility") not in ("HIDDEN_MIGRATION", "HIDDEN_TRANSITION")
+    active = row.get("lifecycle") == "active"
+    if visible and active:
+        raise RuntimeError(f"visible active nonlegacy setting lacks explicit surface_state: {key}")
+    return SurfaceState.TARGET_ONLY
+
+
+def _applicability_for_row(row: Mapping[str, Any]) -> Applicability:
+    key = str(row["key"])
+    if key == "HARVEST_FAST_CAPTURE_MODE":
+        return Applicability.PRIMARY_STORAGE_ENABLED
+    if key.startswith("SECOND_BATTERY_") and key != "SECOND_BATTERY_INTEGRATION_ENABLED":
+        return Applicability.PRIMARY_STORAGE_ENABLED
+    return Applicability.ALWAYS
+
+
+def is_operational_surface(spec: SettingSpec) -> bool:
+    return bool(
+        spec.surface_state is SurfaceState.OPERATIONAL
+        and spec.visibility not in (Visibility.HIDDEN_MIGRATION, Visibility.HIDDEN_TRANSITION)
+        and not spec.lifecycle.startswith("remove_")
+        and spec.lifecycle not in ("reserved_inactive", "deployment_constant_not_config")
+    )
+
+
+def iter_operational_settings() -> Iterator[SettingSpec]:
+    return (spec for spec in SETTINGS if is_operational_surface(spec))
+
+
 def _build_spec(row: Mapping[str, Any]) -> SettingSpec:
     return SettingSpec(
         key=row["key"], order=row["order"], origin=row["origin"], category=row["category"],
@@ -6950,6 +7062,7 @@ def _build_spec(row: Mapping[str, Any]) -> SettingSpec:
         validator_ids=tuple(row["validator_ids"]), validation_text=row["validation_text"],
         migration_text=row["migration_text"], risk=row["risk"], release_stage=row["release_stage"],
         release_text=row["release_text"], lifecycle=row["lifecycle"],
+        surface_state=_surface_state_for_row(row), applicability=_applicability_for_row(row),
         secret_policy=SecretPolicy[row["secret_policy"]], decision_status=row["decision_status"],
         portability_class=PORTABILITY_BY_KEY.get(row["key"], PortabilityClass.NON_TRANSFERABLE),
         **_default_metadata(row),
