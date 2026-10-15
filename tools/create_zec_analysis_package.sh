@@ -57,6 +57,15 @@ nonempty_v4_files() {
   find "$dir" -maxdepth 1 -type f -name 'zendure_measurements_v4*.csv' -size +0c -printf '%f\n' | sort
 }
 
+has_nonempty_v4_file() {
+  local dir="$1" f
+  [[ -d "$dir" ]] || return 1
+  for f in "$dir"/zendure_measurements_v4*.csv; do
+    [[ -f "$f" && -s "$f" ]] && return 0
+  done
+  return 1
+}
+
 sidecar_files() {
   local dir="$1"
   [[ -d "$dir" ]] || return 0
@@ -146,7 +155,7 @@ if [[ -z "$MEASUREMENT_DIR" ]]; then
   first_existing=""
   for candidate in "${candidates[@]:-}"; do
     [[ -n "$first_existing" ]] || first_existing="$candidate"
-    if [[ -n "$(nonempty_v4_files "$candidate" | head -n 1)" ]]; then
+    if has_nonempty_v4_file "$candidate"; then
       MEASUREMENT_DIR="$candidate"
       break
     fi
@@ -213,7 +222,16 @@ if [[ -n "$MEASUREMENT_DIR" && -d "$MEASUREMENT_DIR" ]]; then
   if [[ ${#V4_FILES[@]} -eq 0 ]]; then
     warn "No non-empty zendure_measurements_v4*.csv files found in primary measurement directory: $MEASUREMENT_DIR"
   elif [[ $LATEST_ONLY -eq 1 ]]; then
-    latest="$(ls -t "$MEASUREMENT_DIR"/zendure_measurements_v4*.csv 2>/dev/null | while read -r f; do [[ -s "$f" ]] && echo "$f" && break; done)"
+    latest=""
+    latest_mtime=-1
+    for name in "${V4_FILES[@]}"; do
+      f="$MEASUREMENT_DIR/$name"
+      mtime="$(stat -c %Y -- "$f")"
+      if [[ "$mtime" -gt "$latest_mtime" ]]; then
+        latest="$f"
+        latest_mtime="$mtime"
+      fi
+    done
     if [[ -n "$latest" ]]; then
       log "Including latest primary V4 measurement file only: $latest"
       cp -v -- "$latest" "$WORKDIR/primary_logs/"

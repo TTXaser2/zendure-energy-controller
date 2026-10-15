@@ -1,8 +1,8 @@
 {
-  "build_id": "v17.0.1-20260922",
-  "document_status": "RELEASE_FREEZE_TECHNICAL_GATES_PENDING",
-  "docx_sha256": "6fa07d6b0b13413a0bab0d004b420f9cd1c6d2eea54a19516a85e1ebf7dff0d8",
-  "pdf_sha256": "2d0b16f22f329f66a1e8cd70362dbc992eba8ea1c0a5e9219b05a20cae20480d",
-  "release_label": "V17.0.1",
-  "release_version": "17.0.1"
+  "build_id": "v17.0.2-20260923",
+  "document_status": "TECHNICAL_BUILD_PASS_FIELD_PENDING",
+  "docx_sha256": "de11a7f95fb2ae0d6e635d8df693fe9831980c445e0fa9be472e8f708f4dc3db",
+  "pdf_sha256": "ea00762d46c086ccc08b59bb365852090773df38709cdbbfa49d7a8a0097fe8c",
+  "release_label": "V17.0.2",
+  "release_version": "17.0.2"
 }

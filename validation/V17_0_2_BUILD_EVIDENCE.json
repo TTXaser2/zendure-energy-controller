@@ -1,0 +1,21 @@
+{
+  "format": "ZEC_BUILD_EVIDENCE_V1",
+  "release": {
+    "version": "17.0.2",
+    "label": "V17.0.2",
+    "build_id": "v17.0.2-20260923"
+  },
+  "status": "PASS",
+  "test_file_count": 157,
+  "full_regression": {
+    "status": "PASS",
+    "tests": 1169,
+    "subtests": 706
+  },
+  "resourcewarning_regression": {
+    "status": "PASS",
+    "tests": 1169,
+    "subtests": 706,
+    "warnings_mode": "error::ResourceWarning"
+  }
+}

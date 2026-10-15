@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Read-only productive field acceptance for ZEC V17.0.1 deployment modes.
+"""Read-only productive field acceptance for ZEC V17.0.2 deployment modes.
 
 This tool never publishes commands, changes configuration, mutates the graph
 store, or performs a rollback. It exercises the running HTTP/read-only graph
@@ -30,10 +30,10 @@ from tools.validate_release_datasheet import validate as validate_release_datash
 from tools.deployment_contract import effective_local_web_endpoint, load_bootstrap  # noqa: E402
 from tools.evaluate_installation_readiness import classify as classify_installation_readiness  # noqa: E402
 
-EXPECTED_VERSION = "17.0.1"
-EXPECTED_LABEL = "V17.0.1"
-EXPECTED_BUILD_ID = "v17.0.1-20260922"
-FORMAT = "ZEC_V17_0_1_FIELD_ACCEPTANCE_V1"
+EXPECTED_VERSION = "17.0.2"
+EXPECTED_LABEL = "V17.0.2"
+EXPECTED_BUILD_ID = "v17.0.2-20260923"
+FORMAT = "ZEC_V17_0_2_FIELD_ACCEPTANCE_V1"
 INSTALL_REPORT_FORMAT = "ZEC_V16_2_0_INSTALL_REPORT_V1"
 
 
@@ -763,7 +763,7 @@ def run_first_install_acceptance(base_url: str, install_report: Path) -> Dict[st
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Read-only ZEC V17.0.1 field acceptance")
+    p = argparse.ArgumentParser(description="Read-only ZEC V17.0.2 field acceptance")
     p.add_argument("--base-url", default="", help="Default: resolve active local endpoint from config/bootstrap")
     p.add_argument("--install-report", default="", help="Explicit report path; default: newest persistent release report, then /tmp compatibility copy")
     p.add_argument("--output", default=f"/tmp/ZEC_{EXPECTED_VERSION.replace('.', '_')}_FIELD_ACCEPTANCE.json")

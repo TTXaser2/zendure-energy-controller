@@ -292,7 +292,7 @@ class FastCaptureCoreTests(unittest.TestCase):
         self.assertNotEqual("FULL_IDLE", state.fast_capture_primary_state)
         self.assertEqual(0, state.fast_capture_overlay_w)
 
-    def test_off_mode_matches_v17_0_1_baseline_matrix(self):
+    def test_off_mode_matches_v17_0_2_baseline_matrix(self):
         cases = [
             (0, 600),
             (300, 300),

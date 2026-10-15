@@ -1,8 +1,8 @@
 # ZEC – Master-Backlog & Roadmap
 
-**Stand:** 22.09.2026  
+**Stand:** 23.09.2026  
 **Status:** kanonische, persistente Entwicklungsledger- und Roadmap-Autorität  
-**Produktbasis:** V16.2.5 / `v16.2.5-20260922` (**TECHNICAL BUILD PASS + REAL UPDATE PASS + AUTOMATED FIELD PASS + MANUAL ACCEPTED WITH KNOWN UI FOLLOW-UPS**; `TRANSITIONAL:LIMIT_READBACK_CONVERGENCE` zulässig; Kartenlayout/Mobile Settings/Instance Owner/Graph-Linienbreak/Warnungsfunktion real bestätigt; zwei nicht blockierende Frontend-Restpunkte werden in den nächsten ohnehin anstehenden Release integriert)
+**Produktbasis:** V17.0.1 reale Runtime / V17.0.2 TECHNICAL BUILD PASS, FIELD_PENDING; V17.0.2 isoliert den real gefundenen Fast-Capture-Evidenzpfad-Hotfix ohne Regler-/Command-/Safety-/Cross-Charge-/Recoverysemantikänderung.
 
 ## 1. Zweck und Persistenzvertrag
 
@@ -26,6 +26,8 @@ Historische Chats, Übergaben und Releaseunterlagen sind Provenienz-/Archivbeleg
 Zusätzlich kann `implementation_state` beispielsweise `none`, `partial` oder `implemented` sein. **Diskutiert**, **freigegeben**, **implementiert** und **real feldvalidiert** sind getrennte Aussagen.
 
 ## 3. Aktuelle Roadmap – priorisierte Sicht
+
+**Roadmapstand 23.09.2026:** V17.0.1 ist real installiert und automatisiert FULL_READY feldabgenommen. V17.0.2 korrigiert ausschließlich drei real gefundene Fast-Capture-Evidenzdefekte und besitzt nach 157 Testdateien / 1169 Tests + 706 Subtests, identischem ResourceWarning-Lauf sowie statischen/Deployment-/Datenblatt-/Build-Evidence-Gates TECHNICAL BUILD PASS; finale Paket-/Fresh-extract-Gates folgen vor Veröffentlichung. `ZEC-BL-CTRL-FASTCAP-001` bleibt FIELD_PENDING, bis nach V17.0.2-Installation neue Shadow-Evidenz und anschließend ausdrücklich freigegebene begrenzte Active-Evidenz vorliegen. Desktop-Warning-Chip/Popover ist real visuell PASS; mobile Bottom-Sheet-Variante bleibt offen.
 
 **Roadmapstand 22.09.2026 nach abgeschlossener V16.2.5-Feldentscheidung:** Das Update V16.2.4 → V16.2.5 ist real erfolgreich. Der konsolidierte automatische Feldlauf ist PASS; `controller_ready` war wegen `LIMIT_READBACK_CONVERGENCE` transient, `controller_readiness_acceptance=PASS TRANSITIONAL:LIMIT_READBACK_CONVERGENCE`. Instance Owner, Speicherstatuskarten-Geometrie, Mobile Settings, sichtbare Graph-Linienunterbrechung sowie die funktionale ein-/ausklappbare High-SOC-/Command-Warnung sind real beobachtet.
 
@@ -171,7 +173,7 @@ Damit ist keine historische S1–S9-Stufe mehr nur implizit oder unaufgelöst.
 
 ### ZEC-BL-CTRL-FASTCAP-001 – Fast Capture A400/R100
 
-- **Status:** IN_PROGRESS / TECHNICAL_BUILD_PASS / FIELD_PENDING; `implementation_state=implemented`; `sequencing=ACTIVE`; `spec_state=REVALIDATED_V16_2_5`; V17.0.1 ist der korrigierte Releasekandidat nach fail-closed Packaging-Reject von V17.0.0. Checkpoint A (Controllerkern/State/Differential-/Safetytests) fokussiert PASS: 110 Tests + 11 Subtests. Checkpoint B (Settings/Validation, Measurement V4, Fast-Feldanalyse, V17-Feldabnahme) fokussiert PASS: 114 Tests + 640 Subtests. Kein TECHNICAL BUILD PASS; Checkpoint C/UI-Follow-ups sind fokussiert PASS (12 Tests), vollständige Releasegates stehen noch aus.
+- **Status:** IN_PROGRESS; `implementation_state=partial`; `sequencing=ACTIVE`; `spec_state=REVALIDATED_V16_2_5`; V17.0.0-Makro-Scope am 22.09.2026 ausdrücklich zur Sourceumsetzung freigegeben. Checkpoint A (Controllerkern/State/Differential-/Safetytests) fokussiert PASS: 110 Tests + 11 Subtests. Checkpoint B (Settings/Validation, Measurement V4, Fast-Feldanalyse, V17-Feldabnahme) fokussiert PASS: 114 Tests + 640 Subtests. Kein TECHNICAL BUILD PASS; Checkpoint C/UI-Follow-ups sind fokussiert PASS (12 Tests), vollständige Releasegates stehen noch aus.
 - **Provenienz:** Pretrainer V0.5 -> V0.6.1, Freeze-Spezifikation vom 19.09.2026 und V16.2.5-Revalidierung vom 22.09.2026. Aktive Blockautorität: `ZEC_FAST_CAPTURE_A400_R100_PRODUKTIONSSPEZIFIKATION_V16_2_5_REVALIDATED.md`.
 - **Scope:** Fast-Overlay ausschließlich für `FULL_IDLE` und `NEAR_LIMIT`; `RESERVE_UNKNOWN` bleibt im normalen Baseline-Regelpfad. Produktionskandidat A400/R100. Strategische Baseline `B` und kurzfristiger Fast-Overlay `O` sind strikt getrennte Schichten.
 - **Evidenz:** V0.6.1 Vollhistorie mit 2.141.031/2.141.031 Rows und exakter Replay-Parität; Replay ist keine Closed-Loop-Feldevidenz. Die V16.2.5-Revalidierung bestätigt den Reglerkern byteidentisch zur ursprünglichen Spezifikationsbasis und definiert die notwendigen Settings-/Measurement-/UI-/Evidence-Deltas.
@@ -574,21 +576,23 @@ Checkpoint C setzt die zwei separat freigegebenen Frontend-Follow-ups um: Gap-aw
 **BACKLOG_NO_DROP_GATE = PASS (85/85 IDs erhalten; 0 neue IDs)**
 
 
-### V17.0.0 Technical-Build-Pass Reconciliation 22.09.2026
+### V17.0.1 Real-Field / V17.0.2 Fast-Evidence-Hotfix Reconciliation 23.09.2026
 
-Der freigegebene Fast-Capture-Releaseblock erreicht **TECHNICAL BUILD PASS**. Vollständige Regression: **156 Testdateien / 1162 Tests + 706 Subtests PASS**; identischer `-W error::ResourceWarning`-Lauf ebenfalls **1162 + 706 PASS**. Bash-Syntax 13/13, Browser-JS 3/3, Python-Compileall, Deployment-Harness 11/11, Datenblatt-Gate, Build-Evidence, Release-Hygiene, Source-Manifest und Fresh-extract-Manifestverifikation sind PASS.
+`ZEC-BL-CTRL-FASTCAP-001` bleibt dieselbe stabile Ledger-ID; keine neue Produkt-ID erforderlich. Reales V16.2.5 -> V17.0.1 Update PASS, automatischer V17-Feldlauf PASS und Runtime `FULL_READY`. Fast Capture wurde anschließend real auf `shadow` gesetzt. Ein Night-Mode-Snapshot bestätigte fail-closed `fast_capture_active=false`, Overlay 0 und `NIGHT_MODE`-Blockierung. Der Desktop-Warning-Chip/Popover unter `ZEC-BL-UI-STATUS-003` ist real visuell PASS; die mobile Bottom-Sheet-Variante bleibt Feld-Follow-up.
 
-Finales Paket: `zendure_controller_v17_0_0.zip`, SHA256 `5f8a72edd00c32f0c6ce71871b51cfe479dc1cf465636402bc364e9608c45712`. `controller_logic.py` SHA256 `113cb9cc60475cb59294bf07ab750e63580b59112f178948b7e386fd0539b031`.
+Beim ersten natürlichen Shadow-Evidenzversuch wurden drei Verifikationsdefekte des V17.0.1-Evidenzpfads real gefunden: (1) Fast-Capture-Runtimefelder fehlten in `ControllerState.record_graph_point()` und fielen in Measurement V4 dadurch auf `off`/0 zurück; (2) der Fast-Analyzer bewertete alle historischen Config-Snapshot-Versionen statt nur die von analysierten Rows referenzierten Config-Hashes und erzeugte `CONTROLLER_VERSION_MISMATCH`; (3) `create_zec_analysis_package.sh --latest-only` konnte unter `set -o pipefail` durch eine früh abbrechende Pipeline mit SIGPIPE/rc=141 enden. Die V17.0.1-Shadow-V4-Daten sind daher nicht als kanonischer Fast-Funktionsnachweis verwertbar. Active bleibt nicht freigegeben.
 
-`ZEC-BL-CTRL-FASTCAP-001` bleibt bis realer Shadow-/Active-Wirkungsevidenz **IN_PROGRESS / TECHNICAL_BUILD_PASS / FIELD_PENDING**. Die beiden UI-Follow-ups sind technisch im Release enthalten, reale Sichtprüfung nach Installation bleibt Feldgate. V16.2.5 bleibt bis erfolgreicher V17.0.0-Installation die reale Runtimebasis. Adaptive bleibt unverändert als nachgelagerter Spezifikationsblock erhalten.
+V17.0.2 ist als isolierter Evidence-/Tooling-Hotfix (+0.0.1) freigegeben: Fast-Felder werden cycle-exakt in den Measurement-V4-Zulauf übernommen; Analyzer-Versionsevidenz wird auf referenzierte Config-Hashes begrenzt und strukturelle Evidenz im Human-Report sichtbar; `--latest-only` wird pipefail-/SIGPIPE-sicher. A400/R100-Regler-, Command-, Safety-, Cross-Charge- und Recoverysemantik bleiben unverändert; `controller_logic.py` bleibt byteidentisch zu V17.0.1. Nach V17.0.2-Installation muss neue reale Shadow-Evidenz gesammelt werden, bevor ein begrenzter Active-Rollout überhaupt freigegeben werden kann.
+
+**BACKLOG_NO_DROP_GATE = PASS (85/85 stabile IDs erhalten; 0 neue IDs)**
+
+
+### V17.0.2 Fast-Evidence-Hotfix Technical-Build-Pass Reconciliation 23.09.2026
+
+`ZEC-BL-CTRL-FASTCAP-001` bleibt dieselbe stabile Ledger-ID; keine neue Produkt-ID entsteht. V17.0.2 korrigiert die drei am realen V17.0.1-Shadow-Evidenzpfad gefundenen Defekte: cycle-exakte Fast-Felder werden in `record_graph_point()` und damit Measurement V4 transportiert; Analyzer-Versionsevidenz wird ausschließlich über von analysierten Rows referenzierte Config-Hashes gebildet und strukturelle Evidenz wird im Human-Report sichtbar; `create_zec_analysis_package.sh --latest-only` ist pipefail-/SIGPIPE-sicher.
+
+Technischer Nachweis: fokussierte Regression **51 Tests PASS**; realer `--latest-only`-Shelltest mit >80 V4-Dateien PASS; vollständige Regression **157 Testdateien / 1169 Tests + 706 Subtests PASS**; identischer `-W error::ResourceWarning`-Lauf **1169 + 706 PASS**; Bash **13/13**, Browser-JavaScript **3/3**, Python Compileall, Deployment-Harness **11/11**, Datenblatt-Gate und maschinenlesbare Build-Evidence PASS. Das aktuelle 10-seitige Datenblatt wurde nach dem finalen Statusupdate vollständig gerendert und visuell geprüft. `controller_logic.py` bleibt SHA256 `113cb9cc60475cb59294bf07ab750e63580b59112f178948b7e386fd0539b031` und damit byteidentisch zu V17.0.1. Release-Hygiene, Source-Manifest 932/932, kanonischer ZIP-Root sowie Paket-/Fresh-extract-Manifest-, Build-Evidence- und Datenblatt-Gates sind im Release-Freeze PASS; nach dem Dokumentationsfreeze wird das exakt veröffentlichte ZIP neu gebaut und identisch verifiziert.
+
+Reale V17.0.2-Installation und neue Shadow-Feldevidenz bleiben **FIELD_PENDING**. V17.0.1-Shadow-V4-Daten werden wegen des real nachgewiesenen Evidence-Pfadddefekts nicht als Fast-Funktionsnachweis verwendet. `active` bleibt nicht freigegeben. Der Desktop-Warning-Chip/Popover ist real visuell PASS; die mobile Bottom-Sheet-Variante bleibt als UI-Feldevidenz offen.
 
 **BACKLOG_NO_DROP_GATE = PASS (85/85 IDs erhalten; 0 neue IDs)**
-
-
-### V17.0.0 Packaging-Reject / V17.0.1 Technical-Build-Pass Reconciliation 22.09.2026
-
-`ZEC-BL-CTRL-FASTCAP-001` bleibt dieselbe stabile Ledger-ID; es entsteht keine neue Produkt-ID. Der erste reale V17.0.0-Installerlauf auf der V16.2.5-Runtime wurde im Paket-Preflight **vor jeder Produktivmutation** abgewiesen, weil das ausgelieferte ZIP den vom Installervertrag geforderten Root `zendure_controller_v17_0_0/` nicht enthielt. V17.0.0 ist damit zurückgezogen. Der Befund erweitert den bestehenden Deployment-/Release-Evidenzvertrag, ohne Fast-Capture-Semantik zu ändern.
-
-V17.0.1 korrigiert Releaseidentität, Packaging und Paketgate. `tools/release_package.py` erzwingt beim Build und Verify den kanonischen ZIP-Root; Regression enthält Positiv- und rootless-Negativtest. Technical Exit: **157 Testdateien, 1164 Tests + 706 Subtests PASS**, identischer ResourceWarning-Lauf, Datenblatt/Build-Evidence/Hygiene/Manifest/Browser-JS/Bash/Compile/Deployment-Harness PASS sowie finales Fresh-Extract mit erwarteter Rootstruktur und 921/921 Manifestdateien PASS. `ZEC-BL-CTRL-FASTCAP-001` bleibt bis realer Shadow-/Active-Wirkungsevidenz **IN_PROGRESS / TECHNICAL_BUILD_PASS / FIELD_PENDING**. V16.2.5 bleibt bis erfolgreicher V17.0.1-Installation reale Runtimebasis.
-
-**BACKLOG_NO_DROP_GATE: PASS – 85/85 stabile IDs erhalten; keine neue ID erforderlich.**

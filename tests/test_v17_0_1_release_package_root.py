@@ -11,7 +11,7 @@ def test_verify_rejects_rootless_zip(tmp_path):
     with ZipFile(z,'w') as f:
         f.writestr('version.py','x')
         f.writestr('tools/install_zendure_controller.sh','x')
-    r=mod.verify_zip(z,'17.0.1')
+    r=mod.verify_zip(z,'17.0.2')
     assert not r['ok']
     assert any(e.startswith('ZIP_ROOT_MISMATCH:') for e in r['errors'])
 
@@ -20,9 +20,9 @@ def test_build_emits_installer_expected_root(tmp_path):
     (src/'version.py').write_text('x')
     (src/'tools'/'install_zendure_controller.sh').write_text('x')
     out=tmp_path/'release.zip'
-    r=mod.build(src,out,'17.0.1')
+    r=mod.build(src,out,'17.0.2')
     assert r['ok']
     with ZipFile(out) as f:
         names=set(f.namelist())
-    assert 'zendure_controller_v17_0_1/version.py' in names
-    assert 'zendure_controller_v17_0_1/tools/install_zendure_controller.sh' in names
+    assert 'zendure_controller_v17_0_2/version.py' in names
+    assert 'zendure_controller_v17_0_2/tools/install_zendure_controller.sh' in names

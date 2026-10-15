@@ -30,7 +30,7 @@ class FastFieldAnalysisTests(unittest.TestCase):
         with csvp.open("w",encoding="utf-8",newline="") as h:
             w=csv.DictWriter(h,fieldnames=STANDARD_HEADER,delimiter=";"); w.writeheader(); w.writerows(rows)
         manifest=root/"zec_measurement_manifest.json"; manifest.write_text(json.dumps({"schema_version":4,"files":[{"schema_version":4,"file_name":"m.csv"}]}),encoding="utf-8")
-        snaps=root/"zec_config_snapshots.json"; snaps.write_text(json.dumps({"schema_version":4,"snapshots":[{"controller_version":"17.0.1","config_control_hash":"abc"}]}),encoding="utf-8")
+        snaps=root/"zec_config_snapshots.json"; snaps.write_text(json.dumps({"schema_version":4,"snapshots":[{"controller_version":"17.0.2","config_control_hash":"abc"}]}),encoding="utf-8")
         return td,csvp,manifest,snaps
 
     def test_describe_read_only_strategy(self):
@@ -62,6 +62,39 @@ class FastFieldAnalysisTests(unittest.TestCase):
         row=base_row(1000,mode="off",state="RESERVE_UNKNOWN",desired=0,overlay=0,combined=500)
         td,csv,manifest,snaps=self._write([row])
         try: self.assertEqual("NOT_EVALUABLE",fa.analyze_files([csv],manifest_path=manifest,config_snapshots_path=snaps)["status"])
+        finally: td.cleanup()
+
+    def test_version_evidence_ignores_unreferenced_historical_snapshots(self):
+        rows=[base_row(1000,mode="off",state="RESERVE_UNKNOWN",desired=0,overlay=0,combined=500)]
+        td,csv,manifest,snaps=self._write(rows)
+        try:
+            data=json.loads(snaps.read_text(encoding="utf-8"))
+            data["snapshots"].insert(0,{"controller_version":"12.11.2-rc17","config_control_hash":"historical"})
+            snaps.write_text(json.dumps(data),encoding="utf-8")
+            result=fa.analyze_files([csv],manifest_path=manifest,config_snapshots_path=snaps)
+            self.assertEqual("PASS",result["controller_version_evidence"]["status"])
+            self.assertEqual(["17.0.2"],result["controller_version_evidence"]["versions"])
+            self.assertEqual("NOT_EVALUABLE",result["status"])
+        finally: td.cleanup()
+
+    def test_version_evidence_fails_when_referenced_snapshot_is_missing(self):
+        row=base_row(1000,mode="off",state="RESERVE_UNKNOWN",desired=0,overlay=0,combined=500)
+        row["config_control_hash"]="missing"
+        td,csv,manifest,snaps=self._write([row])
+        try:
+            result=fa.analyze_files([csv],manifest_path=manifest,config_snapshots_path=snaps)
+            self.assertEqual("FAIL",result["controller_version_evidence"]["status"])
+            self.assertEqual("REFERENCED_CONFIG_SNAPSHOT_MISSING",result["controller_version_evidence"]["detail"])
+        finally: td.cleanup()
+
+    def test_human_report_exposes_structural_evidence(self):
+        row=base_row(1000,mode="off",state="RESERVE_UNKNOWN",desired=0,overlay=0,combined=500)
+        td,csv,manifest,snaps=self._write([row])
+        try:
+            result=fa.analyze_files([csv],manifest_path=manifest,config_snapshots_path=snaps)
+            text=fa._human(result)
+            self.assertIn("manifest_evidence=PASS SCHEMA_V4",text)
+            self.assertIn("controller_version_evidence=PASS REFERENCED_CONFIG_CONTROLLER_VERSION_MATCH",text)
         finally: td.cleanup()
 
 if __name__=="__main__": unittest.main()

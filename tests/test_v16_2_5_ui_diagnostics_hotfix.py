@@ -100,21 +100,21 @@ def test_controller_state_snapshot_carries_productive_instance_owner_evidence():
     state = ControllerState()
     state.instance_owner_active = True
     state.instance_owner_pid = 4242
-    state.instance_owner_build_id = "v17.0.1-test"
+    state.instance_owner_build_id = "v17.0.2-test"
     state.instance_owner_since_utc = "2026-09-22T00:00:00Z"
     state.instance_owner_lock_path = "/opt/zendure-controller/zendure_controller.instance.lock"
 
     snap = state.snapshot()
     assert snap["instance_owner_active"] is True
     assert snap["instance_owner_pid"] == 4242
-    assert snap["instance_owner_build_id"] == "v17.0.1-test"
+    assert snap["instance_owner_build_id"] == "v17.0.2-test"
     assert snap["instance_owner_since_utc"] == "2026-09-22T00:00:00Z"
     assert snap["instance_owner_lock_path"].endswith("zendure_controller.instance.lock")
 
     payload = build_status_view_payload(_cfg(), snap)
     assert payload["diag"]["instance_owner_active"] is True
     assert payload["diag"]["instance_owner_pid"] == 4242
-    assert payload["diag"]["instance_owner_build_id"] == "v17.0.1-test"
+    assert payload["diag"]["instance_owner_build_id"] == "v17.0.2-test"
 
 
 def test_mobile_settings_contract_prevents_unreachable_horizontal_content():

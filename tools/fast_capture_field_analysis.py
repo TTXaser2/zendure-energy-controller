@@ -21,7 +21,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 FORMAT = "ZEC_FAST_CAPTURE_FIELD_ANALYSIS_V1"
 EXPECTED_SCHEMA_VERSION = "4"
-EXPECTED_CONTROLLER_VERSION = "17.0.1"
+EXPECTED_CONTROLLER_VERSION = "17.0.2"
 ATTACK_W_PER_S = 400.0
 RELEASE_W_PER_S = 100.0
 FULL_IDLE_CONFIRM_S = 15.0
@@ -151,12 +151,42 @@ def _read_rows(paths: Sequence[Path]) -> Tuple[List[Dict[str, str]], List[str]]:
     return rows, headers
 
 
-def _config_version_evidence(snapshots: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+def _config_version_evidence(rows: Sequence[Dict[str, str]], snapshots: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    referenced_hashes = sorted({str(row.get("config_control_hash") or "").strip() for row in rows if str(row.get("config_control_hash") or "").strip()})
     if snapshots is None:
-        return {"status": "WARN", "detail": "CONFIG_SNAPSHOTS_NOT_PROVIDED", "versions": []}
-    versions = sorted({str(x.get("controller_version") or "") for x in snapshots.get("snapshots", []) if isinstance(x, dict) and x.get("controller_version")})
-    ok = bool(versions) and all(v == EXPECTED_CONTROLLER_VERSION for v in versions)
-    return {"status": "PASS" if ok else "FAIL", "detail": "CONTROLLER_VERSION_MATCH" if ok else "CONTROLLER_VERSION_MISMATCH", "versions": versions}
+        return {
+            "status": "WARN",
+            "detail": "CONFIG_SNAPSHOTS_NOT_PROVIDED",
+            "referenced_config_hashes": referenced_hashes,
+            "missing_config_hashes": [],
+            "versions": [],
+        }
+    snapshot_items = [x for x in snapshots.get("snapshots", []) if isinstance(x, dict)]
+    by_hash = {str(x.get("config_control_hash") or "").strip(): x for x in snapshot_items if str(x.get("config_control_hash") or "").strip()}
+    if not referenced_hashes:
+        return {
+            "status": "FAIL",
+            "detail": "ROW_CONFIG_HASH_MISSING",
+            "referenced_config_hashes": [],
+            "missing_config_hashes": [],
+            "versions": [],
+        }
+    missing = [h for h in referenced_hashes if h not in by_hash]
+    referenced = [by_hash[h] for h in referenced_hashes if h in by_hash]
+    versions = sorted({str(x.get("controller_version") or "") for x in referenced if x.get("controller_version")})
+    if missing:
+        status, detail = "FAIL", "REFERENCED_CONFIG_SNAPSHOT_MISSING"
+    elif not versions or any(v != EXPECTED_CONTROLLER_VERSION for v in versions):
+        status, detail = "FAIL", "CONTROLLER_VERSION_MISMATCH"
+    else:
+        status, detail = "PASS", "REFERENCED_CONFIG_CONTROLLER_VERSION_MATCH"
+    return {
+        "status": status,
+        "detail": detail,
+        "referenced_config_hashes": referenced_hashes,
+        "missing_config_hashes": missing,
+        "versions": versions,
+    }
 
 
 def _manifest_evidence(manifest: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -315,7 +345,7 @@ def analyze_rows(rows: Sequence[Dict[str, str]], *, manifest: Optional[Dict[str,
                 status="NOT_EVALUABLE"; detail="INSUFFICIENT_FRESH_INDEPENDENT_POWER_SAMPLES"
         episode_reports.append({"episode":idx,"start_ms":start_ms,"end_ms":end_ms,"row_count":len(episode),"modes":modes,"primary_states":states,"physical_effect_status":status,"physical_effect_detail":detail,"metrics":metrics})
 
-    manifest_ev=_manifest_evidence(manifest); version_ev=_config_version_evidence(snapshots)
+    manifest_ev=_manifest_evidence(manifest); version_ev=_config_version_evidence(rows,snapshots)
     structural_fail=sum(1 for x in (manifest_ev,version_ev) if x.get("status")=="FAIL")
     structural_warn=sum(1 for x in (manifest_ev,version_ev) if x.get("status")=="WARN")
     state_status=_status_from_counts(state_fail,state_eval)
@@ -360,6 +390,9 @@ def analyze_files(csv_paths: Sequence[Path], *, manifest_path: Optional[Path] = 
 
 def _human(result: Dict[str, Any]) -> str:
     lines=["ZEC Fast Capture A400/R100 field analysis",f"status={result.get('status')}",f"rows={result.get('row_count')} episodes={result.get('episode_count')}"]
+    for evidence_name in ("manifest_evidence", "controller_version_evidence"):
+        evidence = result.get(evidence_name) or {}
+        lines.append(f"{evidence_name}={evidence.get('status')} {evidence.get('detail')}")
     for name,data in (result.get("dimensions") or {}).items():
         lines.append(f"{name}={data.get('status')}")
     for ep in result.get("episodes") or []:

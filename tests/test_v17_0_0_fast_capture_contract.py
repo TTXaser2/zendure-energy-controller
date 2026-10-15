@@ -12,6 +12,7 @@ if "paho" not in sys.modules:
 from config_manager import DEFAULT_CONFIG
 from config_validator import validate_config_semantics
 from measurement_v4 import CONTROL_SNAPSHOT_KEYS, build_config_snapshot, build_v4_row
+from state import ControllerState
 from measurement_v4_contract import EXTENDED_HEADER, RC15_STANDARD_HEADER, RC16_STANDARD_HEADER, RC17_STANDARD_HEADER, STANDARD_HEADER, header_hash
 from settings_registry import SETTINGS_BY_KEY, Applicability, SurfaceState, Visibility
 
@@ -47,6 +48,32 @@ class FastCaptureContractTests(unittest.TestCase):
         self.assertEqual("shadow",build_config_snapshot(cfg)["control_parameters"]["HARVEST_FAST_CAPTURE_MODE"])
         row=build_v4_row(cfg,{"epoch":1,"fast_capture_mode":"shadow","fast_capture_primary_state":"NEAR_LIMIT","fast_capture_overlay_w":123,"fast_capture_combined_target_w":523,"fast_capture_baseline_target_w":400,"fast_capture_observation_distinct":True,"fast_capture_primary_max_charge_w":2300})
         self.assertEqual("shadow",row["fast_capture_mode"]); self.assertEqual(123.0,row["fast_capture_overlay_w"]); self.assertEqual("1",row["fast_capture_observation_distinct"])
+
+    def test_runtime_state_graph_row_preserves_fast_capture_shadow_evidence(self):
+        state=ControllerState()
+        with state.lock:
+            state.fast_capture_mode="shadow"
+            state.fast_capture_active=False
+            state.fast_capture_primary_state="NEAR_LIMIT"
+            state.fast_capture_block_reason=""
+            state.fast_capture_baseline_target_w=400
+            state.fast_capture_desired_overlay_w=350
+            state.fast_capture_overlay_w=300
+            state.fast_capture_combined_target_w=700
+            state.fast_capture_primary_reserve_w=120
+            state.fast_capture_observation_dt_s=1.0
+            state.fast_capture_observation_distinct=True
+            state.fast_capture_primary_max_charge_w=2300
+        state.record_graph_point(10)
+        raw=state.graph_history[-1]
+        self.assertEqual("shadow",raw["fast_capture_mode"])
+        self.assertEqual(300,raw["fast_capture_overlay_w"])
+        cfg=dict(DEFAULT_CONFIG); cfg["HARVEST_FAST_CAPTURE_MODE"]="shadow"
+        row=build_v4_row(cfg,raw)
+        self.assertEqual("shadow",row["fast_capture_mode"])
+        self.assertEqual("NEAR_LIMIT",row["fast_capture_primary_state"])
+        self.assertEqual(300.0,row["fast_capture_overlay_w"])
+        self.assertEqual("1",row["fast_capture_observation_distinct"])
 
     def test_config_example_safe_off(self):
         data=json.loads((Path(__file__).parents[1]/"config.example.json").read_text(encoding="utf-8"))
