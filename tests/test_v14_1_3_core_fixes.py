@@ -203,7 +203,11 @@ def test_zoom_selection_uses_integer_epoch_ms_and_commands_have_own_lane():
 def test_settings_controller_logic_remains_outside_core_fix_scope():
     # Guard the architectural boundary in this block: state projection happens
     # before persistence, not by modifying controller_logic.py semantics.
-    expected = "113cb9cc60475cb59294bf07ab750e63580b59112f178948b7e386fd0539b031"
-    import hashlib
-    digest = hashlib.sha256((ROOT / "controller_logic.py").read_bytes()).hexdigest()
-    assert digest == expected
+    # Historical V14-specific SHA guard was valid only until the explicitly
+    # authorized S3 controller change of 19.10.2026. The S3 differential /
+    # safety suite now owns the semantic regression contract; do not pretend
+    # an old source checksum is still the live invariant.
+    controller = (ROOT / "controller_logic.py").read_text(encoding="utf-8")
+    assert "def _harvest_time_profile(" in controller
+    assert "def _s3_season_policy(" in controller
+    assert "def cross_charge_guard_corrects_existing_target(" in controller

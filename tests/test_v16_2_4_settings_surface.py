@@ -45,9 +45,11 @@ def test_product_surface_is_explicit_and_fail_closed_for_later_target_settings()
         "SECOND_BATTERY_INTEGRATION_ENABLED",
         "SECOND_BATTERY_CAPACITY_WH",
         "SECOND_BATTERY_MAX_DISCHARGE_POWER_W",
+        # S3 is explicitly activated only by its new opt-in setting.
+        "HARVEST_SEASON_MODE",
+        "HARVEST_SEASON_POLICY_ENABLED",
     }
     target_only = {
-        "HARVEST_SEASON_MODE",
         "MEASUREMENT_DB_MAINTENANCE_MODE",
         "MEASUREMENT_LOG_MAINTENANCE_MODE",
     }
@@ -78,9 +80,8 @@ def test_primary_activation_remains_visible_while_subordinate_fields_follow_appl
             assert enabled[key]["editable"] is True
 
 
-def test_target_only_s3_s4_s6_s7_settings_stay_out_of_model_for_any_topology():
+def test_target_only_storage_settings_stay_out_of_model_for_any_topology():
     forbidden = {
-        "HARVEST_SEASON_MODE",
         "MEASUREMENT_DB_MAINTENANCE_MODE",
         "MEASUREMENT_DB_1MIN_RETENTION_MODE",
         "MEASUREMENT_LOG_MAINTENANCE_MODE",
@@ -109,7 +110,8 @@ def test_first_install_persistence_uses_same_surface_authority():
     assert result.persisted["SECOND_BATTERY_INTEGRATION_ENABLED"] is True
     assert result.persisted["SECOND_BATTERY_CAPACITY_WH"] == 13000
     assert result.persisted["SECOND_BATTERY_MAX_DISCHARGE_POWER_W"] == 4600
-    assert "HARVEST_SEASON_MODE" not in result.persisted
+    assert result.persisted["HARVEST_SEASON_POLICY_ENABLED"] is False
+    assert "HARVEST_SEASON_MODE" in result.persisted
     assert "MEASUREMENT_DB_MAINTENANCE_MODE" not in result.persisted
     assert "MEASUREMENT_LOG_MAINTENANCE_MODE" not in result.persisted
 

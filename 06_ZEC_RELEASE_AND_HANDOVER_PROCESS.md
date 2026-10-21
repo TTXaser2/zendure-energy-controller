@@ -1,6 +1,6 @@
 # ZEC – Release & Handover Process
 
-Stand: 22.09.2026
+Stand: 19.10.2026
 Status: kanonisch – inklusive dauerhaftem Datenblatt-, Release-Hygiene- und Build-Evidence-Vertrag
 
 ## 1. Entwicklungsblock starten
@@ -42,9 +42,11 @@ Pflichtausgabe mindestens:
 - Exit-Gate
 - bekannte Restpunkte
 - Master-Backlog-/Changelog-Delta und `BACKLOG_NO_DROP_GATE`-Status
+- bei mitgelieferten Analyse-/Forensikwerkzeugen: dokumentierter bounded-memory-/Langzeitvertrag oder explizit begrenzter Einsatzbereich
 - Installationsbefehle
 - Rollbackhinweis
 - Git-Commit-/Tag-Vorschlag
+- letzte Checkpointidentität samt SHA256, Bibliothekspfad und `CHECKPOINT_LIBRARY_GATE`-Nachweis (bei wesentlichen seitdem erfolgten Änderungen neuer Gate-Lauf nötig)
 
 Das finale ZIP selbst erneut entpacken und daraus die Releasegates wiederholen bzw. die paketbezogenen Gates verifizieren.
 
@@ -74,6 +76,19 @@ Nach Installation mindestens:
 - für den Release relevante Funktions-/UI-Pfade
 - reale physikalische Wirkung bei Regler-/Commandänderungen
 
+### 5.1 Produktiv-Pi-Analyse und Forensik
+
+Read-only bedeutet nicht automatisch betriebssicher. Analyse-/Forensikwerkzeuge, die auf dem produktiven Raspberry Pi laufen, müssen zusätzlich ressourcensicher sein:
+
+- große Measurement-V4-/Log-Historien nur streaming/bounded-memory; keine ungebundene Vollmaterialisierung in Listen/DataFrames;
+- lange Zeiträume zuerst ressourcenschonend filtern/verdichten; fachlich schwere Analyzer anschließend gegen begrenzte Artefakte ausführen, sofern der Analyzer intern Vollmaterialisierung verwendet;
+- neue oder geänderte Langzeittools benötigen vor Real-Pi-Einsatz einen fokussierten Ressourcen-/Stresstest oder einen kleinen repräsentativen Vorlauf;
+- auf dem Real-Pi niedrige CPU-/I/O-Priorität und, wo sinnvoll, explizite Zeit-, Speicher- und Ausgabegrenzen;
+- passives Monitoring muss Logrotation/Größenlimits besitzen und darf keine konkurrierenden Netzwerk-Consumer erzeugen, sofern derselbe Telemetriepfad bereits produktiv gebunden ist;
+- ZEC-/EVCC-/MQTT-Verfügbarkeit hat Vorrang vor Analysekomfort. Ein Tool, das den Host durch RAM-/Swap-/I/O-Druck unbenutzbar machen kann, ist für lange Real-Pi-Zeitfenster nicht freigabefähig.
+
+Realfund 25.09.2026: Ein unbounded V4-Analysepfad mit vollständigen Python-Row-Dictionaries führte während der Analyse zu einem nicht mehr erreichbaren Raspberry Pi und erforderte einen Reboot. Ein nachfolgender Streaming-Extractor verarbeitete denselben Untersuchungsgegenstand bounded. Dieser Vorfall ist dauerhaft als Prozessleitplanke zu berücksichtigen.
+
 ## 6. Chatwechsel / Übergabe
 
 Frühzeitig wechseln, wenn:
@@ -95,8 +110,9 @@ Vor dem Wechsel Übergabepaket erstellen mit:
 - Build-/Abnahmecheckliste
 - Roadmap
 - Startprompt
+- bibliotheksgesicherte, erneut lesbare letzte vollständige Entwicklungsbasis mit SHA256 und Gate-Protokoll
 
-Der neue Chat verwendet diese Übergabe als verbindlichen Startpunkt.
+Der neue Chat verwendet ausschließlich den neu gelesenen, hashverifizierten Archivstand als verbindliche Sourcebasis; fehlende spätere Arbeit wird nicht behauptet.
 
 ## 7. Projektquellenpflege und Backlog-Reconciliation
 
@@ -277,9 +293,15 @@ Ab V16.2.4 ist dieser Vertrag produktiv umgesetzt:
 
 Nach einer realen Feldabnahme sind flüchtige `/tmp`-Artefakte vor Neustart, Cleanup oder destruktivem Test in ein persistentes, gehashtes Evidenzarchiv zu sichern.
 
-## 11. Externe Entwicklungscheckpoint-Pflicht
+## 11. Externe Entwicklungscheckpoint-Pflicht – CHECKPOINT_LIBRARY_GATE
 
-Nach jedem größeren sourceverändernden Arbeitsblock ist sofort ein vollständiges extern bereitgestelltes Checkpoint-ZIP mit SHA256 zu erzeugen. Wenn seit dem letzten extern gesicherten Checkpoint wesentliche Änderungen erfolgt sind, dürfen längere Tests, Dokumentationsblöcke oder weitere Entwicklung erst nach dieser Sicherung fortgesetzt werden.
+**Normative Ausführung: `01_ZEC_PROJECT_RULES.md` § 3.** Nach jedem größeren Sourceblock und vor weiterer umfangreicher Arbeit ist ein vollständiges, ZIP-/CRC-geprüftes Checkpointarchiv mit SHA256 zu erstellen, in `ZEC - Zendure Energy Controller/Checkpoints/` der **persönlichen ChatGPT-Bibliothek** hochzuladen und **unabhängig als raw file zurückzulesen**. SHA256, Datei-Bytezahl und ZIP-Integrität müssen exakt übereinstimmen. Vollständige Sources, Tests, Dokumente, Manifest-/Buildgrundlagen und notwendige Evidenz sichern; Produktivdaten und Secrets nicht ungeschützt beifügen.
+
+Die Checkpoint-Evidenz nennt `CHECKPOINT_LIBRARY_GATE=PASS|FAIL|NOT_EVALUABLE`, Dateiname, SHA256, Größe, Arbeitsbasis, Zeitstempel, Bibliothekspfad, Uploadobjekt/Referenz, Rücklesetest sowie seitdem erfolgte Änderungen. `EXTERNALLY_SECURED` darf nur bei `PASS` behauptet werden; `LOCAL_ONLY`, `UPLOAD_PENDING`, `LIBRARY_UNVERIFIED` und Sandbox-Downloadlinks sind **keine** externen Sicherungen.
+
+**Harter Entwicklungsgate:** Nach wesentlichen ungesicherten Änderungen keine weiteren Sourceblöcke, längeren QA-/Dokumentationsphasen, Chatübergaben als 'gesichert' oder Release-Freeze. Bei fehlendem Bibliothekszugriff, Quota, Uploadfehler, fehlendem Rücklesen oder Hashabweichung `FAIL` und stoppen; eine alternative nachweislich dauerhafte Sicherung nur nach Nutzerabstimmung. Beim Wechsel in einen neuen Chat die letzte gesicherte Archivkopie **aus der Bibliothek** wieder einlesen und verifizieren, statt nur dem Chatprotokoll zu vertrauen.
+
+**Retention:** Keine ungefragte Löschung. Quartalsweise, bei größeren Releases oder bei Kapazitätswarnungen eine Bestands-/Speicherprüfung anbieten. Vor einer manuell freigegebenen Bereinigung Nachfolger, Rollback-, Branch-, Evidenz- und Backlog-/No-Drop-Anker prüfen; mindestens letzte fünf verifizierte Checkpoints des aktiven Zweigs sowie Release-/Freeze-Anker erhalten. Bibliothek/Projektquellen sind unterschiedliche Speicherflächen. Jede tatsächliche Löschung wird separat mit Objekt, Umfang und Grund dokumentiert.
 
 ## 12. Master-Backlog-/Changelog-Gate
 
@@ -288,7 +310,51 @@ Für jeden Release nach Einführung dieses Vertrags gilt zusätzlich:
 - `docs/ZEC_Master_Backlog.md` existiert und ist nicht leer;
 - Snapshot und kanonisches Master-Ledger stimmen für den Releasefreeze in ID/Status/Provenienz überein;
 - alle im Entwicklungsblock neu entstandenen offenen Punkte sind im Ledger enthalten;
+- offene Ledgerpunkte mit `RELEASE_BLOCKER_NEXT_RELEASE` oder `FIX_REQUIRED_NEXT_RELEASE`, die dem anstehenden Produktrelease zugeordnet sind, blockieren Source-Freeze/Release-PASS bis Implementierung und gefordertem Regressionnachweis;
 - alle im Release abgeschlossenen Punkte besitzen Release-/Buildbezug;
 - `BACKLOG_NO_DROP_GATE=PASS` für alle im Zuge des Releases entfernten/archivierten Übergaben/Overlays;
 - Fresh-extract enthält den Snapshot und Manifestprüfung deckt ihn ab;
 - ein optionales Changelog wird aus dem Ledger abgeleitet und darf keine offenen/verworfenen Punkte aus dem Ledger löschen.
+
+
+## 13. Architektur-/Spezifikations-/Historien-Dokumentation im Source-Release (Beschluss 19.10.2026)
+
+### 13.1 Geltung und Struktur
+
+Ab dem **nächsten Entwicklungs-/Produktrelease**, ohne rückwirkende Veränderung des veröffentlichten V17.0.2-Pakets, wird die technische Dokumentation in `docs/` mit Sources, Checkpoint und Release versioniert. Die bewährten bestehenden Benutzerhandbücher, das technische Datenblatt und `docs/ZEC_Master_Backlog.md` bleiben erhalten.
+
+Empfohlene, schrittweise einzuführende Pfade:
+
+```text
+docs/INDEX.md
+docs/architecture/        # As-built der tatsächlich implementierten, relevanten Funktionen
+docs/specifications/      # produktive/freigegebene Spezifikationen, Version/Status klar markiert
+docs/decisions/           # ADR / retrospektiv belegte Architekturentscheidungen
+docs/history/             # alte Original-Specs, belegte ältere Stände, Provenienzindex
+```
+
+Alle Pfade sind relativ zum Source-Root. Alle Links müssen nach Fresh-extract innerhalb des ZIPs auflösbar sein, sofern ihr Ziel Teil des Releasebaums ist. Die konkrete Benennung darf aus Kompatibilitätsgründen abweichen, sofern die semantischen Dokumenttypen sauber trennbar bleiben.
+
+### 13.2 Dokumentstatus, Wahrheit und Historienübernahme
+
+- `AS_BUILT`: aktuell gegen Release-/Sourceversion geprüfte Beschreibung, keine Behauptung einer Feldfreigabe.
+- `SPEC_DRAFT`: fachlicher Entwurf, keine Sourcefreigabe.
+- `SPEC_APPROVED`: ausdrücklich für ihren Block freigegebener Sollvertrag, nicht automatisch Implementierungsnachweis.
+- `HISTORICAL_ORIGINAL`: unveränderte archivierte Originalquelle; ihr damaliger Status bleibt erhalten.
+- `RETROSPECTIVE_RECONSTRUCTION`: kenntlich gemachte nachträgliche Zusammenfassung mit belegten Referenzen, nicht als historisches Original ausgeben.
+- `MISSING_ORIGINAL`: historisch belegter Verweis ohne verfügbare Originalbytes; darf nicht als eingebettet/prüfbar gelten.
+
+Jedes wesentliche Dokument erhält Titel, Dokumenttyp/Status, Basisrelease/-build bzw. Geltungsbereich, Datum, relevanten Source-/Test-/Evidenzbezug und Verknüpfung zum Master-Ledger soweit einschlägig. Der `docs/INDEX.md` ist ein laufend gepflegter Navigations- und Zustandsindex, **keine zweite Roadmap**.
+
+Historische Originale sind bei vertretbarem Aufwand aufzunehmen. Beginn mit der **vorhandenen Fast-Capture-V16.0.2-Originalspezifikation** (unverändert; noch nicht implementiert im damaligen Dokument), einem expliziten V16.2.5-Revalidierungsverweis mit `MISSING_ORIGINAL` und einer gegen V17.0.2 geprüften As-built-Beschreibung; später S3. Nachträglich leicht greifbare Spezifikationen/Entscheidungen können fortlaufend ergänzt werden; keine Pflicht zur spekulativen Vollrekonstruktion aller alten Releases vor dem nächsten Feature-/Winterrelease.
+
+### 13.3 Scope und Release-Gates
+
+1. Im Scope-/Checkpointplan kennzeichnen, welche Module/Regelkontrakte, Diagramme, Architekturdokumente, Specs oder ADR durch den Sourceblock betroffen sind. Größere neue Funktionen erfordern einen As-built-Eintrag bzw. ein begründetes Update; kleinere reine UI-/Hotfixarbeiten erfordern mindestens Prüfung/Änderungsvermerk, nicht blind eine vollständige Neudokumentation.
+2. Bei Source-Freeze Ist-/Sollstatus gegen tatsächliche Code-Consumer, Settings-Registry, Limits, Tests, relevante Feldnachweise und releasegenaue Buildidentität prüfen. `AS_BUILT` darf keinen nur vorgeschlagenen Zweig als aktiv ausweisen. Unreconciled-Mismatch = Dokumentationsgate FAIL für den betroffenen Scope.
+3. Dateien und Querverweise in Source-/Paketmanifest sowie finaler ZIP-/Fresh-extract-Integrität prüfen. Einfache Link-/Existenz-/Status- und Hashprüfungen werden in den Release-Workflow integriert. Nicht existierende historische Originale dürfen explizit als `MISSING_ORIGINAL` referenziert werden, nicht als erfolgreicher Dateilink.
+4. Der freigegebene Sollvertrag und dessen Änderungen gegenüber der implementierten Realität müssen nachvollziehbar sein. Ein `docs/`-Original darf nicht stillschweigend überschrieben oder aus der Historie entfernt werden; Ergänzungen sind als neue Version oder nachvollziehbares Addendum vorzunehmen.
+5. Die vollständige technische Dokumentation einschließlich nachvollziehbarer, **mit vertretbarem Aufwand verfügbarer** Historie wird im jeweiligen Checkpoint/Release mitgeliefert. `docs/ZEC_Master_Backlog.md` bleibt ein Snapshot; an Ledger/Prozessquellen gilt weiterhin `BACKLOG_NO_DROP_GATE` vor Entfernung/Archivierung.
+6. Exit-Bericht nennt `DOC_ARCH_HISTORY_GATE=PASS|FAIL|NOT_EVALUABLE`, vorhandene/fehlende Historienbelege und vorgenommene Änderungen. `NOT_EVALUABLE` darf nicht als vollständiger Release-PASS etikettiert werden, wenn aktuelle As-built-Dokumentation verpflichtend betroffen ist. Fehlende *historische* Originale sind bei dokumentierter Suche/Provenienz dagegen kein pauschales Releasehindernis.
+
+**Abgrenzung:** Diese Prozessänderung implementiert selbst keinerlei Regler-/Installeränderung; die erforderlichen Build-Harness-/Manifest-Checks werden im ersten betroffenen künftigen Sourceblock konkret integriert und regressionsgeprüft. Bekannte Fixpflichten `ZEC-BL-CTRL-NIGHT-MINSOC-GRID-001` und `ZEC-BL-GRID-SMA-OBIS-001` bleiben davon unabhängig bestehen.

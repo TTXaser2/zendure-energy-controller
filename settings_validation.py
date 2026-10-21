@@ -192,10 +192,18 @@ def validate_candidate(values: Mapping[str, Any], context: Optional[ValidationCo
     if all(isinstance(value, str) for value in times) and not (_minutes(times[0]) < _minutes(times[1]) < _minutes(times[2]) < _minutes(times[3])):
         issues.append(_issue("VAL-013", ValidationSeverity.ERROR, time_keys))
 
-    if get("HARVEST_SEASON_MODE") == "calendar":
+    if get("HARVEST_SEASON_POLICY_ENABLED") is True and get("HARVEST_SEASON_MODE") == "calendar":
         start, end = get("HARVEST_SEASON_PARALLEL_START_MM_DD"), get("HARVEST_SEASON_PARALLEL_END_MM_DD")
-        if not (isinstance(start, str) and isinstance(end, str) and _mmdd(start) <= _mmdd(end)):
-            issues.append(_issue("VAL-014", ValidationSeverity.ERROR, ("HARVEST_SEASON_MODE", "HARVEST_SEASON_PARALLEL_START_MM_DD", "HARVEST_SEASON_PARALLEL_END_MM_DD")))
+        def _valid_season_boundary(value: Any) -> bool:
+            from datetime import date
+            if not isinstance(value, str) or value == "02-29":
+                return False
+            try:
+                return date.fromisoformat("2025-" + value).strftime("%m-%d") == value
+            except ValueError:
+                return False
+        if not (_valid_season_boundary(start) and _valid_season_boundary(end)):
+            issues.append(_issue("VAL-014", ValidationSeverity.ERROR, ("HARVEST_SEASON_POLICY_ENABLED", "HARVEST_SEASON_MODE", "HARVEST_SEASON_PARALLEL_START_MM_DD", "HARVEST_SEASON_PARALLEL_END_MM_DD")))
 
     if _changed("GRID_METER_SOURCE", values, context.previous) and context.grid_source_candidate_ready is not True:
         issues.append(_issue("VAL-015", ValidationSeverity.ERROR, ("GRID_METER_SOURCE",)))

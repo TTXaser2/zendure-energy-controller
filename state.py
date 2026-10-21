@@ -166,6 +166,11 @@ class ControllerState:
     rest_surplus_harvest_reason: str = "NONE"
     rest_surplus_harvest_block_reason: str = ""
     rest_surplus_harvest_profile: str = "default"
+    harvest_season_requested: str = ""
+    harvest_season_effective: str = "legacy_parallel"
+    harvest_profile_confirm_s: float = 0.0
+    harvest_s3_applicability: str = "NOT_APPLICABLE"
+    harvest_s3_override_reason: str = ""
     rest_surplus_hold_remaining_s: float = 0.0
     rest_surplus_export_w: float = 0.0
     second_battery_charge_pressure_w: float = 0.0
@@ -1764,6 +1769,11 @@ class ControllerState:
                 "rest_surplus_harvest_reason": self.rest_surplus_harvest_reason,
                 "rest_surplus_harvest_block_reason": self.rest_surplus_harvest_block_reason,
                 "rest_surplus_harvest_profile": self.rest_surplus_harvest_profile,
+                "harvest_season_requested": self.harvest_season_requested,
+                "harvest_season_effective": self.harvest_season_effective,
+                "harvest_profile_confirm_s": self.harvest_profile_confirm_s,
+                "harvest_s3_applicability": self.harvest_s3_applicability,
+                "harvest_s3_override_reason": self.harvest_s3_override_reason,
                 "rest_surplus_entry_progress_s": round(float(self.rest_surplus_entry_progress_s or 0.0), 1),
                 "rest_surplus_hold_remaining_s": round(float(self.rest_surplus_hold_remaining_s or 0.0), 1),
                 "rest_surplus_exit_reason": self.rest_surplus_exit_reason,
@@ -2588,6 +2598,11 @@ class ControllerState:
                 "rest_surplus_harvest_reason": self.rest_surplus_harvest_reason,
                 "rest_surplus_harvest_block_reason": self.rest_surplus_harvest_block_reason,
                 "rest_surplus_harvest_profile": self.rest_surplus_harvest_profile,
+                "harvest_season_requested": self.harvest_season_requested,
+                "harvest_season_effective": self.harvest_season_effective,
+                "harvest_profile_confirm_s": self.harvest_profile_confirm_s,
+                "harvest_s3_applicability": self.harvest_s3_applicability,
+                "harvest_s3_override_reason": self.harvest_s3_override_reason,
                 "rest_surplus_entry_progress_s": round(float(self.rest_surplus_entry_progress_s or 0.0), 1),
                 "rest_surplus_hold_remaining_s": round(float(self.rest_surplus_hold_remaining_s or 0.0), 1),
                 "rest_surplus_exit_reason": self.rest_surplus_exit_reason,

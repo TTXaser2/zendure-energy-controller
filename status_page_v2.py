@@ -334,12 +334,20 @@ def render_status_page_v2(
   <main class="zec-page-shell">
     <section class="zec-main-grid{' is-no-primary' if not primary_present else ''}" aria-label="Aktueller Systemstatus" data-primary-storage-present="{'true' if primary_present else 'false'}">
       <article class="zec-card zec-grid-card" data-card="grid">
-        <header class="zec-card-header"><div class="zec-card-title">{_icon('meter')}<h2>Netzleistung</h2></div>{_info_button('Netzleistung','Diese Karte zeigt den aktuellen ungefilterten Netzleistungswert am Netzanschlusspunkt. Negative Werte bedeuten Einspeisung/Export, positive Werte Netzbezug. Der Mini-Graph zeigt die letzten Messpunkte und reagiert direkt auf die Maus.')}</header>
+        <header class="zec-card-header"><div class="zec-card-title">{_icon('meter')}<h2>Netzleistung</h2></div>{_info_button('Netzleistung','Diese Karte zeigt den aktuellen ungefilterten Netzleistungswert am Netzanschlusspunkt. Negative Werte bedeuten Einspeisung/Export, positive Werte Netzbezug. Der Minigraph zeigt die zeitlich eingeordneten historischen Netzleistungsmessungen, getrennt vom sekündlichen Livewert. Zeitraum 5, 15 oder 60 Minuten; Verlaufsanzeige alle 3 Sekunden aktualisiert. Fehlen ältere Messpunkte, wird der verfügbare Zeitraum angezeigt.')}</header>
         <div class="zec-card-center">
           <div class="zec-grid-value" data-zec="grid.value">{_e(payload['grid'].get('value'))}</div>
           <div class="zec-grid-state" data-zec="grid.status">{_e(payload['grid'].get('status'))}</div>
         </div>
-        <div class="zec-mini-chart-wrap"><canvas id="gridMiniChart" aria-label="Netzleistungsverlauf der letzten Messpunkte"></canvas><div id="gridMiniTooltip" class="zec-chart-tooltip" hidden></div></div>
+        <div class="zec-mini-chart-controls" role="group" aria-label="Zeitraum des Netzleistungsverlaufs">
+          <span>Verlauf</span><div class="zec-mini-range-buttons">
+            <button type="button" data-grid-mini-range="5" aria-pressed="false">5 Min.</button>
+            <button type="button" data-grid-mini-range="15" aria-pressed="true">15 Min.</button>
+            <button type="button" data-grid-mini-range="60" aria-pressed="false">60 Min.</button>
+          </div>
+        </div>
+        <div class="zec-mini-chart-wrap"><canvas id="gridMiniChart" aria-label="Zeitlich korrekter Netzleistungsverlauf mit Messlücken"></canvas><div id="gridMiniTooltip" class="zec-chart-tooltip" hidden></div></div>
+        <div class="zec-mini-chart-caption" id="gridMiniCaption" aria-live="polite">Verlauf: 15 Minuten · Aktualisierung alle 3 s · Messpunkte aus dem Reglerzyklus</div>
         <footer class="zec-card-footer"><span class="zec-status-dot { _e(payload['grid'].get('tone','ok')) }"></span><span>Quelle: <b data-zec="grid.source">{_e(payload['grid'].get('source'))}</b> · <span data-zec="grid.freshness_text">{_e(payload['grid'].get('freshness_text'))}</span></span></footer>
       </article>
 

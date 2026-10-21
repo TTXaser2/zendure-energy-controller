@@ -25,9 +25,11 @@ _FLAP_COMPACT_WINDOW_S = 30 * 60
 
 
 class OperationalEventJournal:
-    def __init__(self, config_getter, state) -> None:
+    def __init__(self, config_getter, state, *, sma_energy_meter_client=None, shelly_sampler=None) -> None:
         self.config_getter = config_getter
         self.state = state
+        self.sma_energy_meter_client = sma_energy_meter_client
+        self.shelly_sampler = shelly_sampler
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._previous: Dict[str, Any] = {}
@@ -424,6 +426,60 @@ class OperationalEventJournal:
                     "MQTT-Verbindung wiederhergestellt",
                     "Brokerverbindung ist wieder aktiv.",
                 )
+
+        # A frozen control-loop grid sample is an operational incident even if
+        # the SMA receiver remains healthy. Never depend on run_once to report it.
+        cfg = self.config_getter()
+        meter_source = str(cfg.get("GRID_METER_SOURCE") or "shelly_http")
+        timeout_s = float(cfg.get("SMA_ENERGY_METER_STALE_TIMEOUT_SECONDS", 15) if meter_source == "sma_energy_meter_udp" else cfg.get("SHELLY_STALE_TIMEOUT_SECONDS", 15) or 15)
+        age_s = s.get("grid_power_age_seconds")
+        # On startup / source replacement there may never have been a valid
+        # grid sample.  A missing timestamp must not suppress incidents for
+        # hours.  Only report once the configured source had time to become
+        # available; the observer's existing hysteresis handles debounce.
+        no_sample = age_s is None and s.get("grid_power_valid") is False
+        startup_epoch = s.get("startup_epoch", getattr(self.state, "startup_epoch", None))
+        startup_age_s = None
+        try:
+            if startup_epoch is not None:
+                startup_age_s = max(0.0, time.time() - float(startup_epoch))
+        except (TypeError, ValueError, OverflowError):
+            pass
+        no_sample_overdue = bool(no_sample and startup_age_s is not None and startup_age_s > timeout_s)
+        try:
+            bad_grid = (age_s is not None and float(age_s) > timeout_s) or no_sample_overdue
+        except (ValueError, TypeError, OverflowError):
+            bad_grid = no_sample_overdue
+        controller_path = "GRID_NEVER_RECEIVED" if no_sample_overdue else "CONTROLLER_PROCESSING_OR_SOURCE_STALE"
+        if bad_grid and meter_source == "sma_energy_meter_udp" and self.sma_energy_meter_client is not None:
+            try:
+                source_epoch = self.sma_energy_meter_client.snapshot().last_received_epoch
+                if source_epoch is not None:
+                    source_age_s = max(0.0, time.time() - float(source_epoch))
+                    controller_path = "CONTROLLER_PROCESSING_STALE" if source_age_s <= timeout_s else "SMA_SOURCE_STALE"
+            except Exception:
+                controller_path = "SMA_SOURCE_STATUS_UNKNOWN"
+        elif bad_grid and meter_source == "shelly_http" and self.shelly_sampler is not None:
+            try:
+                source_epoch = self.shelly_sampler.snapshot().last_received_epoch
+                if source_epoch is not None:
+                    source_age_s = max(0.0, time.time() - float(source_epoch))
+                    controller_path = "CONTROLLER_PROCESSING_STALE" if source_age_s <= timeout_s else "SHELLY_SOURCE_STALE"
+            except Exception:
+                controller_path = "SHELLY_SOURCE_STATUS_UNKNOWN"
+        reason = str(s.get("grid_power_validity_reason") or "GRID_STALE")
+        # Older/unit snapshots without a grid field are NOT an active grid
+        # incident. Avoid a synthetic event or extra debounce clocks.
+        if age_s is not None or no_sample_overdue or "stable:grid_telemetry_stale" in self._previous:
+            age_label = f"{age_s} s alt" if age_s is not None else "nie empfangen (Quelle überfällig)"
+            self._stable_incident(
+                conn, "grid_telemetry_stale", bool(bad_grid),
+                title_bad="Netzleistungsdaten nicht aktuell",
+                title_ok="Netzleistungsdaten wieder aktuell",
+                detail_bad=f"Netzleistung {age_label}; Quelle {meter_source}; Diagnose {controller_path}; Zustand {mode}; Grund {reason}",
+                detail_ok="Controller-Netzleistungsdaten werden wieder innerhalb des zulässigen Zeitfensters aktualisiert.",
+                severity="error", bad_stable_s=6.0, ok_stable_s=4.0,
+            )
 
         tele = str(s.get("zendure_mqtt_overall_status") or "")
         bad = {

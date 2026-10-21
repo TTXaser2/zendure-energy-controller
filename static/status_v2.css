@@ -235,3 +235,12 @@ html[data-theme="dark"] .zec-wordmark{color:#f4f7fb}
   .zec-storage-layout{grid-template-columns:102px minmax(0,1fr);gap:8px}
   .zec-detail-row{grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr);font-size:11px}
 }
+
+/* Bounded, responsive timeline controls; no new space needed in other cards. */
+.zec-mini-chart-controls{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:5px 3px 0;color:var(--zec-muted);font-size:11px}
+.zec-mini-range-buttons{display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end}
+.zec-mini-range-buttons button{border:1px solid var(--zec-card-border);background:transparent;color:inherit;border-radius:8px;padding:4px 7px;font:inherit;cursor:pointer;min-height:28px}
+.zec-mini-range-buttons button[aria-pressed="true"]{border-color:var(--zec-blue);color:var(--zec-blue);font-weight:700}
+.zec-mini-range-buttons button:focus-visible{outline:2px solid var(--zec-blue);outline-offset:2px}
+.zec-mini-chart-caption{font-size:10px;color:var(--zec-muted);padding:0 3px 5px;line-height:1.4;overflow-wrap:anywhere}
+@media(max-width:390px){.zec-mini-range-buttons button{padding:4px 5px}.zec-mini-chart-controls{gap:4px}}

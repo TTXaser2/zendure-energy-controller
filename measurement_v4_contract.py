@@ -133,6 +133,11 @@ STANDARD_HEADER: List[str] = [
     "rest_surplus_harvest_reason",
     "rest_surplus_harvest_block_reason",
     "rest_surplus_harvest_profile",
+    "harvest_season_requested",
+    "harvest_season_effective",
+    "harvest_profile_confirm_s",
+    "harvest_s3_applicability",
+    "harvest_s3_override_reason",
     "rest_surplus_entry_progress_s",
     "rest_surplus_hold_remaining_s",
     "rest_surplus_exit_reason",
@@ -455,6 +460,14 @@ V16_1_SMA_DISCHARGE_FLOOR_FIELDS = {
     "primary_usable_soc_valid",
 }
 
+# S3 diagnostics are additive to the current V4 schema only.  No historic
+# RC format may acquire these fields by accident.
+V17_S3_DIAGNOSTIC_FIELDS = {
+    "harvest_season_requested", "harvest_season_effective",
+    "harvest_profile_confirm_s", "harvest_s3_applicability",
+    "harvest_s3_override_reason",
+}
+
 # Historical RC header contracts must stay byte/column compatible.  New
 # V16.1 diagnostic capability fields and V17 Fast Capture evidence belong only
 # to the current V4 header and must not leak into reconstructed RC17-and-earlier schemas.
@@ -463,6 +476,7 @@ RC17_STANDARD_HEADER: List[str] = [
     if field not in RC18_ASYNC_LOCAL_API_FIELDS
     and field not in V16_1_SMA_DISCHARGE_FLOOR_FIELDS
     and field not in V17_FAST_CAPTURE_FIELDS
+    and field not in V17_S3_DIAGNOSTIC_FIELDS
 ]
 RC16_STANDARD_HEADER: List[str] = [
     field for field in RC17_STANDARD_HEADER if field not in RC17_HARVEST_ZERO_GRID_TARGET_FIELDS

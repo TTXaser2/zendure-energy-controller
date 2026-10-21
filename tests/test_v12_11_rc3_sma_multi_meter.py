@@ -6,15 +6,7 @@ from config_validator import validate_config_semantics
 from sma_energy_meter import SmaEnergyMeterClient, parse_sma_energy_meter_packet, _get_interface_ipv4
 
 
-def make_packet(susy=999, serial=1234567890, import_w=1234.5, export_w=234.5):
-    packet = bytearray(b"SMA\x00" + b"x" * 28)
-    # Known multicast frame placement used by common SMA Energy Meter integrations.
-    packet[18:20] = int(susy).to_bytes(2, "big")
-    packet[20:24] = int(serial).to_bytes(4, "big")
-    packet.extend(b"\x00\x01\x04\x00" + struct.pack(">I", int(round(import_w * 10))))
-    packet.extend(b"abcd")
-    packet.extend(b"\x00\x02\x04\x00" + struct.pack(">I", int(round(export_w * 10))))
-    return bytes(packet)
+from sma_packet_fixtures import make_packet
 
 
 class SmaRc3ParserTests(unittest.TestCase):

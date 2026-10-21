@@ -7,10 +7,8 @@ from sma_energy_meter import parse_sma_energy_meter_packet, SmaEnergyMeterClient
 
 class SmaEnergyMeterParserTests(unittest.TestCase):
     def test_parser_decodes_signed_grid_power_from_obis_values(self):
-        packet = b"SMA\x00" + b"x" * 12
-        packet += b"\x00\x01\x04\x00" + struct.pack(">I", 12345)  # 1234.5 W import
-        packet += b"abcd"
-        packet += b"\x00\x02\x04\x00" + struct.pack(">I", 2345)   # 234.5 W export
+        from sma_packet_fixtures import make_packet
+        packet = make_packet(import_w=1234.5, export_w=234.5)
         reading = parse_sma_energy_meter_packet(packet, received_epoch=1000.0)
         self.assertIsNotNone(reading)
         self.assertEqual(reading.grid_power_w, 1000.0)

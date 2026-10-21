@@ -36,9 +36,9 @@ class FastCaptureContractTests(unittest.TestCase):
         self.assertTrue({"FAST_CAPTURE_ACTIVE_NEEDS_HARVEST","FAST_CAPTURE_ACTIVE_NEEDS_CROSS_CHARGE","FAST_CAPTURE_ACTIVE_NEEDS_PRIMARY_STORAGE","FAST_CAPTURE_ACTIVE_NEEDS_PRIMARY_MAX_CHARGE","FAST_CAPTURE_ACTIVE_NEEDS_ZENDURE_MAX_CHARGE"}.issubset(codes))
 
     def test_measurement_current_header_additive_historical_headers_unchanged(self):
-        self.assertEqual(273,len(STANDARD_HEADER)); self.assertEqual(276,len(EXTENDED_HEADER))
+        self.assertEqual(278,len(STANDARD_HEADER)); self.assertEqual(281,len(EXTENDED_HEADER))
         self.assertEqual(238,len(RC17_STANDARD_HEADER)); self.assertEqual(228,len(RC16_STANDARD_HEADER)); self.assertEqual(217,len(RC15_STANDARD_HEADER))
-        self.assertEqual("5a0c28b2f292a258",header_hash(STANDARD_HEADER)); self.assertEqual("192ccc890c2e1d80",header_hash(RC17_STANDARD_HEADER))
+        self.assertEqual("c68c9a10bd0fc5c3",header_hash(STANDARD_HEADER)); self.assertEqual("192ccc890c2e1d80",header_hash(RC17_STANDARD_HEADER))
         for field in ("fast_capture_mode","fast_capture_overlay_w","fast_capture_observation_distinct","fast_capture_primary_max_charge_w"):
             self.assertIn(field,STANDARD_HEADER); self.assertNotIn(field,RC17_STANDARD_HEADER)
 

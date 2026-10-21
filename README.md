@@ -1,56 +1,32 @@
-# Zendure Energy Controller V16.1.0
+# Zendure Energy Controller V17.1.1
 
-**Build-ID:** `v16.1.0-20260919`
+**Release:** `V17.1.1` · **Build-ID:** `v17.1.1-20261020`
 
-ZEC ist eine lokale Speichersteuerung für einen aktiv gesteuerten Zendure-Speicher – optional koordiniert mit einem Primärspeicher. V16.1.0 erweitert den direkten SMA-Sunny-Island-Pfad um eine read-only Geräte-Capability für die aktuell wirksame untere Entladegrenze und macht daraus zusätzliche Diagnoseevidenz, ohne die Live-Regelstrategie zu verändern.
+ZEC ist ein lokaler, sicherheitsüberwachter Energiespeichercontroller für einen aktiv geregelten Zendure-Speicher mit optionaler Primärspeicherintegration. Unterstützte Netzleistungsmessung: SMA Energy Meter / Sunny Home Manager via Speedwire/UDP und Shelly Pro 3EM beziehungsweise kompatible HTTP-Messpunkte. Die Primärspeicherprofile `evcc_standard`, `custom` (MQTT) und `modbus_template` (u. a. Sunny Island) bleiben erhalten. Eine zweite Zendure-Einheit kann im Status dargestellt werden; daraus entsteht keine zweite produktive Command-Owner-Konfiguration.
 
-## 1. Produktumfang
+## Änderungen in V17.1.1 – anwendergerechte UI-Korrekturen
 
-- lokale automatische Netzleistungsregelung des Zendure-Speichers;
-- optionale Primärspeicherintegration einschließlich direktem Modbus-TCP-Referenzpfad;
-- beim Geräteprofil SMA Sunny Island: read-only Capability `current_discharge_floor_soc` aus Register `31009`, separate Freshness/Validity und diagnostischer normalisierter nutzbarer Primär-SOC;
-- **keine Reglerwirkung** durch Floor oder usable SOC in V16.1.0;
-- SMA Energy Meter / Sunny Home Manager über Speedwire/UDP sowie Shelly Pro 3EM bzw. Shelly-kompatibles HTTP als unterstützte Netzleistungsmesspfade;
-- Graph Core V3, historische Graphen, Inspector, Command-Follow und Episodenvergleich;
-- Settings-/Konfigurationsstand-/Diagnosefunktionen;
-- Supported Update und Clean Fresh Install mit fail-closed Installationszustandsklassifikation;
-- mutationsfreier Installer-/Uninstaller-Preflight;
-- lokales User-Data-Backup beim Uninstall/Fresh-Reset;
-- secretsicheres Third-Party-Supportbundle ohne rohe `config.json`.
+- Vollständige fachliche Settings-Hilfe und Bereichs-Zwecktexte (190 operative Einstellungen / 74 Bereiche).
+- 3-s-Netzleistungs-Minigraph mit Zeitachse, Gaps, Verlaufswahl 5/15/60 min und transparentem Datenalter.
+- Keine Änderung an `controller_logic.py`, Command- oder Safety-Semantik.
 
-## 2. Primärspeicher-Capability in V16.1.0
+## Übernommene V17.1.0-Funktionen
 
-Das Sunny-Island-Template liest zusätzlich Register `31009` (`Lower discharge limit for self-consumption range in %`) per Modbus FC03/U32. Fehler dieser optionalen Capability degradieren nicht automatisch den bestehenden Pflichtpfad aus Leistung und Roh-SOC. Ein alter Capability-Wert wird bei Quellen-/Profilwechsel invalidiert und besitzt eine eigene Freshness-/Validity-Semantik.
+- **S3:** Konfigurierbare Tagesfenster, Bestätigungszeiten und saisonale strategische High-SOC-Policy, ausschließlich nach ausdrücklichem Opt-in; Bestandskonfigurationen ändern ihre Reglerwirkung nicht stillschweigend. Realer Restexport und alle Safety-/Hardwaregrenzen haben Vorrang.
+- **Unabhängiger 1-Hz-Livestatus:** Browser aktualisiert die zuletzt wirklich eingegangenen Netz-, Zendure- und Primärspeicherwerte sekündlich, unabhängig vom ungefähr 3-s-Regeltakt. Sensoralter, Validität und Staleness bleiben erkennbar; keine künstliche Messfrequenz oder zusätzliche Commandinstanz.
+- **Grid-Stale-Betriebsereignisse:** persistentes Open-/Resolve-Journal mit Entprellung; Source-Stale und Controller-Processing-Stale werden getrennt behandelt.
+- **Pflichtfix Nacht/MIN_SOC/Grid:** bei Nachtreserve/Entladebegrenzung kann die gesicherte Grid-Verarbeitung weiterlaufen und zulässiger PV-Export im AUTO-Pfad genutzt werden.
+- **Pflichtfix SMA-Speedwire/OBIS:** strukturvalidierende Paket-/Record-Auswertung statt unsicherer globaler Bytefolgensuche; bestehender Netzleistungs-Plausibilitätsfilter bleibt aktiv.
+- Status-UI-/Graph-Follow-ups sowie versionierte As-built-/Spezifikations-/ADR-/Historien-Dokumentation in `docs/`.
 
-Aus Roh-SOC und frischem Floor kann ZEC diagnostisch den auf den aktuell freigegebenen Entladebereich normierten `primary_usable_soc_percent` ausweisen. Diese Größe ist in Status/API/Readiness-Diagnose und Measurement V4 sichtbar, wird in V16.1.0 aber nicht vom Regler verwendet.
+Das unverändert deterministische Controller-/Command-/Cross-Charge-/Recovery-Konzept bleibt Safety-Owner; die S3-Policy greift nur in bestehende zulässige strategische Harvest-Zweige ein. Adaptive A1/B2/C1 und Battery Care erhalten durch dieses Release keine zusätzliche Produktivregelautorität.
 
-Generische Settings-/Help-Bezeichnungen verwenden „Primärspeicher“. Legacy-Konfigurationskeys bleiben kompatibel. Der New-Install-Default von `SECOND_BATTERY_DISPLAY_NAME` ist leer; explizit persistierte Nutzernamen werden nicht überschrieben.
+## Installation und Rollback
 
-## 3. Deployment
+Die **aktuelle** Installationsanleitung ist [`README_INSTALLATION.md`](README_INSTALLATION.md), identisch mit [`README_INSTALLATION_V17_1_1.md`](README_INSTALLATION_V17_1_1.md). Reguläre Updates sind ausschließlich von `17.1.0 / v17.1.0-20261019` erlaubt. Der kanonische Installer ist `tools/install_zendure_controller.sh`; er prüft Preflight und Backup vor produktiven Änderungen, installiert nur bei bestandenem Gate und rollt bei nachfolgendem Fehler zurück. Fresh Install erfordert ausdrücklich `--fresh-install` und beginnt fail-closed im `FIRST_INSTALL_SETUP`.
 
-Kanonische Werkzeuge:
+## Dokumentation und Qualitätsgrenzen
 
-```text
-tools/install_zendure_controller.sh
-tools/uninstall_zendure_controller.sh
-```
+Aktuelle Architektur, Scope, technische Begrenzungen und Historie: [`docs/INDEX.md`](docs/INDEX.md). Das technische Datenblatt liegt als DOCX und PDF unter `docs/`; die releasebezogene Backlog-Kopie liegt in `docs/ZEC_Master_Backlog.md`, während die externe kanonische Projektquelle `05_ZEC_BACKLOG_AND_ROADMAP.md` alleinige Roadmapautorität bleibt.
 
-`tools/update_zendure_controller.sh` bleibt als Kompatibilitätswrapper erhalten. Details einschließlich Fresh-Install- und Preflight-Semantik stehen in `README_INSTALLATION.md`.
-
-## 4. Schutzvertrag
-
-Der geschützte Reglerkern `controller_logic.py` bleibt gegenüber V16.0.2 byteidentisch mit SHA256 `d243945adbb04dfa19fa915f8f32cafb375b7258888b2ecd6fb7a064cdea99ff`. AUTO/Harvest/Cross-Charge/NIGHT, aktive Neutralisierung, Command-Effect/Readback/Resync, Primärspeicherpriorität und Hardware-Schonungslogik werden durch Block A nicht verändert.
-
-## 5. Dokumentation
-
-```text
-README_INSTALLATION.md
-RELEASE_INFO_V16_1_0.md
-TECHNICAL_NOTES_V16_1_0.md
-BUILD_VALIDATION_V16_1_0.md
-docs/ZEC_Master_Backlog.md
-docs/ZEC_Technisches_Datenblatt.pdf
-docs/ZEC_Technisches_Datenblatt.docx
-```
-
-Das technische Datenblatt beschreibt ausschließlich den Ist-Zustand des ausgelieferten Releases. Das Master-Backlog enthält auch offene Folgeblöcke; insbesondere bleibt die strategische usable-SOC-Integration (Block B) ausdrücklich außerhalb von V16.1.0 erhalten.
+**Technische QA und reale Feldabnahme sind getrennt.** Der Build-Evidence-Vertrag liegt in `validation/V17_1_1_BUILD_EVIDENCE.json`; realer Pi-Rollout, Browser-/Hardwarelast, physische Wirkung und Produktiv-Wiederherstellung sind erst nach der separaten Feldabnahme bestätigt. Produktiv auf dem Pi bleibt bis zur ausdrücklich durchgeführten Installation V17.1.0.

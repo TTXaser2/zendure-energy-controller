@@ -103,6 +103,7 @@ def main() -> None:
     app = create_app(
         config_manager=config_manager,
         state=state,
+        sma_energy_meter_client=controller.sma_energy_meter,
     )
 
     def request_shutdown(signum, frame) -> None:  # type: ignore[no-untyped-def]

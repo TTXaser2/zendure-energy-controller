@@ -258,6 +258,11 @@
         'Diese Karte zeigt den konfigurierten Primärspeicher. ZEC steuert ihn nicht direkt. SOC-Grenzen, Restenergie und Leistungsbalken verwenden nur belastbare aktuelle Geräte-/Quellenwerte und konfigurierte technische Fallbacks; sie besitzen keine Reglerwirkung.',
         `Harmonisierung: ${p.primary?.line||'—'}`,
         `Harvest-Rechnung: ${p.primary?.harvest_calculation||'—'}`,
+        `Saisonpolicy effektiv: ${p.primary?.season_effective||'legacy_parallel'}`,
+        `Saison angefordert: ${p.primary?.season_requested||'—'}`,
+        `Tagesprofil: ${p.primary?.day_profile||'default'}, Share primär: ${p.primary?.primary_share??'—'}, Confirm: ${p.primary?.profile_confirm_s??'—'} s`,
+        `S3-Wirksamkeit (Rechenzweig): ${p.primary?.s3_applicability||'NOT_APPLICABLE'}, Grund: ${p.primary?.s3_override_reason||'—'}`,
+        `Finaler Sollwert (kein physischer Wirkungsnachweis): ${p.primary?.final_command_target_w??'—'} W`,
         `Nutzbarer SOC (normalisiert): ${p.primary?.usable_soc_text||'—'}`,
         `Quellenstatus: ${p.primary?.source_health||'—'}`
       ].join('\n\n');
@@ -420,20 +425,55 @@
   }
 
   class MiniGridChart extends CanvasChart {
-    setData(payload){this.payload=payload||{points:[]};this.kind='mini';this.draw();}
+    setData(payload){
+      this.payload=payload||{points:[]};this.kind='mini';this.draw();
+      const caption=$('#gridMiniCaption');
+      if(caption){
+        const minutes=Number(this.payload.window_minutes||15);
+        const note=this.payload.coverage_partial?' · Ältere Messwerte nicht vollständig verfügbar':'';
+        const source=this.payload.source==='graph_v3_1min+controller_ram'?' · ältere Werte in 1-Min.-Auflösung':'';
+        caption.textContent=`Verlauf: ${minutes} Minuten · Aktualisierung alle 3 s · Livewert separat alle 1 s${source}${note}`;
+      }
+    }
     draw(){
-      const {ctx,w,h}=this.prepare(); const pts=this.payload?.points||[]; const values=pts.map(p=>number(p.value)).filter(v=>v!==null);
-      if(values.length<2){ctx.fillStyle=css('--zec-muted');ctx.font='11px sans-serif';ctx.fillText('keine Verlaufshistorie verfügbar',8,h/2);return;}
+      const {ctx,w,h}=this.prepare();const p=this.payload||{};const pts=Array.isArray(p.points)?p.points:[];
+      const values=pts.map(row=>number(row.value)).filter(v=>v!==null);
+      const from=Number(p.from_ms),to=Number(p.to_ms);
+      if(values.length<2||!Number.isFinite(from)||!Number.isFinite(to)||to<=from){
+        ctx.fillStyle=css('--zec-muted');ctx.font='11px sans-serif';ctx.fillText('keine ausreichende Verlaufshistorie verfügbar',8,h/2);
+        return;
+      }
       let lo=Math.min(...values,0),hi=Math.max(...values,0);if(Math.abs(hi-lo)<1)hi=lo+1;
-      const pad={l:36,r:8,t:10,b:20}; const pw=w-pad.l-pad.r,ph=h-pad.t-pad.b;
-      const x=i=>pad.l+(i/Math.max(1,pts.length-1))*pw; const y=v=>pad.t+(1-(v-lo)/(hi-lo))*ph;
+      const pad={l:36,r:8,t:10,b:22},pw=w-pad.l-pad.r,ph=h-pad.t-pad.b;
+      const x=ms=>pad.l+(Math.max(from,Math.min(to,ms))-from)/(to-from)*pw;
+      const y=v=>pad.t+(1-(v-lo)/(hi-lo))*ph;
       ctx.strokeStyle=css('--zec-card-border');ctx.lineWidth=1;
       [0,.5,1].forEach(f=>{ctx.beginPath();ctx.moveTo(pad.l,pad.t+f*ph);ctx.lineTo(w-pad.r,pad.t+f*ph);ctx.stroke();});
       if(lo<0&&hi>0){ctx.strokeStyle=css('--zec-subtle');ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(pad.l,y(0));ctx.lineTo(w-pad.r,y(0));ctx.stroke();ctx.setLineDash([]);}
-      ctx.strokeStyle=css('--zec-green');ctx.lineWidth=2;ctx.beginPath();
-      pts.forEach((p,i)=>{const v=number(p.value);if(v===null)return;const px=x(i),py=y(v);if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);});ctx.stroke();
-      ctx.fillStyle=css('--zec-muted');ctx.font='9px sans-serif';ctx.fillText(fmtPower(hi),0,12);ctx.fillText(fmtPower(lo),0,h-18);ctx.fillText('letzte 48 Punkte',pad.l,h-4);ctx.textAlign='right';ctx.fillText(`neuester: ${fmtPower(values.at(-1))}`,w-pad.r,h-4);ctx.textAlign='left';
-      if(this.hoverX!==null){const idx=Math.max(0,Math.min(pts.length-1,Math.round((this.hoverX-pad.l)/pw*(pts.length-1))));const p=pts[idx];const v=number(p.value);if(v!==null){const px=x(idx),py=y(v);ctx.strokeStyle=css('--zec-blue');ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px,pad.t);ctx.lineTo(px,h-pad.b);ctx.stroke();ctx.fillStyle=css('--zec-blue');ctx.beginPath();ctx.arc(px,py,3.5,0,Math.PI*2);ctx.fill();this.showTooltip(`<strong>${escapeHtml(p.time||'')}</strong><div class="zec-chart-tooltip-row"><span>Netzleistung</span><b>${escapeHtml(fmtPower(v))}</b></div><div class="zec-chart-tooltip-row"><span>Status</span><b>${escapeHtml(p.status||'—')}</b></div>`,px,py);}}
+      ctx.strokeStyle=css('--zec-green');ctx.lineWidth=2;ctx.beginPath();let previous=null;
+      pts.forEach(row=>{
+        const value=number(row.value),ms=Number(row.epoch_ms);
+        if(value===null||!Number.isFinite(ms)){previous=null;return;}
+        const px=x(ms),py=y(value);
+        // A missing source interval is a gap, not a line joining unrelated measurements.
+        if(!previous||ms-previous> (p.window_minutes===60 ? 125000 : 12000))ctx.moveTo(px,py);
+        else ctx.lineTo(px,py);
+        previous=ms;
+      });ctx.stroke();
+      ctx.fillStyle=css('--zec-muted');ctx.font='9px sans-serif';ctx.fillText(fmtPower(hi),0,12);ctx.fillText(fmtPower(lo),0,h-19);
+      ctx.fillText(`vor ${Number(p.window_minutes||15)} Min.`,pad.l,h-4);
+      ctx.textAlign='right';ctx.fillText('Jetzt',w-pad.r,h-4);ctx.textAlign='left';
+      if(this.hoverX!==null){
+        const target=from+(Math.max(pad.l,Math.min(w-pad.r,this.hoverX))-pad.l)/pw*(to-from);
+        let nearest=null,dist=Infinity;
+        pts.forEach(row=>{const ms=Number(row.epoch_ms),v=number(row.value);if(v===null||!Number.isFinite(ms))return;const d=Math.abs(ms-target);if(d<dist){dist=d;nearest=row;}});
+        const tolerance=p.window_minutes===60?75000:12000;
+        if(nearest&&dist<=tolerance){const ms=Number(nearest.epoch_ms),v=number(nearest.value),px=x(ms),py=y(v);
+          ctx.strokeStyle=css('--zec-blue');ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px,pad.t);ctx.lineTo(px,h-pad.b);ctx.stroke();
+          ctx.fillStyle=css('--zec-blue');ctx.beginPath();ctx.arc(px,py,3.5,0,Math.PI*2);ctx.fill();
+          this.showTooltip(`<strong>${escapeHtml(nearest.time||'')}</strong><div class="zec-chart-tooltip-row"><span>Verlaufspunkt</span><b>${escapeHtml(fmtPower(v))}</b></div><div class="zec-chart-tooltip-row"><span>Status</span><b>${escapeHtml(nearest.status||'—')}</b></div>`,px,py);
+        } else this.tooltip.hidden=true;
+      }
     }
   }
 
@@ -627,8 +667,64 @@
   function startClock(){const el=$('#localClock');const update=()=>{if(el)el.textContent=new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',second:'2-digit'});};update();setInterval(update,1000);}
 
   let statusSequence=0;
-  const statusPoll=new PollChannel(apiUrl('/status-view-data'),3000,p=>{const seq=number(p.snapshot_epoch_ms)||Date.now();if(seq<statusSequence)return;statusSequence=seq;applyStatus(p);},2500);
-  const miniPoll=new PollChannel(apiUrl('/grid-mini-data'),10000,p=>miniChart.setData(p),2500);
+  const statusPoll=new PollChannel(apiUrl('/status-view-data'),3000,p=>{const seq=number(p.snapshot_epoch_ms)||Date.now();if(seq<statusSequence)return;statusSequence=seq;applyStatus(p);if(lastLiveStatus && Date.now()-Number(lastLiveStatus.server_epoch_ms||0)<3000)applyLiveStatus(lastLiveStatus);},2500);
+  // Dedicated 1-Hz read-only telemetry. Structural/controller snapshot stays 3-Hz-in-3s.
+  let lastLiveStatus=null;
+  function applyLiveStatus(payload){
+    if(!payload) return;
+    lastLiveStatus=payload;
+    const rows=[['grid','grid.value'],['zendure','zendure.actual'],['primary','primary.actual']];
+    for(const [key,id] of rows){
+      const record=payload[key]||{};
+      if(key==='primary' && record.present===false) continue;
+      const value=record.power_w;
+      text(id,value==null?'—':fmtPower(value));
+      if(key==='zendure'||key==='primary'){
+        const meterEl=$(`[data-zec-row="${key}.power_meter"]`);
+        if(meterEl){
+          const max=value>0?number(record.max_charge_w):number(record.max_discharge_w);
+          const direction=value==null?'neutral':value>0?'charge':value<0?'discharge':'neutral';
+          const canDisplay=value!=null && max!=null && max>0;
+          meterEl.hidden=!canDisplay;
+          meterEl.classList.toggle('is-charge',direction==='charge');
+          meterEl.classList.toggle('is-discharge',direction==='discharge');
+          meterEl.style.setProperty('--power-fill',canDisplay?`${Math.min(100,Math.max(0,100*Math.abs(value)/max))}%`:'0%');
+          text(`${key}.power_meter_label`,direction==='discharge'?'Entladeleistung':'Ladeleistung');
+          text(`${key}.power_meter_text`,canDisplay?`${fmtPower(Math.abs(value))} / ${fmtPower(max)}`:'—');
+        }
+      }
+      if(key==='grid'){
+        const gv=$('.zec-grid-value');
+        if(gv){gv.classList.toggle('is-unknown',!record.fresh);gv.classList.toggle('is-import',record.fresh&&value>50);gv.classList.toggle('is-import-high',false);}
+        const gf=$('[data-card="grid"] .zec-card-footer');if(gf)setDot(gf,record.fresh?'ok':'unknown');
+        text('grid.freshness_text',record.fresh?`aktuell · ${record.age_s??0} s · ${record.measurement_path||record.source||''}`:`nicht aktuell · ${record.age_s??'—'} s`);
+        text('grid.status',record.fresh?(value>50?'Bezug aus Netz':value< -50?'Einspeisung / Export':'ausgeglichen'):'Messwert nicht aktuell');
+      }
+      if(key==='primary'){
+        text('primary.freshness_text',record.fresh?`aktuell · ${record.age_s??0} s`:`nicht aktuell · ${record.age_s??'—'} s`);
+        setRing('primary',record.soc_percent,record.fresh?'ok':'unknown');
+      }
+      if(key==='zendure'){
+        text('zendure.system_soc_text',fmtSoc(record.soc_percent));
+        // Single-device ring must follow the same 1-Hz observation age as
+        // the prominent SOC text. Multi-device rings need per-unit evidence.
+        setRing('zendure',record.soc_percent,record.soc_fresh?'ok':'unknown');
+      }
+    }
+  }
+  const livePoll=new PollChannel(apiUrl('/status-live-data'),1000,p=>applyLiveStatus(p),900);
+  let miniWindowMinutes=15;
+  const miniPoll=new PollChannel(apiUrl('/grid-mini-data?window_minutes=15'),3000,p=>miniChart.setData(p),2500);
+  $$('[data-grid-mini-range]').forEach(button=>button.addEventListener('click',()=>{
+    const value=Number(button.dataset.gridMiniRange);
+    if(![5,15,60].includes(value)||value===miniWindowMinutes)return;
+    miniWindowMinutes=value;
+    $$('[data-grid-mini-range]').forEach(item=>item.setAttribute('aria-pressed',String(Number(item.dataset.gridMiniRange)===value)));
+    miniPoll.url=apiUrl(`/grid-mini-data?window_minutes=${value}`);
+    miniChart.hoverX=null;
+    if(miniChart.tooltip)miniChart.tooltip.hidden=true;
+    miniPoll.run();
+  }));
 
   let selectedDate=new Date(); let dayController=null; let dayRequestSequence=0;
   const dateString=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -702,7 +798,7 @@
   const dayPicker=$('#socDayPicker'),dayPickerButton=$('#socDayPickerButton');if(dayPicker){dayPicker.addEventListener('change',()=>{const chosen=localDateFromString(dayPicker.value);if(chosen&&dateString(chosen)<=dateString(new Date())){selectedDate=chosen;refreshSocDay();}});const openDayPicker=()=>{try{if(typeof dayPicker.showPicker==='function'){dayPicker.showPicker();return;}}catch(_){}try{dayPicker.focus({preventScroll:true});dayPicker.click();}catch(_){dayPicker.focus();}};if(dayPickerButton){dayPickerButton.addEventListener('click',openDayPicker);dayPickerButton.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openDayPicker();}});}}
 
   infoPopoverController=setupInfoPopovers(); setupMenus(); startClock(); applyStatus(bootstrap);
-  statusPoll.start(Math.floor(Math.random()*700)); miniPoll.start(Math.floor(Math.random()*1000)); refreshSocDay();
+  statusPoll.start(Math.floor(Math.random()*700)); livePoll.start(Math.floor(Math.random()*600)); miniPoll.start(Math.floor(Math.random()*1000)); refreshSocDay();
   setInterval(()=>{if(dateString(selectedDate)===dateString(new Date()))refreshSocDay();},60000);
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){statusPoll.run();miniPoll.run();refreshSocDay();}});
 })();

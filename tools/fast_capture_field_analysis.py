@@ -21,7 +21,8 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 FORMAT = "ZEC_FAST_CAPTURE_FIELD_ANALYSIS_V1"
 EXPECTED_SCHEMA_VERSION = "4"
-EXPECTED_CONTROLLER_VERSION = "17.0.2"
+EXPECTED_CONTROLLER_VERSION = "17.1.1"
+SUPPORTED_CONTROLLER_VERSIONS = frozenset({"17.0.2", "17.1.0", "17.1.1"})
 ATTACK_W_PER_S = 400.0
 RELEASE_W_PER_S = 100.0
 FULL_IDLE_CONFIRM_S = 15.0
@@ -176,7 +177,7 @@ def _config_version_evidence(rows: Sequence[Dict[str, str]], snapshots: Optional
     versions = sorted({str(x.get("controller_version") or "") for x in referenced if x.get("controller_version")})
     if missing:
         status, detail = "FAIL", "REFERENCED_CONFIG_SNAPSHOT_MISSING"
-    elif not versions or any(v != EXPECTED_CONTROLLER_VERSION for v in versions):
+    elif not versions or any(v not in SUPPORTED_CONTROLLER_VERSIONS for v in versions):
         status, detail = "FAIL", "CONTROLLER_VERSION_MISMATCH"
     else:
         status, detail = "PASS", "REFERENCED_CONFIG_CONTROLLER_VERSION_MATCH"

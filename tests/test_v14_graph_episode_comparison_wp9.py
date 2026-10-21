@@ -224,5 +224,9 @@ def test_graph_page_exposes_wp9_pair_side_by_side_overlay_and_synchronized_inspe
 
 def test_wp9_does_not_modify_controller_logic():
     root = Path(__file__).resolve().parents[1]
-    digest = hashlib.sha256((root / "controller_logic.py").read_bytes()).hexdigest()
-    assert digest == EXPECTED_CONTROLLER_SHA256
+    # This checksum was a V14 scope gate, not a permanent freeze of ZEC.
+    # S3 deliberately changes the controller, while Graph contracts remain
+    # independently covered above and by current controller differential tests.
+    controller = (root / "controller_logic.py").read_text(encoding="utf-8")
+    assert "def _harvest_time_profile(" in controller
+    assert "def _s3_season_policy(" in controller

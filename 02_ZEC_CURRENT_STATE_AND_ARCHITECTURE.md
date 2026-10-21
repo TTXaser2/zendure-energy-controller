@@ -162,3 +162,16 @@ Seit V16.2.3 gilt zusätzlich ein kanonischer maschinenlesbarer Build-Evidence-V
 Ab V16.2.4 wird der maschinenlesbare Installationsreport atomar und timestamped persistent unter `/home/pi/Downloads` geschrieben; `/tmp` bleibt Kompatibilitätskopie. Das Feldabnahmetool bevorzugt ohne expliziten Pfad die persistente releasespezifische Evidenz und prüft beim Update weiterhin die reale Rollback-Datei gegen Pfad, Größe und SHA256. Die V16.2.4-Feldabnahme prüft zusätzlich die reale `/settings/model`-Surface statt nur statische Guidance-Texte.
 
 Der reale Clean-Fresh-/FIRST_INSTALL_SETUP-/Uninstaller-Gesamtpfad ist automatisiert abgedeckt, aber noch nicht vollständig auf echter Hardware produktiv abgenommen. V16.2.4 wurde real erfolgreich von V16.2.3 installiert; der automatische Feldlauf bestand 27/27 Checks mit `FULL_READY`. V16.2.4 ist damit die aktuelle real bestätigte Runtimebasis. V16.2.5 besitzt TECHNICAL BUILD PASS und ändert keine Deploymentsemantik; für die reale Freigabe ist weiterhin ein Update V16.2.4 → V16.2.5 mit UI-/Diagnosefeldabnahme erforderlich. Siehe `05` und `07`.
+
+## Strategiearchitektur – fachliche Zielrichtung 18.10.2026 (NICHT implementiert)
+
+Der reale V17.0.2-Controller bleibt normative Implementierungsbasis; die folgenden Punkte sind **keine Beschreibung vorhandener Runtimefähigkeiten**:
+
+- Adaptive-Lernregler/A1: `DEFERRED/EVIDENCE_GAP` nach 23-Tage-Herbstbewertung. High-SOC-Share-Gate ist nachweislich begrenzt wirksam; seine Eintrittsbedingungen sind nicht als unveränderliches Axiom anzusehen, dürfen aber auch nicht pauschal früher schalten.
+- S3 Saison-/Tagesprofile: eigenständiger deterministischer Funktionsscope. V17.0.2 besitzt bereits wirksame Legacy-Shares, aber noch hartcodierte Fenster/Confirm-Zeiten und zehn `target_only`-S3-Keys. Runtime-/Defaultmigration inklusive saisonaler Wirksamkeit ist noch ausstehend.
+- Strategischer usable Primär-SOC (B2): unabhängig von Adaptive und nicht Winter-only zu spezifizieren; bestehende SMA-Capability und Diagnose bleiben bis expliziter Freigabe **ohne Reglerwirkung**.
+- Weiche Kapazitätsgewichtung C1: eigenständige optionale künftige Allokationspolicy `off|soft`, default `off`, keine unmittelbare Sollwertwirkung in V17.0.2, nicht auf High-SOC festgelegt; kein ableitbarer Vorteil allein aus Kapazitätszahlen.
+- Battery Care: eigenständige winterpriorisierte Reserveerhaltungs-Policy, keine neue Netznachladung oder SOC-Grenze in V17.0.2; Netzladung braucht gesonderte Freigabe.
+- Die gemeinsame fachliche Policy-Abstimmung darf sich niemals zu einer konkurrierenden zweiten Command-/Recovery-Autorität entwickeln. Strategievorschläge bleiben nachrangig gegenüber aktueller physischer Export-Capture-, Cross-Charge-, SOC-, Safety- und Hardware-/Command-Semantik.
+
+Siehe `05_ZEC_BACKLOG_AND_ROADMAP.md` (Status/Sequencing) und `ZEC_STRATEGIEARCHITEKTUR_ENTSCHEIDUNGSSTAND_20261018.md` (fachliche Richtungsentscheidung).

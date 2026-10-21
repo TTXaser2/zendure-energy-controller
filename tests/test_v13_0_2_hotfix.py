@@ -44,9 +44,9 @@ class V1302ConfigArtifactHotfixTests(unittest.TestCase):
         self.session = "v1302-session"
 
     def test_release_and_registry_contract_are_v13_0_2(self):
-        self.assertEqual("17.0.2", version.APP_VERSION)
-        self.assertEqual("V17.0.2", version.APP_VERSION_LABEL)
-        self.assertEqual("v17.0.2-20260923", version.APP_BUILD_ID)
+        self.assertEqual("17.1.1", version.APP_VERSION)
+        self.assertEqual("V17.1.1", version.APP_VERSION_LABEL)
+        self.assertEqual("v17.1.1-20261020", version.APP_BUILD_ID)
         self.assertEqual("1.25-v13.0", SCHEMA_VERSION)
         self.assertNotEqual(OLD_REGISTRY_HASH, registry_contract_sha256())
 
@@ -72,7 +72,7 @@ class V1302ConfigArtifactHotfixTests(unittest.TestCase):
         state = self.store.create(self.manager, name="Portable local", scope_mode="portable_profile")
         self.assertEqual("valid", state["status"])
         self.assertEqual("portable_profile", state["scope_mode"])
-        self.assertEqual(56, state["scope_key_count"])
+        self.assertEqual(57, state["scope_key_count"])
         bundle = parse_bundle(self.store.export_bytes(state["state_id"], expected_revision=state["state_revision"]))
         self.assertEqual("named_state", bundle.payload["artifact_kind"])
         self.assertEqual("portable_profile", bundle.scope["mode"])
@@ -299,9 +299,9 @@ class V1302BackfillAndUiContractTests(unittest.TestCase):
     def test_installer_is_strict_v13_0_1_to_v13_0_2(self):
         script=(ROOT/"tools"/"install_zendure_controller.sh").read_text(encoding="utf-8")
         for marker in (
-            'EXPECTED_VERSION_ARG="v17_0_2"', 'EXPECTED_SOURCE_VERSION="17.0.1"',
-            'EXPECTED_SOURCE_BUILD_ID="v17.0.1-20260922"', 'EXPECTED_TARGET_VERSION="17.0.2"',
-            'EXPECTED_TARGET_BUILD_ID="v17.0.2-20260923"', 'SOURCE_MANIFEST="V17_0_2_SOURCE_MANIFEST.sha256"',
+            'EXPECTED_VERSION_ARG="v17_1_1"', 'EXPECTED_SOURCE_VERSION="17.1.0"',
+            'EXPECTED_SOURCE_BUILD_ID="v17.1.0-20261019"', 'EXPECTED_TARGET_VERSION="17.1.1"',
+            'EXPECTED_TARGET_BUILD_ID="v17.1.1-20261020"', 'SOURCE_MANIFEST="V17_1_1_SOURCE_MANIFEST.sha256"',
         ):
             self.assertIn(marker,script)
 

@@ -15,7 +15,7 @@
   ],
   "schema_name": "ZEC SettingsRegistry snapshot",
   "schema_version": "1.25-v13.0",
-  "setting_count": 218,
+  "setting_count": 219,
   "settings": [
     {
       "apply_class": "live_next_cycle",
@@ -591,7 +591,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Gesamtkapazität der installierten Zendure-Batterien in Wh für Prognose und Diagnose. Leer bedeutet: Kapazität ist nicht bekannt; ZEC erfindet keinen Anlagenwert. Wirksamkeit nach Speichern: Wirksam im nächsten Regelzyklus; kein Dienstneustart. Die Einstellung steht in Beziehung zu: ZENDURE_BATTERY_CAPACITY_KWH, MAX_SOC_PERCENT, MANUAL_FIXED_CHARGE_TARGET_SOC, MANUAL_FIXED_DISCHARGE_TARGET_SOC, NIGHT_DISCHARGE_STOP_SOC_PERCENT.",
+        "extended": "Die Kapazitätsangabe hilft ZEC, aus einem bekannten Ladezustand eine verbleibende Energiemenge und Nachtprognose darzustellen. Sie ist kein Befehl und setzt weder die maximale Ladeleistung noch die SOC-Grenzen herauf. Nur den tatsächlichen Gesamtwert der installierten Akkus eintragen; bei unbekanntem Wert bleibt die Energieberechnung ohne erfundene Ersatzkapazität.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -655,7 +655,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Identifier der Zendure Headunit für die MQTT-Topics. Wirksamkeit nach Speichern: Dienstneustart zwingend. Die Einstellung steht in Beziehung zu: MQTT_BROKER, MQTT_PORT, ZENDURE_LOCAL_API_ENABLED, ZENDURE_LOCAL_IP.",
+        "extended": "ZEC kann nur dann zuverlässig die richtige Zendure-Headunit erreichen, wenn diese Kennung mit den MQTT-Topics des Geräts übereinstimmt. Sie verbindet eingehende Telemetrie und ausgehende Leistungsanforderungen mit demselben Gerät. Hiermit wird kein zweiter eigenständiger Zendure-Regler aktiviert; nach einem Gerätewechsel sind Verbindung, Anzeige und Sicherheitszustand zu prüfen.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -670,7 +670,7 @@
           "Gerätezuordnung",
           "DEVICE"
         ],
-        "short": "Identifier der Zendure Headunit für die MQTT-Topics.",
+        "short": "Kennung der Zendure-Headunit, für die ZEC MQTT-Telemetrie empfängt und Leistungsbefehle erstellt. Sie muss zu den Topics des tatsächlich gesteuerten Geräts passen und schaltet keine zusätzliche Headunit frei.",
         "when": null
       },
       "key": "DEVICE_ID",
@@ -734,7 +734,7 @@
           "CHARGE",
           "POWER"
         ],
-        "short": "Maximale Leistung, mit der Zendure bei PV-Überschuss geladen werden darf.",
+        "short": "Globale Obergrenze für Zendure-Ladung aus allen zulässigen Regelpfaden. AUTO, Harvest und feste Ladeanforderungen dürfen sie nicht überschreiten; sie erzwingt keine Ladung und ersetzt keine Gerätelimits.",
         "when": "Die Grenze wirkt in jedem Zweig, der Zendure-Ladung anfordern kann: AUTO, Harvest und feste Ladung. Sie begrenzt den berechneten Zielwert unabhängig davon, welcher Zweig ihn erzeugt hat."
       },
       "key": "MAX_CHARGE_POWER_W",
@@ -797,7 +797,7 @@
           "DISCHARGE",
           "POWER"
         ],
-        "short": "Maximale Leistung, mit der Zendure das Haus versorgen darf.",
+        "short": "Globale Obergrenze für die Entladeleistung von Zendure. Sie begrenzt AUTO, Nacht- und manuelle Entladung, unabhängig von der gewünschten Netzleistung; der tatsächliche Akku- und SOC-Schutz hat weiterhin Vorrang.",
         "when": "Die Grenze wirkt in jedem Zweig, der Zendure-Entladung anfordern kann: AUTO, Nachtbetrieb und feste Entladung. Sie begrenzt den berechneten Zielwert unabhängig davon, welcher Zweig ihn erzeugt hat."
       },
       "key": "MAX_DISCHARGE_POWER_W",
@@ -861,7 +861,7 @@
           "SOC",
           "PERCENT"
         ],
-        "short": "Ab diesem SOC wird Ladung verhindert.",
+        "short": "Ab diesem oberen Zendure-Ladezustand wird weitere Ladung begrenzt. Das gilt auch bei PV-Überschuss und manuell gewünschter Ladung; die Einstellung ändert nicht den Ladezustand des Primärspeichers.",
         "when": "Die Obergrenze wird bei allen Ladeentscheidungen geprüft. Erreichen der Grenze ist bei gültigen Daten ein normaler Schutz-/HOLD-Zustand; Ladeprofile dürfen sie nicht überschreiten."
       },
       "key": "MAX_SOC_PERCENT",
@@ -929,7 +929,7 @@
           "SOC",
           "PERCENT"
         ],
-        "short": "Unterhalb dieses SOC wird Entladung verhindert.",
+        "short": "Unterhalb der globalen Zendure-Reserve darf ZEC keine weitere Entladung anfordern, unabhängig von AUTO-, Nacht- oder manuellem Modus. Zulässiges Laden aus tatsächlichem PV-Export bleibt möglich, sofern alle anderen Schutzgrenzen erfüllt sind.",
         "when": "Die Untergrenze wird bei allen Entladeentscheidungen geprüft. Erreichen der Grenze ist bei gültigen Daten ein normaler Schutz-/HOLD-Zustand; Entladeprofile und Nachtreserve dürfen sie nicht unterschreiten."
       },
       "key": "MIN_SOC_PERCENT",
@@ -1071,7 +1071,7 @@
           "AVERAGE",
           "SAMPLES"
         ],
-        "short": "Anzahl der Messwerte im gleitenden Mittelwert. Höher = ruhiger, aber träger.",
+        "short": "Bestimmt, wie viele aktuelle Netzleistungsmessungen in den Mittelwert für AUTO eingehen. Mehr Werte glätten Lastspitzen, verzögern aber die Reaktion; die separate Reglerverstärkung und Schrittbegrenzung wirken danach.",
         "when": "Die Mittelwertbildung wirkt auf die für AUTO verwendete Netzleistung, sobald mehrere Messwerte vorliegen. Zusammen mit dem Regelintervall bestimmt die Samplezahl die zeitliche Glättung der Eingangsgröße."
       },
       "key": "MOVING_AVERAGE_SAMPLES",
@@ -1274,7 +1274,7 @@
           "MAX",
           "POWER"
         ],
-        "short": "Maximale Änderung der Lade-/Entladeleistung pro Zyklus.",
+        "short": "Begrenzt, wie stark ZEC das Leistungsziel in einem normalen Regelzyklus ändern darf. Kleine Schritte beruhigen die Geräteansteuerung, verzögern aber Lastsprünge; übergeordnete Schutz- und Neutralisierungspfade bleiben wirksam.",
         "when": "Die Schrittbegrenzung wirkt bei Zielwertänderungen der normalen Reglerpfade und begrenzt die Änderung von einem Regelzyklus zum nächsten. Sie ersetzt keine absolute Leistungsgrenze."
       },
       "key": "MAX_POWER_STEP_W",
@@ -1673,7 +1673,7 @@
           "DISCHARGE",
           "ENABLED"
         ],
-        "short": "Aktiviert eine feste Entladeleistung im konfigurierten Zeitfenster.",
+        "short": "Erlaubt eine feste Zendure-Entladung im gewählten Nacht-Zeitfenster statt normaler AUTO-Nachführung, sofern kein vorrangiger manueller Modus aktiv ist. Das Reserve-SOC und alle globalen Schutzlimits bleiben verbindlich.",
         "when": "Der Nachtmodus kann nur im konfigurierten Zeitfenster und bei MANUAL_MODE=AUTO aktiv werden. Gültiger SOC, globale Schutzgrenzen und weitere Safety-Bedingungen bleiben Voraussetzung."
       },
       "key": "NIGHT_DISCHARGE_ENABLED",
@@ -1739,7 +1739,7 @@
           "DISCHARGE",
           "POWER"
         ],
-        "short": "Feste Entladeleistung im Nachtmodus.",
+        "short": "Legt die gewünschte feste Zendure-Entladeleistung während des aktivierten Nachtfensters fest. Anders als AUTO wird sie nicht automatisch an die momentane Hauslast angepasst; der Wert muss unter der globalen Entladegrenze bleiben.",
         "when": "Die feste Leistung wird nur während eines aktiven Nachtfensters verwendet, wenn Nachtbetrieb freigegeben ist und keine Reserve-/SOC-/Safety-Bedingung die Entladung stoppt. Sie wird nicht anhand der aktuellen Hauslast nachgeführt."
       },
       "key": "NIGHT_DISCHARGE_POWER_W",
@@ -1869,7 +1869,7 @@
           "END",
           "HOUR"
         ],
-        "short": "Endstunde des Nachtmodus.",
+        "short": "Stunde, zu der das aktivierte Nachtfenster endet. Zusammen mit der Endminute und der Startzeit begrenzt sie die feste Nachtentladung; nach dem Ende gelten wieder die regulären Betriebs- und Sicherheitsentscheidungen.",
         "when": "Endstunde und Endminute bilden gemeinsam die logische Endzeit des Nachtfensters. Beim Verlassen des Fensters ist eine aktive 0-W-Neutralisierung Teil des Sicherheitsvertrags."
       },
       "key": "NIGHT_END_HOUR",
@@ -1999,7 +1999,7 @@
           "START",
           "HOUR"
         ],
-        "short": "Startstunde des Nachtmodus.",
+        "short": "Stunde, zu der die feste Nachtentladung grundsätzlich erlaubt wird. Sie wirkt nur zusammen mit Startminute, Ende und aktiviertem Nachtmodus; manuelle Modi sowie SOC-Schutz können die Entladung verhindern.",
         "when": "Startstunde und Startminute bilden gemeinsam die logische Startzeit des Nachtfensters. Die UI behandelt beide technischen Werte als ein HH:MM-Feld; ein Fenster über Mitternacht ist zulässig."
       },
       "key": "NIGHT_START_HOUR",
@@ -2064,7 +2064,7 @@
           "START",
           "MINUTE"
         ],
-        "short": "Startminute des Nachtmodus.",
+        "short": "Minutenanteil des Beginns der aktivierten Nachtentladung. Zusammen mit der Startstunde legt er das Zeitfenster fest, löst allein jedoch keinen Lade-/Entladebefehl aus.",
         "when": "Startstunde und Startminute bilden gemeinsam die logische Startzeit des Nachtfensters. Die UI behandelt beide technischen Werte als ein HH:MM-Feld; ein Fenster über Mitternacht ist zulässig."
       },
       "key": "NIGHT_START_MINUTE",
@@ -2114,7 +2114,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Nach dieser Zeit ohne vollständiges Primärspeicher-Update gelten die Daten für die Regelung als veraltet. Das gilt quellenneutral für MQTT und native Modbus-Templates; Source Health kann bereits vorher DEGRADED melden, solange der letzte vollständige Snapshot noch frisch ist. Wirksamkeit nach Speichern: Wirksam im nächsten Regelzyklus; kein Dienstneustart. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_STALE_BLOCK_CHARGE, REST_SURPLUS_HARVEST_ENABLED, SECOND_BATTERY_POWER_TOPIC, SECOND_BATTERY_SOC_TOPIC, SECOND_BATTERY_CAPACITY_TOPIC.",
+        "extended": "Diese Zeitgrenze legt fest, ab wann der letzte vollständige Primärspeicherwert für eine sichere Allokations-/Cross-Charge-Entscheidung zu alt ist. Sie gilt unabhängig davon, ob du EVCC, eigenes MQTT oder Modbus nutzt. Ein veralteter Wert darf nicht so aussehen, als hätte der Primärspeicher gerade Leistung verfügbar; zu knappe Grenzen können bei normaler Kommunikationsverzögerung häufiger sperren.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -2178,7 +2178,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Freier Anzeigename des Primärspeichers. Dieser Name wird in Status, Graph, Inspector und Diagnose verwendet; interne IDs und Historienidentität bleiben stabil. Wirksamkeit nach Speichern: Sofort in der Oberfläche; kein Dienstneustart. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_SOURCE_PROFILE, CROSS_CHARGE_ENABLED.",
+        "extended": "Mit diesem Namen kannst du den Primärspeicher in Status, Graphen und Fehlerdiagnosen eindeutig erkennen. Der Name ist ausschließlich eine Anzeigehilfe und verändert weder die gewählte EVCC-/MQTT-/Modbus-Datenquelle noch die Batterieleistung oder den SOC. Gerätekennungen, historische Messwerte und Schutzentscheidungen bleiben getrennt.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -2238,7 +2238,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Konfiguration für Primärspeicher-Integration aktiv. Wirksamkeit nach Speichern: Dienstneustart; danach Ready-/Freshness-/Preflight-Prüfung.",
+        "extended": "Dieser Schalter schaltet die ZEC-Integration des Primärspeichers ein, nicht dessen physische Stromversorgung. Erst mit aktivierter Integration und einer gültigen, frischen Datenquelle können entsprechende Harvest- und Cross-Charge-Entscheidungen auf diesen Speicher Bezug nehmen. Die Anbindungsart (EVCC/MQTT/Modbus) und die Leistungsdaten werden separat festgelegt; die Anbindung ist nicht automatisch ein schreibender Primärspeicher-Regler.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -2256,8 +2256,8 @@
           "INTEGRATION",
           "ENABLED"
         ],
-        "short": "Konfiguration für Primärspeicher-Integration aktiv.",
-        "when": null
+        "short": "Erlaubt ZEC, einen zusätzlichen Primärspeicher bei der Ladeverteilung und beim Schutz vor gegenseitigem Laden zu berücksichtigen. Aus: ZEC arbeitet ohne diese Speicherintegration; andere Quellenwerte dürfen nicht einfach als aktueller Primärspeicher gelten.",
+        "when": "Die Integration beeinflusst nur entsprechende Strategie- und Schutzpfade, wenn eine passende Datenquelle vorhanden und aktuell ist. Ist sie deaktiviert oder stale, darf ZEC keine verlässliche Primärspeicherleistung vortäuschen."
       },
       "key": "SECOND_BATTERY_INTEGRATION_ENABLED",
       "label": "Primärspeicher-Integration aktiv",
@@ -2310,7 +2310,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Wählt genau eine Primärspeicher-Anbindung: EVCC, benutzerdefiniertes MQTT oder direktes read-only Modbus über ein geprüftes Geräteprofil. Die jeweils benötigten Verbindungsparameter werden unmittelbar darunter geführt. Ein Quellenwechsel erfordert einen Dienstneustart. Wirksamkeit nach Speichern: Dienstneustart; aktive Primärspeicherquelle wird danach neu initialisiert. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_EVCC_BASE_TOPIC, SECOND_BATTERY_POWER_TOPIC, SECOND_BATTERY_SOC_TOPIC, SECOND_BATTERY_CAPACITY_TOPIC, SECOND_BATTERY_MODBUS_TEMPLATE, SECOND_BATTERY_MODBUS_HOST, SECOND_BATTERY_MODBUS_PORT, SECOND_BATTERY_MODBUS_UNIT_ID.",
+        "extended": "Die Auswahl bestimmt, woher ZEC den tatsächlichen SOC, die aktuelle Lade-/Entladeleistung und gegebenenfalls die Kapazität des Primärspeichers bekommt. EVCC und benutzerdefiniertes MQTT benötigen passende Topics; Modbus liest ein geprüftes Gerätetemplate direkt, ohne Schreibzugriff. Diese Wege sind Alternativen. Erst frische, korrekt normalisierte Werte dürfen die dazugehörigen Harvest-/Cross-Charge-Entscheidungen unterstützen.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -2391,7 +2391,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Geprüftes read-only Geräteprofil für die direkte Modbus-Anbindung. Derzeit ist SMA Sunny Island verfügbar. Weitere Geräteprofile werden versioniert mit ZEC-Releases ausgeliefert; Register sind nicht frei editierbar. Wirksamkeit nach Speichern: Dienstneustart; Geräteprofil wird danach neu initialisiert. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_SOURCE_PROFILE, SECOND_BATTERY_MODBUS_HOST, SECOND_BATTERY_MODBUS_PORT, SECOND_BATTERY_MODBUS_UNIT_ID.",
+        "extended": "Das Geräteprofil legt unveränderlich fest, welche Modbus-Register für Leistung, SOC und weitere unterstützte Merkmale gelesen werden. ZEC verwendet das Template nur, wenn die Modbus-Anbindung gewählt und der Primärspeicher aktiviert ist; Host, Port und Unit-ID stellen separat die konkrete Verbindung her. Das Template darf weder neue Schreibzugriffe noch erfundene Gerätefunktionen freigeben.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -2461,7 +2461,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Host oder IP-Adresse des Primärspeichers für Modbus TCP. Der Wert ist installationsspezifisch. Wirksamkeit nach Speichern: Dienstneustart; Verbindung wird danach mit dem neuen Endpoint aufgebaut. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_SOURCE_PROFILE, SECOND_BATTERY_MODBUS_TEMPLATE.",
+        "extended": "Hier gibst du an, unter welcher Adresse der echte Primärspeicher im lokalen Netz erreichbar ist. Dieser Wert wirkt nur mit der Datenquelle „Modbus“ zusammen mit Port, Unit-ID und Geräteprofil. Bei einer falschen Adresse erhält ZEC keine belastbaren Speicherwerte; die Reglersicherheit darf dann nicht auf alten Daten beruhen.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -2526,7 +2526,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Modbus-TCP-Port. Das Geräteprofil SMA Sunny Island verwendet 502 als Default; der Wert kann installationsseitig überschrieben werden. Wirksamkeit nach Speichern: Dienstneustart. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_SOURCE_PROFILE, SECOND_BATTERY_MODBUS_TEMPLATE.",
+        "extended": "Der TCP-Port ergänzt die Adresse des Primärspeichers für den lesenden Modbus-Zugriff. Für das geprüfte Sunny-Island-Profil ist 502 ein typischer Standard, kann aber installationsabhängig abweichen. Ohne passende Hostadresse, Unit-ID und Template gibt es keine gültige Datenquelle; der Port schaltet keine Gerätesteuerung ein.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -2591,7 +2591,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Modbus Unit-ID. Das Geräteprofil SMA Sunny Island verwendet 3 als Default; der Wert kann installationsseitig überschrieben werden. Wirksamkeit nach Speichern: Dienstneustart. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_SOURCE_PROFILE, SECOND_BATTERY_MODBUS_TEMPLATE.",
+        "extended": "Die Unit-ID benennt das logische Modbus-Gerät auf der Verbindung; bei Sunny Island wird üblicherweise 3 verwendet. Sie ist nur bei gewähltem Modbus-Template relevant und muss zusammen mit IP, Port und Template korrekt sein. Falsche Werte führen zu ungültigen oder fehlenden Lesedaten, nicht zu einer zulässigen Primärspeicher-Ansteuerung.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -2658,7 +2658,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Optionales MQTT-Topic für die Primärspeicher-Kapazität im MQTT-Profil. Die Kapazität dient Anzeige und Diagnose, ist aber nicht zwingend für die Schutzentscheidung erforderlich. Wirksamkeit nach Speichern: Live-Reload; Dienstneustart nach Topicwechsel empfohlen. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_CAPACITY_PAYLOAD_TYPE, SECOND_BATTERY_CAPACITY_JSON_PATH, SECOND_BATTERY_CAPACITY_UNIT, HARVEST_CAPACITY_WEIGHTING_MODE.",
+        "extended": "Wenn du den Primärspeicher per eigenem MQTT einbindest, kann dieses zusätzliche Topic eine Gerätekapazität liefern. Sie ergänzt die Leistungs- und SOC-Topics für Status und Diagnose; sie ist keine Ladefreigabe und ersetzt nicht die Einstellung für maximale Ladeleistung. Das Feld wird nicht für EVCC-Standard oder Modbus gebraucht.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -2724,7 +2724,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Vollständiges MQTT-Topic der Primärspeicher-Leistung. Dieses Topic ist nur im benutzerdefinierten MQTT-Profil Pflicht. Wirksamkeit nach Speichern: Live-Reload; Dienstneustart nach Topicwechsel empfohlen. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_SOURCE_PROFILE, SECOND_BATTERY_POWER_PAYLOAD_TYPE, SECOND_BATTERY_POWER_JSON_PATH, SECOND_BATTERY_POWER_UNIT, SECOND_BATTERY_DISCHARGE_SIGN.",
+        "extended": "Über dieses Topic erhält ZEC beim benutzerdefinierten MQTT-Profil den tatsächlichen Lade- oder Entladefluss des Primärspeichers. Erst zusammen mit Payloadformat, Leistungseinheit, Vorzeichenregel und Freshness entsteht ein sicher interpretierbarer Wert. Der gemeldete Istwert ist kein Befehl an das Gerät und muss sich auf den richtigen Speicher beziehen.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -2790,7 +2790,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Optionales MQTT-Topic für den Ladezustand des Primärspeichers in Prozent. Das native Sunny-Island-Template liest den SOC direkt per Modbus und benötigt dieses MQTT-Topic nicht. Wirksamkeit nach Speichern: Live-Reload; Dienstneustart nach Topicwechsel empfohlen. Die Einstellung steht in Beziehung zu: HARVEST_HIGH_SMA_SOC_ENABLED, SECOND_BATTERY_SOC_PAYLOAD_TYPE, SECOND_BATTERY_SOC_JSON_PATH.",
+        "extended": "Dieses optionale Topic liefert beim eigenen MQTT-Profil den Ladezustand des Primärspeichers. Es ergänzt das Leistungsthema, ist jedoch nicht mit der Zendure-SOC-Grenze gleichzusetzen. Beim Sunny-Island-Modbusprofil stammt SOC stattdessen aus geprüften Registern; alte SOC-Nachrichten müssen als veraltet gelten.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -2855,7 +2855,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Basis-Topic des Primärspeichers bei EVCC-Standardstruktur, z. B. evcc/site/battery/devices/1. Daraus werden Leistung, SOC und Kapazität automatisch als /power, /soc und /capacity abgeleitet. Wirksamkeit nach Speichern: Live-Reload; Dienstneustart nach Topicwechsel empfohlen. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_SOURCE_PROFILE, CROSS_CHARGE_ENABLED.",
+        "extended": "Bei einer EVCC-Standardanbindung entsteht aus diesem Stamm automatisch die Adresse für Leistung, SOC und Kapazität. Du brauchst daher nicht die benutzerdefinierten Einzel-Topics auszufüllen. Die gewählte EVCC-Quelle und ihre Nachrichtengültigkeit entscheiden, ob ZEC den Speicher in Schutz- und Allokationspfaden berücksichtigen darf.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -2918,7 +2918,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Feldpfad innerhalb eines JSON-Payloads, z. B. capacity oder battery.capacity. Nur relevant, wenn Kapazitäts-Payload = JSON gewählt ist. Wirksamkeit nach Speichern: Live-Reload; Dienstneustart nach Parserwechsel empfohlen. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_CAPACITY_PAYLOAD_TYPE.",
+        "extended": "Wenn die Kapazität im eigenen MQTT-Profil als JSON veröffentlicht wird, zeigt dieser Pfad ZEC das tatsächliche Zahlenfeld. Du benötigst ihn nur zusammen mit einem konfigurierten Kapazitäts-Topic und Payloadformat JSON. Ein falscher Pfad macht die Kapazitätsanzeige unbekannt, ändert aber keine Hardwarekapazität oder Ladegrenze.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -2982,7 +2982,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Gibt an, ob das Kapazitäts-Topic direkt eine Zahl enthält oder ein JSON-Objekt liefert. Wirksamkeit nach Speichern: Live-Reload; Dienstneustart nach Parserwechsel empfohlen. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_CAPACITY_TOPIC, SECOND_BATTERY_CAPACITY_JSON_PATH.",
+        "extended": "Hier sagst du ZEC, ob das Kapazitäts-Topic eine einzelne Zahl oder ein JSON-Dokument liefert. Bei JSON muss zusätzlich das Feld mit dem eigentlichen Wert angegeben werden. Die Angabe dient der korrekten Auswertung und Energieanzeige, nicht der Steuerung einer Ladeanforderung.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -3054,7 +3054,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Feldpfad innerhalb eines JSON-Payloads, z. B. power oder battery.power. Nur relevant, wenn Leistungs-Payload = JSON gewählt ist. Wirksamkeit nach Speichern: Live-Reload; Dienstneustart nach Parserwechsel empfohlen. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_POWER_PAYLOAD_TYPE.",
+        "extended": "Nur beim eigenen MQTT-Profil mit Leistungs-Payload als JSON wird hier das Feld gewählt, aus dem ZEC die aktuelle Primärspeicherleistung liest. Das Vorzeichen und die Einheit werden separat festgelegt. Ein falscher Pfad darf nicht durch einen angenommenen Nullwert als echter Lade-/Entladestillstand erscheinen.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -3118,7 +3118,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Gibt an, ob das Leistungs-Topic direkt eine Zahl enthält oder ein JSON-Objekt liefert. Wirksamkeit nach Speichern: Live-Reload; Dienstneustart nach Parserwechsel empfohlen. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_POWER_TOPIC, SECOND_BATTERY_POWER_JSON_PATH.",
+        "extended": "Die Quelle kann Primärspeicherleistung als schlichte Zahl oder innerhalb eines JSON-Dokuments veröffentlichen. Mit dieser Auswahl entscheidet ZEC, wie es die MQTT-Nachricht ausliest. Die Einheiten- und Vorzeicheneinstellungen bestimmen erst anschließend ihre fachliche Bedeutung und Sicherheit.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -3190,7 +3190,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Feldpfad innerhalb eines JSON-Payloads, z. B. soc oder battery.soc. Nur relevant, wenn SOC-Payload = JSON gewählt ist. Wirksamkeit nach Speichern: Live-Reload; Dienstneustart nach Parserwechsel empfohlen. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_SOC_PAYLOAD_TYPE.",
+        "extended": "Wenn dein eigener Primärspeicher-SOC-Topic JSON sendet, wählt dieser Feldpfad den darin enthaltenen Prozentwert. Er wirkt nicht bei direkter numerischer Payload oder EVCC-/Modbus-Anbindung. Ein nicht lesbarer Wert bleibt unbekannt statt als aktuelle Batterie-Reserve behauptet zu werden.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -3254,7 +3254,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Gibt an, ob das SOC-Topic direkt eine Zahl enthält oder ein JSON-Objekt liefert. Wirksamkeit nach Speichern: Live-Reload; Dienstneustart nach Parserwechsel empfohlen. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_SOC_TOPIC, SECOND_BATTERY_SOC_JSON_PATH.",
+        "extended": "Legt fest, ob der SOC des Primärspeichers aus einer einfachen MQTT-Zahl oder aus einem JSON-Feld gelesen wird. Bei JSON muss der dazugehörige Feldpfad stimmen. Dieser SOC dient der fachlichen Einordnung des Primärspeichers und ersetzt niemals den aktuellen Zendure-SOC für dessen harte Schutzgrenzen.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -3326,7 +3326,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Einheit des Kapazitätswerts der Zusatzbatterie. Die Statusseite zeigt den Wert in kWh an. Wirksamkeit nach Speichern: Wirksam mit dem nächsten MQTT-Wert; kein Dienstneustart zwingend. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_CAPACITY_TOPIC.",
+        "extended": "Die Datenquelle kann die Primärspeicherkapazität in unterschiedlichen Energieeinheiten melden. ZEC muss die gewählte Einheit kennen, um den tatsächlichen Wert korrekt in kWh darzustellen. Diese Auswahl verändert keine Kapazität im Gerät und ist von der Leistungs-Einheit Watt/kW ausdrücklich zu unterscheiden.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -3400,7 +3400,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "+1 bedeutet: positive MQTT-Leistung = Zusatzbatterie entlädt. -1 bedeutet: negative MQTT-Leistung = Zusatzbatterie entlädt. Die Statusanzeige normiert danach auf positiv = Ladung, negativ = Entladung. Wirksamkeit nach Speichern: Wirksam im nächsten Regelzyklus; kein Dienstneustart. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_POWER_TOPIC, SECOND_BATTERY_POWER_UNIT, CROSS_CHARGE_SIGNIFICANT_W, REST_SURPLUS_HARVEST_ENABLED.",
+        "extended": "Je nach MQTT-Quelle bedeutet eine positive Leistung Laden oder Entladen. Hier ordnest du diese Richtung eindeutig zu, damit ZEC den Primärspeicherfluss richtig für Anzeige, Harvest und Cross-Charge-Schutz interpretiert. Eine verkehrte Zuordnung kann Schutzentscheidungen verfälschen; die wirkliche physische Leistung wird dadurch nicht geändert.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -3463,7 +3463,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Einheit des Leistungswerts der Zusatzbatterie. Intern wird immer auf Watt normalisiert. Wirksamkeit nach Speichern: Wirksam mit dem nächsten MQTT-Wert; kein Dienstneustart zwingend. Die Einstellung steht in Beziehung zu: SECOND_BATTERY_POWER_TOPIC, SECOND_BATTERY_DISCHARGE_SIGN.",
+        "extended": "Die Quelle kann Primärspeicherleistung in Watt oder Kilowatt melden. Diese Auswahl übersetzt den eingehenden Istwert in die von ZEC verwendeten Watt; das Vorzeichen wird separat eingestellt. Eine falsche Einheit würde Ladegrenzen und Gegenflussdetektion um Größenordnungen verfälschen, ohne das reale Gerät zu beeinflussen.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -3540,7 +3540,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Maximale Ladeleistung des Primärspeichers bzw. der Zweitbatterie. Dieser installationsabhängige Wert muss aus der konkreten Anlage bzw. deren Datenblatt stammen; leer bedeutet unbekannt. Wirksamkeit nach Speichern: Wirksam im nächsten Regelzyklus; kein Dienstneustart. Die Einstellung steht in Beziehung zu: REST_SURPLUS_HARVEST_ENABLED, HARVEST_PRIMARY_CHARGE_FLOOR_RATIO, HARVEST_PRIMARY_CHARGE_FLOOR_W, HARVEST_PRIMARY_CHARGE_RESTART_RATIO, HARVEST_PRIMARY_CHARGE_RESTART_W, HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_RATIO, HARVEST_PRIMARY_CHARGE_NEAR_LIMIT_W.",
+        "extended": "Dieser Wert beschreibt die belastbare maximale Aufnahmeleistung des echten Primärspeichers. Er hilft, Lade-Headroom und Harvest-Schwellen sachgerecht einzuordnen; sofern das Profil verlässlich direkt gelesene technische Daten bereitstellt, haben diese Vorrang. Hiermit erteilt ZEC keine Schreibanweisung an den Primärspeicher und es entsteht keine automatisierte Netzladung.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -3604,7 +3604,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Konfiguration für Kapazität Primärspeicher. Wirksamkeit nach Speichern: Wirksam für Status/Diagnose im nächsten Zyklus; keine Reglerwirkung.",
+        "extended": "Diese Angabe beschreibt die Speichergröße der realen Anlage; sie dient dem kWh-Status und verwandten Diagnosen. Eine im Gerät ausgelesene verlässliche Kapazität hat Vorrang, danach folgt ein vorhandener manueller Fallback. Die Einstellungen zu maximaler Lade- und Entladeleistung sind getrennt und legen andere Grenzen fest.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -3621,8 +3621,8 @@
           "BATTERY",
           "CAPACITY"
         ],
-        "short": "Konfiguration für Kapazität Primärspeicher.",
-        "when": null
+        "short": "Trägt die tatsächliche Kapazität des Primärspeichers für die Anzeige und die Berechnung seiner verbleibenden Energiemenge ein, wenn keine belastbare Gerätedatenquelle dafür existiert. Der Wert ist kein neuer Ladebefehl und darf nicht geraten werden.",
+        "when": "Nur bei aktivierter Primärspeicher-Integration und wenn ZEC für die betreffende Anzeige keine vorrangigen belastbaren Kapazitätsdaten hat. Es entsteht dadurch keine automatische SOC- oder strategische Kapazitätsgewichtung."
       },
       "key": "SECOND_BATTERY_CAPACITY_WH",
       "label": "Kapazität Primärspeicher",
@@ -3663,7 +3663,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Konfiguration für Maximale Entladeleistung Primärspeicher. Wirksamkeit nach Speichern: Wirksam für Status/Diagnose im nächsten Zyklus; keine Reglerwirkung.",
+        "extended": "ZEC benötigt eine belastbare Leistungsreferenz, um den aktuellen Primärspeicherfluss verständlich anzuzeigen. Diese technische Angabe darf nicht mit Zendures globaler maximaler Entladeleistung verwechselt werden; die Primärspeicher-Datenquelle und tatsächliche Istleistung haben jeweils eigene Aufgaben.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 8,
@@ -3682,8 +3682,8 @@
           "DISCHARGE",
           "POWER"
         ],
-        "short": "Konfiguration für Maximale Entladeleistung Primärspeicher.",
-        "when": null
+        "short": "Gibt die maximale reale Entladeleistung des Primärspeichers für Statusbalken und technische Einordnung an, falls die gewählte Quelle diesen Wert nicht selbst liefert. Sie ist kein Befehl, den Primärspeicher mit dieser Leistung zu entladen.",
+        "when": "Nur bei aktivierter Primärspeicher-Integration und fehlender vorrangiger verlässlicher Geräteangabe. Es werden keine neuen Modbus-Schreibkommandos oder Entladestrategien freigegeben."
       },
       "key": "SECOND_BATTERY_MAX_DISCHARGE_POWER_W",
       "label": "Maximale Entladeleistung Primärspeicher",
@@ -4409,7 +4409,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Bestätigt Near-Limit-/Restexportbedingungen über Zeit, damit kurze Spitzen nicht sofort einen Harvest-Eintritt auslösen.",
+        "extended": "Diese Zeit verhindert, dass eine kurze Netzexportspitze sofort den speziellen Near-Limit-/Restüberschuss-Zweig auslöst. Erst wenn die passende Primärspeicher-Ladeannahme- und Exportlage lange genug bestätigt ist, darf ZEC zusätzlichen Restexport für Zendure prüfen. Mindestexport, Primärspeicher-Schwelle, Fast Capture und die unveränderten SOC-/Cross-Charge-Grenzen bleiben jeweils eigene Bedingungen.",
         "guidance_rule_ids": [
           "GUIDE-HARVEST-ENTRY"
         ],
@@ -4945,6 +4945,70 @@
     },
     {
       "apply_class": "live_next_cycle",
+      "apply_text": "Nach bestätigtem Commit im nächsten Regelzyklus",
+      "bootstrap_value": false,
+      "category": "Harvest / Restüberschuss",
+      "codec_id": "bool",
+      "decision_status": "Bestätigt",
+      "default_class": "safe_sentinel",
+      "default_help": "Sicherer Ausgangszustand · kein empfohlener Betriebswert",
+      "default_new_install": false,
+      "default_rc19": false,
+      "dependency_keys": [
+        "REST_SURPLUS_HARVEST_ENABLED"
+      ],
+      "editability": "editable",
+      "help": {
+        "extended": "Dieser Schalter bestimmt nicht, ob Zendure generell PV-Überschuss laden darf. Er entscheidet nur, ob die neu wählbare Saisonstrategie den strategischen High-SOC-Harvest-Zweig beeinflussen darf. Die normale Restüberschussaufnahme, Fast Capture, MIN-/MAX-SOC und Geräteschutz arbeiten weiterhin nach ihren eigenen Regeln. Die Tagesprofile haben einen separaten Aktivierungsschalter.",
+        "guidance_rule_ids": [],
+        "handbook": {
+          "page": 9,
+          "section_id": "harvest",
+          "section_title": "Harvest / Restüberschuss"
+        },
+        "level": "rich",
+        "search_terms": [
+          "Saisonale Strategie aktivieren",
+          "HARVEST_SEASON_POLICY_ENABLED",
+          "Harvest / Restüberschuss",
+          "Saisonale Strategie",
+          "HARVEST",
+          "SEASON",
+          "POLICY",
+          "ENABLED"
+        ],
+        "short": "Erlaubt ZEC, die unten gewählte Saisonstrategie für die zusätzliche Verteilung von PV-Überschuss zwischen Primärspeicher und Zendure zu nutzen. Bei Aus bleibt die bisherige Ladeverteilung erhalten – auch wenn darunter bereits SMA-Priorität ausgewählt ist.",
+        "when": "Erst nach bestätigter Änderung und nur in einem dafür geeigneten High-SOC-Harvest-Zustand. Bei ausgeschaltetem Schalter verwendet ZEC unverändert die bisherige Strategie, unabhängig von der gespeicherten Saisonwahl."
+      },
+      "key": "HARVEST_SEASON_POLICY_ENABLED",
+      "label": "Saisonale Strategie aktivieren",
+      "lifecycle": "active",
+      "maximum": null,
+      "minimum": null,
+      "options": [],
+      "order": 73,
+      "origin": "Neu",
+      "portability_class": "portable_profile",
+      "product_default": null,
+      "profile_id": null,
+      "release_stage": "S3",
+      "release_text": "S3 – Saison- und Tagesprofile",
+      "required_first_install": false,
+      "reset_label": "Auf sicheren Ausgangszustand setzen",
+      "reset_policy": "default",
+      "reset_value": false,
+      "risk": "Sehr hoch",
+      "secret_policy": "none",
+      "section": "Saisonale Strategie",
+      "unit": null,
+      "validator_ids": [
+        "VAL-014"
+      ],
+      "value_type": "bool",
+      "visibility": "standard"
+    },
+    {
+      "apply_class": "live_next_cycle",
       "apply_text": "nächster Regelzyklus",
       "bootstrap_value": "sma_priority",
       "category": "Harvest / Restüberschuss",
@@ -4959,7 +5023,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Konfiguration für Strategische Parallelallokation. Wirksamkeit nach Speichern: nächster Regelzyklus. Die Einstellung steht in Beziehung zu: REST_SURPLUS_HARVEST_ENABLED.",
+        "extended": "Parallel erlaubt im bisherigen High-SOC-Harvest-Zweig eine zusätzliche Aufteilung zugunsten von Zendure. SMA-Priorität unterdrückt nur diese zusätzliche strategische Umlenkung; verbleibender echter PV-Überschuss darf weiterhin in Zendure gespeichert werden. Die Kalenderoption entscheidet nach dem Datum zwischen beiden Verhaltensweisen. Fast Capture und die Sicherheitsschranken sind davon getrennt.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 9,
@@ -4968,7 +5032,7 @@
         },
         "level": "rich",
         "search_terms": [
-          "Strategische Parallelallokation",
+          "Saisonale Ladeverteilung",
           "HARVEST_SEASON_MODE",
           "Harvest / Restüberschuss",
           "Saisonale Strategie",
@@ -4976,8 +5040,8 @@
           "SEASON",
           "MODE"
         ],
-        "short": "Konfiguration für Strategische Parallelallokation.",
-        "when": null
+        "short": "Wählt, wie ZEC die zusätzliche strategische Ladeverteilung in geeigneten High-SOC-Situationen behandelt: Parallel, SMA-Priorität oder jahreszeitabhängig. Die Auswahl wirkt nur, wenn „Saisonale Strategie aktivieren“ eingeschaltet ist.",
+        "when": "Nur bei aktivierter Saisonstrategie UND einem tatsächlich durchlaufenen strategischen High-SOC-Zweig. Bei normalem HOLD, bei fehlenden Eingangsdaten oder bei vorrangigem Export Capture hat die Auswahl möglicherweise keine zusätzliche Sollwertwirkung."
       },
       "key": "HARVEST_SEASON_MODE",
       "label": "Strategische Parallelallokation",
@@ -4998,7 +5062,7 @@
           "value": "calendar"
         }
       ],
-      "order": 73,
+      "order": 74,
       "origin": "Neu",
       "portability_class": "portable_profile",
       "product_default": null,
@@ -5035,7 +5099,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Konfiguration für Parallel-Harvest-Saison bis. Wirksamkeit nach Speichern: nächster Regelzyklus. Die Einstellung steht in Beziehung zu: HARVEST_SEASON_MODE.",
+        "extended": "Das Enddatum ergänzt ausschließlich das Startdatum für die Kalenderentscheidung. Es beeinflusst weder die normale PV-Überschussaufnahme noch SOC-Grenzen oder Gerätebefehle unmittelbar.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 9,
@@ -5053,8 +5117,8 @@
           "PARALLEL",
           "END"
         ],
-        "short": "Konfiguration für Parallel-Harvest-Saison bis.",
-        "when": null
+        "short": "Letzter Kalendertag, an dem die Parallelstrategie gelten soll. Zusammen mit dem Startdatum begrenzt er das jährliche Parallel-Zeitfenster; danach nutzt ZEC in geeigneten High-SOC-Situationen SMA-Priorität.",
+        "when": "Nur bei eingeschalteter Saisonstrategie und Modus „Kalender“. Der Endtag zählt mit; auch Zeiträume über Silvester sind erlaubt. Ungültige oder fehlende Datumsgrenzen werden beim Aktivieren abgewiesen."
       },
       "key": "HARVEST_SEASON_PARALLEL_END_MM_DD",
       "label": "Parallel-Harvest-Saison bis",
@@ -5062,7 +5126,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 74,
+      "order": 75,
       "origin": "Neu",
       "portability_class": "portable_profile",
       "product_default": null,
@@ -5099,7 +5163,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Konfiguration für Parallel-Harvest-Saison ab. Wirksamkeit nach Speichern: nächster Regelzyklus. Die Einstellung steht in Beziehung zu: HARVEST_SEASON_MODE.",
+        "extended": "Dieses Datum ist nur für die Auswahl „Kalender“ relevant, wenn die Saisonstrategie eingeschaltet ist. Es steuert keine Ladeleistung direkt und startet keinen eigenen Ladezyklus. ZEC bewertet es zusammen mit dem Enddatum und den High-SOC-Bedingungen.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 9,
@@ -5117,8 +5181,8 @@
           "PARALLEL",
           "START"
         ],
-        "short": "Konfiguration für Parallel-Harvest-Saison ab.",
-        "when": null
+        "short": "Erster Kalendertag, an dem die Parallelstrategie gelten soll. Gemeinsam mit „Parallel-Harvest-Saison bis“ legt er den jährlich wiederkehrenden Zeitraum fest; außerhalb davon hat SMA-Priorität Vorrang.",
+        "when": "Nur wenn Saisonstrategie aktiviert und Modus „Kalender“ ausgewählt ist. Der Starttag zählt mit; ein Zeitraum über den Jahreswechsel ist zulässig. Ohne gültiges Enddatum kann Kalender nicht aktiviert werden."
       },
       "key": "HARVEST_SEASON_PARALLEL_START_MM_DD",
       "label": "Parallel-Harvest-Saison ab",
@@ -5126,7 +5190,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 75,
+      "order": 76,
       "origin": "Neu",
       "portability_class": "portable_profile",
       "product_default": null,
@@ -5161,7 +5225,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Konfiguration für Entry-Bestätigung nachmittags. Wirksamkeit nach Speichern: nächster Regelzyklus.",
+        "extended": "Dieser Wert ersetzt im Nachmittagsfenster die allgemeine Eintrittsbestätigung, wenn das Tagesprofil aktiv ist. Er steuert die zeitliche Freigabe, nicht die Ladeleistung selbst; dabei bleibt die normale PV-Überschussaufnahme unabhängig.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 9,
@@ -5183,8 +5247,8 @@
           "AFTERNOON",
           "SECONDS"
         ],
-        "short": "Konfiguration für Entry-Bestätigung nachmittags.",
-        "when": null
+        "short": "Mindestdauer für die Bestätigung eines High-SOC-Eintritts am Nachmittag. Erst nach dieser Zeit darf der entsprechende strategische Harvest-Zweig beginnen.",
+        "when": "Nur bei aktivem Tagesprofil im Nachmittagsfenster und zulässigen High-SOC-Bedingungen."
       },
       "key": "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_AFTERNOON_SECONDS",
       "label": "Entry-Bestätigung nachmittags",
@@ -5192,7 +5256,7 @@
       "maximum": 600,
       "minimum": 1,
       "options": [],
-      "order": 76,
+      "order": 77,
       "origin": "Neu",
       "portability_class": "portable_profile",
       "product_default": null,
@@ -5225,7 +5289,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Konfiguration für Entry-Bestätigung mittags. Wirksamkeit nach Speichern: nächster Regelzyklus.",
+        "extended": "Dieser Wert tritt mittags an die Stelle der allgemeinen High-SOC-Eintrittsbestätigung, falls das Tagesprofil aktiviert ist. Die spätere Leistungsaufteilung bestimmt der Mittagsanteil, nicht diese Zeitangabe.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 9,
@@ -5247,8 +5311,8 @@
           "MIDDAY",
           "SECONDS"
         ],
-        "short": "Konfiguration für Entry-Bestätigung mittags.",
-        "when": null
+        "short": "Mindestdauer für die Bestätigung eines High-SOC-Eintritts während des Mittagsprofils. Längere Werte vermeiden häufige Freigaben bei kurzzeitigem Überschuss.",
+        "when": "Nur bei aktivem Tagesprofil im Mittagsfenster und erfüllten High-SOC-Schwellen."
       },
       "key": "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_MIDDAY_SECONDS",
       "label": "Entry-Bestätigung mittags",
@@ -5256,7 +5320,7 @@
       "maximum": 600,
       "minimum": 1,
       "options": [],
-      "order": 77,
+      "order": 78,
       "origin": "Neu",
       "portability_class": "portable_profile",
       "product_default": null,
@@ -5289,7 +5353,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Konfiguration für Entry-Bestätigung morgens. Wirksamkeit nach Speichern: nächster Regelzyklus.",
+        "extended": "Dieser Wert ersetzt im Morgenfenster die allgemeine High-SOC-Bestätigungszeit, wenn das Tagesprofil eingeschaltet ist. Er verändert weder die Höhe der Ladeleistung noch eine harte SOC-Grenze; dafür sind andere Einstellungen verantwortlich.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 9,
@@ -5311,8 +5375,8 @@
           "MORNING",
           "SECONDS"
         ],
-        "short": "Konfiguration für Entry-Bestätigung morgens.",
-        "when": null
+        "short": "So lange müssen die High-SOC-Eintrittsbedingungen morgens ununterbrochen bestätigt sein, bevor ZEC die zusätzliche strategische Ladeverteilung freigibt. Kurze Ausschläge werden dadurch gefiltert.",
+        "when": "Nur bei aktivem Tagesprofil im Morgenfenster und bei grundsätzlich zulässigem High-SOC-Eintritt."
       },
       "key": "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_MORNING_SECONDS",
       "label": "Entry-Bestätigung morgens",
@@ -5320,7 +5384,7 @@
       "maximum": 600,
       "minimum": 1,
       "options": [],
-      "order": 78,
+      "order": 79,
       "origin": "Neu",
       "portability_class": "portable_profile",
       "product_default": null,
@@ -5353,7 +5417,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Konfiguration für Mittag → Nachmittag. Wirksamkeit nach Speichern: nächster Regelzyklus.",
+        "extended": "Der Umschaltpunkt verändert die strategische Aufteilung nur, wenn das Tagesprofil und der High-SOC-Regelzweig aktiv sind. Er schaltet weder einen Speicher ein noch verändert er die Schutzlimits.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 9,
@@ -5375,8 +5439,8 @@
           "START",
           "TIME"
         ],
-        "short": "Konfiguration für Mittag → Nachmittag.",
-        "when": null
+        "short": "Ab dieser Uhrzeit verwendet ZEC das Nachmittagsprofil mit dessen Primärspeicheranteil und Bestätigungszeit, statt weiterhin die Mittagwerte zu nutzen.",
+        "when": "Nur im aktivierten High-SOC-Tagesprofil zwischen Mittagsbeginn und Ende des Zeitfensters."
       },
       "key": "HARVEST_HIGH_SMA_SOC_PROFILE_AFTERNOON_START_TIME",
       "label": "Mittag → Nachmittag",
@@ -5384,7 +5448,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 79,
+      "order": 80,
       "origin": "Neu",
       "portability_class": "portable_profile",
       "product_default": null,
@@ -5419,7 +5483,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Konfiguration für Parallel-Harvest Ende. Wirksamkeit nach Speichern: nächster Regelzyklus.",
+        "extended": "Das ist kein Ausschalter für den gesamten Harvest-Betrieb: Nur die zeitliche Profilzuordnung endet. Export Capture, die allgemeine Ladeverteilung und sämtliche Batteriegrenzen bleiben bestehen.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 9,
@@ -5440,8 +5504,8 @@
           "END",
           "TIME"
         ],
-        "short": "Konfiguration für Parallel-Harvest Ende.",
-        "when": null
+        "short": "Beendet das zeitabhängige Nachmittagsprofil. Danach verwendet ZEC wieder die bestehenden allgemeinen High-SOC-Standardwerte statt der Morgen-, Mittag- oder Nachmittagswerte.",
+        "when": "Nur relevant, wenn das High-SOC-Tagesprofil aktiviert ist; Endzeit liegt nach den anderen drei Zeitgrenzen."
       },
       "key": "HARVEST_HIGH_SMA_SOC_PROFILE_END_TIME",
       "label": "Parallel-Harvest Ende",
@@ -5449,7 +5513,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 80,
+      "order": 81,
       "origin": "Neu",
       "portability_class": "portable_profile",
       "product_default": null,
@@ -5484,7 +5548,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Konfiguration für Morgen → Mittag. Wirksamkeit nach Speichern: nächster Regelzyklus.",
+        "extended": "Die Uhrzeit teilt nur die strategischen Tagesprofile auf und ist kein Startkommando für eine Batterie. Das High-SOC-Tagesprofil muss separat aktiviert sein; Schutzgrenzen gelten unverändert.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 9,
@@ -5506,8 +5570,8 @@
           "START",
           "TIME"
         ],
-        "short": "Konfiguration für Morgen → Mittag.",
-        "when": null
+        "short": "Ab dieser Uhrzeit wechselt das High-SOC-Tagesprofil von Morgen auf Mittag. ZEC nutzt dann den Mittaganteil des Primärspeichers und die Bestätigungszeit für Mittag statt der Morgenwerte.",
+        "when": "Nur bei aktiviertem Tagesprofil und geeigneter High-SOC-Regelsituation; die Zeitpunkte müssen streng aufeinanderfolgen."
       },
       "key": "HARVEST_HIGH_SMA_SOC_PROFILE_MIDDAY_START_TIME",
       "label": "Morgen → Mittag",
@@ -5515,7 +5579,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 81,
+      "order": 82,
       "origin": "Neu",
       "portability_class": "portable_profile",
       "product_default": null,
@@ -5550,7 +5614,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Konfiguration für Parallel-Harvest Start. Wirksamkeit nach Speichern: nächster Regelzyklus.",
+        "extended": "Zusammen mit den Übergangszeiten für Mittag und Nachmittag und der Endzeit teilt dieser Wert den Tag in Profile. Er gibt keine sofortige Ladeleistung vor. Die saisonale Strategie besitzt einen eigenen Aktivierungsschalter.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 9,
@@ -5571,8 +5635,8 @@
           "START",
           "TIME"
         ],
-        "short": "Konfiguration für Parallel-Harvest Start.",
-        "when": null
+        "short": "Ab dieser Uhrzeit beginnt das Morgenprofil der High-SOC-Ladeverteilung. Es verwendet den eingestellten Morgenanteil für den Primärspeicher und die Morgen-Bestätigungszeit – sofern das Tagesprofil aktiv und High-SOC-Harvest anwendbar ist.",
+        "when": "Gilt bei aktiviertem High-SOC-Tagesprofil. Das Morgenfenster reicht von dieser Zeit einschließlich bis zum Mittagsbeginn ausschließlich; außerhalb der Profilzeiten gilt das bestehende Standardprofil."
       },
       "key": "HARVEST_HIGH_SMA_SOC_PROFILE_START_TIME",
       "label": "Parallel-Harvest Start",
@@ -5580,7 +5644,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 82,
+      "order": 83,
       "origin": "Neu",
       "portability_class": "portable_profile",
       "product_default": null,
@@ -5650,7 +5714,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 83,
+      "order": 84,
       "origin": "RC19",
       "portability_class": "non_transferable",
       "product_default": null,
@@ -5707,7 +5771,7 @@
           "SHARE",
           "AFTERNOON"
         ],
-        "short": "Primärspeicher-Zielanteil des Harvest-Zeitprofils am Nachmittag.",
+        "short": "Anteil der im High-SOC-Nachmittagsprofil strategisch dem Primärspeicher zugeordneten Ladeleistung. Ein höherer Wert bevorzugt den Primärspeicher; der reale Restexport und übergeordnete Schutzregeln können dennoch Zendure-Ladung erlauben.",
         "when": "Der Anteil wird nur im zugehörigen nachmittäglichen Harvest-Zeitprofil verwendet, wenn der betreffende Harvestzweig aktiv ist. Er beschreibt eine Strategieallokation für den Primärspeicher und ist kein direkter Zendure-Sollwert."
       },
       "key": "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_AFTERNOON",
@@ -5716,7 +5780,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 84,
+      "order": 85,
       "origin": "RC19",
       "portability_class": "portable_profile",
       "product_default": null,
@@ -5773,7 +5837,7 @@
           "SHARE",
           "MIDDAY"
         ],
-        "short": "Primärspeicher-Zielanteil des Harvest-Zeitprofils zur Mittagsphase.",
+        "short": "Anteil der im High-SOC-Mittagsprofil strategisch für den Primärspeicher vorgesehenen Leistung. Dieser Wert ist nur im passenden aktiven Profil anwendbar, kein fester Gerätebefehl und keine eigene Ladefreigabe.",
         "when": "Der Anteil wird nur im zugehörigen mittäglichen Harvest-Zeitprofil verwendet, wenn der betreffende Harvestzweig aktiv ist. Er beschreibt eine Strategieallokation für den Primärspeicher und ist kein direkter Zendure-Sollwert."
       },
       "key": "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY",
@@ -5782,7 +5846,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 85,
+      "order": 86,
       "origin": "RC19",
       "portability_class": "portable_profile",
       "product_default": null,
@@ -5848,7 +5912,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 86,
+      "order": 87,
       "origin": "RC19",
       "portability_class": "portable_profile",
       "product_default": null,
@@ -5910,7 +5974,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 87,
+      "order": 88,
       "origin": "RC19",
       "portability_class": "non_transferable",
       "product_default": null,
@@ -5972,7 +6036,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 88,
+      "order": 89,
       "origin": "RC19",
       "portability_class": "non_transferable",
       "product_default": null,
@@ -6035,7 +6099,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 89,
+      "order": 90,
       "origin": "RC19",
       "portability_class": "non_transferable",
       "product_default": null,
@@ -6097,7 +6161,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 90,
+      "order": 91,
       "origin": "RC19",
       "portability_class": "non_transferable",
       "product_default": null,
@@ -6161,7 +6225,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 91,
+      "order": 92,
       "origin": "RC19",
       "portability_class": "non_transferable",
       "product_default": null,
@@ -6226,7 +6290,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 92,
+      "order": 93,
       "origin": "RC19",
       "portability_class": "portable_profile",
       "product_default": null,
@@ -6295,7 +6359,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 93,
+      "order": 94,
       "origin": "RC19",
       "portability_class": "portable_profile",
       "product_default": true,
@@ -6356,7 +6420,7 @@
       "maximum": 5000,
       "minimum": 0,
       "options": [],
-      "order": 94,
+      "order": 95,
       "origin": "RC19",
       "portability_class": "non_transferable",
       "product_default": null,
@@ -6423,7 +6487,7 @@
       "maximum": 5000,
       "minimum": 0,
       "options": [],
-      "order": 95,
+      "order": 96,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": 80,
@@ -6484,7 +6548,7 @@
       "maximum": 1000,
       "minimum": 0,
       "options": [],
-      "order": 96,
+      "order": 97,
       "origin": "RC19",
       "portability_class": "non_transferable",
       "product_default": null,
@@ -6520,7 +6584,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Überwacht die physische Wirkung einer aktiven sicherheitsrelevanten 0-W-Neutralisierung.",
+        "extended": "Wenn ZEC aus Sicherheitsgründen aktiv 0 W anfordert, muss die gemeldete Zendure-Istleistung innerhalb eines begrenzten Zeitfensters plausibel nachziehen. Diese Grenze entscheidet, ab wann eine ausbleibende physische Neutralisierung als möglicher Commandfehler weiterbehandelt wird. Sie erzeugt kein dauerndes Nullkommando und ist von der normalen AUTO-Reglerverzögerung und dem Resync-Cooldown getrennt.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 11,
@@ -6547,7 +6611,7 @@
       "maximum": 300,
       "minimum": 5,
       "options": [],
-      "order": 97,
+      "order": 98,
       "origin": "RC19",
       "portability_class": "portable_profile",
       "product_default": 30,
@@ -6584,7 +6648,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Aktualitätsgrenze für den vollständig rückgelesenen Command-State aus smartMode, acMode, inputLimit und outputLimit.",
+        "extended": "Für eine verlässliche Command-Rückmeldung muss ZEC den vollständigen Gerätezustand aus Betriebsart und Lade-/Entladegrenzen aktuell kennen. Diese Zeit legt fest, wann solche Readbackwerte zu alt werden, um eine neue Zustandsbestätigung zu behaupten. Sie unterscheidet sich vom SOC- und Istleistungsalter und erlaubt weder neue Geräteschreibbefehle noch eine Umgehung des Single-Owner-Schutzes.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 11,
@@ -6612,7 +6676,7 @@
       "maximum": 300,
       "minimum": 5,
       "options": [],
-      "order": 98,
+      "order": 99,
       "origin": "RC19",
       "portability_class": "portable_profile",
       "product_default": 30,
@@ -6648,7 +6712,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Abstand für das erneute Anfordern/Herstellen eines vollständigen Command-States im vorgesehenen Recoverypfad.",
+        "extended": "Wenn nach einer Kommandoumstellung noch keine belastbare Bestätigung aller relevanten Gerätezustandsfelder vorliegt, darf der Recoverypfad nach dieser Zeit erneut prüfen oder den zulässigen Zustand herstellen. Das ist kein periodisches Senden des normalen AUTO-Ziels. Zusammen mit SmartMode-Retry, Aktualitätsgrenze und Resync-Cooldown soll der Wert unbestätigte Zustände erkennen, ohne die Headunit mit Wiederholbefehlen zu belasten.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 11,
@@ -6676,7 +6740,7 @@
       "maximum": 600,
       "minimum": 5,
       "options": [],
-      "order": 99,
+      "order": 100,
       "origin": "RC19",
       "portability_class": "portable_profile",
       "product_default": 30,
@@ -6712,7 +6776,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Abstand für SmartMode-bezogene Wiederholungsversuche, wenn der erforderliche Gerätevertrag noch nicht bestätigt ist.",
+        "extended": "SmartMode ist Teil des erwarteten vollständigen Zendure-Gerätezustands. Bleibt der gewünschte Modus trotz zulässiger Anforderung unbestätigt, kann ZEC erst nach dieser Wartezeit im vorgesehenen Recoveryverfahren erneut handeln. Die Zeit beeinflusst nicht, wie schnell AUTO auf die Netzleistung reagiert, und umgeht weder die Command-State-Prüfung noch die allgemeine Drosselung von Wiederabgleichen.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 11,
@@ -6740,7 +6804,7 @@
       "maximum": 600,
       "minimum": 5,
       "options": [],
-      "order": 100,
+      "order": 101,
       "origin": "RC19",
       "portability_class": "portable_profile",
       "product_default": 30,
@@ -6805,7 +6869,7 @@
       "maximum": 600,
       "minimum": 3,
       "options": [],
-      "order": 101,
+      "order": 102,
       "origin": "RC19",
       "portability_class": "portable_profile",
       "product_default": 30,
@@ -6869,7 +6933,7 @@
       "maximum": 100,
       "minimum": 1,
       "options": [],
-      "order": 102,
+      "order": 103,
       "origin": "RC19",
       "portability_class": "non_transferable",
       "product_default": null,
@@ -6934,7 +6998,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 103,
+      "order": 104,
       "origin": "RC19",
       "portability_class": "portable_profile",
       "product_default": false,
@@ -6998,7 +7062,7 @@
       "maximum": 900,
       "minimum": 30,
       "options": [],
-      "order": 104,
+      "order": 105,
       "origin": "RC19",
       "portability_class": "portable_profile",
       "product_default": 120,
@@ -7035,7 +7099,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Drosselt identische Resync-/Recovery-Wiederholungen und verhindert unnötige Publish-Schleifen.",
+        "extended": "Nach einem vollständigen Wiederabgleich von Zendure-Betriebsart und Leistungsgrenzen verhindert dieser Cooldown, dass ZEC denselben Recoveryversuch unmittelbar immer wieder startet. So wird die Headunit vor unnötig vielen Publish-/Modewechseln geschützt. Ein kleinerer Wert kann echte Störungen schneller erneut behandeln, erhöht aber das Risiko einer Kommandoschleife; normales AUTO und die gesonderte 0-W-Neutralisierung bleiben andere Pfade.",
         "guidance_rule_ids": [
           "GUIDE-RESYNC-COOLDOWN"
         ],
@@ -7064,7 +7128,7 @@
       "maximum": 1800,
       "minimum": 0,
       "options": [],
-      "order": 105,
+      "order": 106,
       "origin": "RC19",
       "portability_class": "portable_profile",
       "product_default": 120,
@@ -7126,7 +7190,7 @@
       "maximum": 30,
       "minimum": 0,
       "options": [],
-      "order": 106,
+      "order": 107,
       "origin": "RC19",
       "portability_class": "portable_profile",
       "product_default": 10,
@@ -7191,7 +7255,7 @@
       "maximum": 500,
       "minimum": 10,
       "options": [],
-      "order": 107,
+      "order": 108,
       "origin": "RC19",
       "portability_class": "portable_profile",
       "product_default": 80,
@@ -7257,7 +7321,7 @@
       "maximum": 500,
       "minimum": 0,
       "options": [],
-      "order": 108,
+      "order": 109,
       "origin": "RC19",
       "portability_class": "portable_profile",
       "product_default": 120,
@@ -7319,7 +7383,7 @@
       "maximum": 500,
       "minimum": 30,
       "options": [],
-      "order": 109,
+      "order": 110,
       "origin": "RC19",
       "portability_class": "portable_profile",
       "product_default": 80,
@@ -7384,7 +7448,7 @@
       "maximum": 600,
       "minimum": 10,
       "options": [],
-      "order": 110,
+      "order": 111,
       "origin": "RC19",
       "portability_class": "portable_profile",
       "product_default": 90,
@@ -7444,7 +7508,7 @@
       "maximum": 20,
       "minimum": 1,
       "options": [],
-      "order": 111,
+      "order": 112,
       "origin": "RC19",
       "portability_class": "non_transferable",
       "product_default": null,
@@ -7505,7 +7569,7 @@
       "maximum": 50000,
       "minimum": 500,
       "options": [],
-      "order": 112,
+      "order": 113,
       "origin": "RC19",
       "portability_class": "non_transferable",
       "product_default": null,
@@ -7538,7 +7602,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Bei Überschreitung wird rotiert. Zusammen mit der Dateianzahl bestimmt dieser Wert die geschätzte Aufbewahrung. Wirksamkeit nach Speichern: Live-Reload grundsätzlich vorgesehen.",
+        "extended": "Damit eine einzelne Measurement-V4-CSV nicht unbegrenzt wächst, wird sie beim Erreichen dieses Limits gewechselt. Zusammen mit Speicherziel, Rotation und Mindestfreiplatz entscheidet das über Datenträgerverbrauch und verfügbare Historie. Kleinere Dateien erzeugen mehr Rotation, beeinflussen aber keine Steuerentscheidung.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 13,
@@ -7565,7 +7629,7 @@
       "maximum": 100000000,
       "minimum": 100000,
       "options": [],
-      "order": 113,
+      "order": 114,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 25000000,
@@ -7601,7 +7665,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Wenn das externe Speicherziel nicht verfügbar ist, darf begrenzt auf die interne SD geschrieben werden. Der Fallback wird sichtbar markiert und enger rotiert. Wirksamkeit nach Speichern: Wirksam im nächsten Zyklus. Die Einstellung steht in Beziehung zu: MEASUREMENT_LOG_FALLBACK_DIR, MEASUREMENT_DB_PATH.",
+        "extended": "Wenn das bevorzugte externe Messlaufwerk nicht erreichbar ist, kann ZEC eine begrenzte Aufzeichnung auf der internen SD fortsetzen. Dafür gelten eigenes Fallback-Verzeichnis, engere Dateigrenzen und Freiplatzschutz. Dies bewahrt einige Diagnosedaten, nicht die zuvor fehlenden Messpunkte; die eigentliche Regelung läuft unabhängig vom Logging.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 13,
@@ -7627,7 +7691,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 114,
+      "order": 115,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": true,
@@ -7663,7 +7727,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Begrenztes Fallback-Verzeichnis auf der internen SD, falls ein externes Logziel ausfällt. Wirksamkeit nach Speichern: Wirksam beim nächsten Fallback. Die Einstellung steht in Beziehung zu: MEASUREMENT_LOG_MOUNTPOINT, MEASUREMENT_LOG_STORAGE_TARGET.",
+        "extended": "Dieses Verzeichnis nimmt Messdaten ausschließlich dann auf, wenn ein freigegebener SD-Fallback nach Ausfall des externen Speicherziels aktiv ist. Es wirkt mit dem Fallback-Schalter und dessen strengem Rotationslimit zusammen. Ein nicht beschreibbarer Pfad soll einen transparenten Logausfall zeigen und nicht den Controller blockieren.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 13,
@@ -7689,7 +7753,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 115,
+      "order": 116,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": "logs/fallback",
@@ -7722,7 +7786,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Kleinere Rotationsgrenze für den SD-Fallback, damit ein USB-Ausfall die SD nicht unbegrenzt belastet. Wirksamkeit nach Speichern: Wirksam bei nächster Größenprüfung.",
+        "extended": "Die kleinere Größenbegrenzung im SD-Fallback verhindert, dass ein zeitweiser USB-Ausfall sehr große zusätzliche Dateien auf der Systemkarte erzeugt. Sie wirkt nur, wenn der Fallback tatsächlich aktiviert wurde; reguläre CSV-Rotation und Freiplatzgrenzen sind davon getrennte Schutzmaßnahmen.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 13,
@@ -7749,7 +7813,7 @@
       "maximum": 100000000,
       "minimum": 100000,
       "options": [],
-      "order": 116,
+      "order": 117,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 10000000,
@@ -7810,7 +7874,7 @@
       "maximum": 10,
       "minimum": 1,
       "options": [],
-      "order": 117,
+      "order": 118,
       "origin": "RC19",
       "portability_class": "non_transferable",
       "product_default": null,
@@ -7876,7 +7940,7 @@
           "value": "4"
         }
       ],
-      "order": 118,
+      "order": 119,
       "origin": "RC19",
       "portability_class": "non_transferable",
       "product_default": null,
@@ -7909,7 +7973,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Dateiname der aktuellen Measurement-V4-Datei. Beim Standardnamen schreibt der Controller automatisch zendure_measurements_v4.csv; produktive Messdaten werden ausschließlich im V4-Vertrag erzeugt. Wirksamkeit nach Speichern: Wirksam im nächsten Zyklus; neue Datei/Stream.",
+        "extended": "Dieser Name bestimmt die aktuelle Measurement-V4-Datei, in der ZEC Reglerzustände und Messwerte für spätere Untersuchung aufzeichnet. Speicherziel, Logmodus, Rotation und Flush kontrollieren gemeinsam die tatsächliche Ablage. Eine Namensänderung verändert weder das Measurement-Schema noch die aktuelle Regelung.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 13,
@@ -7935,7 +7999,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 119,
+      "order": 120,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": "zendure_measurements.csv",
@@ -7970,7 +8034,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Aus: keine zyklischen Messdaten, schont die SD-Karte. Standard: vollständige Reglerdiagnose inklusive Datenaktualität, MQTT-Veraltet-Aggregat, Sollwertkaskade, Kommando und Szenario ohne Zendure. Erweitert: Standard plus Detaildaten für Simulation, What-if und tiefe MQTT-/Aktualitätsanalyse; erzeugt größere Dateien und sollte gezielt genutzt werden. Wirksamkeit nach Speichern: Wirksam im nächsten Zyklus; Moduswechsel erzeugt neuen Profil-/Dateikontext. Die Einstellung steht in Beziehung zu: MEASUREMENT_LOG_STORAGE_TARGET.",
+        "extended": "Hier bestimmst du, ob ZEC überhaupt neue zyklische Measurement-V4-Daten schreibt und wie viele Detailfelder später für Analysen verfügbar sind. Aus spart Speicher, liefert aber keine neue Messhistorie; Standard genügt für viele Diagnosefälle; Erweitert bietet mehr Details mit entsprechendem I/O-Aufwand. Die unabhängig vorhandene Reglerfunktion und der Graphstore müssen davon unterschieden werden.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 13,
@@ -8009,7 +8073,7 @@
           "value": "extended"
         }
       ],
-      "order": 120,
+      "order": 121,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": null,
@@ -8047,7 +8111,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Schreibt parallel zu CSV/V4 einen leichten SQLite-Store für schnelle Status- und Graphdaten. Läuft auch, wenn Messdaten-CSV deaktiviert ist; die Regelung wird bei DB-Fehlern nicht blockiert. Wirksamkeit nach Speichern: Wirksam im nächsten Zyklus. Die Einstellung steht in Beziehung zu: MEASUREMENT_DB_PATH, MEASUREMENT_LOG_STORAGE_TARGET.",
+        "extended": "Der SQLite-Graphstore hält aufbereitete Messwerte für schnellere Status- und Graphabfragen bereit, unabhängig vom CSV-Logmodus. Wird er deaktiviert, fehlen künftige DB-Punkte; er setzt keine Batterieleistung und erlaubt keine bislang gesperrte Ladefunktion. Speicherziel, Datenbankpfad und Fallback haben jeweils eigene Verträge.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 13,
@@ -8071,7 +8135,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 121,
+      "order": 122,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": true,
@@ -8132,7 +8196,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 122,
+      "order": 123,
       "origin": "RC19",
       "portability_class": "non_transferable",
       "product_default": null,
@@ -8165,7 +8229,7 @@
       "dependency_keys": [],
       "editability": "read_only",
       "help": {
-        "extended": "Optionaler absoluter Pfad zur SQLite-Datei. Leer bedeutet: automatisch neben den Messdaten im aktiven Speicherziel. Wirksamkeit nach Speichern: nur geschützte Migration mit Dienstneustart.",
+        "extended": "Mit diesem Pfad wählst du die SQLite-Datei des Graphstores, falls die automatische Platzierung neben dem aktiven Messdatenziel nicht passt. Schreibbarkeit und Datenbestand müssen beim Wechsel geprüft werden. Die Einstellung ist ein Speicherverwaltungsvertrag, keine Anweisung zum Löschen alter Messwerte und keine Änderung der Regelstrategie.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 13,
@@ -8190,7 +8254,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 123,
+      "order": 124,
       "origin": "RC19",
       "portability_class": "non_transferable",
       "product_default": null,
@@ -8254,7 +8318,7 @@
       "maximum": 3650,
       "minimum": 30,
       "options": [],
-      "order": 124,
+      "order": 125,
       "origin": "Neu",
       "portability_class": "local_runtime",
       "product_default": 400,
@@ -8325,7 +8389,7 @@
           "value": "age"
         }
       ],
-      "order": 125,
+      "order": 126,
       "origin": "Neu",
       "portability_class": "local_runtime",
       "product_default": null,
@@ -8395,7 +8459,7 @@
           "value": "enforce"
         }
       ],
-      "order": 126,
+      "order": 127,
       "origin": "Neu",
       "portability_class": "local_runtime",
       "product_default": null,
@@ -8459,7 +8523,7 @@
       "maximum": 3650,
       "minimum": 1,
       "options": [],
-      "order": 127,
+      "order": 128,
       "origin": "Neu",
       "portability_class": "local_runtime",
       "product_default": 28,
@@ -8530,7 +8594,7 @@
           "value": "age"
         }
       ],
-      "order": 128,
+      "order": 129,
       "origin": "Neu",
       "portability_class": "local_runtime",
       "product_default": null,
@@ -8565,7 +8629,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Schreibt gepufferte Messdaten periodisch aus dem Python-Puffer. Kein hartes fsync pro Zeile; bei Stromausfall können letzte Messdaten fehlen. Wirksamkeit nach Speichern: Wirksam beim nächsten Flush.",
+        "extended": "Um die SD-Karte zu schonen, hält ZEC einige Measurement-V4-Zeilen im Schreibpuffer. Dieser Wert legt fest, nach wie vielen Zeilen der Puffer normal geleert werden soll. Höhere Werte vermindern häufige Schreibzugriffe, können aber im Störfall mehr noch nicht persistierte Daten kosten; die Sekunden-Grenze wirkt zusätzlich.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 13,
@@ -8593,7 +8657,7 @@
       "maximum": 10000,
       "minimum": 1,
       "options": [],
-      "order": 129,
+      "order": 130,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 100,
@@ -8626,7 +8690,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Zeitbasierte Flush-Grenze für gepuffertes Logging. Reduziert kleine Sync-Schreibvorgänge gegenüber hartem Schreiben pro Messpunkt. Wirksamkeit nach Speichern: Wirksam beim nächsten Flush.",
+        "extended": "Zusätzlich zur Zeilenzahl gibt dieser Wert an, wie lange Messdaten spätestens im Puffer verbleiben sollen, bevor sie geschrieben werden. Eine kleine Zeit bedeutet häufigere Datenträgerarbeit, eine größere Zeit mehr potenziell verlorene letzte Zeilen bei Stromausfall. Die Regelung darf nicht auf das Schreiben warten.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 13,
@@ -8654,7 +8718,7 @@
       "maximum": 3600,
       "minimum": 1,
       "options": [],
-      "order": 130,
+      "order": 131,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 60,
@@ -8687,7 +8751,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Mindestfreier Speicher am aktuell aktiven Messdatenziel: interne SD, externer USB-/Mountpoint oder bei aktivem Fallback der SD-Fallback-Pfad. Wenn weniger Speicher frei ist, pausiert das Messdaten-Logging; die Regelung läuft weiter. Wirksamkeit nach Speichern: Wirksam im nächsten Zyklus.",
+        "extended": "Diese Freiplatzschwelle schützt sowohl den normalerweise gewählten Datenträger als auch einen aktiven SD-Fallback vor volllaufenden Logs. Unterschreitet der verfügbare Platz die Grenze, muss ZEC die Messaufzeichnung bremsen oder unterlassen und dies diagnostizieren, nicht weiterhin unbegrenzt schreiben oder die Batterie-Regelung blockieren.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 13,
@@ -8715,7 +8779,7 @@
       "maximum": 100000,
       "minimum": 100,
       "options": [],
-      "order": 131,
+      "order": 132,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 500,
@@ -8750,7 +8814,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Verzeichnis für ZEC-MEASUREMENT-Messdaten. Bei internal_sd/custom_path wird dieses Feld direkt verwendet. Bei external_mount wird es als Unterordner auf dem USB-/Mountpoint verwendet, z. B. USB + ZEC/logs. Wirksamkeit nach Speichern: Wirksam im nächsten Zyklus; keine Migration. Die Einstellung steht in Beziehung zu: MEASUREMENT_LOG_MODE.",
+        "extended": "Das Datenverzeichnis legt fest, wo die aktuellen CSV-Messdateien innerhalb des gewählten Speicherziels liegen. Bei externem Mount ist es ein Unterordner, bei internem/custom Ziel der eigentliche Pfad. Der Freiplatzschutz und die Rotationsregeln bleiben davon unabhängig und keine bereits fehlenden Messwerte werden nachträglich erzeugt.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 13,
@@ -8776,7 +8840,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 132,
+      "order": 133,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": "logs",
@@ -8812,7 +8876,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Optionaler Mountpoint für externes Messdaten-Logging, z. B. /media/pi/USBSTICK oder /mnt/zec-logs. Wenn leer, wird bei Speicherziel external_mount ein erkannter schreibbarer USB-/Mountpoint automatisch verwendet. Wirksamkeit nach Speichern: Wirksam im nächsten Zyklus. Die Einstellung steht in Beziehung zu: MEASUREMENT_LOG_FALLBACK_DIR, MEASUREMENT_LOG_STORAGE_TARGET.",
+        "extended": "Wenn ein bestimmtes USB-Laufwerk für Messdaten genutzt werden soll, benennt dieser Pfad den Mountpoint. Bei automatischer Erkennung kann er leer bleiben. ZEC muss das Laufwerk tatsächlich als eingebunden und schreibbar erkennen; sonst gelten die vereinbarten Fallback- und Freiplatzregeln, nicht ein stillschweigender SD-Schreibzwang.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 13,
@@ -8838,7 +8902,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 133,
+      "order": 134,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": null,
@@ -8875,7 +8939,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Legt fest, wo Messdaten primär geschrieben werden. Bei erkanntem USB-/Mountpoint wird ein schreibbarer externer Mount automatisch verwendet; das Feld USB-/Mountpoint kann optional einen bestimmten Mountpoint festlegen. Wirksamkeit nach Speichern: Wirksam im nächsten Zyklus; keine Migration offener/alter Dateien. Die Einstellung steht in Beziehung zu: MEASUREMENT_LOG_MOUNTPOINT, MEASUREMENT_LOG_DIR, MEASUREMENT_DB_PATH.",
+        "extended": "Damit entscheidest du, ob Messdaten auf der SD-Karte, einem externen Datenträger oder einem eigenen Pfad gespeichert werden sollen. Zusammen mit Mountpoint, Unterordner und Fallback bestimmt dies die Zuverlässigkeit und Schreibbelastung der Archivierung. Der Speicherort ändert keine Ladeentscheidung und ist nicht mit der Auswahl einer Netzleistungsquelle zu verwechseln.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 13,
@@ -8915,7 +8979,7 @@
           "value": "custom_path"
         }
       ],
-      "order": 134,
+      "order": 135,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": "internal_sd",
@@ -8950,7 +9014,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Anzahl der im RAM gehaltenen Graph-Datenpunkte. Diese Historie ist unabhängig vom dauerhaften Messdaten-Logging. Wirksamkeit nach Speichern: Wirksam im nächsten Zyklus. Die Einstellung steht in Beziehung zu: INTERVAL_SECONDS.",
+        "extended": "Diese Zahl begrenzt die im Arbeitsspeicher gehaltenen Status-Graphpunkte. Sie beeinflusst, wie weit eine RAM-basierte kleine Verlaufsgrafik zurückblicken kann, nicht wie oft der echte Netzsensor misst. Langfristige, zeitgetreue Graphdaten stammen aus der getrennten Persistenz; mehr RAM-Punkte sind kein Ersatz für längere Historienabfragen.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 13,
@@ -8976,7 +9040,7 @@
       "maximum": 5000,
       "minimum": 50,
       "options": [],
-      "order": 135,
+      "order": 136,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 300,
@@ -9009,7 +9073,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Zeit, für die ein aus Messdaten aufgebauter SOC-Tagesgraph-Bootstrap im Speicher wiederverwendet werden darf. Wirksamkeit nach Speichern: Sofort für neue Requests.",
+        "extended": "Beim Aufruf des heutigen SOC-Tagesgraphen kann ZEC Daten aus bestehenden Messdateien ergänzen und das Ergebnis kurz zwischenspeichern. Diese Zeit begrenzt, wie lange ein solcher aufbereiteter Tagesstand wiederverwendet wird. Sie ist kein Samplingintervall des Akkus und darf alte Punkte nicht als aktuelle Sensormessungen ausgeben.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 13,
@@ -9038,7 +9102,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 136,
+      "order": 137,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 300,
@@ -9074,7 +9138,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Versucht beim Abruf der SOC-Tageskurve, heutige Measurement-V4-Logs best-effort einzulesen. Fehler sind nicht kritisch; die Kurve startet dann ab jetzt. Wirksamkeit nach Speichern: Wirksam beim nächsten Cache-Neuaufbau. Die Einstellung steht in Beziehung zu: MEASUREMENT_DB_ENABLED, MEASUREMENT_LOG_MODE.",
+        "extended": "Der SOC-Tagesgraph kann frühere heutige Messpunkte aus vorhandenen Measurement-V4-Dateien lesen, statt nur die seit dem aktuellen Start gesammelten Punkte zu zeigen. Fehlen Dateien oder ist das Lesen nicht möglich, beginnt die Kurve aus den aktuell verfügbaren Werten. Dies verändert weder die SOC-Grenzen noch die Regelung und muss ressourcenschonend erfolgen.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 13,
@@ -9103,7 +9167,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 137,
+      "order": 138,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": true,
@@ -9136,7 +9200,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Zeigt auf der Statusseite eine leichte 24h-Zendure-SOC-Kurve für den aktuellen lokalen Tag. Wirksamkeit nach Speichern: Nach Seitenneuladen; kein Dienstneustart.",
+        "extended": "Dieser Schalter zeigt die Zendure-SOC-Entwicklung des aktuellen lokalen Tages an. Das Diagramm verwendet sein eigenes Sampling und gegebenenfalls einen begrenzten Bootstrap aus alten V4-Dateien. Ausschalten spart Darstellungskosten, ändert aber nicht den physischen Ladezustand oder die Schutzentscheidungen.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 13,
@@ -9163,7 +9227,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 138,
+      "order": 139,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": true,
@@ -9199,7 +9263,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Samplingintervall der SOC-Tageskurve im RAM. Default 60 Sekunden; der Controller hält maximal etwa 1440 Punkte pro Tag. Wirksamkeit nach Speichern: Wirksam beim nächsten Cache-Neuaufbau. Die Einstellung steht in Beziehung zu: SOC_DAY_GRAPH_BOOTSTRAP_FROM_MEASUREMENTS, SOC_DAY_GRAPH_BOOTSTRAP_CACHE_SECONDS.",
+        "extended": "Mit diesem Zeitabstand speichert ZEC neue Punkte für die tägliche SOC-Kurve. Größere Abstände ergeben weniger Details und geringere RAM-Last, kleinere mehr Zeitauflösung; das ist unabhängig vom sekündlichen Browser-Status und der physischen SOC-Melderate der Zendure-Hardware.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 13,
@@ -9227,7 +9291,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 139,
+      "order": 140,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 60,
@@ -9289,7 +9353,7 @@
       "maximum": 1440,
       "minimum": 5,
       "options": [],
-      "order": 140,
+      "order": 141,
       "origin": "Neu",
       "portability_class": "local_runtime",
       "product_default": 15,
@@ -9361,7 +9425,7 @@
           "value": "enforce"
         }
       ],
-      "order": 141,
+      "order": 142,
       "origin": "Neu",
       "portability_class": "local_runtime",
       "product_default": null,
@@ -9425,7 +9489,7 @@
       "maximum": 3650,
       "minimum": 7,
       "options": [],
-      "order": 142,
+      "order": 143,
       "origin": "Neu",
       "portability_class": "local_runtime",
       "product_default": null,
@@ -9489,7 +9553,7 @@
       "maximum": 100000000000,
       "minimum": 100000000,
       "options": [],
-      "order": 143,
+      "order": 144,
       "origin": "Neu",
       "portability_class": "local_runtime",
       "product_default": null,
@@ -9560,7 +9624,7 @@
           "value": "bounded"
         }
       ],
-      "order": 144,
+      "order": 145,
       "origin": "Neu",
       "portability_class": "local_runtime",
       "product_default": null,
@@ -9623,7 +9687,7 @@
       "maximum": 720,
       "minimum": 1,
       "options": [],
-      "order": 145,
+      "order": 146,
       "origin": "Neu",
       "portability_class": "local_runtime",
       "product_default": null,
@@ -9658,7 +9722,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Schreibt das V4-Manifest gepuffert statt pro Zyklus. Niedrigere Werte sind aktueller, höhere Werte reduzieren I/O. Wirksamkeit nach Speichern: Wirksam beim nächsten Manifestcheck.",
+        "extended": "Das Measurement-V4-Manifest beschreibt, welche Messdateien zu welcher Aufzeichnung gehören. Dieser Zeilenwert erlaubt es, Metadaten gebündelt statt nach jedem Messpunkt zu schreiben. Ein größeres Intervall schont den Datenträger, kann aber bis zum nächsten Flush vorübergehend einen älteren Manifeststand anzeigen; die Messdaten selbst müssen separat konsistent bleiben.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 13,
@@ -9686,7 +9750,7 @@
       "maximum": 1000,
       "minimum": 1,
       "options": [],
-      "order": 146,
+      "order": 147,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 25,
@@ -9719,7 +9783,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Spätester gepufferter V4-Manifest-Update. Beim Schließen wird immer final aktualisiert. Wirksamkeit nach Speichern: Wirksam beim nächsten Manifestcheck.",
+        "extended": "Mit dieser Zeitgrenze hält ZEC selbst bei langsamer Messdatenerzeugung die Manifest-Metadaten regelmäßig nach. Zusammen mit der Zeilen-Grenze bestimmt das die Aktualität des Verzeichnisses. Sie beeinflusst nicht die Frequenz der eigentlichen Sensorsamples oder der Batteriekommandos; beim Dateischluss wird das Manifest finalisiert.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 13,
@@ -9747,7 +9811,7 @@
       "maximum": 600,
       "minimum": 5,
       "options": [],
-      "order": 147,
+      "order": 148,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 30,
@@ -9780,7 +9844,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Wenn aktiv, abonniert das Script zusätzlich das konfigurierte Diagnose-Topic, standardmäßig Zendure/#, und zeigt die letzten MQTT-Nachrichten unter /mqtt-diagnostics an. Nur für Analysephasen empfohlen, weil dadurch mehr MQTT-Daten verarbeitet werden. Wirksamkeit nach Speichern: Live, aber Dienstneustart nach Filter/Deaktivierung empfohlen.",
+        "extended": "Diese Option schaltet einen zusätzlichen Diagnosemitschnitt von MQTT-Nachrichten ein. Das ist nur bei gezielter Fehlersuche nötig und darf nicht mit dem normalen MQTT-Kommando-/Telemetriepfad verwechselt werden. Welche Nachrichten sichtbar werden und wie lange sie erhalten bleiben, regeln Filter, Ansichtsmodus und RAM-Historie getrennt.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -9807,7 +9871,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 148,
+      "order": 149,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": null,
@@ -9840,7 +9904,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "MQTT-Topic-Filter für den Diagnosemitschnitt, z. B. Zendure/# oder evcc/#. MQTT Topic Matching ist groß-/kleinschreibungssensitiv; EVCC/# passt also nicht auf evcc/site/... . Änderungen an diesem Filter erfordern meist einen Neustart oder erneutes Speichern der Config. Wirksamkeit nach Speichern: Live, aber Dienstneustart nach Filter/Deaktivierung empfohlen.",
+        "extended": "Mit diesem Topic-Muster begrenzt du, welche Nachrichten im Diagnosemitschnitt betrachtet werden. Es wirkt zusammen mit dem Diagnose-Einschalter und dem Ansichtsmodus „gefiltert“; der Modus „alle“ kann zusätzlich andere empfangene Topics zeigen. Der Filter ist case-sensitiv und ändert nicht, an welches Zendure-Gerät ZEC Kommandos sendet.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -9867,7 +9931,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 149,
+      "order": 150,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": "Zendure/#",
@@ -9900,7 +9964,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Anzahl der letzten MQTT-Diagnosemeldungen, die im RAM gehalten werden. Höhere Werte brauchen mehr Speicher, sind aber für Topic-Analyse hilfreich. Wirksamkeit nach Speichern: Live, aber Dienstneustart nach Filter/Deaktivierung empfohlen.",
+        "extended": "Diese Zahl bestimmt nur, wie viele der zuletzt für die Diagnose erfassten MQTT-Nachrichten im Arbeitsspeicher sichtbar bleiben. Höhere Werte helfen bei längerer Fehlersuche, benötigen aber mehr RAM. Es handelt sich nicht um die Aufbewahrung der Measurement-V4-Messdaten und nicht um eine andere Regler-Eingangsdatenfrequenz.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -9928,7 +9992,7 @@
       "maximum": 5000,
       "minimum": 10,
       "options": [],
-      "order": 150,
+      "order": 151,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": 200,
@@ -9961,7 +10025,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "filtered speichert/zeigt nur Nachrichten, die zum MQTT Topic-Diagnose Filter passen. all speichert alle vom Controller empfangenen MQTT-Nachrichten und ist nur für kurze Fehlersuche empfohlen. Wirksamkeit nach Speichern: Live, aber Dienstneustart nach Filter/Deaktivierung empfohlen.",
+        "extended": "Hier wählst du, ob die Diagnose nur Topics passend zum eingestellten Muster anzeigt oder alle vom Controller empfangenen Nachrichten betrachtet. Für eine gezielte Fehlersuche ist „gefiltert“ übersichtlicher und weniger belastend; „alle“ ist nur zeitweise sinnvoll. Der Modus ändert keine MQTT-Abonnements für normale Regelungskommandos.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -9998,7 +10062,7 @@
           "value": "all"
         }
       ],
-      "order": 151,
+      "order": 152,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": "filtered",
@@ -10031,7 +10095,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Adresse des MQTT-Brokers. Meist der Raspberry Pi selbst. Wirksamkeit nach Speichern: Dienstneustart zwingend.",
+        "extended": "Ohne erreichbaren MQTT-Broker kann ZEC Zendure-Telemetrie oder Leistungsbefehle nicht zuverlässig übertragen. Diese Adresse wirkt zusammen mit Port und optionalem Zugang, unabhängig von der eigens gewählten Netzleistungsmessung durch SMA oder Shelly. Der Broker kann lokal oder im eigenen Netzwerk betrieben werden; ein nicht erreichbarer Broker darf nicht als gesunde Verbindung angezeigt werden.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -10047,7 +10111,7 @@
           "MQTT",
           "BROKER"
         ],
-        "short": "Adresse des MQTT-Brokers. Meist der Raspberry Pi selbst.",
+        "short": "Netzwerkadresse des MQTT-Brokers, über den ZEC Zendure-Gerätedaten und Befehle austauscht. Der Broker muss erreichbar sein; ein falscher Wert kann Telemetrie und sichere Gerätesteuerung unterbrechen.",
         "when": null
       },
       "key": "MQTT_BROKER",
@@ -10056,7 +10120,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 152,
+      "order": 153,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": null,
@@ -10091,7 +10155,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Passwort für MQTT. Wird in der lokalen config.json gespeichert. Wirksamkeit nach Speichern: Dienstneustart zwingend.",
+        "extended": "Das Kennwort gehört ausschließlich zur Anmeldung am gewählten MQTT-Broker und ergänzt dessen Adresse, Port und gegebenenfalls Benutzername. Ist für den Broker kein Login vorgesehen, kann es leer bleiben. Falsche Zugangsdaten verhindern unter Umständen aktuelle Zendure-Werte und Befehle; dieses Feld ist keine Einstellung einer Batterie-Regelstrategie.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -10107,7 +10171,7 @@
           "MQTT",
           "PASSWORD"
         ],
-        "short": "Passwort für MQTT. Wird in der lokalen config.json gespeichert.",
+        "short": "Kennwort für die Anmeldung am konfigurierten MQTT-Broker. Es ist nur erforderlich, wenn der Broker Authentifizierung verlangt; fehlende Anmeldung verhindert aktuelle Gerätedaten und Befehlsübertragung.",
         "when": null
       },
       "key": "MQTT_PASSWORD",
@@ -10116,7 +10180,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 153,
+      "order": 154,
       "origin": "RC19",
       "portability_class": "secret",
       "product_default": null,
@@ -10152,7 +10216,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Port des MQTT-Brokers. Standard ist 1883. Wirksamkeit nach Speichern: Dienstneustart zwingend.",
+        "extended": "Brokeradresse und Port gehören zusammen und bestimmen den erreichbaren MQTT-Dienst, über den ZEC Zendure-Telemetrie und Kommandos austauscht. Ein nicht passender Port unterbricht möglicherweise die Verbindung, obwohl die gewählte SMA-/Shelly-Netzmessung weiterhin funktioniert. Der Port legt weder Ladeleistung noch Controller-Regeltakt fest.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -10168,7 +10232,7 @@
           "MQTT",
           "PORT"
         ],
-        "short": "Port des MQTT-Brokers. Standard ist 1883.",
+        "short": "Netzwerkport des eingestellten MQTT-Brokers (häufig 1883). Er gehört zur Brokeradresse und zur optionalen Anmeldung; bei falschem Port kann ZEC keine verlässlichen Zendure-MQTT-Daten oder Kommandos übertragen.",
         "when": null
       },
       "key": "MQTT_PORT",
@@ -10177,7 +10241,7 @@
       "maximum": 65535,
       "minimum": 1,
       "options": [],
-      "order": 154,
+      "order": 155,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": 1883,
@@ -10212,7 +10276,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Benutzername für MQTT. Leer lassen, wenn keine Authentifizierung verwendet wird. Wirksamkeit nach Speichern: Dienstneustart zwingend.",
+        "extended": "Der Benutzername wird nur für einen MQTT-Broker benötigt, der eine Anmeldung verlangt. Er ergänzt Kennwort, Brokeradresse und Port; sein Inhalt beeinflusst weder die Netzleistungsquelle noch direkt eine Ladeentscheidung. Bei Anmeldefehlern darf ZEC keine vermeintlich frischen Zendure-Daten aus alten MQTT-Nachrichten ableiten.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -10237,7 +10301,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 155,
+      "order": 156,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": null,
@@ -10272,7 +10336,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Absolute Obergrenze für plausible Netzleistungswerte. Messwerte oberhalb dieser Grenze werden verworfen und nicht für AUTO-Regelung oder Glättung verwendet. Default 30000 W schützt vor offensichtlich defekten SMA-/Shelly-Ausreißern. Wirksamkeit nach Speichern: Wirksam beim nächsten Messwert.",
+        "extended": "Diese Grenze verwirft Netzleistungs-Rohwerte, die für die reale Anlage offenkundig unplausibel hoch sind. Sie schützt die AUTO-Regelung vor Ausreißern, egal ob die Quelle SMA oder Shelly heißt. Sie ist keine maximale Hauslast und kein gewünschter Netzleistungssollwert; Quellidentität und Frischeprüfung bleiben getrennte notwendige Schutzschichten.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -10300,7 +10364,7 @@
       "maximum": 250000,
       "minimum": 1000,
       "options": [],
-      "order": 156,
+      "order": 157,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": 30000,
@@ -10333,7 +10397,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Schreibt kompakte SMA-Socket-/Paketdiagnosen in das Runtime-Textlog. Zusätzlich muss Datei-Logging aktiv sein, damit die Meldungen in zendure_runtime.log landen. Wirksamkeit nach Speichern: Live.",
+        "extended": "Damit kannst du bei SMA-Empfangsproblemen Details zu UDP-Socket, Paketlücken oder Filterung sichtbar machen. Die Meldungen werden erst bei passender Runtime-Logging-Konfiguration in Dateien geschrieben. Sie aktivieren keinen zweiten Netzleistungsregler, ändern die Zählerauswahl nicht und dienen nur der nachvollziehbaren Diagnose.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -10361,7 +10425,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 157,
+      "order": 158,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": null,
@@ -10394,7 +10458,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Mindestabstand zwischen periodischen SMA_DIAG-Zeilen im Runtime-Log, wenn SMA-Diagnoselogging aktiv ist. Wirksamkeit nach Speichern: Live.",
+        "extended": "Diese Zeit begrenzt die Häufigkeit wiederholter SMA-Diagnosemeldungen, damit das Runtime-Log bei intakter Messung nicht unnötig wächst. Sie ist nur bei aktiviertem SMA-Diagnoselogging relevant und ändert weder den eigentlichen Speedwire-Empfang noch den Aktualisierungstakt der Netzleistung.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -10423,7 +10487,7 @@
       "maximum": 3600,
       "minimum": 10,
       "options": [],
-      "order": 158,
+      "order": 159,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": 60,
@@ -10456,7 +10520,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Ab dieser Lücke zwischen empfangenen SMA-Speedwire-Paketen wird die Lücke in der SMA-Diagnose markiert. Der Stream kommt typischerweise ungefähr sekündlich. Wirksamkeit nach Speichern: Live.",
+        "extended": "Überschreitet der Abstand zwischen empfangenen SMA-Telegrammen diese Zeit, kennzeichnet die SMA-Diagnose eine verdächtige Empfangslücke. Das hilft, Netzwerk- und Quellprobleme zu unterscheiden. Diese Warnschwelle ist nicht mit dem separat wirksamen Messdaten-Stale-Timeout zu verwechseln und schaltet den Controller nicht selbst um.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -10486,7 +10550,7 @@
       "maximum": 300,
       "minimum": 1,
       "options": [],
-      "order": 159,
+      "order": 160,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": 5,
@@ -10519,7 +10583,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Multicast-Adresse der SMA Energy Meter Daten. Typischer Standard: 239.12.255.254. Wirksamkeit nach Speichern: Live; Listener wird bei Änderung neu gestartet.",
+        "extended": "Die Multicast-Gruppe gibt vor, von welcher Netzwerkgruppe der lokale SMA-Empfänger Speedwire-Telegramme empfängt. Sie wirkt zusammen mit UDP-Port und gewählter Netzwerkschnittstelle. Eine falsche Gruppe verhindert aktuelle Zählerwerte; die Seriennummerfilterung muss zusätzlich sicherstellen, dass der richtige Zähler für den Hausanschlusspunkt ausgewertet wird.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -10546,7 +10610,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 160,
+      "order": 161,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": "239.12.255.254",
@@ -10579,7 +10643,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Optional: lokale IPv4-Adresse oder Interface-Name wie eth0 für den Multicast-Join. Bei mehreren Netzwerkinterfaces bevorzugt eth0 eintragen. Wirksamkeit nach Speichern: Live; Listener wird bei Änderung neu gestartet.",
+        "extended": "Bei mehreren Netzwerkschnittstellen kann dieser Wert den lokalen Netzwerkadapter für den SMA-Multicast-Empfang festlegen. Er ergänzt Gruppenadresse und UDP-Port und muss den tatsächlichen SMA-Datenpfad erreichen. Das Feld entscheidet nicht, welcher von mehreren SMA-Zählern fachlich richtig ist – dafür sind Seriennummer und gegebenenfalls SUSy-ID maßgeblich.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -10606,7 +10670,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 161,
+      "order": 162,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": null,
@@ -10639,7 +10703,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Nur relevant, wenn als Netzleistungsquelle die Shelly-kompatible HTTP-Quelle gewählt ist: startet zusätzlich einen passiven SMA Energy Meter / Sunny Home Manager 2.0 Listener zum Vergleich. Wenn SMA Home Manager direkt als Netzleistungsquelle gewählt ist, wird der Listener automatisch aktiviert; dieser Schalter ist dann fachlich redundant. Wirksamkeit nach Speichern: Live; Listener wird gestartet/gestoppt.",
+        "extended": "Wenn die eigentliche Netzleistungsquelle Shelly-kompatibles HTTP ist, kann ZEC SMA-Daten zusätzlich nur zur Gegenprüfung mitlesen. Diese passive Messung darf nicht stillschweigend den aktiven Reglerwert ersetzen. Bei direkt ausgewählter SMA-Netzleistungsquelle wird der nötige Empfänger ohnehin verwendet; dieser Schalter gibt dann keine zusätzliche Funktion frei.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -10667,7 +10731,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 162,
+      "order": 163,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": null,
@@ -10700,7 +10764,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "UDP-Port für SMA Energy Meter / Sunny Home Manager 2.0 Multicast. Typischer Standard: 9522. Wirksamkeit nach Speichern: Live; Listener wird bei Änderung neu gestartet.",
+        "extended": "Der UDP-Port ergänzt die SMA-Speedwire-Multicast-Gruppe und die ausgewählte Netzwerkschnittstelle. Standardmäßig verwenden SMA-Energy-Meter-Telegramme häufig 9522. Ein anderer Wert kann die Netzleistungsquelle unbrauchbar machen, ändert aber weder die Seriennummer des auszuwertenden Geräts noch die zulässige Zendure-Leistung.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -10727,7 +10791,7 @@
       "maximum": 65535,
       "minimum": 1,
       "options": [],
-      "order": 163,
+      "order": 164,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": 9522,
@@ -10762,7 +10826,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Optionaler Filter auf die Seriennummer des Energy Meters am Netzbezugspunkt. Bei mehreren SMA Energy Metern vor produktiver Nutzung zwingend empfohlen. Wirksamkeit nach Speichern: Live; Listener wird bei Änderung neu gestartet. Die Einstellung steht in Beziehung zu: GRID_METER_SOURCE.",
+        "extended": "In einer Anlage mit mehreren SMA-Zählern schützt die Seriennummer davor, den Produktionszähler anstelle des Hausanschlusspunktzählers für die AUTO-Regelung zu verwenden. Sie ist zusammen mit korrektem Multicast-Empfang und Protokollvalidierung zu prüfen. Die Identität ist daher sicherheitsrelevant und nicht bloß ein Anzeigename.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -10789,7 +10853,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 164,
+      "order": 165,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": null,
@@ -10826,7 +10890,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Experten-/Diagnoseoption für die Koexistenz mit EVCC, UniMeter oder weiteren SMA-Speedwire-Listenern auf demselben Host. Default group_bind bindet auf die SMA-Multicast-Gruppe und war im Nachtlauf mit EVCC auf demselben Raspberry Pi stabil. Wildcard-Modi auf 0.0.0.0:9522 bleiben reine Diagnoseoptionen und können EVCC stören. Wirksamkeit nach Speichern: Live mit Listener-Neustart. Die Einstellung steht in Beziehung zu: GRID_METER_SOURCE.",
+        "extended": "Diese Expertenoption bestimmt, wie der SMA-UDP-Socket auf dem Raspberry Pi gebunden wird, insbesondere bei parallelem EVCC- oder anderem SMA-Empfang. Sie wirkt nur auf den Netzwerk-Empfänger und kann bei ungünstiger Wahl andere Listener stören. Die Zahl der Messpunkte oder die AUTO-Reglergeschwindigkeit wird dadurch nicht automatisch erhöht.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -10871,7 +10935,7 @@
           "value": "unimeter_like"
         }
       ],
-      "order": 165,
+      "order": 166,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": "group_bind",
@@ -10904,7 +10968,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Maximales Alter eines direkt per SMA Energy Meter empfangenen Netzleistungswerts, falls die direkte SMA-Quelle als Regelquelle verwendet wird. Wirksamkeit nach Speichern: Wirksam sofort.",
+        "extended": "Nach dieser Dauer ohne neue gültige SMA-Messung muss ZEC den Hausnetzleistungswert als veraltet einstufen, falls SMA als aktive Netzquelle gewählt ist. Alte Werte dürfen nicht für neue AUTO-Korrekturen herangezogen werden. Sie ist unabhängig von der Diagnosewarnung für einzelne Telegrammlücken und von der Shelly-Frischegrenze.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -10933,7 +10997,7 @@
       "maximum": 600,
       "minimum": 5,
       "options": [],
-      "order": 166,
+      "order": 167,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": 15,
@@ -10966,7 +11030,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Optionaler Filter auf die SMA SUSy-ID des gewünschten Energy Meters. Bei mehreren SMA Energy Metern empfohlen. Beispiel: <SMA-SUSY-ID>. Wirksamkeit nach Speichern: Live; Listener wird bei Änderung neu gestartet.",
+        "extended": "Zusätzlich zur Seriennummer kann die SMA-SUSy-ID die Herkunft der eingehenden Speedwire-Daten präzisieren. Besonders bei mehreren SMA-Geräten hilft sie, den richtigen Netzanschlusspunktzähler zu identifizieren. Ein falscher Filter darf nicht durch willkürliche Fremdzählerwerte ersetzt werden; auch die Frame-/Plausibilitätsprüfung bleibt verbindlich.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -10993,7 +11057,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 167,
+      "order": 168,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": null,
@@ -11028,7 +11092,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "IP-Adresse der Shelly- oder Shelly-kompatiblen Messdatenquelle. Das kann ein echter Shelly Pro 3EM oder ein anderer Shelly-kompatibler HTTP-Endpunkt sein. Wirksamkeit nach Speichern: Wirksam im nächsten Abruf. Die Einstellung steht in Beziehung zu: GRID_METER_SOURCE.",
+        "extended": "Bei aktiv ausgewählter Shelly-kompatibler Netzleistungsquelle sendet ZEC lesende HTTP-Anfragen an diese Adresse. Der Endpunkt muss die tatsächliche Hausnetzleistung mit richtigem Vorzeichen liefern; die dazugehörige Stale-Grenze verhindert die Nutzung zu alter Daten. Das Feld ist bei direkter SMA-Regelquelle nicht die aktive Zähleradresse.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -11052,7 +11116,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 168,
+      "order": 169,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": null,
@@ -11085,7 +11149,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Maximales Alter des letzten gültigen Netzleistungswerts. Wirksamkeit nach Speichern: Wirksam im nächsten Fehlerfall.",
+        "extended": "Diese maximale Messaltergrenze gilt speziell für die Shelly-kompatible HTTP-Netzleistungsquelle. Ohne frische Werte darf AUTO nicht mit einem alten Hausnetzfluss weiterrechnen; die direkte SMA-Quelle verwendet stattdessen ihren eigenen Receiver-Timeout. Der Timeout ist keine Reglerverzögerung und darf Datenfehler nicht verdecken.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -11103,7 +11167,7 @@
           "TIMEOUT",
           "SECONDS"
         ],
-        "short": "Maximales Alter des letzten gültigen Netzleistungswerts.",
+        "short": "Maximales Alter einer gültigen Netzleistungsmessung aus der Shelly-kompatiblen Quelle. Wird der Wert zu alt, darf ZEC ihn nicht als frische Grundlage für AUTO interpretieren; die direkte SMA-Quelle hat eigene Frischegrenzen.",
         "when": null
       },
       "key": "SHELLY_STALE_TIMEOUT_SECONDS",
@@ -11112,7 +11176,7 @@
       "maximum": 600,
       "minimum": 5,
       "options": [],
-      "order": 169,
+      "order": 170,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": 15,
@@ -11149,7 +11213,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Quelle für die Netzleistung am Hausanschlusspunkt. Shelly-kompatibles HTTP bleibt dauerhaft als Alternative für echte Shelly Pro 3EM und kompatible Endpunkte erhalten. SMA direkt nutzt das lokale SMA Energy Meter / Sunny Home Manager UDP-Multicast-Protokoll. Wirksamkeit nach Speichern: Live im nächsten Zyklus. Die Einstellung steht in Beziehung zu: SHELLY_IP, SMA_ENERGY_METER_PASSIVE_ENABLED, SMA_ENERGY_METER_SERIAL.",
+        "extended": "Mit dieser Auswahl entscheidest du, aus welchem echten Zähler ZEC Hausnetzbezug und Einspeisung für die Leistungsregelung ableitet. SMA-Direktquelle liest lokale Speedwire-Telegramme; Shelly-kompatibles HTTP bezieht einen Endpunkt. Beide Wege haben eigene Adressen, Identitäts- und Frischeprüfungen. Ein falsch gewählter Zähler kann echte Export- und Importwerte verwechseln; Diagnose-Receiver sind kein stiller Ersatz.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -11184,7 +11248,7 @@
           "value": "sma_energy_meter_udp"
         }
       ],
-      "order": 170,
+      "order": 171,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": null,
@@ -11220,7 +11284,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Aktiviert den Diagnose-Endpunkt /zendure-properties. Diese Option steuert die Web-Diagnoseseite; die Telemetrie-Fallback-Nutzung wird separat über die folgenden Optionen gesteuert. Wirksamkeit nach Speichern: Live.",
+        "extended": "Dieser Schalter macht die lokale Zendure-Gerätediagnose über die Weboberfläche zugänglich. Er erlaubt für sich allein nicht, lokale Messwerte anstelle von MQTT für die normale Regelung zu verwenden. Dafür sind der getrennte Telemetrie-Schalter, die Fallback-Regel und die lokale Geräte-IP erforderlich; die Kommandosteuerung bleibt weiterhin dem bestehenden autorisierten Pfad vorbehalten.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -11247,7 +11311,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 171,
+      "order": 172,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": null,
@@ -11280,7 +11344,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Pause nach einem Timeout oder Fehler der lokalen Zendure-API, bevor der Controller erneut /properties/report abfragt. Schützt EVCC und die Zendure-Headunit vor aggressiven Wiederholungen. Wirksamkeit nach Speichern: Live.",
+        "extended": "Wenn die lokale Zendure-API nicht antwortet, wartet ZEC diese Mindestzeit bis zum nächsten Versuch. Das reduziert Last und störende Wiederholungsanfragen an Headunit und lokale Dienste. Es wirkt zusammen mit Pollintervall und Timeout, nicht mit der normalen 3-s-Reglerberechnung oder MQTT-Command-Recovery.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -11309,7 +11373,7 @@
       "maximum": 3600,
       "minimum": 0,
       "options": [],
-      "order": 172,
+      "order": 173,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": 30,
@@ -11342,7 +11406,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Mindestabstand zwischen zwei lokalen Zendure-API-Abfragen für Telemetrie und Temperaturdiagnose. Wirksamkeit nach Speichern: Live.",
+        "extended": "Dieses Intervall begrenzt, wie häufig der Hintergrundworker lokale Zendure-Telemetrie abfragen darf. Kürzere Werte bedeuten mehr Netzwerk-/Gerätelast, garantieren aber keine schnelleren physischen Sensorsamples. Sie sind nicht mit dem 1-s-Webstatus-Poll und nicht mit der MQTT-Messaktualität gleichzusetzen.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -11371,7 +11435,7 @@
       "maximum": 300,
       "minimum": 2,
       "options": [],
-      "order": 173,
+      "order": 174,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": 5,
@@ -11404,7 +11468,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Legt fest, welcher SOC-Wert aus /properties/report bevorzugt wird, falls sowohl properties.electricLevel als auch packData[0].socLevel vorhanden sind. Wirksamkeit nach Speichern: Live.",
+        "extended": "Liefert die lokale Geräte-API mehrere unterschiedliche SOC-Felder, bestimmt diese Auswahl, welches bevorzugt gelesen wird. Die Wahl beeinflusst nur die Interpretation dieser Quelle, nicht den tatsächlichen Ladezustand; ob API-Werte überhaupt den aktiven ZEC-SOC ergänzen dürfen, entscheiden separate Telemetrie- und Fallback-Schalter.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -11441,7 +11505,7 @@
           "value": "pack_first"
         }
       ],
-      "order": 174,
+      "order": 175,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": "properties_first",
@@ -11477,7 +11541,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Wenn aktiv, bleibt MQTT die bevorzugte Quelle für SOC und Istleistung. Die lokale API aktualisiert den aktiven SOC nur dann, wenn MQTT fehlt oder veraltet ist. Sobald MQTT wieder gültige Werte liefert, wechselt die Anzeige automatisch zurück zu MQTT. Wirksamkeit nach Speichern: Live. Die Einstellung steht in Beziehung zu: ZENDURE_LOCAL_API_USE_FOR_TELEMETRY, ZENDURE_LOCAL_IP.",
+        "extended": "Bei aktivem Fallback bleibt MQTT die bevorzugte Quelle für Zendure-SOC und Istleistung. Nur wenn passende MQTT-Daten fehlen oder veraltet sind, kann die freigegebene lokale API einspringen; nach MQTT-Recovery wechselt ZEC zurück. Der Modus wirkt nur, wenn die lokale API-Nutzung für Telemetrie überhaupt aktiviert ist.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -11506,7 +11570,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 175,
+      "order": 176,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": null,
@@ -11542,7 +11606,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Wenn aktiv, darf der Controller die lokale Zendure-API als zusätzliche Telemetriequelle für SOC, Istleistung und Akkutemperatur verwenden. Das ist ein Fallback gegen den bekannten Fall, dass Zendure nach Broker-/Raspberry-Neustart keine MQTT-Sensordaten mehr publiziert. Wirksamkeit nach Speichern: Live per Worker-Config-Generation. Die Einstellung steht in Beziehung zu: ZENDURE_LOCAL_API_TELEMETRY_FALLBACK_ONLY, ZENDURE_LOCAL_IP.",
+        "extended": "Damit darf ZEC die lesende lokale Zendure-API zusätzlich für SOC, Istleistung und gegebenenfalls Temperatur heranziehen. Welche Quelle Vorrang hat, regelt der separate Nur-Fallback-Schalter; MQTT bleibt der autorisierte Kommando-Transport. Eine API-Abfrage allein ist kein Nachweis neuer Gerätedaten und nicht jede lokale Quelle muss sekündlich liefern.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -11571,7 +11635,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 176,
+      "order": 177,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": null,
@@ -11608,7 +11672,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "IP-Adresse der Zendure-Headunit für lokale Abfragen wie /properties/report. Wird sowohl für die Diagnose-Webseite als auch für den optionalen Telemetrie-Fallback verwendet. Wirksamkeit nach Speichern: Worker übernimmt per Config-Generation live. Die Einstellung steht in Beziehung zu: ZENDURE_LOCAL_API_TELEMETRY_FALLBACK_ONLY, ZENDURE_LOCAL_API_TIMEOUT_SECONDS, ZENDURE_LOCAL_API_USE_FOR_TELEMETRY.",
+        "extended": "Diese IP bezeichnet die echte Zendure-Headunit für lesende lokale API-Anfragen und Gerätediagnose. Sie wirkt zusammen mit Diagnose-/Telemetrie-Aktivierung, Pollintervall und Timeout. Eine falsche Adresse darf keine alten MQTT-Werte als neue API-Proben erscheinen lassen; die Adresse gibt keine neue Gerätelschreibberechtigung frei.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 12,
@@ -11633,7 +11697,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 177,
+      "order": 178,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": null,
@@ -11668,7 +11732,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Begrenzt den Hintergrundrequest unabhängig vom höheren allgemeinen API-Timeout. Die lokale API arbeitet asynchron und blockiert den Regelzyklus nicht. Wirksamkeit nach Speichern: Live. Die Einstellung steht in Beziehung zu: INTERVAL_SECONDS.",
+        "extended": "Der getrennte kurze Zeitdeckel begrenzt einzelne lokale API-Hintergrundaufrufe, selbst wenn das allgemeine Timeout großzügiger gewählt wurde. Damit soll eine langsame Headunit den laufenden Controller nicht ausbremsen. Er verändert weder das Regler-Sollwertziel noch die sichere MQTT-Rückmeldung eines Leistungsbefehls.",
         "guidance_rule_ids": [
           "GUIDE-LOCAL-API-TIMEOUT"
         ],
@@ -11700,7 +11764,7 @@
       "maximum": 5,
       "minimum": 0.2,
       "options": [],
-      "order": 178,
+      "order": 179,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": 1.5,
@@ -11736,7 +11800,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Maximale Wartezeit eines asynchronen lokalen Zendure-API-Requests. Der Regelzyklus wartet nicht auf diesen Request. Wirksamkeit nach Speichern: Live. Die Einstellung steht in Beziehung zu: INTERVAL_SECONDS, ZENDURE_LOCAL_IP.",
+        "extended": "Diese Wartezeit begrenzt einen einzelnen lokalen Zendure-API-Aufruf im asynchronen Hintergrundworker. Zu lange Zeiten halten Ressourcen beschäftigt, sehr kurze können gültige langsamere Antworten verwerfen. Zusammen mit Pollintervall und Fehlerpause entsteht ein begrenzter Diagnose-/Telemetriepfad, kein blockierendes I/O im Regelzyklus.",
         "guidance_rule_ids": [
           "GUIDE-LOCAL-API-TIMEOUT"
         ],
@@ -11766,7 +11830,7 @@
       "maximum": 30,
       "minimum": 1,
       "options": [],
-      "order": 179,
+      "order": 180,
       "origin": "RC19",
       "portability_class": "site_specific",
       "product_default": 5,
@@ -11799,7 +11863,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Erlaubt der Weboberfläche, nach dem Speichern neustartrelevanter Einstellungen den systemd-Dienst kontrolliert neu zu starten. Aus Sicherheitsgründen ist diese Funktion standardmäßig deaktiviert und benötigt zusätzlich ein freigegebenes Restart-Hilfsscript mit sudoers-Regel. Wirksamkeit nach Speichern: Live für die Berechtigung der nächsten Aktion.",
+        "extended": "Mit dieser Option darf die Weboberfläche bei bestätigten neustartpflichtigen Settings den ZEC-Dienst über einen gesondert autorisierten Helper neu starten. Das ist eine Zugriffs-/Betriebsfunktion, kein Reglermodus. Fehlt die Betriebssystemfreigabe, bleibt der Neustart trotz Schalter gesperrt; ungespeicherte Änderungen werden nicht dadurch automatisch übernommen.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -11826,7 +11890,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 180,
+      "order": 181,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": null,
@@ -11859,7 +11923,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Erweiterte Dateianzahl für bewusst bestätigte größere Analysen. Auf dem Raspberry Pi nur mit Warnung verwenden. Wirksamkeit nach Speichern: Für nächste Analyse; Replay-Service liest config.json.",
+        "extended": "Diese höhere Dateianzahl ist ausschließlich für bewusst genehmigte umfangreichere Offline-/Replay-Untersuchungen gedacht. Normale Analysen bleiben durch die kleineren Standardlimits begrenzt, damit der Raspberry Pi für Regler, MQTT und EVCC reaktionsfähig bleibt. Mehr Dateien bedeuten mehr potenzielle RAM- und CPU-Last, nicht präzisere aktuelle Batteriekommandos.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -11886,7 +11950,7 @@
       "maximum": 20,
       "minimum": 1,
       "options": [],
-      "order": 181,
+      "order": 182,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 3,
@@ -11919,7 +11983,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Erweiterte Messpunktzahl für bewusst bestätigte größere Analysen. Alles darüber wird fail-closed abgelehnt. Wirksamkeit nach Speichern: Für nächste Analyse; Replay-Service liest config.json.",
+        "extended": "Hier legst du die maximale Zahl von Messpunkten für einen ausdrücklich erweiterten Analysejob fest. Das Limit wird vor zu großer Verarbeitung geprüft und ist von der normalen kleineren Zeilenbegrenzung getrennt. Sehr große Werte können RAM und Laufzeit trotzdem erhöhen; für Langzeitforensik bevorzugt ZEC begrenzte Streamingextrakte statt vollständige RAM-Materialisierung.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -11946,7 +12010,7 @@
       "maximum": 500000,
       "minimum": 1000,
       "options": [],
-      "order": 182,
+      "order": 183,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 35000,
@@ -11979,7 +12043,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Erweiterte Gesamtgröße für bewusst bestätigte größere Analysen. Alles darüber wird lokal abgelehnt und sollte offline/auf dem PC analysiert werden. Wirksamkeit nach Speichern: Für nächste Analyse; Replay-Service liest config.json.",
+        "extended": "Diese Obergrenze schützt vor dem Versuch, zu große Messdateisammlungen auf dem produktiven Pi zu laden. Sie greift zusätzlich zu Dateianzahl und Zeilenlimit; ein größerer Bytewert hebt weder Worker-Speicherlimit noch Laufzeitgrenze auf. Sehr große Auswertungen sind eher offline auf einem leistungsfähigeren Rechner sinnvoll.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -12007,7 +12071,7 @@
       "maximum": 100000000,
       "minimum": 1000000,
       "options": [],
-      "order": 183,
+      "order": 184,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 10485760,
@@ -12040,7 +12104,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Speicherlimit für bewusst bestätigte größere Analyse-Worker. Wirksamkeit nach Speichern: Für nächste Analyse; Replay-Service liest config.json.",
+        "extended": "Bei einem bewusst erweiterten Analyseauftrag begrenzt dieser Wert den Speicherverbrauch des getrennten Analyseworkers. Er wirkt zusätzlich zu Datei-, Zeilen- und Bytebudget. Höhere Grenzen können größere Auswertungen erlauben, den Pi aber so stark beanspruchen, dass Live-Dienste leiden; das ist keine Ladeleistungs- oder Speichergröße der Batterien.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -12059,7 +12123,7 @@
           "MEMORY",
           "LIMIT"
         ],
-        "short": "Speicherlimit für bewusst bestätigte größere Analyse-Worker.",
+        "short": "Begrenzt den Arbeitsspeicher bewusst freigegebener größerer Analysejobs. Ein höherer Wert kann komplexere Auswertungen erlauben, erhöht aber das Risiko, den Raspberry Pi zu überlasten; die Reglerfunktion selbst wird nicht umgestellt.",
         "when": null
       },
       "key": "ANALYSIS_EXTENDED_WORKER_MEMORY_LIMIT_MB",
@@ -12068,7 +12132,7 @@
       "maximum": 900,
       "minimum": 128,
       "options": [],
-      "order": 184,
+      "order": 185,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 380,
@@ -12101,7 +12165,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Zeitlimit für bewusst bestätigte größere Analyse-Worker. Wirksamkeit nach Speichern: Für nächste Analyse; Replay-Service liest config.json.",
+        "extended": "Diese Grenze beendet bewusst erweiterte lokale Analysen, die zu lange dauern. Sie ergänzt deren Speicher- und Eingabedatenlimits; ein längerer Timeout kann ressourcenintensive Jobs länger auf dem Pi halten. Die Steuerung von Zendure arbeitet unabhängig und darf nicht auf eine Analyse warten.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -12120,7 +12184,7 @@
           "TIMEOUT",
           "SECONDS"
         ],
-        "short": "Zeitlimit für bewusst bestätigte größere Analyse-Worker.",
+        "short": "Legt die maximale Laufzeit eines bewusst erweiterten Analysejobs fest. Ein langer Timeout gestattet umfangreichere Auswertungen, kann Ressourcen länger binden; er beschleunigt oder verändert keine Reglerentscheidung.",
         "when": null
       },
       "key": "ANALYSIS_EXTENDED_WORKER_TIMEOUT_SECONDS",
@@ -12129,7 +12193,7 @@
       "maximum": 3600,
       "minimum": 30,
       "options": [],
-      "order": 185,
+      "order": 186,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 300,
@@ -12162,7 +12226,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Maximale Dateianzahl für normale lokale Analysen auf dem Raspberry Pi. Standard ist bewusst konservativ, um EVCC, MQTT und Live-Regler zu schützen. Wirksamkeit nach Speichern: Für nächste Analyse; Replay-Service liest config.json.",
+        "extended": "Damit bestimmst du, wie viele ausgewählte Messdateien der normale lokale Analysedienst höchstens verarbeitet. Zusammen mit Zeilen-, Byte-, RAM- und Laufzeitlimits schützt das die laufende Regelung vor Ressourcenengpässen. Eine zu geringe Grenze lehnt sehr große Untersuchungen kontrolliert ab, ohne Messdaten zu löschen.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -12188,7 +12252,7 @@
       "maximum": 20,
       "minimum": 1,
       "options": [],
-      "order": 186,
+      "order": 187,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 2,
@@ -12221,7 +12285,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Maximale Messpunktzahl für normale lokale Analysen. Das Limit wird bereits beim Lesen geprüft; zusätzlich läuft die Analyse in einem isolierten Worker. Wirksamkeit nach Speichern: Für nächste Analyse; Replay-Service liest config.json.",
+        "extended": "Diese maximale Zeilenzahl begrenzt normale Auswertungen bereits während der Eingabeverarbeitung. Sie ist unabhängig von Dateigröße und Worker-Speichergrenze; alle Limits müssen passen. Wird ein Job abgewiesen, bedeutet das keine fehlerhaften Realmesswerte und keine Änderung des Controllerbetriebs.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -12247,7 +12311,7 @@
       "maximum": 500000,
       "minimum": 1000,
       "options": [],
-      "order": 187,
+      "order": 188,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 20000,
@@ -12280,7 +12344,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Maximale Gesamtgröße der ausgewählten CSV-Dateien für normale lokale Analysen. Standard ist bewusst konservativ, weil Python-/HTML-/Diagrammstrukturen deutlich mehr RAM benötigen als die CSV-Datei auf der SD-Karte. Wirksamkeit nach Speichern: Für nächste Analyse; Replay-Service liest config.json.",
+        "extended": "Dieses Limit schützt vor großen CSV-Eingaben, die im Speicher viel mehr Platz als ihre Dateigröße benötigen können. Es greift zusätzlich zur Datei- und Zeilenbegrenzung. Auf dem Raspberry Pi sind größere Forensikfenster daher vorab zu extrahieren oder offline auszuwerten, statt den laufenden Controller zu gefährden.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -12307,7 +12371,7 @@
       "maximum": 100000000,
       "minimum": 1000000,
       "options": [],
-      "order": 188,
+      "order": 189,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 6291456,
@@ -12340,7 +12404,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Speicherlimit für normale Analyse-Worker. Bei Überschreitung wird nur der Analyse-Worker beendet, nicht der Live-Controller. Wirksamkeit nach Speichern: Für nächste Analyse; Replay-Service liest config.json.",
+        "extended": "Normale Analysen laufen in einem begrenzten Worker statt im Reglerprozess. Diese Grenze verhindert, dass eine aufwendige Untersuchung den gesamten Pi-Speicher verbraucht. Bei Überschreitung wird der Analysejob beendet; seine Resultate sind dann unvollständig und dürfen nicht als erfolgreicher Energienachweis behandelt werden.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -12367,7 +12431,7 @@
       "maximum": 900,
       "minimum": 128,
       "options": [],
-      "order": 189,
+      "order": 190,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 300,
@@ -12400,7 +12464,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Zeitlimit für normale Analyse-Worker. Bei Überschreitung wird der Worker abgebrochen. Wirksamkeit nach Speichern: Für nächste Analyse; Replay-Service liest config.json.",
+        "extended": "Wenn eine normale Analyse länger als dieser Wert benötigt, bricht ZEC den getrennten Worker ab. Zusammen mit Speicher-, Datei- und Zeilenlimits bleibt die Last des Analysedienstes begrenzt. Ein Timeout ändert weder die historische Messung noch den Sollwert für Zendure und rechtfertigt keine automatische Wiederholung ohne Rücksicht auf Ressourcen.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -12427,7 +12491,7 @@
       "maximum": 1800,
       "minimum": 30,
       "options": [],
-      "order": 190,
+      "order": 191,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 180,
@@ -12460,7 +12524,7 @@
       "dependency_keys": [],
       "editability": "read_only",
       "help": {
-        "extended": "Port des optionalen separaten Analyse-/Replay-Webdienstes. Der Dienst wird mitgeliefert, aber nicht automatisch aktiviert. Wirksamkeit nach Speichern: Replay-Service-/systemd-Konfiguration separat.",
+        "extended": "Dieser Port gehört ausschließlich zum optionalen eigenständigen Analyse-/Replay-Webdienst, nicht zum normalen ZEC-Status- und Settings-Portal. Der Replay-Dienst muss gesondert gestartet beziehungsweise freigegeben werden; eine Portangabe aktiviert keine zusätzliche Controllerinstanz oder Befehlssteuerung.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -12486,7 +12550,7 @@
       "maximum": 65535,
       "minimum": 1,
       "options": [],
-      "order": 191,
+      "order": 192,
       "origin": "RC19",
       "portability_class": "non_transferable",
       "product_default": null,
@@ -12519,7 +12583,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Aktiviert ein dunkles Farbschema für Statusseite, Settings, Graph, Diagnose, Analyse-Linkseiten und Headless-Hinweisseite. Die Änderung wird nach dem Speichern sofort bei neu geladenen Webseiten sichtbar. Wirksamkeit nach Speichern: Nach Seitenneuladen.",
+        "extended": "Mit dieser Einstellung wählst du ein dunkles oder helles Erscheinungsbild der ZEC-Webseiten. Es betrifft Status, Settings und Diagramme, nicht den Lade-/Entladealgorithmus, Datenquellen oder aktive Sicherheitsgrenzen. Nach Übernahme wird das Farbschema bei neu dargestellten Seiten sichtbar.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -12544,7 +12608,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 192,
+      "order": 193,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": true,
@@ -12577,7 +12641,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Vorbereitung für eine reduzierte Standardansicht und eine vollständige Expertenansicht. Expertenmodus ist fachlich ein Superset des Standardmodus: Kernstatus und Warnungen bleiben immer sichtbar, Expert-only-Details kommen zusätzlich hinzu. Wirksamkeit nach Speichern: Nach Seitenneuladen.",
+        "extended": "Der Standardmodus zeigt die wichtigsten Informationen und Einstellungen ohne unnötige technische Details. Im Expertenmodus kommen zusätzliche Diagnosefelder und technische Optionen hinzu; entscheidende Warnungen und Basisinformationen bleiben sichtbar. Der Ansichtsmodus erteilt keine neuen Gerätebefehle und schaltet keine bisher gesperrte Schutzfunktion aus.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -12610,7 +12674,7 @@
           "value": "expert"
         }
       ],
-      "order": 193,
+      "order": 194,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": "standard",
@@ -12669,7 +12733,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 194,
+      "order": 195,
       "origin": "RC19",
       "portability_class": "non_transferable",
       "product_default": null,
@@ -12702,7 +12766,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Schreibt einen Runtime-Hinweis, wenn ein Reglerzyklus ohne Sleep länger dauert. Dient der Laufzeit- und Timingdiagnose. Wirksamkeit nach Speichern: Live.",
+        "extended": "Diese Zeit ist eine Warnschwelle für ungewöhnlich lange Ausführung eines einzelnen Controllerzyklus. Sie hilft zu erkennen, ob CPU, Datenträger oder andere lokale Pfade den Regelbetrieb verzögern. Der eingestellte Warnwert verändert weder das eigentliche Regelintervall noch die physische Ladeleistung und ist kein Leistungsoptimierungsparameter.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -12728,7 +12792,7 @@
       "maximum": 60000,
       "minimum": 1000,
       "options": [],
-      "order": 195,
+      "order": 196,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 5000,
@@ -12761,7 +12825,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Anzahl alter Text-Logdateien, die behalten werden. Wirksamkeit nach Speichern: Live beim nächsten Logereignis.",
+        "extended": "Hier wählst du, wie viele alte Runtime-Textprotokolle nach einer Rotation erhalten bleiben. Zusammen mit maximaler Dateigröße und dem Logverzeichnis ergibt sich der ungefähre Speicherbedarf. Mehr Historie erleichtert die Fehlersuche, ist aber nicht mit der langfristigen CSV-Messdatenaufbewahrung zu verwechseln.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -12779,7 +12843,7 @@
           "BACKUP",
           "COUNT"
         ],
-        "short": "Anzahl alter Text-Logdateien, die behalten werden.",
+        "short": "Anzahl älterer Laufzeit-Logdateien, die ZEC nach einer Rotation aufbewahrt. Mehr Backups erleichtern die rückblickende Fehlersuche, brauchen aber mehr Speicherplatz; das verändert keine Batteriekommandos.",
         "when": null
       },
       "key": "FILE_LOG_BACKUP_COUNT",
@@ -12788,7 +12852,7 @@
       "maximum": 10,
       "minimum": 1,
       "options": [],
-      "order": 196,
+      "order": 197,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 3,
@@ -12823,7 +12887,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Relatives oder absolutes Verzeichnis für die Text-Logdatei. Wirksamkeit nach Speichern: Live beim nächsten Logereignis. Die Einstellung steht in Beziehung zu: FILE_LOG_ENABLED.",
+        "extended": "Wenn Datei-Logging eingeschaltet ist, legt dieser Pfad fest, wohin ZEC Betriebs- und Fehlermeldungen schreibt. Der Dateiname und die Rotationsgrenzen werden separat eingestellt. Ein falscher oder unbeschreibbarer Pfad vermindert die Diagnosehistorie, darf aber weder Reglerparameter ändern noch die Headunit aggressiver ansteuern.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -12840,7 +12904,7 @@
           "LOG",
           "DIR"
         ],
-        "short": "Relatives oder absolutes Verzeichnis für die Text-Logdatei.",
+        "short": "Speicherverzeichnis für die normalen Controller-Textprotokolle. Es wirkt zusammen mit aktiviertem Datei-Logging und der Rotationsgrenze; ein falscher Pfad beeinträchtigt die Diagnoseaufzeichnung, nicht die Sollwertformel.",
         "when": null
       },
       "key": "FILE_LOG_DIR",
@@ -12849,7 +12913,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 197,
+      "order": 198,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": "logs",
@@ -12884,7 +12948,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Schreibt Betriebs-, Fehler- und Diagnosemeldungen zusätzlich rollierend in eine Text-Logdatei. Das ersetzt nicht das CSV-Datenlogging. Wirksamkeit nach Speichern: Live beim nächsten Logereignis. Die Einstellung steht in Beziehung zu: FILE_LOG_DIR.",
+        "extended": "Zusätzlich zu systemd/journald kann ZEC normale Laufzeitmeldungen in einer rotierenden Textdatei sammeln. Dies hilft bei längeren Fehlersuchen, ist aber nicht dasselbe wie das strukturierte Measurement-V4-Log mit echten Regler- und Energiemesspunkten. Speicherort, Dateigröße und Aufbewahrung werden separat begrenzt.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -12910,7 +12974,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 198,
+      "order": 199,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": null,
@@ -12943,7 +13007,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Dateiname der aktuellen Runtime-Text-Logdatei, standardmäßig zendure_runtime.log. Wirksamkeit nach Speichern: Live beim nächsten Logereignis.",
+        "extended": "Dieser Wert benennt die aktuell beschriebene Runtime-Textdatei, sofern das Datei-Logging eingeschaltet ist. Verzeichnis, maximale Dateigröße und Zahl älterer Backups kontrollieren den tatsächlichen Speicherbedarf. Ein Name allein aktiviert keine zusätzlichen Diagnosen, keine Messdatenspeicherung und keine Regleränderung.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -12968,7 +13032,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 199,
+      "order": 200,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": "zendure_runtime.log",
@@ -13001,7 +13065,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Bei Überschreitung wird die Text-Logdatei rotiert. Alte Dateien werden nach dem Schema zendure_runtime_1.log, zendure_runtime_2.log usw. gehalten. Wirksamkeit nach Speichern: Live beim nächsten Logereignis.",
+        "extended": "Erreicht die laufende Textlogdatei diese Größe, rotiert ZEC zu einer neuen Datei und hält gemäß Backupzahl ältere Fassungen vor. Niedrigere Limits erzeugen mehr Dateiwechsel, höhere längere Einzelprotokolle. Das betrifft nur Laufzeittexte; Measurement-V4 und SQLite-Graphdaten haben andere Speicherverträge.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -13028,7 +13092,7 @@
       "maximum": 100000000,
       "minimum": 100000,
       "options": [],
-      "order": 200,
+      "order": 201,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 2000000,
@@ -13061,7 +13125,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Allgemeine Konsolenausgaben. Wirksamkeit nach Speichern: Live.",
+        "extended": "Dieser Schalter erhöht die allgemeine Konsolen-Ausführlichkeit und kann beim Nachvollziehen seltener Fehler helfen. Er ist keine Freigabe für die separate MQTT-Diagnose oder für zusätzliche Command-Publishes. Dauerhaft unnötig viele Meldungen machen Logs unübersichtlich und können Ressourcen beanspruchen.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -13075,7 +13139,7 @@
           "System & Diagnose",
           "Runtime-Logging · Detailkanäle"
         ],
-        "short": "Allgemeine Konsolenausgaben.",
+        "short": "Schaltet zusätzliche technische Konsolenmeldungen für die Fehlersuche ein. Die Meldungen können unübersichtlich werden und Ressourcen beanspruchen; sie verändern nicht die gewählte AUTO-/Nacht-/Harvest-Strategie.",
         "when": null
       },
       "key": "DEBUG",
@@ -13084,7 +13148,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 201,
+      "order": 202,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": null,
@@ -13117,7 +13181,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Schreibt zusätzliche menschenlesbare Debug-Meldungen zu Zielwerten und Regelentscheidungen ins Runtime-Textlog. Das ist kein strukturiertes Measurement-Logging; die V4-Standard-Messdaten enthalten die Reglerdiagnose bereits. Wirksamkeit nach Speichern: Live.",
+        "extended": "Zusätzliche menschlich lesbare Zeilen helfen beim Nachvollziehen, wie ZEC aktuelle Messwerte zu Leistungszielen verarbeitet hat. Sie ergänzen die strukturierte Measurement-V4-Diagnose, ersetzen sie aber nicht. Mehr Protokolltext darf weder das Zielwertrechnen noch die sicherheitsrelevanten Command-Wirkungsprüfungen verändern.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -13142,7 +13206,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 202,
+      "order": 203,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": null,
@@ -13175,7 +13239,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Loggt Aktionen des manuellen Modus, z. B. Start, Ziel erreicht und automatische Umschaltung nach Ziel-SOC. Wirksamkeit nach Speichern: Live.",
+        "extended": "Mit diesem Detailkanal protokolliert ZEC die Ausführung fester Lade-/Entlademodi, deren Ziel-SOC und den anschließenden Moduswechsel. Die Aufzeichnung ist nur zur Diagnose gedacht; ob ein manueller Modus tatsächlich aktiv ist, entscheidet weiterhin die betreffende Betriebsarteinstellung.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -13200,7 +13264,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 203,
+      "order": 204,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": true,
@@ -13233,7 +13297,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Loggt MQTT-Kommandos an Zendure. Wirksamkeit nach Speichern: Live.",
+        "extended": "Dieser Logkanal macht sichtbar, welche MQTT-Kommandos ZEC gesendet hat und unterstützt den Vergleich mit Command-Readback und beobachteter Istleistung. Ein veröffentlichter Befehl ist noch kein Beweis, dass das Gerät ihn umgesetzt hat. Das Logging erhöht weder die normale Wiederholungsfrequenz noch die erlaubten Leistungsgrenzen.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -13249,70 +13313,11 @@
           "LOG",
           "MQTT"
         ],
-        "short": "Loggt MQTT-Kommandos an Zendure.",
+        "short": "Protokolliert MQTT-Kommandos an die Zendure-Headunit zur Diagnose des Befehlsablaufs. Mehr Logeinträge sind kein Beweis für eine physische Gerätewirkung und aktivieren keine zusätzlichen Kommandos.",
         "when": null
       },
       "key": "LOG_MQTT",
       "label": "MQTT loggen",
-      "lifecycle": "active",
-      "maximum": null,
-      "minimum": null,
-      "options": [],
-      "order": 204,
-      "origin": "RC19",
-      "portability_class": "local_runtime",
-      "product_default": null,
-      "profile_id": null,
-      "release_stage": "S1",
-      "release_text": "S1 – Settings-Basis & UI",
-      "required_first_install": false,
-      "reset_label": "Auf sicheren Ausgangszustand setzen",
-      "reset_policy": "default",
-      "reset_value": false,
-      "risk": "Mittel–hoch",
-      "secret_policy": "none",
-      "section": "Runtime-Logging · Detailkanäle",
-      "unit": null,
-      "validator_ids": [],
-      "value_type": "bool",
-      "visibility": "expert"
-    },
-    {
-      "apply_class": "live_next_cycle",
-      "apply_text": "Live",
-      "bootstrap_value": false,
-      "category": "System & Diagnose",
-      "codec_id": "bool",
-      "decision_status": "Bestätigt",
-      "default_class": "safe_sentinel",
-      "default_help": "Sicherer Ausgangszustand · kein empfohlener Betriebswert",
-      "default_new_install": false,
-      "default_rc19": false,
-      "dependency_keys": [],
-      "editability": "editable",
-      "help": {
-        "extended": "Loggt vollständige Shelly-JSON-Antworten. Nur für Fehlersuche verwenden. Wirksamkeit nach Speichern: Live.",
-        "guidance_rule_ids": [],
-        "handbook": {
-          "page": 14,
-          "section_id": "system-diagnostics",
-          "section_title": "System und Diagnose"
-        },
-        "level": "base",
-        "search_terms": [
-          "Shelly RAW loggen",
-          "LOG_RAW_RESPONSE",
-          "System & Diagnose",
-          "Runtime-Logging · Detailkanäle",
-          "LOG",
-          "RAW",
-          "RESPONSE"
-        ],
-        "short": "Loggt vollständige Shelly-JSON-Antworten. Nur für Fehlersuche verwenden.",
-        "when": null
-      },
-      "key": "LOG_RAW_RESPONSE",
-      "label": "Shelly RAW loggen",
       "lifecycle": "active",
       "maximum": null,
       "minimum": null,
@@ -13350,7 +13355,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Loggt empfangene Zendure-SOC-Werte. Wirksamkeit nach Speichern: Live.",
+        "extended": "Beim Shelly-kompatiblen Netzmesspfad kann ZEC vollständige HTTP-Antworten zur gezielten Fehleranalyse protokollieren. Das erzeugt umfangreichere Textdaten und kann Nutzungsinformationen enthalten. Es wirkt nur auf die Nachvollziehbarkeit der bereits verwendeten Quelle; die Auswahl des Zählers und Plausibilitätsfilter bleiben unabhängig.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -13359,18 +13364,19 @@
         },
         "level": "base",
         "search_terms": [
-          "SOC loggen",
-          "LOG_SOC",
+          "Shelly RAW loggen",
+          "LOG_RAW_RESPONSE",
           "System & Diagnose",
           "Runtime-Logging · Detailkanäle",
           "LOG",
-          "SOC"
+          "RAW",
+          "RESPONSE"
         ],
-        "short": "Loggt empfangene Zendure-SOC-Werte.",
+        "short": "Schreibt bei aktivem Diagnoselogging vollständige Antworten der Shelly-kompatiblen Netzleistungsquelle. Nur zur Fehlersuche einschalten: die Texte können groß sein; der Regler verwendet weiterhin dieselben validierten Messwerte.",
         "when": null
       },
-      "key": "LOG_SOC",
-      "label": "SOC loggen",
+      "key": "LOG_RAW_RESPONSE",
+      "label": "Shelly RAW loggen",
       "lifecycle": "active",
       "maximum": null,
       "minimum": null,
@@ -13408,7 +13414,65 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Loggt Shelly-Rohwert und geglättete Netzleistung. Wirksamkeit nach Speichern: Live.",
+        "extended": "Hier zeichnest du zusätzlich auf, wann Zendure neue Ladezustände gemeldet hat. Das hilft, Stale-Ereignisse und die Anwendung von Mindest-/Maximal-SOC nachzuvollziehen. Es ändert weder den realen Batterie-SOC noch die Schwellen und liefert nicht automatisch ein neues physisches Sample.",
+        "guidance_rule_ids": [],
+        "handbook": {
+          "page": 14,
+          "section_id": "system-diagnostics",
+          "section_title": "System und Diagnose"
+        },
+        "level": "base",
+        "search_terms": [
+          "SOC loggen",
+          "LOG_SOC",
+          "System & Diagnose",
+          "Runtime-Logging · Detailkanäle",
+          "LOG",
+          "SOC"
+        ],
+        "short": "Protokolliert empfangene Zendure-Ladezustände, um Datenlücken und Reserveentscheidungen nachzuvollziehen. Das Logging verändert weder den tatsächlich gemeldeten SOC noch die Schutzgrenzen.",
+        "when": null
+      },
+      "key": "LOG_SOC",
+      "label": "SOC loggen",
+      "lifecycle": "active",
+      "maximum": null,
+      "minimum": null,
+      "options": [],
+      "order": 207,
+      "origin": "RC19",
+      "portability_class": "local_runtime",
+      "product_default": null,
+      "profile_id": null,
+      "release_stage": "S1",
+      "release_text": "S1 – Settings-Basis & UI",
+      "required_first_install": false,
+      "reset_label": "Auf sicheren Ausgangszustand setzen",
+      "reset_policy": "default",
+      "reset_value": false,
+      "risk": "Mittel–hoch",
+      "secret_policy": "none",
+      "section": "Runtime-Logging · Detailkanäle",
+      "unit": null,
+      "validator_ids": [],
+      "value_type": "bool",
+      "visibility": "expert"
+    },
+    {
+      "apply_class": "live_next_cycle",
+      "apply_text": "Live",
+      "bootstrap_value": false,
+      "category": "System & Diagnose",
+      "codec_id": "bool",
+      "decision_status": "Bestätigt",
+      "default_class": "safe_sentinel",
+      "default_help": "Sicherer Ausgangszustand · kein empfohlener Betriebswert",
+      "default_new_install": false,
+      "default_rc19": false,
+      "dependency_keys": [],
+      "editability": "editable",
+      "help": {
+        "extended": "Dieser Detailkanal stellt gemessene Netzleistungswerte und ihre Glättung gegenüber. Er hilft zu verstehen, weshalb AUTO auf eine Schwankung ruhiger oder schneller reagiert. Die Logausgabe ändert nicht die Wahl zwischen Shelly und SMA, und die Settings für Mittelung/Gain bleiben weiterhin für die Regelung verantwortlich.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -13424,7 +13488,7 @@
           "LOG",
           "VALUES"
         ],
-        "short": "Loggt Shelly-Rohwert und geglättete Netzleistung.",
+        "short": "Protokolliert Netzleistungs-Rohwerte und die von ZEC verwendete Glättung zur Fehleranalyse. Die zusätzlichen Ausgaben beeinflussen nicht die Auswahl der Netzleistungsquelle oder die Reglerformel.",
         "when": null
       },
       "key": "LOG_VALUES",
@@ -13433,7 +13497,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 207,
+      "order": 208,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": null,
@@ -13466,7 +13530,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Nach dieser Anzahl direkt aufeinanderfolgender Fehler aktiviert der Controller den Safe-State. Safe-State bedeutet: Ladeleistung und Entladeleistung werden per MQTT auf 0 W gesetzt, der Modus wird auf SAFE_STATE gestellt und die Regelung versucht nicht weiter aktiv Leistung zu verschieben, bis wieder gültige Daten vorliegen und der nächste Regelzyklus sauber laufen kann. Wirksamkeit nach Speichern: Live.",
+        "extended": "Diese Fehlerzahl verhindert, dass ZEC bei einer Serie unzuverlässiger Mess- oder Laufzeitfehler unendlich weiter aktiv nachregelt. Nach genug direkt aufeinanderfolgenden Fehlern wechselt es in den Schutzbetrieb und fordert soweit über den verfügbaren Kommandoverbindungspfad möglich neutrale Leistung an. Der Wert ist kein allgemeiner Retry- oder Netzfilter und darf nicht zu großzügig gewählt werden.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -13492,7 +13556,7 @@
       "maximum": 100,
       "minimum": 1,
       "options": [],
-      "order": 208,
+      "order": 209,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 5,
@@ -13525,7 +13589,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Wenn aktiv, setzt der Controller bei erkannter MQTT-Trennung Lade- und Entladeleistung auf 0 W. Das ist die konservativste Variante, weil ohne MQTT keine zuverlässigen neuen Befehle und teilweise keine aktuellen Rückmeldungen möglich sind. Wenn diese Option nicht aktiv ist, läuft die Logik weiter und zeigt den MQTT-Fehler an; bereits zuletzt an Zendure gesendete Werte können dort aber weiter gültig bleiben, weil der Controller sie während der Trennung nicht sicher ändern kann. Nicht aktiv ist daher toleranter bei kurzen Broker-Aussetzern, aber weniger sicher bei längeren MQTT-Problemen. Wirksamkeit nach Speichern: Wirksam bei nächster Trennung.",
+        "extended": "Bei erkannter MQTT-Verbindungsunterbrechung ist eine sichere aktuelle Geräteansteuerung nicht mehr gewährleistet. Mit aktivem Schalter versucht ZEC konservativ auf Neutralität zu gehen; ohne Verbindung kann ein 0-W-Kommando aber nicht garantiert physisch ankommen. Bei Aus wird nicht pauschal neutralisiert, sodass alte zuletzt bestätigte Gerätezustände fortbestehen können. Das ist eine echte Sicherheitsabwägung, kein bloßer Warnschalter.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -13552,7 +13616,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 209,
+      "order": 210,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": false,
@@ -13589,7 +13653,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Wenn aktiv, fährt der Controller bei anhaltenden Messfehlern auf 0 W. Wirksamkeit nach Speichern: Live. Die Einstellung steht in Beziehung zu: GRID_METER_SOURCE, SHELLY_STALE_TIMEOUT_SECONDS, SMA_ENERGY_METER_STALE_TIMEOUT_SECONDS.",
+        "extended": "Wenn die Shelly-kompatible Hausnetzmessung dauerhaft fehlerhaft ist, kann ZEC auf eine konservative neutrale Ansteuerung zurückfallen, statt mit alten Netzleistungswerten zu rechnen. Diese Option hängt an der gewählten Shelly-Messquelle und deren Frischeprüfung; direkte SMA-Messungen haben einen eigenen Datenpfad und dürfen nicht blind mit Shelly-Ausfällen gleichgesetzt werden.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -13607,7 +13671,7 @@
           "SHELLY",
           "ERROR"
         ],
-        "short": "Wenn aktiv, fährt der Controller bei anhaltenden Messfehlern auf 0 W.",
+        "short": "Bei anhaltendem Fehler der Shelly-kompatiblen Netzmessung darf ZEC sicherheitshalber 0 W anfordern statt mit veralteten Leistungswerten weiterzuregeln. Das betrifft nicht automatisch die unabhängig konfigurierte SMA-Direktquelle.",
         "when": null
       },
       "key": "SAFE_STATE_ON_SHELLY_ERROR",
@@ -13616,7 +13680,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 210,
+      "order": 211,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": true,
@@ -13651,7 +13715,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Maximales Alter des Zendure-SOC. Bei Überschreitung wird Entladung blockiert. Wirksamkeit nach Speichern: Live. Die Einstellung steht in Beziehung zu: INTERVAL_SECONDS.",
+        "extended": "Der Zendure-SOC muss frisch genug sein, damit ZEC nicht auf Grundlage eines alten Ladezustands weiter entlädt. Nach dieser Zeit ohne neue gültige Meldung werden die entsprechenden Entladefreigaben konservativ blockiert; das betrifft AUTO, Nacht und feste Entladung. Die Grenze ist unabhängig vom Höchst-/Mindest-SOC-Wert selbst.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -13669,7 +13733,7 @@
           "TIMEOUT",
           "SECONDS"
         ],
-        "short": "Maximales Alter des Zendure-SOC. Bei Überschreitung wird Entladung blockiert.",
+        "short": "Legt fest, wie alt ein Zendure-Ladezustand höchstens sein darf, bevor er für eine sichere Entladefreigabe nicht mehr genügt. Die Grenze schützt insbesondere Nacht-/AUTO-/manuelle Entladung vor Entscheidungen auf alten Akkudaten.",
         "when": null
       },
       "key": "SOC_STALE_TIMEOUT_SECONDS",
@@ -13678,7 +13742,7 @@
       "maximum": 3600,
       "minimum": 10,
       "options": [],
-      "order": 211,
+      "order": 212,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 90,
@@ -13711,7 +13775,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Alter der Zendure-Istleistungswerte, ab dem eine Warnung gesetzt wird. Wirksamkeit nach Speichern: Live.",
+        "extended": "Hier bestimmst du, ab welchem Datenalter die gemeldete Zendure-Istleistung als veraltet gekennzeichnet werden soll. Ein alter Istwert eignet sich nicht als aktueller Nachweis dafür, dass ein Kommando ausgeführt wurde. Diese Einstellung setzt keinen Sollwert und darf nicht mit dem Messalter der Hausnetzleistung oder dem UI-Pollintervall verwechselt werden.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -13730,7 +13794,7 @@
           "TIMEOUT",
           "SECONDS"
         ],
-        "short": "Alter der Zendure-Istleistungswerte, ab dem eine Warnung gesetzt wird.",
+        "short": "Nach diesem Datenalter markiert ZEC die Zendure-Istleistungsmessung als veraltet. Das ist eine Aktualitäts- und Diagnosegrenze, keine neue Sollleistung und kein Beweis, dass ein zuvor gesendeter Befehl ausgeführt wurde.",
         "when": null
       },
       "key": "ZENDURE_POWER_STALE_TIMEOUT_SECONDS",
@@ -13739,7 +13803,7 @@
       "maximum": 3600,
       "minimum": 10,
       "options": [],
-      "order": 212,
+      "order": 213,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 90,
@@ -13772,7 +13836,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Schaltet die Weboberflächen ab. Beim Aufruf der Web-URLs wird nur noch eine Hinweisseite angezeigt. Die Regelung läuft weiter; Änderungen sind dann ausschließlich über die config.json und den regulären Config-Reload möglich. Ein Neustart ist zum Beenden des Headless Mode nicht erforderlich, wenn die config.json während des laufenden Programms angepasst wird. Wirksamkeit nach Speichern: Live nach Seitenneuladen.",
+        "extended": "ZEC kann die normalen Webseiten durch eine kurze Hinweisseite ersetzen, während der Controller im Hintergrund weiterarbeitet. Dadurch wird insbesondere der lokale Zugang zu Einstellungen und Diagnose bewusst eingeschränkt. Den Modus darf man nicht mit „Regelung deaktivieren“ verwechseln; zum Rückwechsel wird die reale Konfiguration auf einem erlaubten Weg geändert.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -13797,7 +13861,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 213,
+      "order": 214,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": false,
@@ -13830,7 +13894,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Bind-Adresse des HTTP-Webservers. Eine Änderung betrifft den Netzwerkzugriff und wird erst nach Dienstneustart wirksam. Wirksamkeit nach Speichern: Dienstneustart zwingend.",
+        "extended": "Diese Bind-Adresse legt fest, auf welchen Netzwerkadressen ZEC seinen HTTP-Server anbietet. In Verbindung mit dem Webport entscheidet sie, ob die Oberfläche nur lokal oder auch im Heimnetz erreichbar ist. Eine falsche Wahl kann den Zugriff blockieren; sie verändert weder MQTT-Verbindung noch die Batterie-Regelstrategie.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -13855,7 +13919,7 @@
       "maximum": null,
       "minimum": null,
       "options": [],
-      "order": 214,
+      "order": 215,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": "0.0.0.0",
@@ -13888,7 +13952,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "HTTP-Port des Webinterfaces. Änderung erfordert Neustart. Wirksamkeit nach Speichern: Dienstneustart zwingend.",
+        "extended": "Dieser Port bildet zusammen mit der Webhost-Bindung die Adresse der ZEC-Oberfläche. Eine Änderung braucht den vorgesehenen Neustart beziehungsweise die abgesicherte Deployment-Konfiguration und kann den gespeicherten Browserlink ungültig machen. Der Port ist kein MQTT-Brokerport und ändert nicht den Controllerzyklus.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -13904,7 +13968,7 @@
           "WEB",
           "PORT"
         ],
-        "short": "HTTP-Port des Webinterfaces. Änderung erfordert Neustart.",
+        "short": "Port, über den du die ZEC-Weboberfläche im Netzwerk erreichst. Eine Änderung betrifft den HTTP-Zugang und erfordert einen geeigneten Dienstneustart; sie verändert nicht die Lade-/Entladestrategie.",
         "when": null
       },
       "key": "WEB_PORT",
@@ -13913,7 +13977,7 @@
       "maximum": 65535,
       "minimum": 1024,
       "options": [],
-      "order": 215,
+      "order": 216,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 8080,
@@ -13948,7 +14012,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Wartezeit nach MQTT-Reconnect/Broker-Neustart, bevor fehlende nicht-retained Live-Werte als Neustart-/App-Neuspeicherproblem gemeldet werden. Wirksamkeit nach Speichern: Live.",
+        "extended": "Direkt nach Broker-/Controller-Wiederanlauf können einige nicht dauerhaft gespeicherte Zendure-Sensortopics vorübergehend fehlen. Dieses Zeitfenster verhindert vorschnelle Diagnosen eines permanenten Fehlers. Es macht fehlende Livewerte aber nicht zu frischen Messdaten und hebt keine SOC-/Command-Sicherheitsgrenzen auf.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -13977,7 +14041,7 @@
       "maximum": 3600,
       "minimum": 10,
       "options": [],
-      "order": 216,
+      "order": 217,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 90,
@@ -14010,7 +14074,7 @@
       "dependency_keys": [],
       "editability": "editable",
       "help": {
-        "extended": "Maximales Alter kritischer Zendure-MQTT-Gruppen für die Live-/Partial-Stale-Diagnose. Warnungen verschwinden automatisch, sobald wieder frische nicht-retained Live-Werte eintreffen. Wirksamkeit nach Speichern: Live.",
+        "extended": "Wenn wesentliche Zendure-MQTT-Datengruppen länger nicht aktualisiert wurden, soll ZEC dies klar als Teil- oder Vollstaleness anzeigen. Zusammen mit der Restart-Gnadenzeit trennt der Wert normale Wiederverbindung von anhaltendem Quellproblem. Eine Warnung allein beweist keine neue Istleistung und darf nicht als Erlaubnis für riskante Befehle gelten.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 14,
@@ -14039,7 +14103,7 @@
       "maximum": 3600,
       "minimum": 10,
       "options": [],
-      "order": 217,
+      "order": 218,
       "origin": "RC19",
       "portability_class": "local_runtime",
       "product_default": 90,

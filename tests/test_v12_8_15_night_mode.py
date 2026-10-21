@@ -109,7 +109,10 @@ class V12815NightModeReserveSocTests(unittest.TestCase):
 
     def test_global_min_soc_still_takes_precedence(self):
         cfg = base_cfg(NIGHT_DISCHARGE_ENABLED=True, MIN_SOC_PERCENT=15, NIGHT_DISCHARGE_STOP_SOC_PERCENT=35)
-        controller, state, mqtt, shelly = make_controller(cfg, state=fresh_state(15))
+        # The next-release MIN_SOC fix deliberately samples the independent
+        # grid source. Supply a valid import to assert the expected HOLD mode;
+        # missing grid data instead correctly activates the AUTO fail-closed path.
+        controller, state, mqtt, shelly = make_controller(cfg, state=fresh_state(15), shelly=OkShelly(300))
         controller.is_night_discharge_active = lambda _cfg: True
 
         self._run_full_cycle(controller, cfg)

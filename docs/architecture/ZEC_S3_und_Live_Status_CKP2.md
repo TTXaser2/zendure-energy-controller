@@ -1,0 +1,11 @@
+# ZEC S3 und sekündlicher Live-Status – Architektur-Checkpoint
+
+**Status:** DEVELOPMENT_CHECKPOINT, ausdrücklich KEIN Release-PASS oder produktiver As-built-Beleg. **Basis:** ZEC V17.0.2 + Checkpointarbeiten 19.10.2026.
+
+- `controller_logic.py`: konfigurierbare Tagesgrenzen und Confirmwerte im strategischen High-SOC-Profil; saisonaler Share-Gate mit explizitem `HARVEST_SEASON_POLICY_ENABLED=false` als Default; `sma_priority` hält die zusätzliche Strategieallokation zurück, Export Capture bleibt erhalten.
+- `settings_registry.py`/`settings_validation.py`: Saisonpolicy opt-in, S3-Settings von TARGET_ONLY auf OPERATIONAL, Jahreswechselintervalle validiert, fehlende/Feb-29-Grenzen bei aktivem Kalender blockiert.
+- `live_status.py`: ausschließlich lesende quellenbezogene 1-Hz-Datenprojektion; `web_ui.py::/status-live-data` greift auf SMA-Empfängersnapshot unabhängig vom Regler und auf durch MQTT/Modbus aktualisierte ControllerState-Rohtelemetrie zurück; Plausibilitätsfilter bleibt erforderlich. Für Shelly-HTTP wurde zusätzlich ein eigenständiger, bounded read-only-HTTP-Worker (bis zu 1 Hz, Requesttimeout 0,8 s) implementiert; physische Poll- und Ausfallgrenzen sind noch nicht real feldverifiziert. Keine Control-I/O aus UI.
+- `operational_events.py`: beobachtet `grid_power_age_seconds` im unabhängigen Journal-Thread, unterscheidet bei verfügbarem direkten SMA-Empfänger zwischen Quelle und ausbleibender Controller-Verarbeitung; zeitstabile open/resolve-Episode, keine neuen Commandaktionen.
+- `static/status_v2.js`: separater 1000-ms-Live-Poll für wichtige Leistungs-/SOC-Werte (bei sichtbarem Browser-Tab); strukturelle übrige Statuspayloads bislang noch 3000 ms. Teilweise 1-Hz-Kartenleistungsbalken-/SOC-Adaption implementiert; weiterhin offene vollständige Quellen- und UI-Semantik, End-to-end-Browser-Tests und Pi-Lastverifikation.
+
+**Noch nicht umgesetzt:** `NIGHT-MINSOC-GRID` und strukturierter `SMA-OBIS`-Parser; vollständige S3-Messschema-/Statusdiagnose und exakte Legacy-Differentialnachweise; gesamte Browser-UI-/Endpunkt-Regression; Shelly-/SMA-/Modbus-/MQTT-Livequellen vollständig feld- und lastverifizieren; Release/Manifest/Build-Evidence/Datenblatt-Freeze. Dieser Checkpoint darf nicht installiert werden.

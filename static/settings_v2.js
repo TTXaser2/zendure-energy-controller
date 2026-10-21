@@ -513,7 +513,7 @@
     c.sections.forEach(section => {
       const rowParts = section.settings.map(settingHtml).filter(Boolean);
       renderedSettings += rowParts.length;
-      if (rowParts.length) body += `<section class="section-block"><div class="section-title-line"><h2>${esc(section.name)}</h2>${section.help ? helpButton('section', `${c.name}|||${section.name}`, section.name) : ''}</div><div class="settings-grid">${rowParts.join('')}</div></section>`;
+      if (rowParts.length) body += `<section class="section-block"><div class="section-title-line"><h2>${esc(section.name)}</h2>${section.help ? helpButton('section', `${c.name}|||${section.name}`, section.name) : ''}</div>${section.help ? `<p class="section-purpose">${esc(section.help)}</p>` : ''}<div class="settings-grid">${rowParts.join('')}</div></section>`;
     });
     const showAdmin = c.name === 'System & Diagnose' && app.mode === 'expert';
     if (renderedSettings === 0 && !showAdmin) body += emptyStateHtml(c);
@@ -737,10 +737,12 @@
   function settingHelpBody(s) {
     const h = s.help || {};
     const dynamicWhen = guidanceForSetting(s).map(x=>x.text).join(' ');
-    const when = dynamicWhen || h.when || (s.dependency_rule ? 'Die Einstellung wirkt nur, wenn die zugehörige Aktivierungs- oder Quellbedingung erfüllt ist.' : 'Die Einstellung wirkt gemäß der unten angegebenen Wirksamkeitsart und den fachlichen Schutzbedingungen.');
+    // No generic claim of applicability: omit the section unless grounded guidance exists.
+    const when = dynamicWhen || h.when || '';
     const body = [
-      `<div class="help-context"><span>${esc(s._category)}</span><span>›</span><span>${esc(s._section)}</span>${h.level==='rich'?'<span class="help-level rich">RICH</span>':'<span class="help-level">BASE</span>'}</div>`,
-      helpSection('Kurz erklärt', helpText(h.short || s.description)),
+      `<div class="help-context"><span>${esc(s._category)}</span><span>›</span><span>${esc(s._section)}</span></div>`,
+      helpSection('Wozu dient diese Einstellung?', helpText(h.extended || h.short || s.description)),
+      (h.extended && h.extended !== h.short ? helpSection('Auf einen Blick', helpText(h.short || s.description)) : ''),
       helpSection('Wann wirkt die Einstellung?', helpText(when)),
       helpSection('Wirkung bei Änderung', effectHelpHtml(s)),
       helpSection('Abhängigkeiten & Vorrangregeln', `${dependencyHelpHtml(s)}${h.override?`<div class="help-callout override"><b>Vorrang / Überschreibung</b><span>${esc(h.override)}</span></div>`:''}`),

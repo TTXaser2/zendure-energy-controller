@@ -1,7 +1,17 @@
 # ZEC – UI, Settings & Diagnostics Contract
 
-**Stand:** 22.09.2026  
+**Stand:** 20.10.2026 (V17.1.0-Feld-/UI-Nachtrag; historische Vorversionsabschnitte erhalten)  
 **Status:** kanonisch
+
+## 0. V17.1.0 – aktuelle Status-/Freshness- und Minigraph-Semantik
+
+- Reale aktuelle Version `V17.1.0`; die allgemeinen Standard-/Experten- und Warnungsverträge der folgenden Kapitel bleiben unverändert verbindlich.
+- **Prominente Livewerte:** Frontend-Read-only-GET `/status-live-data` im Browser **1.000-ms-Intervall**. Live-Werte, echte Quellenfrische, Age, Provider und Validity dürfen niemals allein aus dem Clientpoll als „jede Sekunde neu gemessen“ bezeichnet werden. Normaler `/status-view-data`-Struktursnapshot hat einen eigenen 3.000-ms-Poll; der reale Reglerzyklus wird nicht beschleunigt.
+- **Netzleistungs-Minigraph – derzeitige Implementierung:** Frontend-GET `/grid-mini-data` alle **10.000 ms**; im Backend 48 Punkte aus `state.graph_history`, meist Controllerzyklen statt unabhängiger Livegrid-Quellenwerte. Der Benutzer kann darum zeitlich abweichende Anzeige/Chart-Endwerte sehen. Diese Diskrepanz ist **im V17.1.0-Release vorhanden** (Real-Screenshot 20.10.2026) und steht als `ZEC-BL-UI-GRID-MINICHART-001` offen.
+- **Verbindliche UX-Härtung für Folgeänderung:** Direkt und dauerhaft am Minigraphen, nicht nur im Infotooltip, die Semantik sichtbar machen, z. B. „Verlauf: letzte 48 Regler-Messpunkte · Aktualisierung alle 10 s“ und den letzten Chartwert eindeutig als *Verlaufspunkt* statt aktueller Grid-Istwert bezeichnen. Die Livezahl bleibt separat „Aktuell (1 s)“. Beschriftung muss bei später geänderter tatsächlicher Kadenz angepasst werden; `10 s` nicht als harte ewige Konstante dokumentieren.
+- **Optionales schnelleres Graphdesign separat evaluieren:** für wirklich 1-Hz-korrelierte Kurve echten unabhängigen Grid-Livestream als eigene begrenzte Zeitserie nutzen (bei Reload/Retention/Freshness und Zeitachse definiert); keine 1-Hz-Werte künstlich aus Controller-3-s-Samples ableiten und keine stille Reglerintervallverkürzung. Poll-Änderung allein ersetzt keinen neuen Quellwert.
+- **S3:** sichtbare Opt-in-Nichtanwendbarkeit/effektive Strategie, `NOT_APPLICABLE` in HOLD, keine behauptete physische Wirksamkeit ohne natürliche Harvest-Episode.
+- **Grid-Stale:** Warnung/Incident mit echter open-/resolved-State-Quelle statt historischer Anzeigeerinnerung; keine lückenfüllende Kurveninterpolation.
 
 ## 1. Standard/Experte
 
@@ -159,6 +169,14 @@ Die aktuelle Graphoberfläche basiert auf Graph Core V3 und unterstützt freie/g
 - Bestätigte Coverage-/Evidence-Gaps, Controller-Downtime oder Retention-Lücken dürfen in numerischen Graphserien nicht als gemessene Kontinuität erscheinen. Der Dataset-/Renderpfad muss an echten Lücken ein Break-/Null-Segment erzeugen; es werden keine synthetischen Messwerte zur Überbrückung erzeugt. Normale Sampling-Jittertoleranz darf nicht unnötig in Lücken umklassifiziert werden.
 
 
-## 11. V16.2.5 – technischer Implementierungsstatus
+## 11. Historischer V16.2.5-Implementierungsstand (von V17.1.0 abgelöst)
 
 Der freigegebene V16.2.5-Hotfix ist source-seitig umgesetzt und besitzt TECHNICAL BUILD PASS; die reale V16.2.4 → V16.2.5-Feldabnahme bleibt ausstehend. Umgesetzt sind die Speicherstatuskarten-Geometrie und kompakte Warnungsdarstellung nach Abschnitt 7.1, der mobile Settings-Overflow-Vertrag nach Abschnitt 6, die Single-Owner-Snapshot-Konsistenz nach Abschnitt 9 sowie die renderseitige Gap-Unterbrechung nach Abschnitt 10. Die vollständige Statusseiten-Expertenmodus-Completion bleibt separat unter `ZEC-BL-UI-STATUS-EXPERT-001` offen.
+
+## Ergänzender verbindlicher UX-Hilfe-Vertrag – Nutzerfreigabe 20.10.2026 (Folgerelease, nicht V17.1.0)
+
+- Settings-Hilfe ist **Produktfunktion für Endanwender**, nicht Metadatenanzeige. Unmittelbar beim Setting und am Beginn des Hilfedialogs muss der **Zweck samt Wechselwirkung mit den relevanten benachbarten Einstellungen und dem tatsächlichen Einfluss auf Regel-/Command-/Diagnosepfade** klar beschrieben sein.
+- Bei Schaltern beide Zustände, bei Auswahlfeldern Optionen und bei numerischen Eingaben Wirkung von Erhöhen/Verringern fachlich differenzieren. `configured`, `effective`, `applicable`, `target` und `physical effect` niemals vermischen.
+- Jede Bereichsüberschrift erhält eine dauerhaft lesbare Zweckbeschreibung; Infoknöpfe sind zusätzliche Vertiefung, kein Ersatz. Keine sichtbar nutzlosen generischen Hilfetexte oder internen Qualitätsstempel wie `BASE`/`RICH` im Endnutzer-Dialog.
+- Prüfgate: Registerinventar aller verfügbaren UI-Settings, per Key sourceverifizierte Wirkung, Referenzen auf Voraussetzungen/Schutzvorrang, verständliche Prosa, Sonderfall keine unmittelbare physische Wirkung, Standard/Expert/Mobile und Help-Navigation. Fachliche Sichtprüfung ergänzt automatische Abwesenheit von Fallback-Formeln.
+- Minigraph-Follow-up: 1-s-Live-Zahl unabhängig halten; 3-s-Chart-Refresh erst nach freigegebenem bounded/zeitachsentreuem Verlauf für wählbare Zeitfenster; echte Sample-Freshness, Lücken und keine zusätzliche Controller-/Hardware-Pollrate. Aktueller V17.1.0-Stand 10-s-Chart aus Controller-Graphhistorie bleibt bis Nachfolgerrelease wahr.

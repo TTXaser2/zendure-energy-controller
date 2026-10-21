@@ -126,10 +126,15 @@ class SingleInstanceOwnerTests(unittest.TestCase):
                 self.assertLess(time.monotonic(), deadline, "subprocess readiness barrier timed out")
                 time.sleep(0.005)
             Path(go_path).write_text("go", encoding="utf-8")
-            while not all(os.path.exists(path) for path in result_paths):
+            # A result file can become visible before write_text() completes.
+            # Wait for *complete* process verdicts, not merely path existence.
+            results=[]
+            while True:
+                results=[Path(path).read_text(encoding="utf-8") if os.path.isfile(path) else "" for path in result_paths]
+                if all(result in {"OWNER", "HELD"} for result in results):
+                    break
                 self.assertLess(time.monotonic(), deadline, "subprocess race result timed out")
                 time.sleep(0.005)
-            results=[Path(path).read_text(encoding="utf-8") for path in result_paths]
             Path(release_path).write_text("release", encoding="utf-8")
             outputs=[proc.communicate(timeout=15) for proc in procs]
             self.assertEqual(["HELD", "OWNER"], sorted(results), outputs)

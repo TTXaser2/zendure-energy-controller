@@ -1,15 +1,18 @@
 # ZEC – Current Release & Field Status
 
-**Stand:** 23.09.2026, V17.0.1 real installiert/FULL_READY; V17.0.2 TECHNICAL BUILD PASS / FIELD_PENDING  
+**Stand:** 25.09.2026, V17.0.2 real installiert / allgemeine Feldabnahme PASS-FULL_READY; Fast-Capture-Feldevidenz teilweise PASS, Gesamtabschluss EVIDENCE_PENDING  
 **Status:** aktuelle versionsspezifische Autorität für Release- und Feldstatus
 
-## A. Aktueller Stand V17.0.1 / V17.0.2
+## A. Aktueller Stand V17.0.2
 
-- **Reale Runtimebasis:** `V17.0.1 / 17.0.1 / v17.0.1-20260922`. Reales Update V16.2.5 -> V17.0.1 PASS; interner Preflight vor Mutation PASS; Installerabschluss `ready=true`; `tools/v17_field_acceptance.py` vollständig PASS mit `FULL_READY`, Installationsreport und exakter Rollback-Backup-Integrität.
-- **Technischer Releasekandidat:** `V17.0.2 / 17.0.2 / v17.0.2-20260923` – **TECHNICAL BUILD PASS / FIELD_PENDING**. Vollständige Regression 157 Testdateien / **1169 Tests + 706 Subtests PASS**; identischer ResourceWarning=error-Lauf; Bash 13/13, Browser-JavaScript 3/3, Compileall, Deployment-Harness 11/11, Datenblatt und maschinenlesbare Build-Evidence PASS. Release-Hygiene, Source-Manifest 932/932, kanonischer ZIP-Root sowie Paket-/Fresh-extract-Manifest-, Build-Evidence- und Datenblatt-Gates sind im Release-Freeze PASS; der finale Rebuild nach Dokumentationsfreeze wird identisch verifiziert.
-- **Fast-Capture-Feldstatus:** V17.0.1 real auf `shadow`; Night-Mode-Safety real fail-closed beobachtet. Erster Shadow-Evidenzversuch deckte drei Evidence-Toolingdefekte auf; deshalb sind V17.0.1-Fast-V4-Daten nicht als kanonischer Funktionsnachweis verwertbar. V17.0.2 korrigiert ausschließlich diesen Evidenzpfad. Neue Shadow-Evidenz nach V17.0.2-Installation ist Pflicht; `active` bleibt nicht freigegeben.
-- **Reglerkern:** `controller_logic.py` SHA256 `113cb9cc60475cb59294bf07ab750e63580b59112f178948b7e386fd0539b031`, byteidentisch zu V17.0.1. Keine Änderung an A400/R100-, Command-, Safety-, Cross-Charge- oder Recoverysemantik.
-- **UI-Feldstatus:** Desktop-Warning-Chip/Popover des V17-Follow-ups real visuell PASS; mobile Bottom-Sheet-Variante separat ausstehend.
+- **Reale Runtimebasis:** `V17.0.2 / 17.0.2 / v17.0.2-20260923`. Reales Update V17.0.1 -> V17.0.2 am 23.09.2026 erfolgreich; Installer-Preflight/Backup/Copy/Postchecks PASS; Controller anschließend vollständig `ready=true`.
+- **Allgemeine Feldabnahme:** `tools/v17_field_acceptance.py` real PASS / FULL_READY. Persistente Feldartefakte liegen auf dem Pi vor. Dies ist von der funktionsspezifischen Fast-Capture-Abnahme zu trennen.
+- **Paket:** `zendure_controller_v17_0_2.zip`, SHA256 `82bd2db52a71b4a4e56f8e8c39e30511494fb02f8735909667052b73bd82f311`, Größe `14.402.481 Byte`. Vollständige Regression **157 Testdateien / 1169 Tests + 706 Subtests PASS**; identischer ResourceWarning-Lauf; Bash 13/13, Browser-JavaScript 3/3, Compileall, Deployment-Harness 11/11, Datenblatt, Build-Evidence, Manifest-/Hygiene-/Fresh-extract-Gates PASS.
+- **Reglerkern:** `controller_logic.py` SHA256 `113cb9cc60475cb59294bf07ab750e63580b59112f178948b7e386fd0539b031`.
+- **Fast Capture Shadow:** neue V17.0.2-V4-Evidenz ist verwertbar; ein natürlicher Lauf mit zwei Episoden `PASS / SHADOW_ONLY`, ein weiterer ohne Episode korrekt `NOT_EVALUABLE`; definierter Shadow-Gate **PASS**.
+- **Fast Capture Active:** begrenzter Active-Rollout ausdrücklich freigegeben. Erster beaufsichtigter/unbeaufsichtigter Lauf ohne natürliche Episode korrekt `NOT_EVALUABLE`; ein externer Watchdog-Readiness-Abbruch wurde nachträglich als False Positive auf zulässiges `TRANSITIONAL:LIMIT_READBACK_CONVERGENCE` klassifiziert und stellte `shadow` korrekt wieder her. Spätere reale Active-Daten zeigen `NEAR_LIMIT`-Wirkung: 23.794 Active-Mode-Zeilen, 501 positive Overlay-Zeilen, 20 erkannte Episoden, max. Fast-Capture-Overlay 1.642 W; für die auswertbaren `NEAR_LIMIT`-Episoden liegen reale Exportreduktion, Command-Tracking, Import-Guard/Recovery und Cross-Charge-Evidenz ohne bestätigten Command-Mismatch vor. **Active-`FULL_IDLE` fehlt weiterhin**, daher bleibt der Fast-Capture-Gesamtabschluss `EVIDENCE_PENDING`. Letzter real beobachteter Nutzungsstand: Fast Capture `active`.
+- **Fast-Capture-Evidence-Tooling:** Analyzer-Hotfix2 besitzt einen applicability-bezogenen Calculation-False-Positive (`PRIMARY_RESERVE_MISMATCH` in blockierten/nicht anwendbaren Zyklen). Außerdem ist Vollhistorienmaterialisierung im Analyzer für lange Real-Pi-Zeitfenster ressourcenunsicher. Vor Fast-Capture-Gesamtabschluss sind applicability-aware Calculation-Prüfung und bounded-memory-/bounded-extract-Langzeitvertrag zu härten.
+- **Next-Release-Blocker:** `ZEC-BL-CTRL-NIGHT-MINSOC-GRID-001` und `ZEC-BL-GRID-SMA-OBIS-001` müssen spätestens im nächsten Produktrelease implementiert und regressionsgeprüft werden.
 - **Projektweiter PRODUCTIVE-PASS:** weiterhin zusätzlich durch deferred `ZEC-EV-DEP-001` begrenzt.
 
 ## 0. Historischer V17.0.0-Entwicklungsblock (Provenienz)
@@ -186,10 +189,84 @@ Die drei V16.2.4-Primärspeicher-Controls wurden live bestätigt: `SECOND_BATTER
 Die Gegenüberstellung Fast Capture versus Adaptive ist abgeschlossen. **Fast Capture A400/R100 ist der ausdrücklich gewählte und aktuell in Umsetzung befindliche Controllerblock; Adaptive folgt entkoppelt als eigener Spezifikationsblock nach Bereitstellung des Fast-Capture-Releases.** Der V17.0.0-Makro-Scope ist freigegeben; Checkpoint A und B sind fokussiert PASS. Die beiden isolierten UI-Follow-ups unter `ZEC-BL-GRAPH-GAP-001` und `ZEC-BL-UI-STATUS-003` sind im Checkpoint C umgesetzt und fokussiert PASS (12 Tests); vollständige Releasegates stehen noch aus.
 
 
-## 10. V17.0.2 Fast-Evidence-Hotfix – Technical Build 23.09.2026
+## 10. Historischer Snapshot: V17.0.2 Fast-Evidence-Hotfix – Technical Build 23.09.2026
 
 V17.0.2 ist der isolierte Hotfix auf die real in V17.0.1 gefundenen Fast-Capture-Feldevidenzdefekte. Behoben sind der fehlende cycle-exakte Fast-Feldtransport in den Measurement-V4-Zulauf, die versionsübergreifend zu breite Config-Snapshot-Prüfung des Analyzers sowie der `--latest-only`-SIGPIPE/rc=141-Pfad des Analysis-Package-Wrappers. Der Human-Report weist strukturelle Manifest-/Versions-Evidenz nun explizit aus.
 
 Technische Evidenz vor finalem Paketfreeze: fokussiert 51 Tests PASS; vollständige Regression 157 Testdateien / **1169 Tests + 706 Subtests PASS**; identischer ResourceWarning-Lauf; Bash 13/13, Browser-JavaScript 3/3, Compileall, Deployment-Harness 11/11, Datenblatt-Gate und Build-Evidence PASS. Aktuelles Datenblatt 10/10 Seiten visuell geprüft. Der Reglerkern ist byteidentisch zu V17.0.1.
 
-Reale Installation V17.0.1 -> V17.0.2: **PENDING**. Danach ist ausschließlich neue V17.0.2-Shadow-Evidenz für Fast Capture verwertbar. Fehlen natürliche FULL_IDLE-/NEAR_LIMIT-Episoden, ist `NOT_EVALUABLE` korrekt; ein begrenzter Active-Rollout benötigt weiterhin eine ausdrückliche spätere Freigabe nach zufriedenstellender Shadow-Evidenz.
+Zum damaligen Stand 23.09.2026 war die reale Installation V17.0.1 -> V17.0.2 **PENDING**. Dieser historische Status ist durch Abschnitt A sowie die Abschnitte 12–15 überholt. Danach war ausschließlich neue V17.0.2-Shadow-Evidenz für Fast Capture verwertbar. Fehlen natürliche FULL_IDLE-/NEAR_LIMIT-Episoden, ist `NOT_EVALUABLE` korrekt; ein begrenzter Active-Rollout benötigt weiterhin eine ausdrückliche spätere Freigabe nach zufriedenstellender Shadow-Evidenz.
+
+
+## 11. Historischer Snapshot: V17.0.2 Finales Installerpaket – 23.09.2026
+
+Finales Paket: `zendure_controller_v17_0_2.zip`, SHA256 `82bd2db52a71b4a4e56f8e8c39e30511494fb02f8735909667052b73bd82f311`, Größe 14.402.481 Byte. Das exakt veröffentlichte ZIP bestand Root-/ZIP-Integrität, Release-Hygiene, Source-Manifest **932/932**, Fresh-extract-Manifest **932/932**, Build-Evidence und Datenblatt-Gate. Der echte Installer erreichte in der Build-Runtime mit diesem Paket Package-Identität, Datenblatt, Runtime-Smoke und Build-Evidence PASS und stoppte danach erwartungsgemäß vor Host-/Produktivmutation am Benutzer-`pi`-Gate.
+
+Zum damaligen Paketfreeze war der reale V17.0.1 -> V17.0.2 Updatefeldlauf **PENDING** und V17.0.1 noch reale Runtimebasis; dieser historische Stand ist durch Abschnitt A überholt. Nach erfolgreichem Update müssen neue Fast-Capture-Shadow-Daten gesammelt und mit dem korrigierten Evidence-Pfad ausgewertet werden.
+
+## 12. Reale Fast-Capture-Feldevidenz 23.–25.09.2026
+
+### 12.1 Shadow
+
+- Measurement-V4-Felder sind nach V17.0.2 cycle-exakt vorhanden.
+- Lauf `...T123452Z`: `status=PASS`, `evidence_phase=SHADOW_ONLY`, 1701 Rows, 2 natürliche Episoden; State/Calculation/Mutation/Recovery PASS, physische Wirkung im Shadow korrekt `NOT_EVALUABLE`.
+- Lauf `...T140151Z`: 1751 Rows, keine Episode, korrekt `NOT_EVALUABLE`.
+- Ergebnis: Shadow-Gate PASS; begrenzter Active-Rollout anschließend ausdrücklich freigegeben.
+
+### 12.2 Active
+
+- Watchdog-Lauf 24.09.2026 08:32Z–10:20Z: Active real gesetzt, aber keine natürliche Fast-Capture-Episode; Watchdog stoppte wegen zu grobem `ready=false`-Guard. Nachauswertung: ausschließlich zulässiges `TRANSITIONAL:LIMIT_READBACK_CONVERGENCE`; Restoration `PASS_SHADOW_RESTORED`. Watchdog-Hotfix2 korrigiert die Readiness-Klassifikation; dies ist Tooling-, kein Controllerfehler.
+- Spätere Active-Messung 24./25.09.2026: 40.531 Rows im Untersuchungsfenster, davon 23.794 Active-Mode-Rows, 501 positive Overlay-Rows, 20 Episoden, max. Overlay 1.642 W; `math_failures={}` im streamingbasierten Forensik-Extractor.
+- `NEAR_LIMIT`: reale Fälle zeigen, dass das Fast-Capture-Overlay zusätzlich zur Baseline aufgebaut wird und der Restexport mit steigender Zendure-Istleistung deutlich sinkt. Keine Beobachtung mit positivem Fast-Capture-Overlay und gleichzeitig >100 W Netzbezug.
+- Import-Guard: realer Umschlag auf Netzbezug führte zu sofortigem Overlay 0 (`GRID_IMPORT_ABORT`); anschließend Cross-Charge-/Neutralisierungspfad und physische Leistung gegen 0.
+- Cross-Charge: 71 reale Erkennungen, alle begrenzt; kein positiver Fast-Capture-Overlay in diesen Cross-Charge-Zyklen.
+- Command-Effekt in frischen Active-Overlay-Beobachtungen: überwiegend `COMMAND_TARGET_TRACKING_EFFECTIVE`/`COMMAND_PARTIALLY_EFFECTIVE`, kein `COMMAND_MISMATCH_CONFIRMED`.
+- **Noch offen:** keine ausreichend belastbare Active-`FULL_IDLE`-Episode; Gesamtstatus deshalb nicht CLOSED.
+
+### 12.3 Nomenklatur
+
+In Prosa, UI, Logs und Reports künftig **„Fast Capture“**, bei echter Platzknappheit **„FastC“**, nicht kontextlos „Fast“. Technische Keys/Feldnamen bleiben unverändert.
+
+## 13. Nacht-/MIN_SOC-Netzpfad-Incident 25.09.2026
+
+### 13.1 Reale Ereignislinie
+
+- letzter normal aktualisierter Grid-Wert etwa 01:24:04 lokal;
+- Zendure erreicht etwa 01:24:07 den globalen `MIN_SOC=10 %`; Primärspeicher lag gleichzeitig nahe seiner Entladeuntergrenze, ist aber **nicht** Trigger des Fehlers;
+- allgemeiner ZEC-Grid-State wird ab etwa 01:24:22 stale; letzter Wert bleibt stehen;
+- exakt mit Ende des konfigurierten Nachtfensters um 05:30 wird im ersten Folgezyklus wieder ein neuer frischer Grid-Wert übernommen; scheinbare ZEC-Grid-Lücke rund 4 h 06 min;
+- Nutzergegenprüfung in der SMA-Anwendung zeigte während des Incidents normale SMA-Hardware-/Portalwerte. Dies schließt nicht jedes lokale Multicastproblem formal aus, spricht aber gegen einen tatsächlichen Ausfall des Home Managers/Zählers.
+
+### 13.2 Bestätigter Sourcebefund / `ZEC-BL-CTRL-NIGHT-MINSOC-GRID-001`
+
+Im aktiven Nachtfenster führt `Zendure_SOC <= MIN_SOC` über den Night-/SOC-Hold-Pfad zu einem Early Return aus `run_once()` vor frischer Grid-Verarbeitung und vor normaler AUTO-Regelung. Deshalb ist der Defekt funktional: `MIN_SOC` neutralisiert zwar korrekt weitere Entladung, kann aber zugleich zulässiges Laden bei neu auftretendem realem PV-Export verhindern. Eine reine Display-Refresh-Korrektur reicht nicht.
+
+**Verbindlicher Fixvertrag für den nächsten Release:** MIN_SOC bleibt harte Entladegrenze; Netztelemetrie muss frisch bleiben; bei realem Export darf normale AUTO-Ladung stattfinden, sofern MAX_SOC, Command-, Cross-Charge- und sonstige Safety-Grenzen dies erlauben. Fast Capture muss hierfür nicht im Nachtmodus freigegeben werden.
+
+### 13.3 Diagnose-UI
+
+Während `NIGHT_RESERVE_STOP`/`SOC_LIMIT_HOLD:MIN_SOC` und stale Grid-Telemetrie zeigte die UI `HOLD – Grund: Netzleistung nahe 0 W`. Dies ist als Diagnose-/Reason-Priorisierungsfinding unter `ZEC-BL-DIAG-001` offen; es beweist keine falsche Geräteansteuerung.
+
+## 14. SMA-Speedwire-/OBIS-Parser-Finding 25.09.2026
+
+- wiederkehrender realer dekodierter Rohwert: `-1.730.098,8 W`; der vorhandene 30-kW-Plausibilitätsfilter verwirft ihn korrekt.
+- reale SMA-Topologie: ausgewählter Sunny Home Manager mit integriertem Hausanschlusspunktzähler plus zweiter SMA Energy Meter für die drei Zaun-Wechselrichter.
+- V17.0.2-Sourcebefund: Leistungs-OBIS-Signaturen werden global per Bytefolge im UDP-Datagramm gesucht; echte Speedwire-/Protokoll-/OBIS-Recordstruktur und 4-/8-Byte-Werttypen werden nicht ausreichend als Parservertrag erzwungen.
+- Entscheidung: Parserdefekt ist unabhängig von der noch nicht gesicherten exakten historischen Raw-Frame-Ursache **bestätigt und reparaturpflichtig**. Kein 72-h-Passivcapture als Fix-Vorbedingung.
+- nächster Release: strukturierte Frame-/Protokollvalidierung + sequentieller OBIS-Recordparser + robuste Längen-/Typprüfung + unbekannte Felder überspringen + Seriennummernselektion beibehalten + Plausibilitätsfilter als zweite Schutzschicht erhalten. Deterministische Regression umfasst insbesondere False-Signature innerhalb eines 8-Byte-Wertes, falsche Protokoll-ID, Truncation, zusätzliche/umgeordnete OBIS-Felder und beide realen SMA-Geräte.
+- Nach dem Fix genügt zunächst natürliche Feldbeobachtung der bestehenden Logs. Nur wenn der Extremwert erneut erscheint, ist ein gezielter Raw-Frame-Capture erforderlich.
+
+## 15. Analyse-/Forensik-Ressourcenfinding 25.09.2026
+
+Ein erster langer V4-Analyseblock materialisierte vollständige Measurement-Rows in RAM und machte den Raspberry Pi während Schritt 5/8 nicht mehr erreichbar; der Host musste neu gestartet werden. Ein Kernel-OOM-Beleg ist mangels verwertbarer historischer Journal-Evidenz nicht gesichert. Der direkte Analyseweg gilt dennoch als ressourcenunsicher.
+
+Ein nachfolgender streamingbasierter Extractor verarbeitete 69.087 V4-Rows bounded und erzeugte die verwertbare Fast-Capture-/Grid-Incident-Evidenz. Dauerhafte Konsequenz: große Real-Pi-Historien nur streaming/bounded-memory; Vollmaterialisierungs-Analyzer nur gegen vorher begrenzte Extrakte.
+
+
+## 16. Oktober-2026 Herbst-/Strategie-Evidenz (read-only, keine Produktfreigabe)
+
+- Aus vollständig extern exportierten und offline bewerteten V4-Daten vom 24.09.–16.10.2026 (23 Tage): 646.890 gültige Messzyklen; 7 Tage, an denen beide Speicher jeweils unter 98 % SOC blieben; High-SOC-Rechenzweig 1.706 Minuten, `STRATEGIC_SHARE` 725 Minuten, an den 7 knappen Tagen 132 Minuten. Am 24.09., 08.10. und 13.10. keine strategische Share-Auswahl; am 13.10. betrug der Primärspeicher-SOC-Maximalwert ca. 88 %, also erklärt die SOC-Eintrittsschwelle allein die Branch-Nichtanwendung nicht.
+- Vereinfachte Offline-A1-Sensitivität für 1.008 rekonstruierbare High-SOC-Minuten: +/-10 Prozentpunkte strategischer Primärshare verändern den begrenzten Zielwert in 226/139 Minuten um >=50 W. **Kein** geschlossener physikalischer Gegenfaktual-/Ertrags- oder Hardware-Nutzenbeleg. Bisheriges A1-Aktionsfeld für produktives Lernen als beschränkt bewertet; Adaptive wird im Master-Backlog begründet zurückgestellt, nicht entfernt.
+- Im sieben-/23-Tage-Material Nacht-/MIN_SOC-Grid-Staleness-Reproduktionen sowie separate 05.10.2026 Command-Episoden: wiederholte mögliche unbegründete Lade-Resyncs und intermittierende Entlade-Nichtwirkung. Die Command-Kausalität ist nicht abschließend belegt; gezielte spätere Source-/Readback-Prüfung bleibt erforderlich. Dies **ersetzt nicht** die zwingenden Next-Release-Fixes vom 25.09.2026 und erweitert sie nicht stillschweigend.
+- Analysegrenzen: V4-Samplemittel nicht automatisch korrekt integrierte Energiemengen; keine vollständige unabhängige PV-/Hausenergiemessung in diesen Exporten, 5 Minuten Datenlücke im ersten 16-Tage-Fenster. Auf dem produktiven Raspberry Pi wurden nur begrenzte read-only Streamingexports mit positivem Extractorstatus durchgeführt; alle fachlich schweren Auswertungen offline.
+- Referenzen: `ZEC_A1_WIRKSAMKEIT_23T_DECISION_BRIEF_20261017.md`, `ZEC_HERBSTANALYSE_23T_KONSOLIDIERT_20261017.md`, `ZEC_20261005_COMMAND_EPISODES_OFFLINE_20261017.md`. Diese Analyseberichte sind Evidenz-/Provenienzquellen, **keine** automatische Runtime- oder Releasefreigabe.

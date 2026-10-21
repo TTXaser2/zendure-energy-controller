@@ -88,7 +88,14 @@ class TestS11Validation(unittest.TestCase):
         self.assert_has("VAL-013")
 
     def test_val_014_calendar_season(self):
-        self.values.update(HARVEST_SEASON_MODE="calendar", HARVEST_SEASON_PARALLEL_START_MM_DD="10-01", HARVEST_SEASON_PARALLEL_END_MM_DD="03-01")
+        # S3 now supports recurring seasons crossing New Year, but activates
+        # them only after the explicit migration-safe opt-in.
+        self.values.update(HARVEST_SEASON_POLICY_ENABLED=True,
+                           HARVEST_SEASON_MODE="calendar",
+                           HARVEST_SEASON_PARALLEL_START_MM_DD="10-01",
+                           HARVEST_SEASON_PARALLEL_END_MM_DD="03-01")
+        self.assertNotIn("VAL-014", {issue.code for issue in validate_candidate(self.values)})
+        self.values["HARVEST_SEASON_PARALLEL_END_MM_DD"] = "02-29"
         self.assert_has("VAL-014")
 
     def test_val_015_grid_source_preflight(self):

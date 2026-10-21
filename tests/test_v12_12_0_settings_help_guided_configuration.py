@@ -23,11 +23,11 @@ def operational_settings():
 class V12110SettingsHelpContractTests(unittest.TestCase):
     def test_registry_help_coverage_and_depth(self):
         ops = operational_settings()
-        self.assertEqual(218, len(SETTINGS))
-        self.assertEqual(179, len(ops))
+        self.assertEqual(219, len(SETTINGS))
+        self.assertEqual(190, len(ops))
         self.assertEqual(12, len({s.category for s in ops}))
-        self.assertEqual(72, len({(s.category, s.section) for s in ops}))
-        self.assertEqual(63, sum(s.help.help_level == "rich" for s in ops))
+        self.assertEqual(74, len({(s.category, s.section) for s in ops}))
+        self.assertEqual(74, sum(s.help.help_level == "rich" for s in ops))
         self.assertTrue(all(s.help.short_help.strip() for s in ops))
         self.assertTrue(all(s.help.extended_help.strip() for s in ops))
         self.assertTrue(all(s.help.handbook_ref is not None for s in ops))

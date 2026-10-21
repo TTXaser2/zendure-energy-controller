@@ -919,6 +919,17 @@ class ZendureController:
         self._timed_phase("cross_charge_metrics_ms", self.update_cross_charge_control_metrics, cfg)
 
         grid_power = self.state.grid_power
+        if night_active:
+            with self.state.lock:
+                night_soc = self.state.battery_soc
+            if night_soc is not None and night_soc <= int(cfg["MIN_SOC_PERCENT"]):
+                self._fast_capture_force_zero("NIGHT_MIN_SOC")
+                self.state.add_limiter("MIN_SOC")
+                if grid_power >= -float(cfg["DEADBAND_W"]):
+                    # The fixed night output was already neutralized above.
+                    # A fresh import/deadband reading must never reopen output
+                    # or emit a second redundant neutralization in this cycle.
+                    return
         self.update_rest_surplus_harvest_state(cfg, grid_power)
 
         if self.cross_charge_guard_corrects_existing_target(cfg):
@@ -2974,22 +2985,71 @@ class ZendureController:
         now = datetime.now()
         return now.hour * 60 + now.minute
 
+    @staticmethod
+    def _s3_clock_minute(value: Any, fallback: int) -> int:
+        """S3 validated HH:MM; retain V17 compatible fallback for legacy files."""
+        try:
+            hour, minute = (int(part) for part in str(value).split(":"))
+            if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                raise ValueError("invalid clock")
+            return hour * 60 + minute
+        except (ValueError, TypeError):
+            return fallback
+
+    @staticmethod
+    def _s3_calendar_parallel(today_mmdd: str, start: str, end: str) -> bool:
+        """Inclusive recurring seasonal interval, including windows over New Year."""
+        if start <= end:
+            return start <= today_mmdd <= end
+        return today_mmdd >= start or today_mmdd <= end
+
+    def _s3_season_policy(self, cfg: Dict[str, Any]) -> Dict[str, Any]:
+        """Opt-in seasonal policy: pre-S3 installs are ALWAYS legacy parallel."""
+        requested = str(cfg.get("HARVEST_SEASON_MODE", "sma_priority") or "sma_priority")
+        enabled = cfg.get("HARVEST_SEASON_POLICY_ENABLED") is True
+        if not enabled:
+            return {"requested": requested, "effective": "legacy_parallel", "enabled": False}
+        if requested == "parallel":
+            effective = "parallel"
+        elif requested == "sma_priority":
+            effective = "sma_priority"
+        elif requested == "calendar":
+            a = str(cfg.get("HARVEST_SEASON_PARALLEL_START_MM_DD") or "")
+            b = str(cfg.get("HARVEST_SEASON_PARALLEL_END_MM_DD") or "")
+            try:
+                from datetime import date
+                # Validate strictly: no 29 February boundaries and no malformed month/day.
+                if not a or not b or a.endswith("02-29") or b.endswith("02-29"):
+                    raise ValueError("missing/invalid seasonal boundary")
+                for value in (a, b):
+                    if date.fromisoformat(f"2025-{value}").strftime("%m-%d") != value:
+                        raise ValueError("invalid seasonal boundary")
+                effective = "parallel" if self._s3_calendar_parallel(datetime.now().strftime("%m-%d"), a, b) else "sma_priority"
+            except (ValueError, TypeError):
+                effective = "invalid_fallback_parallel"
+        else:
+            effective = "invalid_fallback_parallel"
+        return {"requested": requested, "effective": effective, "enabled": enabled}
+
     def _harvest_time_profile(self, cfg: Dict[str, Any]) -> Dict[str, Any]:
+        """S3 time/confirm settings consume existing defaults without silent policy changes."""
+        default_share = self._cfg_float(cfg, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY", 0.50)
+        default_confirm = int(cfg.get("HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS", 30) or 30)
         if not bool(cfg.get("HARVEST_HIGH_SMA_SOC_TIME_PROFILE_ENABLED", True)):
-            return {
-                "name": "default",
-                "share": self._cfg_float(cfg, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY", 0.50),
-                "reserve_w": 0,
-                "entry_confirm_s": int(cfg.get("HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS", 30) or 30),
-            }
+            return {"name": "default", "share": default_share, "reserve_w": 0, "entry_confirm_s": default_confirm}
+        defaults = (570, 690, 870, 1080)
+        keys = ("HARVEST_HIGH_SMA_SOC_PROFILE_START_TIME", "HARVEST_HIGH_SMA_SOC_PROFILE_MIDDAY_START_TIME", "HARVEST_HIGH_SMA_SOC_PROFILE_AFTERNOON_START_TIME", "HARVEST_HIGH_SMA_SOC_PROFILE_END_TIME")
+        bounds = tuple(self._s3_clock_minute(cfg.get(key), fallback) for key, fallback in zip(keys, defaults))
+        if not (bounds[0] < bounds[1] < bounds[2] < bounds[3]):
+            bounds = defaults
         minutes = self._profile_clock_minutes()
-        if 9 * 60 + 30 <= minutes < 11 * 60 + 30:
-            return {"name": "morning", "share": self._cfg_float(cfg, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MORNING", 0.60), "reserve_w": 0, "entry_confirm_s": 60}
-        if 11 * 60 + 30 <= minutes < 14 * 60 + 30:
-            return {"name": "midday", "share": self._cfg_float(cfg, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY", 0.50), "reserve_w": 0, "entry_confirm_s": 30}
-        if 14 * 60 + 30 <= minutes < 18 * 60:
-            return {"name": "afternoon", "share": self._cfg_float(cfg, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_AFTERNOON", 0.35), "reserve_w": 0, "entry_confirm_s": 15}
-        return {"name": "default", "share": self._cfg_float(cfg, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MIDDAY", 0.50), "reserve_w": 0, "entry_confirm_s": int(cfg.get("HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS", 30) or 30)}
+        if bounds[0] <= minutes < bounds[1]:
+            return {"name": "morning", "share": self._cfg_float(cfg, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MORNING", 0.60), "reserve_w": 0, "entry_confirm_s": int(cfg.get("HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_MORNING_SECONDS", 60) or 60)}
+        if bounds[1] <= minutes < bounds[2]:
+            return {"name": "midday", "share": default_share, "reserve_w": 0, "entry_confirm_s": int(cfg.get("HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_MIDDAY_SECONDS", 30) or 30)}
+        if bounds[2] <= minutes < bounds[3]:
+            return {"name": "afternoon", "share": self._cfg_float(cfg, "HARVEST_PRIMARY_CHARGE_TARGET_SHARE_AFTERNOON", 0.35), "reserve_w": 0, "entry_confirm_s": int(cfg.get("HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_AFTERNOON_SECONDS", 15) or 15)}
+        return {"name": "default", "share": default_share, "reserve_w": 0, "entry_confirm_s": default_confirm}
 
     def _primary_threshold_w(self, cfg: Dict[str, Any], absolute_key: str, ratio_key: str, fallback_ratio: float) -> int:
         max_charge = self._rest_surplus_max_charge_w(cfg) or 0
@@ -3057,6 +3117,8 @@ class ZendureController:
             self.state.harvest_zendure_share_target_w = 0.0
             self.state.harvest_export_capture_target_w = 0.0
             self.state.harvest_target_selected_by = "NOT_APPLICABLE"
+            self.state.harvest_s3_applicability = "NOT_APPLICABLE"
+            self.state.harvest_s3_override_reason = ""
             self.state.harvest_calculation_branch = "NOT_APPLICABLE"
             self.state.harvest_entry_min_export_w = 0.0
             self.state.harvest_command_path_eligible = False
@@ -3098,6 +3160,7 @@ class ZendureController:
         """Update Entry/Stay diagnostics for Basis- and High-SOC Restüberschuss-Ernte."""
         thresholds = self._rest_surplus_thresholds(cfg)
         profile = thresholds.get("profile") or {}
+        season = self._s3_season_policy(cfg)
         export_w = max(0.0, -float(grid_power or 0.0))
         self._update_harvest_capacity_diagnostics(cfg)
         with self.state.lock:
@@ -3121,6 +3184,9 @@ class ZendureController:
             self.state.harvest_primary_near_limit_w = float(thresholds["saturation"])
             self.state.harvest_primary_target_share = float(profile.get("share", 0.50) or 0.50)
             self.state.rest_surplus_harvest_profile = str(profile.get("name", "default") or "default")
+            self.state.harvest_season_requested = season["requested"]
+            self.state.harvest_season_effective = season["effective"]
+            self.state.harvest_profile_confirm_s = float(profile.get("entry_confirm_s", 0.0) or 0.0)
             self.state.harvest_target_semantics = "NOT_APPLICABLE"
             self.state.harvest_reference_charge_w = 0.0
             self.state.harvest_reference_charge_source = "NONE"
@@ -3138,6 +3204,8 @@ class ZendureController:
             self.state.harvest_zendure_share_target_w = 0.0
             self.state.harvest_export_capture_target_w = 0.0
             self.state.harvest_target_selected_by = "NOT_APPLICABLE"
+            self.state.harvest_s3_applicability = "NOT_APPLICABLE"
+            self.state.harvest_s3_override_reason = ""
             self.state.harvest_calculation_branch = "NOT_APPLICABLE"
             self.state.harvest_entry_min_export_w = 0.0
             self.state.harvest_command_path_eligible = False
@@ -3726,6 +3794,7 @@ class ZendureController:
         """Return the RC17 Harvest target with separated share/capture diagnostics."""
         thresholds = self._rest_surplus_thresholds(cfg)
         profile = thresholds.get("profile") or {}
+        season = self._s3_season_policy(cfg)
         export_w = max(0.0, -float(grid_power or 0.0))
         now = time.time()
 
@@ -3770,7 +3839,7 @@ class ZendureController:
             total_available_charge_w = sma_charge_w + reference_charge_w + export_w
             export_capture_target_w = reference_charge_w + export_w
 
-            if reason in {"HIGH_SMA_SOC", "HIGH_SMA_SOC_SMA_NEAR_LIMIT"}:
+            if reason in {"HIGH_SMA_SOC", "HIGH_SMA_SOC_SMA_NEAR_LIMIT"} and season["effective"] != "sma_priority":
                 profile_share_unclamped_w = share * total_available_charge_w
                 primary_share_unclamped_w = max(floor_w, profile_share_unclamped_w)
                 primary_share_target_w = min(sma_max_w, primary_share_unclamped_w)
@@ -3789,7 +3858,9 @@ class ZendureController:
                     limiter = "PRIMARY_SHARE_LIMIT"
                 if reason == "HIGH_SMA_SOC" and restart_w > 0 and second_power < restart_w:
                     limiter = limiter or "PRIMARY_RESTART_WAIT"
-            elif reason in {"SMA_NEAR_LIMIT", "SMA_FULL_OR_IDLE", "EXPORT_HOLD"}:
+            elif reason in {"SMA_NEAR_LIMIT", "SMA_FULL_OR_IDLE", "EXPORT_HOLD"} or (
+                reason in {"HIGH_SMA_SOC", "HIGH_SMA_SOC_SMA_NEAR_LIMIT"} and season["effective"] == "sma_priority"
+            ):
                 raw_candidate = export_capture_target_w
                 target_semantics = "ABSOLUTE_EXPORT_CAPTURE"
                 target_selected_by = "EXPORT_CAPTURE"
@@ -3811,6 +3882,26 @@ class ZendureController:
             calculation_branch = "INCREMENTAL_FALLBACK"
             limiter = "INCREMENTAL_FALLBACK"
             fallback_reason = fallback_reason or "INCREMENTAL_FALLBACK"
+
+        # These labels describe *calculation applicability*, never physical
+        # device response or successful final command acceptance.  The
+        # established command, export capture and safety layers remain owners.
+        high_soc_branch = reason in {"HIGH_SMA_SOC", "HIGH_SMA_SOC_SMA_NEAR_LIMIT"}
+        if not high_soc_branch:
+            s3_applicability = "NOT_APPLICABLE"
+            s3_override_reason = "OUTSIDE_HIGH_SOC_BRANCH"
+        elif not reference_valid:
+            s3_applicability = "NOT_APPLICABLE"
+            s3_override_reason = fallback_reason or "PHYSICAL_REFERENCE_UNAVAILABLE"
+        elif season["effective"] == "sma_priority":
+            s3_applicability = "OVERRIDDEN"
+            s3_override_reason = "SEASON_SMA_PRIORITY_EXPORT_CAPTURE_ONLY"
+        elif target_selected_by == "STRATEGIC_SHARE":
+            s3_applicability = "APPLIED"
+            s3_override_reason = ""
+        else:
+            s3_applicability = "OVERRIDDEN"
+            s3_override_reason = "EXPORT_CAPTURE_PRIORITY"
 
         candidate = max(0, int(round(raw_candidate)))
         with self.state.lock:
@@ -3837,6 +3928,8 @@ class ZendureController:
             self.state.harvest_zendure_share_target_w = round(zendure_share_target_w, 1)
             self.state.harvest_export_capture_target_w = round(export_capture_target_w, 1)
             self.state.harvest_target_selected_by = target_selected_by
+            self.state.harvest_s3_applicability = s3_applicability
+            self.state.harvest_s3_override_reason = s3_override_reason
             self.state.harvest_calculation_branch = calculation_branch
             self.state.harvest_entry_min_export_w = float(
                 thresholds.get("high_min_export")
@@ -4208,7 +4301,9 @@ class ZendureController:
                 "MIN_SOC",
                 technical_path="NIGHT_MODE -> MIN_SOC -> HOLD",
             )
-            return False
+            # Only discharge is prohibited. Do not skip the fresh grid read:
+            # an independently observed PV export may safely enter AUTO charge.
+            return True
 
         self.state.add_limiter("NIGHT_RESERVE_SOC")
         with self.state.lock:

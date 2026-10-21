@@ -118,55 +118,87 @@ def _read_u32_be(data: bytes, offset: int) -> Optional[int]:
     return value
 
 
-def _find_obis_value(data: bytes, code: bytes) -> Optional[float]:
-    """Find a 4-byte OBIS code and return the following u32 as Watt.
+def _decode_speedwire_emeter(data: bytes) -> Optional[Tuple[int, int, Optional[float], Optional[float]]]:
+    """Parse one complete SMA Net 2 / Energy Meter telegram, never scan raw bytes.
 
-    Common SMA Energy Meter total instantaneous power values use OBIS-like tags
-    00 01 04 00 (grid consumption) and 00 02 04 00 (feed-in).  The value is
-    transported as 0.1 W in the packet variants used by Sunny Home Manager 2.0 /
-    Energy Meter installations.
+    Frame: SMA signature; Tag0 (group); Data2 (protocol 0x6069); end tag.
+    Data2 holds a six-byte device address, a four-byte millisecond ticker,
+    then length-delimited OBIS records (4-byte current / 8-byte energy).
+    Unknown but well-formed records are skipped at their actual boundaries.
+    See SMA EMETER-Protocol-TI-en-10, sections 3 and 4.
     """
-    start = 0
-    while True:
-        idx = data.find(code, start)
-        if idx < 0:
+    if len(data) < 32 or data[:4] != b"SMA\x00":
+        return None
+    offset = 4
+    # Never accept an OBIS-shaped byte sequence in an unrelated protocol/tag.
+    if data[offset:offset + 4] != b"\x00\x04\x02\xa0":
+        return None
+    if data[offset + 4:offset + 8] != b"\x00\x00\x00\x01":
+        return None
+    offset += 8
+    if offset + 4 > len(data):
+        return None
+    length, tag = struct.unpack_from(">HH", data, offset)
+    if tag != 0x0010 or length < 12:
+        return None
+    data_start = offset + 4
+    data_end = data_start + length
+    # A complete Data2 frame must end with exactly one empty end-of-data tag.
+    if data_end + 4 != len(data) or data[data_end:] != b"\x00\x00\x00\x00":
+        return None
+    if data[data_start:data_start + 2] != b"\x60\x69":
+        return None
+    susy, serial = struct.unpack_from(">HI", data, data_start + 2)
+    if susy in (0, 0xFFFF) or serial in (0, 0xFFFFFFFF):
+        return None
+    # Four-byte ticker begins after the device identifier; only records
+    # starting after it may influence the measured power.
+    offset = data_start + 12
+    consumption = feedin = None
+    seen_consumption = seen_feedin = False
+    while offset < data_end:
+        if offset + 4 > data_end:
             return None
-        raw = _read_u32_be(data, idx + len(code))
-        if raw is not None:
-            return raw / 10.0
-        start = idx + 1
-
-
-def _extract_susy_serial(data: bytes) -> Tuple[Optional[int], Optional[int]]:
-    """Extract SUSy-ID and serial from a multicast Energy Meter packet.
-
-    SMA's meter protocol transmits a device address consisting of a 2-byte
-    SUSy-ID and a 4-byte serial number.  In the well-known Sunny Home Manager /
-    Energy Meter multicast frame used by home automation integrations, the
-    serial is located at bytes 20..23 in big-endian representation; the SUSy-ID
-    precedes it at bytes 18..19.  The parser keeps the extraction deliberately
-    conservative: if the frame is too short, the values remain unknown while the
-    power parser can still be used for passive diagnostics.
-    """
-    susy_id = _read_u16_be(data, 18)
-    serial = _read_u32_be(data, 20)
-    return susy_id, serial
+        code = data[offset:offset + 4]
+        record_type = code[2]
+        if record_type == 4:
+            value_len = 4
+        elif record_type == 8:
+            value_len = 8
+        elif code == b"\x90\x00\x00\x00":  # manufacturer software version
+            value_len = 4
+        else:
+            # An unknown record length cannot safely be skipped. Reject the
+            # whole telegram rather than misinterpret its payload as power.
+            return None
+        value_offset = offset + 4
+        if value_offset + value_len > data_end:
+            return None
+        if code in (b"\x00\x01\x04\x00", b"\x00\x02\x04\x00"):
+            raw = _read_u32_be(data, value_offset)
+            if raw is None:
+                return None
+            value = raw / 10.0
+            if code[1] == 1:
+                if seen_consumption:
+                    return None
+                consumption, seen_consumption = value, True
+            else:
+                if seen_feedin:
+                    return None
+                feedin, seen_feedin = value, True
+        offset = value_offset + value_len
+    if offset != data_end or not (seen_consumption or seen_feedin):
+        return None
+    return susy, serial, consumption, feedin
 
 
 def parse_sma_energy_meter_packet(data: bytes, received_epoch: Optional[float] = None, source_ip: str = "") -> Optional[SmaEnergyMeterReading]:
-    """Decode total grid power from one SMA Energy Meter UDP packet.
-
-    Returns signed grid power using ZEC convention:
-      + = grid import / Netzbezug
-      - = feed-in / Einspeisung
-    """
-    if not data or len(data) < 16:
+    """Return signed grid power only for a structurally valid SMA EM telegram."""
+    parsed = _decode_speedwire_emeter(data)
+    if parsed is None:
         return None
-    consumption = _find_obis_value(data, b"\x00\x01\x04\x00")
-    feedin = _find_obis_value(data, b"\x00\x02\x04\x00")
-    if consumption is None and feedin is None:
-        return None
-    susy_id, serial_number = _extract_susy_serial(data)
+    susy_id, serial_number, consumption, feedin = parsed
     c = float(consumption or 0.0)
     f = float(feedin or 0.0)
     return SmaEnergyMeterReading(

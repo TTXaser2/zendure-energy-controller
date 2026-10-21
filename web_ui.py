@@ -50,6 +50,8 @@ from version import APP_BUILD_ID, APP_VERSION, APP_VERSION_LABEL
 from status_page_v2 import render_global_topbar, render_status_page_v2
 from system_metrics import get_system_metrics
 from operational_events import OperationalEventJournal, read_recent_events
+from live_status import build_live_status
+from live_shelly_sampler import LiveShellySampler
 from primary_storage_modbus import probe_primary_storage_modbus
 from storage_inventory import StorageInventory
 from state import ControllerState
@@ -666,22 +668,63 @@ def _grid_mini_values_from_snapshot(snap: Dict[str, Any], max_points: int = 48) 
     return vals
 
 
-def build_grid_mini_payload(snap: Dict[str, Any], max_points: int = 48) -> Dict[str, Any]:
-    rows = list(snap.get("graph_history", []) or [])[-max_points:]
+def build_grid_mini_payload(
+    snap: Dict[str, Any], max_points: int = 360, *, window_minutes: int = 15,
+    history_points: Optional[List[Dict[str, Any]]] = None, now_epoch: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Bounded read-only timeline of true controller samples, optionally V3 history.
+
+    Never stretch index-spaced points across unknown times or synthesize fresh
+    grid data. The 60-minute window uses a bounded 1-minute V3 history when
+    available; absent V3 data is explicitly marked as incomplete.
+    """
+    minutes = int(window_minutes)
+    if minutes not in (5, 15, 60):
+        raise ValueError("Unsupported mini-graph window")
+    now_s = float(time.time() if now_epoch is None else now_epoch)
+    start_ms, end_ms = int((now_s - minutes * 60) * 1000), int(now_s * 1000)
+    rows = list(snap.get("graph_history", []) or [])[-max(1, min(int(max_points), 500)):]
     points: List[Dict[str, Any]] = []
-    for idx, row in enumerate(rows):
+    if minutes == 60 and history_points:
+        for item in history_points[:90]:
+            if not isinstance(item, dict):
+                continue
+            try:
+                ts = int(item.get("epoch_ms"))
+            except (ValueError, TypeError, OverflowError):
+                continue
+            if start_ms <= ts <= end_ms:
+                value = _safe_float(item.get("value"))
+                points.append({"epoch_ms": ts, "value": value, "time": datetime.fromtimestamp(ts / 1000).strftime("%H:%M:%S"),
+                               "status": "nicht verfügbar" if value is None else ("Bezug aus Netz" if value > 50 else ("Einspeisung / Export" if value < -50 else "ausgeglichen"))})
+    for row in rows:
         if not isinstance(row, dict):
             continue
-        value = _safe_float(row.get("grid_power", row.get("grid_power_w", row.get("raw_grid_power_w"))))
-        if value is None:
+        try:
+            ts = int(float(row.get("epoch_s", row.get("epoch"))) * 1000)
+        except (ValueError, TypeError, OverflowError):
+            continue  # old undated samples cannot be placed honestly on a timeline
+        if not start_ms <= ts <= end_ms:
             continue
-        time_text = str(row.get("timestamp") or row.get("time") or "")
-        if not time_text:
-            dt_text = str(row.get("datetime_local") or "")
-            time_text = dt_text[11:19] if len(dt_text) >= 19 else f"Punkt {idx+1}"
-        status = "Bezug aus Netz" if value > 50 else ("Einspeisung / Export" if value < -50 else "ausgeglichen")
-        points.append({"time": time_text, "value": value, "status": status})
-    return {"points": points, "count": len(points), "snapshot_epoch_ms": int(time.time() * 1000)}
+        value = _safe_float(row.get("raw_grid_power_w", row.get("grid_power", row.get("grid_power_w"))))
+        if row.get("grid_power_valid") is False or row.get("grid_power_fresh") is False:
+            value = None
+        points.append({"epoch_ms": ts, "time": datetime.fromtimestamp(ts / 1000).strftime("%H:%M:%S"),
+                       "value": value,
+                       "status": "Messung nicht verfügbar" if value is None else ("Bezug aus Netz" if value > 50 else ("Einspeisung / Export" if value < -50 else "ausgeglichen"))})
+    # Prefer RAM points at overlapping timestamps; preserve explicit null/gap observations.
+    points = list({item["epoch_ms"]: item for item in sorted(points, key=lambda p: p["epoch_ms"])}.values())
+    if len(points) > 450:
+        # Time-bucket sampling, not an unbounded payload; keep final point.
+        step = (len(points) + 448) // 449
+        points = points[::step] + ([points[-1]] if points[-1] not in points[::step] else [])
+    valid = [point for point in points if point["value"] is not None]
+    earliest = points[0]["epoch_ms"] if points else None
+    return {"points": points, "count": len(points), "window_minutes": minutes,
+            "from_ms": start_ms, "to_ms": end_ms, "source": "graph_v3_1min+controller_ram" if history_points else "controller_ram",
+            "oldest_sample_ms": earliest, "coverage_partial": earliest is None or earliest > start_ms + 20000,
+            "last_sample_ms": valid[-1]["epoch_ms"] if valid else None,
+            "snapshot_epoch_ms": end_ms, "refresh_interval_s": 3}
 
 
 def _inventory_cache_path(cfg: Dict[str, Any]) -> str:
@@ -1123,8 +1166,9 @@ def analysis_service_url(cfg: Dict[str, Any]) -> str:
     return f"//__CURRENT_HOST__:{port}"
 
 
-def create_app(config_manager: ConfigManager, state: ControllerState, on_config_saved=None) -> FastAPI:
-    event_journal = OperationalEventJournal(config_manager.get, state)
+def create_app(config_manager: ConfigManager, state: ControllerState, on_config_saved=None, *, sma_energy_meter_client=None) -> FastAPI:
+    live_shelly_sampler = LiveShellySampler(config_manager.get)
+    event_journal = OperationalEventJournal(config_manager.get, state, sma_energy_meter_client=sma_energy_meter_client, shelly_sampler=live_shelly_sampler)
     settings_service = SettingsService(config_manager)
     config_state_store = ConfigStateStore(config_manager.path)
     config_artifacts = ConfigArtifactCoordinator(config_manager, settings_service, config_state_store)
@@ -1163,12 +1207,14 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
+        live_shelly_sampler.start()
         event_journal.start()
         storage_inventory.refresh_async()
         try:
             yield
         finally:
             event_journal.stop()
+            live_shelly_sampler.stop()
 
     app = FastAPI(title="Zendure Energy Controller", version=APP_VERSION, lifespan=lifespan)
     static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
@@ -1216,9 +1262,44 @@ def create_app(config_manager: ConfigManager, state: ControllerState, on_config_
             status_view_cache.update({"built_epoch": now, "payload": payload})
         return payload
 
+    @app.get("/status-live-data")
+    def status_live_data():
+        # No SQLite, no control-cycle waits, no external device polling.
+        return build_live_status(
+            config_manager.get(), state, sma_energy_meter_client=sma_energy_meter_client,
+            shelly_sampler=live_shelly_sampler,
+        )
+
+    grid_mini_history_cache: Dict[str, Any] = {"read_at": 0.0, "rows": None}
+    grid_mini_history_lock = threading.Lock()
+
     @app.get("/grid-mini-data")
-    def grid_mini_data():
-        return build_grid_mini_payload(state.snapshot())
+    def grid_mini_data(window_minutes: int = 15):
+        if window_minutes not in (5, 15, 60):
+            return JSONResponse({"error": "INVALID_MINI_WINDOW"}, status_code=422)
+        now = time.time()
+        history = None
+        if window_minutes == 60:
+            with grid_mini_history_lock:
+                if now - grid_mini_history_cache["read_at"] >= 15:
+                    grid_mini_history_cache["read_at"] = now
+                    grid_mini_history_cache["rows"] = None
+                    try:
+                        result = GRAPH_QUERY_SERVICE.overview(
+                            _graph_v1_db_path(), int((now-3600)*1000), int(now*1000),
+                            series_ids=["raw_grid_power_w"], resolution="1min", include_context=False,
+                        )
+                        times = result.get("timestamps_ms") or []
+                        values = (result.get("series") or {}).get("raw_grid_power_w") or []
+                        grid_mini_history_cache["rows"] = [
+                            {"epoch_ms": ts, "value": values[i] if i < len(values) else None}
+                            for i, ts in enumerate(times[:90])
+                        ]
+                    except (GraphQueryError, OSError, ValueError, TypeError):
+                        pass  # Missing historical DB is a truthful partial window, not an API failure.
+                history = grid_mini_history_cache["rows"]
+        return build_grid_mini_payload(state.snapshot(), window_minutes=window_minutes,
+                                       history_points=history, now_epoch=now)
 
     @app.get("/api/graph/v1/catalog")
     def graph_v1_catalog():
@@ -4910,6 +4991,14 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "status": primary_status if primary_present else "nicht konfiguriert",
             "line": harmony if primary_present else "",
             "harvest_calculation": harvest_calculation if primary_present else "",
+            "season_effective": str(s.get("harvest_season_effective") or "legacy_parallel") if primary_present else "",
+            "season_requested": str(s.get("harvest_season_requested") or "") if primary_present else "",
+            "day_profile": str(s.get("rest_surplus_harvest_profile") or "default") if primary_present else "",
+            "profile_confirm_s": _safe_float(s.get("harvest_profile_confirm_s")) if primary_present else None,
+            "primary_share": _safe_float(s.get("harvest_primary_target_share")) if primary_present else None,
+            "s3_applicability": str(s.get("harvest_s3_applicability") or "NOT_APPLICABLE") if primary_present else "NOT_APPLICABLE",
+            "s3_override_reason": str(s.get("harvest_s3_override_reason") or "") if primary_present else "",
+            "final_command_target_w": _safe_float(s.get("target_final_w")) if primary_present else None,
             "source": primary_storage_source_label(cfg) if primary_present else "",
             "source_profile": primary_storage_source_profile(cfg) if primary_present else "",
             "source_health": str(s.get("primary_storage_source_health") or "-") if primary_present else "",

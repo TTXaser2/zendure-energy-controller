@@ -1,8 +1,31 @@
 # ZEC – Master-Backlog & Roadmap
 
-**Stand:** 23.09.2026  
+**Stand:** 20.10.2026  
 **Status:** kanonische, persistente Entwicklungsledger- und Roadmap-Autorität  
-**Produktbasis:** V17.0.1 reale Runtime / V17.0.2 TECHNICAL BUILD PASS, FIELD_PENDING; V17.0.2 isoliert den real gefundenen Fast-Capture-Evidenzpfad-Hotfix ohne Regler-/Command-/Safety-/Cross-Charge-/Recoverysemantikänderung.
+**Produktbasis:** V17.1.0 reale Pi-Runtime / `TECHNICAL_BUILD_PASS` / Update und allgemeine Feldabnahme `FULL_READY` **PASS** am 20.10.2026. Die V17.0.2-Pflichtdefekte sind in V17.1.0 implementiert und regressionsgeprüft; spezifische natürliche NIGHT/MIN_SOC-/Stale-/S3-Strategie-Evidenz bleibt entsprechend unten `EVIDENCE_PENDING`/`NOT_EVALUABLE`. Fast Capture: bisheriger Active-NEAR_LIMIT-Nachweis erhalten, Active-FULL_IDLE weiterhin EVIDENCE_PENDING.
+
+## V17.1.1 UX-Qualitätsrelease – technische Freigabe noch ausstehend
+
+Die Änderungen des freigegebenen UX-Blocks sind auf der technisch bereits abgenommenen V17.1.0-Basis implementiert: `ZEC-BL-UI-SETTINGS-HELP-001` und `ZEC-BL-UI-GRID-MINICHART-001`. 190/190 operative Settings und 74/74 Bereiche erhalten nutzerorientierte Hilfe, deren Einzelwirkung gegen Source-Consumer und Schutzgrenzen zu prüfen bleibt. Minigraph 3-s-Poll, 5/15/60-min mit zeitgetreuen Punkten und read-only Graph-V3-Langfenster. Volle Regression inkl. ResourceWarning und Chromium-Funktionstests auf dem Entwicklungsstand PASS; **keine Produktivinstallation**, TECHNICAL_BUILD_PASS erst nach eigenständigem Paket-/Releasegate. Historische V17.1.0- und Roadmapeinträge sind Provenienz.
+
+## Freigegebener UX-Qualitätsblock 20.10.2026 – Vorrang vor Battery Care
+
+**Nutzerfreigabe:** Settings-Hilfen und Abschnittserklärungen zuerst vollständig fachlich überarbeiten, danach Minigraph mit 3-s-Aktualisierung und verständlich wählbarem zeitlichem Rückblick; erst danach S3-Feldwirkung und Battery-Care-Produktionsspezifikation. Kein Wechsel der aktuellen realen V17.1.0-Laufzeit vor einem vollständig bestandenen eigenen Release-/Feldgate.
+
+### ZEC-BL-UI-SETTINGS-HELP-001 – Anwendergerechte Settings-Erklärungen und Bereichszwecke
+
+- **Status:** `IN_PROGRESS / USER_APPROVED_20261020 / IMPLEMENTATION_PARTIAL`; vollständige inhaltliche Umsetzung und Freigabe **noch offen**.
+- **Zweck/Pflicht:** Jede tatsächlich angebotene Einstellung muss ohne Entwicklungs- oder Elektrotechnik-Vorkenntnisse ihren konkreten Systemzweck und die Wirkung auf Regelung, Steuerausgabe oder reinen Diagnose-/Speicher-/Zugriffspfad erläutern. Der Zusammenhang zu benachbarten Einstellungen, Aktivierungsschaltern, Quellen, wirksamen Limits, Ausnahmen und Vorrangregeln ist **Pflichtbestandteil des einleitenden Haupttextes** und darf nicht in isolierte technische Unterkapitel ausgelagert werden. Benutzer müssen unterscheiden können zwischen *gespeichert*, *aktiviert*, *anwendbar*, *berechnet* und *physisch wirksam*.
+- **Hilfestruktur:** Direkt unter jeder Bereichsüberschrift steht eine sinnvolle, dauerhaft sichtbare Erklärung zum jeweiligen Zweck. Die Hilfe je Setting behandelt fachlich korrekt: (1) Wozu und Verhältnis zu anderen Settings/Reglerpfaden, (2) Ein/Aus bzw. Änderung und Optionen, (3) Wann/nicht anwendbar, (4) konkrete Auswirkungen und übergeordnete Schutzregeln, (5) passende anschauliche Beispiele. Technische Kennungen und Codes nur ergänzend für Experten.
+- **Kein generischer Fallback als fertige Hilfe:** Formeln wie `Konfiguration für …`, `wirkt gemäß …`, `zusammengehörige Parameter …`, `RICH/BASE` oder rein technische Metadaten gelten nicht als Endnutzer-Erklärung. Alle operativ sichtbaren Settings einschließlich Standard/Experte müssen individuell gegen echten V17.1.0-Source-Consumer/Registry und Hardware-Safety begründet werden. Fehlende oder nicht verifizierbare Beschreibung wird als Qualitäts-Finding inventarisiert und verhindert UI-Completion.
+- **Umsetzung in überprüfbaren Scheiben:** erster Source-Slice S3-Saison-/Tagesprofiltexte, Hilfedialog-Grundstruktur und sichtbare Abschnittszwecke; noch **kein** Gesamt-PASS für ca. 190 operative Settings. Erweiterung in der Registry automatisiert inventarisieren und in fachlichen Schritten abarbeiten, ohne die QA für Teilfortschritt als Gesamtabnahme auszugeben.
+- **Tests/Exit:** Quellenmapping und Vollständigkeits-/Placeholder-Gates, nachvollziehbare Text-/Wirkungsprüfung jedes aktiven Keys, i18n/mobile/standard/expert/accessibility, Headless-Browserprüfung, Negativfälle bei abgeschalteter S3-Policy und unveränderte Command-/Controllerlogik; vollständige Regression und Releasegates erst vor Produktivpaket.
+
+**Entwicklungsfortschritt nach CP06, noch kein Release-PASS:** `ZEC-BL-UI-GRID-MINICHART-001` ist `IN_PROGRESS / FOCUSED_QA_PARTIAL`, 5/15/60-Minuten-Fenster, 3-s-UI-Refresh, Zeitachse, echte Gap-/Validity-Semantik und read-only Historienweg prototypisch implementiert. Die endgültige Versionsfreigabe erfordert Source-/Browser-/Performance-/Fresh-Extract-Gates; V17.1.0 bleibt produktiv unverändert. Der Help-Block ist gemäß CP06 fokussiert und vollständig regressionsgeprüft, bleibt ohne eigenes neues Paket nicht produktiv ausgeliefert.
+
+### ZEC-BL-UI-GRID-MINICHART-001 – Priorisierung und Ergänzung 20.10.2026
+
+- **Neu freigegeben:** Unter Beibehaltung der echten 1-Hz-Netzleistung einen unabhängig gewählten graphischen Rückblick (Ziel: 5/15/60 min, bevorzugter Startwert 15 min) mit sinnvollem Zeitachsen-/Gap-Vertrag und sichtbarer Pollsemantik konzipieren; 3-s-Refresh statt aktuell 10 s, sofern reale Source-/Pi-Performance-/Datenpfadtests das tragen. Keine synthetischen 1-Hz-Samples durch schnelleres Polling der historischen 3-s-Controllerpunkte; zeitlich begrenzte History/Graphdaten verwenden. Erste Umsetzung **nach Abschluss** des Settings-Help-Blocks, kein UI-Release-PASS vor Source-/Browser-/Speicherbudget-Gates.
 
 ## 1. Zweck und Persistenzvertrag
 
@@ -11,6 +34,68 @@ Diese Datei ist nicht nur eine Liste aktueller offener Aufgaben. Sie ist das **v
 Ein Eintrag darf nicht durch Quellenbereinigung verschwinden. Er darf nur fortgeschrieben und in einen anderen Status überführt werden. Die **Roadmap** ist eine priorisierte Sicht auf dieses Ledger; das Ledger selbst bleibt historisch vollständig.
 
 Historische Chats, Übergaben und Releaseunterlagen sind Provenienz-/Archivbelege. Aktuelle reale Sources und aktuelle reale Evidenz haben bei Widerspruch Vorrang.
+
+
+## Ergänzung 20.10.2026 – Quellenmitgliedschaft / 25-Dateien-Grenze
+
+- **Projekt-Quelleninventar vor diesem Zusatzupdate:** 20 tatsächlich aktive Dateien, darunter kanonische `00`–`07`, das exakte finale V17.1.0-Source-ZIP, Installationsanleitung, Normregelwerke, Lernwerkzeug und historische Planungs-/Evidenzquellen. Acht Kernquellen einschließlich bereits aktualisierter `00`, `02`, `04`, `05`, `07` wurden lesbar angetroffen.
+- **Verbindliches Ziel nach manueller Einspielung:** 22/25 Dateien. Nur `00` und `05` mit neuem Inhalt **ersetzen**, `ZEC_S3_PRODUKTIONSSPEZIFIKATION_V17_0_2_FINAL_20261019.md` und `ZEC_V17_1_0_RELEASE_UND_FELDEVIDENZ_KONSOLIDIERT_20261020.md` **ergänzen**. Keine andere Projektdatei löschen oder ersetzen. Anschließende Prüfung des realen Projektbestands ist vor Behauptung `PROJECT_SOURCE_ADOPTION_PASS` zwingend.
+- **Verlustfreier Evidenzvertrag:** Das Sammeldokument enthält den technischen V17.1.0-Releasebericht und alle vier Realfeldberichte **vollständig im Originaltext** mit Prüfsummen pro Original. Die getrennten Originale bleiben in der persönlichen Bibliothek `/ZEC - Zendure Energy Controller/Releases/`. Abweichende Datumsstände nicht als aktuelle Feldautorität vermischen; `07` bleibt aktuell. Bibliothek allein ersetzt keinen aktiv angehängten Projektquellenplatz.
+- **Backlog-/No-Drop-Vertrag:** Diese Quellenergänzung nimmt **keinen** neuen technischen Roadmappunkt vor, entfernt keine `ZEC-BL-`- oder `ZEC-EV-`-ID, verändert keinen fachlichen Status der Regler-/Safety-/Hardwarewirkung. Der neue Minigraph-Folgepunkt `ZEC-BL-UI-GRID-MINICHART-001` bleibt offen, S3-/Stale-/NIGHT-MIN_SOC-/Fast-Capture-Realnachweise bleiben evidenzabhängig offen. Keine historisch aktive Projektquelle wird entfernt: ein source-spezifisches **Bereinigungs-`BACKLOG_NO_DROP_GATE` ist nicht ausgelöst**; der rein additive Ledger-Identitätsabgleich wird beim Paketbau dokumentiert.
+- **Geltungsgrenze:** Dies ist eine **Projektquellenpflege**, keine Source-/Konfigurationsänderung der produktiven Controller-Software, keine neue Version und keine neue Feldfreigabe. Technische `TECHNICAL_BUILD_PASS`- und `FULL_READY`-Evidenz bleibt unverändert.
+
+## Aktuelle Release-/Feld-Reconciliation 20.10.2026 – V17.1.0 (maßgeblich)
+
+- **Release:** unverändertes final veröffentlichtes ZIP `zendure_controller_v17_1_0.zip`, SHA256 `11dddaaaa7831e2339a19b9b7f46412ee72f35917935b7292a005a47bfe61669`, Build `v17.1.0-20261019`; TECHNICAL_BUILD_PASS; 1.220 Tests + 718 Subtests regulär und unter `ResourceWarning=error`, sowie Fresh-extract/Deployment/Manifest/Dokumentationsgates. Reales Pi-Update und allgemeine Feldabnahme 20.10. **PASS / FULL_READY**, `RELEASE_BACKUP_EXACT`.
+- `ZEC-BL-CTRL-NIGHT-MINSOC-GRID-001`: Sourcefix und vollständige technische Regression umgesetzt; alte Next-Release-Blockerpflicht damit technisch erledigt; natürliche Low-SOC-Export-Feldepisode weiterhin ausstehend.
+- `ZEC-BL-GRID-SMA-OBIS-001`: strukturierter Parser inkl. OBIS-Länge/4-/8-Byte/Seriennummer/Negativtests implementiert, technische Regression PASS; historische Extremwertursache weiterhin nicht als eindeutig bewiesen behandeln. Live-HOLD-Grid-Pfad mit SMA-Receiver ist real frisch beobachtet.
+- `ZEC-BL-CTRL-S3-001`: abgeschlossener finaler Produktionsvertrag umgesetzt; Opt-in/Legacy-Migration und `NOT_APPLICABLE` im realen HOLD beobachtet; reale Zielwert-/Hardwarewirkung im natürlichen Harvest **EVIDENCE_PENDING**.
+- `ZEC-BL-UI-STATUS-LIVE-001`: reale unabhängige 1-Hz-Grid- und Primärspeicherfrische während `HOLD` **PASS**; Browser-/Sourcegates technisch PASS; NIGHT, weitere Quellen und physisch schnelle Gerätewechsel weiterhin differenziert nachzuweisen.
+- `ZEC-BL-DIAG-GRID-STALE-001`: Incident-Diagnostik/Entprellung/Resolve technisch PASS, aber nach vollständiger 2-Tages-Inventur (155 Events, davon 0 stale, 0 open) kein natürlicher Grid-Stale-Fall -> Realtrigger/Resolve **NOT_EVALUABLE**. Kein Sensor künstlich trennen.
+- `ZEC-BL-DOC-ARCH-001`: Releasegebundene `docs/architecture`, Specs, ADR/History und prüfendes Dokumentationsgate in V17.1.0 PASS. Dauerhafte Pflicht bleibt für Folgeversionen.
+- `ZEC-BL-PROC-CHKPT-LIBRARY-001`: CP15 und finales Release-ZIP sind extern Bibliothek-Readback-/SHA256-/Byte-/CRC-verifiziert; gesicherte Releaseevidenz separat im Bibliotheksordner `Releases`.
+- **Reales Betriebsereignis:** seit 09:52 genau eine Mode-Transition um 10:03:22 `SAFE_STATE → HOLD`; Journalfolge `systemd Started` 10:03:12, MQTT verbunden 10:03:16, `COMMAND_RESYNC` 10:03:21 stützt Start-/Reinitialisierungskontext, nicht eine Oszillation. Anlass dieses Dienststarts nicht geklärt.
+- **UX-Finding** `ZEC-BL-UI-GRID-MINICHART-001` nach Screenshot 20.10.: Live-Netzwert 1 s, Minigraph-Poll 10 s und Controller-Historypunkte typischerweise je Reglerzyklus; sichtbar kein Refreshintervall. **OPEN / NEXT_UI_ITERATION / non-blocking**. Kein rückwirkender Eingriff in eingefrorenes V17.1.0-Release.
+- **Roadmap nach Installation:** S3-/Stale-/NIGHT-MIN_SOC-Realnachweise fortführen, Fast-Capture-FULL_IDLE erhalten, weiterhin B2/C1 (separat spezifizieren), Battery Care winterpriorisiert, Adaptive deferred; Graph-UX-Härtung in nächstem passenden UI-Release, ohne Roadmapverlust oder Sicherheitssemantikänderung.
+- **No-drop:** alle vor diesem Update erkannten IDs und historischen Roadmap-/Freigabetexte bleiben bestehen; neue ID ausschließlich `ZEC-BL-UI-GRID-MINICHART-001`. Projektquellen werden nicht gelöscht oder archiviert. Das Release-Snapshot im ZIP bleibt unveränderlich und wird nicht nachträglich umgeschrieben.
+
+### ZEC-BL-UI-GRID-MINICHART-001 – Netzleistungs-Minigraph: Aktualisierungsfrequenz sichtbar machen (NEU 20.10.2026)
+
+- **Status:** `OPEN / UX_FOLLOWUP / NEXT_UI_ITERATION`; `implementation_state=not_started`; `priority=non_blocking`; kein Incident im Steuer- oder Messpfad.
+- **Reale Evidenz:** Screenshot des produktiven V17.1.0 am 20.10.2026: Netzleistungszahl `+8 W` schnell, letzter Verlaufspunkt `-3 W` wirkt verzögert; keine Erklärung des Chart-Intervalls außer „letzte 48 Punkte“. Exakte Sourcepfade: `static/status_v2.js` PollChannel(`/status-live-data`, **1000 ms**) und PollChannel(`/grid-mini-data`, **10000 ms**); `web_ui.build_grid_mini_payload` liest 48 letzte `state.graph_history`-Regler-Messpunkte.
+- **Verpflichtende UX-Abnahme:** in der Karte unmittelbar lesbar unterscheiden zwischen „Livewert (1 s)“ und „Minigraph: letzte 48 Regler-Messpunkte · Aktualisierung alle 10 s“ (oder vergleichbar korrekt und responsive); Chart-Endwert als letzter **Verlaufspunkt** statt als zeitgleich aktueller Istwert ausweisen; Standard/Experte/Mobile, i18n/Info-Text und visuelle Regression prüfen.
+- **Optional gesondert:** Minigraph auf echte read-only 1-Hz-Grid-Samples umrüsten, falls nach Performance-/Zeitachsen-/Speicher-/Datenalterkonzept sinnvoll; keine bloße 1-s-Abfrage unveränderter Controller-3-s-Historie als scheinbare Livegrafik. Controller-/Command-/Safety-Semantik nicht ändern. Vor Sourceentwicklung separater UX-Scope und freigegebenes Releasefenster.
+- **Exit:** im tatsächlich ausgelieferten Folge-Release UI-Vertrags-/Browser-/Accessibilitytests, sichtbare Refreshsemantik und nachvollziehbare Anzeige bei voneinander abweichenden Live-/History-Werten. V17.1.0 bleibt byteidentisch.
+
+## Historische Freigabe-/Scopefortschreibung 19.10.2026 – S3 + unabhängige 1-Hz-Status-Evidenz
+
+**Nutzerentscheidung:** S3-Produktionsvertrag fachlich schließen und anschließend ohne neue Grundsatzdiskussion auf der verifizierten V17.0.2-Basis entwickeln. Zusätzlich im **nächsten Produktrelease** verpflichtend: 1-Hz-Anzeige der real vorhandenen Netz-/Zendure-/Primärspeicherleistung, SOC und weiterer relevanter Messstati, unabhängig vom Controller-Intervall und davon, ob der Regelpfad in `NIGHT`/`HOLD`/`MIN_SOC` bereits zurückgekehrt ist; Messalter/Validity immer ehrlich mitführen. Grid-Stale/Controller-Processing-Stale als persistente Betriebsereignisse erfassen, open/resolve und Entprellung, ohne Event-Flut. Bestehende zwei Pflichtdefekte und UI-Followups bleiben im selben Produktrelease zwingend. Separate Quellen- und Hardwarepfade (SMA direkt, MQTT, nativer Modbus, Shelly HTTP) dürfen keine unehrlichen Aktualitätsbehauptungen erzeugen.
+
+**Freigabe-/Entwicklungsbasis:** `ZEC_S3_PRODUKTIONSSPEZIFIKATION_V17_0_2_FINAL_20261019.md` ist der geschlossene fachliche Sollvertrag; **keine Release-/Feldevidenz**. Am 19.10.2026 wurde ein **nicht freigabefähiger Source-Checkpoint** begonnen. Die S3-Settings werden dort in einer Entwicklungsfassung verdrahtet, 1-Hz-Read-only-Live-Snapshot (für SMA-Empfänger unabhängig vom Controller) und Grid-Stale-Eventprototyp fokussiert getestet. Erforderliche vollständige Ausleitung für Shelly-HTTP, UI-/Browser-/Sicherheits-/Profil- und sämtliche Releasegates noch offen. Die aktuelle produktive Software bleibt V17.0.2 und darf nicht mit dem Entwicklungscheckpoint verwechselt werden.
+
+### ZEC-BL-UI-STATUS-LIVE-001 – quellenunabhängige sekündliche Statusaktualisierung (NEU 19.10.2026)
+- **Status 20.10.2026:** `IMPLEMENTED / TECHNICAL_PASS / HOLD_PARTIAL_FIELD_PASS / EVIDENCE_PENDING_OTHER_MODES`, `implementation_state=implemented`. Ursprünglich `IN_PROGRESS / REQUIRED_NEXT_RELEASE` am 19.10.2026; das ist historische Scope-Provenienz.
+- Zweck: Browser-Status jede Sekunde mit den neuesten von den Messquellen empfangenen Werten aktualisieren, nicht nur im Reglerzyklus gepflegte Statusfelder erneut ausgeben. Erfassungsraten der physischen Quellen bleiben separat; fehlende neue Samples als stale kennzeichnen, keine synthetisch frischen Werte.
+- Integrität: keine neue Command-/Polling-Autorität, keine 3-s-Reglerbeschleunigung, kein blockierendes HTTP-Modbus-/SMA-/MQTT-IO im Regler; spezifisch unabhängiger Shelly-/Fallback-Quellenvertrag nötig; Zeitalter/Messquellen-/Browserlatenz/Performance auf Pi 3B+ testen.
+- Exit: 1-Hz-fester Aktualisierungszyklus sichtbare Seite, Rohquellen auch bei NIGHT/HOLD und vollständigen frischen/staleness Failures, gültige Time-/Validity-UI in Standard/Experte, minimale CPU/IO-Kosten, No-Regression.
+
+### ZEC-BL-DIAG-GRID-STALE-001 – persistente Netzleistungs-Stale-Betriebsereignisse (NEU 19.10.2026)
+- **Status 20.10.2026:** `IMPLEMENTED / TECHNICAL_PASS / GRID_STALE_REAL_NOT_EVALUABLE`, `implementation_state=implemented`; 155 Events ohne Stale/OPEN. Ursprünglich `IN_PROGRESS / REQUIRED_NEXT_RELEASE` am 19.10.2026.
+- Zweck: ausbleibende Netzleistungsaktualisierung persistiert als eigener Incident mit Quelle, Alter, Reglerzustand; bei verfügbaren unabhängigen SMA-Receiver-Werten `SOURCE_STALE` von `CONTROLLER_PROCESSING_STALE` trennen; Debounce, single-open, resolved/recovered, keine pro-Zyklus-Ereignisflut. Auch bei Regler-Early-Return wirksam.
+- Link: `ZEC-BL-CTRL-NIGHT-MINSOC-GRID-001` funktional reparieren; `ZEC-BL-DIAG-001` Reason-/Stale-Anzeigensemantik weiterhin eigenständig. Dieser Diagnostikscope ersetzt **keinen** der beiden Fixes.
+- Exit: mindestens Incident+Recovery bei Nacht/MIN_SOC mit lebendem SMA-RX, echter Sensorstale, initialer Startupphase, anderer Quelle, Modewechsel, SQLite-Restart und UI-Persistenz; realer Feldtest oder dokumentiertes `NOT_EVALUABLE`.
+
+**Quellen-/No-Drop-Status:** Die früheren Ledgerabschnitte/IDs und die historische 87er-Aussage bleiben unverändert erhalten. Zwei neue eindeutige IDs additiv; nie eine Quellenbereinigung vor dem vollständigen `BACKLOG_NO_DROP_GATE`. Dokumentationsgate `ZEC-BL-DOC-ARCH-001` bleibt verbindlich.
+
+### ZEC-BL-PROC-CHKPT-LIBRARY-001 – Extern verifizierte Checkpoint-Sicherung (NEU 19.10.2026)
+
+- **Quellen-Übernahmestand 20.10.2026 nach Teilupdate:** `20_OF_25_VERIFIED / CORE_00_TO_07_ADOPTED / FINAL_S3_AND_EVIDENCE_AGGREGATE_PENDING_USER_UPLOAD`, Ziel `22_OF_25` nach diesem Paket. Hieraus folgt weder ein Produkt-Release-Rollback noch eine automatische PROJECT_SOURCE_ADOPTION_PASS-Behauptung.
+
+- **Status 20.10.2026 (vorher):** `PROCESS_IMPLEMENTED / CP15_AND_RELEASE_LIBRARY_GATE_PASS / PROJECT_SOURCE_REPLACEMENT_PENDING`; die ursprüngliche CP03-Evidenz bleibt historische Provenienz. Source- und Releasebackup sind unabhängig in der Bibliothek byteidentisch verifiziert; die **neuen kanonischen Projektdateien sind erst nach Nutzerupload aktiv**.
+- **Nutzerbeschluss 19.10.2026:** vollständige Entwicklungscheckpoints aus temporärem Working Tree **sofort in die persönliche ChatGPT-Bibliothek hochladen, unabhängig wieder materialisieren und Bytezahl/SHA256/ZIP-Integrität vergleichen**; `EXTERNALLY_SECURED` erst nach `CHECKPOINT_LIBRARY_GATE=PASS`. Kein weiteres wesentliches Coding bei ungesichertem Fortschritt. Normative Ausführung in `01` § 3 und `06` § 11; Einstieg `00` § 2c.
+- **Konkrete Evidenz:** Checkpoint 03 am 19.10.2026 unter `ZEC - Zendure Energy Controller/Checkpoints/` erfolgreich hochgeladen und byteidentisch zurückgelesen (SHA256 `24b31fd0867ef770c6bbef43a5c942b31477d874fff8e3f5e0964daebb31c3fc`). Checkpoints 04–06 sind dadurch **nicht** wiedergefunden; keine falsche Rekonstruktion.
+- **Retention:** keine automatische Löschung; bei Bedarf und mit expliziter Nutzerfreigabe unter Erhalt von Release-/Branch-/Rollback-/Handover-Ankern und allen nur dort erhaltenen Quellen, Tests und Entscheidungen. Bereinigung von Projektquellen/Planungsbelegen setzt zusätzlich `BACKLOG_NO_DROP_GATE=PASS` voraus.
+- **Exit:** aktualisierte `00`/`01`/`05`/`06` in aktive Projektquellen übernommen und dort wiederauffindbar; künftig für **jeden** wesentlichen Sourcecheckpoint rücklesbarer PASS samt Evidenz. Kein finales `CLOSED`, solange die Übernahme nicht nachgewiesen ist.
 
 ## 2. Statusmodell
 
@@ -27,6 +112,26 @@ Zusätzlich kann `implementation_state` beispielsweise `none`, `partial` oder `i
 
 ## 3. Aktuelle Roadmap – priorisierte Sicht
 
+**Verbindliches Realfeld-/Source-Delta 25.09.2026:** Der reale V17.0.2-Betrieb und die anschließende Sourceanalyse haben zwei eigenständige Defekte bestätigt. `ZEC-BL-CTRL-NIGHT-MINSOC-GRID-001` ist **RELEASE_BLOCKER_NEXT_RELEASE**: bei aktivem Nachtfenster und erreichtem Zendure-`MIN_SOC` kehrt der aktuelle Pfad vor frischer Grid-Verarbeitung und normaler exportseitiger AUTO-Regelung zurück; dadurch kann realer PV-Export ungenutzt bleiben. `ZEC-BL-GRID-SMA-OBIS-001` ist **BUG_CONFIRMED / FIX_REQUIRED_NEXT_RELEASE**: der V17.0.2-SMA-Parser sucht Leistungs-OBIS-Bytefolgen global im Datagramm statt die Speedwire-/Protokoll-/OBIS-Struktur robust zu validieren. Der wiederholt verworfene Rohwert `-1.730.098,8 W` ist real belegt; seine exakte historische Raw-Frame-Ursache muss nicht als Vorbedingung für die strukturelle Parserkorrektur erneut eingefangen werden. Der bestehende 30-kW-Plausibilitätsfilter bleibt als zweite Schutzschicht erhalten.
+
+**Release-Gate:** Kein nächster ZEC-Produktrelease darf freigegeben werden, solange **beide** Punkte nicht implementiert und regressionsgeprüft sind. Für `NIGHT-MINSOC-GRID` sind mindestens Nacht+MIN_SOC+Import, Nacht+MIN_SOC+Export, Import↔Export und Nachtende/Recovery nachzuweisen. Für `GRID-SMA-OBIS` sind mindestens valide Home-Manager-Frames, zusätzliche/unbekannte OBIS-Felder, 4-/8-Byte-Recordgrenzen, False-Signature-in-Payload, falsche Protokoll-ID, Truncation sowie die Seriennummernselektion der realen Zwei-SMA-Zähler-Topologie abzudecken.
+
+**Verbindlicher Roadmap-/Strategieentscheid 18.10.2026 (überschreibt nur das bisherige Sequencing, nicht die Historie):** Nach Offline-Bewertung der 23 Herbsttage wird Adaptive-Lernen (A1) **DEFERRED / EVIDENCE_GAP**; S3, strategischer usable SOC (B2) und weiche Kapazitätsgewichtung (C1) sind **eigenständige** Funktions-/Spezifikationsscopes ohne notwendige Adaptive- oder High-SOC-Kopplung. S3 ist unmittelbar zu spezifizieren und als nächster freizugebender Funktionsblock vorgesehen; B2 und C1 benötigen je einen *zweck-/nutzenorientierten* Produktionsvertrag. Bei unverhältnismäßigem B2/C1-Aufwand wird Battery Care wegen Winterpriorität vorgezogen. Für jede neue policy-basierte Regelwirkung gelten nutzbarer Endzielwert und tatsächliche physische Wirkung als Wirksamkeitskriterium, kein alleiniger interner Sharewechsel. Verbindliche Freigabegrenze: kein produktiver Code allein durch diese Quellenkonsolidierung.
+
+**Aktuelle priorisierte Roadmapsicht 18.10.2026:**
+
+1. **Nächster Produktrelease – zwingend:** `ZEC-BL-CTRL-NIGHT-MINSOC-GRID-001` und `ZEC-BL-GRID-SMA-OBIS-001` beheben, alle vorhandenen Safety-/Regression-Gates; ohne beide kein Release-PASS.
+2. **S3 eigenständig:** `ZEC-BL-CTRL-S3-001` – Saison-/Tagesprofile: Zweck, Runtimewirksamkeit aller vorgesehenen Keys, sichere Legacy-/Neuinstallationsmigration, zeitrichtige Kalender-/Timersemantik, UI-/Diagnosevertrag und No-Regression; vor Sourceänderung eigenständige finale Spezifikations-/Scopefreigabe.
+3. **B2 eigenständig:** `ZEC-BL-CTRL-USABLE-SOC-001` – sinnvolle deterministische, kontextabhängige strategische Nutzung des diagnostisch bereits vorhandenen usable SOC, nicht pauschal Winter-only; konkrete Wirksamkeit und Geltungsgrenzen vor Coding.
+4. **C1 eigenständig:** `ZEC-BL-CTRL-CAP-001` – optionale weiche Kapazitätsgewichtung `off|soft`, default `off`; übergreifenden erlaubten Aktionsraum prüfen, nicht unreflektiert auf High-SOC begrenzen; harte Invarianten bleiben erhalten.
+5. **Winterpriorisiert Battery Care:** `ZEC-BL-BATCARE-001` – getrennte Zendure-Reserve-/SOC-Erhaltungsstrategie; **vorziehen**, wenn B2/C1 zeitlich unverhältnismäßig aufwendig werden. Netzladung ist gesondert freigabepflichtig und nicht implizit aktiviert.
+6. **Adaptive bewusst DEFERRED:** `ZEC-BL-CTRL-ADAPTIVE-001` und `ZEC-BL-CTRL-001` – sämtliche Konzepte/Lern-/Replay-/Confidence-/Persistenzfragen und A1-Evidenz erhalten; Wiederaufnahme nur bei plausiblem Zusatznutzen und geprüftem Aktionsraum (gegebenenfalls jenseits High-SOC).
+7. **Release-Dokumentationsvertrag:** `ZEC-BL-DOC-ARCH-001` – versionsgebundene aktuelle Architektur, Specs, ADR und niedrigaufwändige echte Historie im Source-`docs/`; ab nächstem Release; keine Vorbedingung für die S3-Fachspezifikation.
+8. **Fast Capture Field/Evidence:** `ZEC-BL-CTRL-FASTCAP-001` Active-`FULL_IDLE` und bounded-/applicability-aware Forensik bleiben `EVIDENCE_PENDING`, sind keine Voraussetzung für getrennte S3-Konzeption.
+9. **Verbleibende Frontend-/Storage-/Analyse-/Simulation-/Multi-/Release-Härtungen** verbleiben unverändert unter ihren bisherigen stabilen IDs, mit jeweiligem Implementierungs- und Feldevidenzstatus.
+
+**Historischer Roadmap-Snapshot 23.09./25.09.2026, inzwischen im Sequencing abgelöst (Provenienz, nicht aktuelle Anweisung):**
+
 **Roadmapstand 23.09.2026:** V17.0.1 ist real installiert und automatisiert FULL_READY feldabgenommen. V17.0.2 korrigiert ausschließlich drei real gefundene Fast-Capture-Evidenzdefekte und besitzt nach 157 Testdateien / 1169 Tests + 706 Subtests, identischem ResourceWarning-Lauf sowie statischen/Deployment-/Datenblatt-/Build-Evidence-Gates TECHNICAL BUILD PASS; finale Paket-/Fresh-extract-Gates folgen vor Veröffentlichung. `ZEC-BL-CTRL-FASTCAP-001` bleibt FIELD_PENDING, bis nach V17.0.2-Installation neue Shadow-Evidenz und anschließend ausdrücklich freigegebene begrenzte Active-Evidenz vorliegen. Desktop-Warning-Chip/Popover ist real visuell PASS; mobile Bottom-Sheet-Variante bleibt offen.
 
 **Roadmapstand 22.09.2026 nach abgeschlossener V16.2.5-Feldentscheidung:** Das Update V16.2.4 → V16.2.5 ist real erfolgreich. Der konsolidierte automatische Feldlauf ist PASS; `controller_ready` war wegen `LIMIT_READBACK_CONVERGENCE` transient, `controller_readiness_acceptance=PASS TRANSITIONAL:LIMIT_READBACK_CONVERGENCE`. Instance Owner, Speicherstatuskarten-Geometrie, Mobile Settings, sichtbare Graph-Linienunterbrechung sowie die funktionale ein-/ausklappbare High-SOC-/Command-Warnung sind real beobachtet.
@@ -37,18 +142,19 @@ Das Sequencing-Gate ist am 22.09.2026 durch ausdrückliche Nutzerentscheidung ge
 
 Adaptive bleibt vollständig erhalten, ist aber kein Vorläufer für Fast Capture. Nach Bereitstellung des Fast-Capture-Releases beginnt ein eigener Adaptive-Spezifikationsblock; reale Fast-Episoden dürfen dabei als Evidenzinput dienen. Adaptive-Controller-Sourcearbeit benötigt weiterhin Lernzustand/Persistenz/Reset, Confidence/Fallback, S3-Mapping, Capacity-Weighting-Vertrag und eigene explizite Freigabe.
 
-Aktuelle priorisierte Sicht:
+Historische priorisierte Sicht vom 23.–25.09.2026 (durch Roadmapsicht 18.10.2026 hinsichtlich Adaptive/S3/B2/C1/Battery Care ersetzt):
 
-1. **`ZEC-BL-CTRL-FASTCAP-001` – Fast Capture A400/R100:** **IN_PROGRESS**; V17.0.0-Makro-Scope ausdrücklich freigegeben. Checkpoint A und Checkpoint B sind fokussiert PASS; Checkpoint C mit den zwei bereits freigegebenen isolierten UI-Follow-ups ist fokussiert PASS mit 12 Tests; vollständige Releasegates stehen noch aus. Der Release muss die Fast-spezifische read-only Feldanalyse gleich mitliefern.
-2. **Verbindliche UI-Follow-ups im selben nächsten ohnehin anstehenden Release:** `ZEC-BL-GRAPH-GAP-001` Gap-aware Cursor/Tooltip/Inspector sowie `ZEC-BL-UI-STATUS-003` höhenneutraler Warning-Chip + Desktop-Popover/Mobile-Bottom-Sheet. Beide als isolierte Frontend-Deltas mit eigener Regression; keine Kopplung an Fast-Reglerlogik.
-3. **`ZEC-BL-CTRL-ADAPTIVE-001` – Adaptive-Spezifikationsblock nach Fast-Capture-Release:** S3 + adaptive Strategie + weiche Kapazitätsgewichtung vollständig spezifizieren; produktive Sourcearbeit erst separat freigeben.
-4. **ZEC-BL-BATCARE-001 – Battery Care / Winter- und Reserve-SOC-Erhaltung** folgt gemäß bestehender Roadmap nach dem adaptiven Block; vor Implementierung ist aus dem erhaltenen Brainstorming eine explizit freigegebene Spezifikation zu erstellen.
-5. **ZEC-BL-STORAGE-001 – Measurement-/SQLite-Storage-Lifecycle.** S4/S5/S6/S7/S9 gegen die aktuelle Codebasis inventarisieren und in sicheren Stufen umsetzen.
-6. **ZEC-BL-ANALYSIS-HANDOFF-001 – Graph → Analyse-Service.**
-7. **ZEC-BL-SIM-001 – kontrafaktische Regler-Simulation.**
-8. **ZEC-BL-SCENARIO-001 – allgemeiner Szenarioeditor.**
-9. **ZEC-BL-MULTI-001 – echter Multi-Zendure-Command-/Regelpfad.** Darstellung mehrerer Entities ist keine aktive Dual-Headunit-Regelung.
-10. **ZEC-BL-REL-001 – repo-zentrierter/reproduzierbarer Releaseprozess / CI.**
+1. **Zwingende Fixes im nächsten Produktrelease:** `ZEC-BL-CTRL-NIGHT-MINSOC-GRID-001` und `ZEC-BL-GRID-SMA-OBIS-001`; Releaseblocker bis Implementierung und Regression beider Punkte.
+2. **`ZEC-BL-CTRL-FASTCAP-001` – Fast Capture A400/R100:** Implementierung und allgemeine V17.0.2-Feldbasis PASS; Shadow-Gate PASS; reale Active-`NEAR_LIMIT`-Evidenz in den beobachteten Aspekten PASS. Active-`FULL_IDLE` sowie die abschließende Evidence-Tooling-Härtung bleiben EVIDENCE_PENDING.
+3. **Verbindliche UI-Follow-ups im nächsten ohnehin anstehenden Release:** `ZEC-BL-GRAPH-GAP-001` Gap-aware Cursor/Tooltip/Inspector sowie `ZEC-BL-UI-STATUS-003` höhenneutraler Warning-Chip + Desktop-Popover/Mobile-Bottom-Sheet. Beide als isolierte Frontend-Deltas mit eigener Regression.
+4. **`ZEC-BL-CTRL-ADAPTIVE-001` – Adaptive-Spezifikationsblock:** S3 + adaptive Strategie + weiche Kapazitätsgewichtung vollständig spezifizieren; dies darf parallel zur verbleibenden Fast-Capture-Feldevidenz erfolgen. Produktive Adaptive-Sourcearbeit bleibt separat freigabepflichtig und muss die beiden Next-Release-Fixes mitführen, falls sie den nächsten Produktrelease erzeugt.
+5. **ZEC-BL-BATCARE-001 – Battery Care / Winter- und Reserve-SOC-Erhaltung** folgt gemäß bestehender Roadmap nach dem adaptiven Block; vor Implementierung ist aus dem erhaltenen Brainstorming eine explizit freigegebene Spezifikation zu erstellen.
+6. **ZEC-BL-STORAGE-001 – Measurement-/SQLite-Storage-Lifecycle.** S4/S5/S6/S7/S9 gegen die aktuelle Codebasis inventarisieren und in sicheren Stufen umsetzen.
+7. **ZEC-BL-ANALYSIS-HANDOFF-001 – Graph → Analyse-Service.**
+8. **ZEC-BL-SIM-001 – kontrafaktische Regler-Simulation.**
+9. **ZEC-BL-SCENARIO-001 – allgemeiner Szenarioeditor.**
+10. **ZEC-BL-MULTI-001 – echter Multi-Zendure-Command-/Regelpfad.** Darstellung mehrerer Entities ist keine aktive Dual-Headunit-Regelung.
+11. **ZEC-BL-REL-001 – repo-zentrierter/reproduzierbarer Releaseprozess / CI.**
 
 Querschnittlich bleiben `ZEC-BL-PRIMARY-METADATA-001`, `ZEC-BL-UI-STATUS-EXPERT-001`, Diagnose-/Command-Langzeitevidenz, Lernwerkzeugabgleich und Storage-Langzeitperformance erhalten.
 
@@ -58,7 +164,7 @@ Querschnittlich bleiben `ZEC-BL-PRIMARY-METADATA-001`, `ZEC-BL-UI-STATUS-EXPERT-
 |---|---|---|---|
 | S1 | Settings-Basis, UI und Legacy-Audit | CLOSED | in RC20/V12.11.x–V12.12.x produktiv umgesetzt; dauerhaft in der Closed-Historie erhalten |
 | S2 | Primärspeicherintegration | CLOSED / SUPERSEDED BY V15 ARCHITECTURE | source-neutrale Primärspeicherintegration und direkte read-only Modbus-Anbindung in V15.0.0 schließen die alte S2-Kopplungslücke |
-| S3 | Saison- und Tagesprofile | OPEN / in adaptiven Umbrella eingeplant | `ZEC-BL-CTRL-S3-001` als Child von `ZEC-BL-CTRL-ADAPTIVE-001`; kein separater vorgelagerter S3-Release |
+| S3 | Saison- und Tagesprofile | OPEN / SPEC_DRAFT, **jetzt eigenständiger Scope** | `ZEC-BL-CTRL-S3-001`; Adaptive-Umbrella-Anbindung vom 20.09.2026 historisch, ab 18.10.2026 in der Reihenfolge supersediert |
 | S4 | SQLite-Pfad und `report_only` | OPEN / partial | `ZEC-BL-STORAGE-S4-001` |
 | S5 | SQLite-Enforce | OPEN | `ZEC-BL-STORAGE-S5-001`; Bedeutung aus `conversations.json` wiederhergestellt |
 | S6 | V4-Schutz, Katalog und Sicherheitsdialog | OPEN / partial | `ZEC-BL-STORAGE-S6-001` |
@@ -70,7 +176,11 @@ Damit ist keine historische S1–S9-Stufe mehr nur implizit oder unaufgelöst.
 
 ## 4. Offenes und zurückgestelltes Master-Ledger
 
-### ZEC-BL-CTRL-ADAPTIVE-001 – gemeinsamer adaptiver Reglerblock (S3 + adaptive Strategie + Kapazitätsgewichtung)
+### ZEC-BL-CTRL-ADAPTIVE-001 – historischer gemeinsamer Adaptive-Umbrella; aktueller Scope nur Adaptive (DEFERRED)
+
+- **Aktueller Entscheid 18.10.2026:** `DEFERRED / EVIDENCE_GAP`, `implementation_state=none`; S3 und C1 **nicht** mehr verpflichtende Children bzw. technische Vorbedingungen. Der Umbrella-Zuschnitt vom 20.09.2026 und seine Detailanforderungen bleiben im folgenden Abschnitt ausdrücklich als Provenienz erhalten, sind aber als Sequencing-Anweisung supersediert. Adaptive-Wiederaufnahme soll Aktionsraum auch abseits High-SOC und tatsächlichen Zusatznutzen prüfen; 23-Tage-Analyse und A1-Brief dauerhaft referenzieren. Kein produktives Shadow-/Lern-Coding im nächsten Block.
+
+#### Historische Umbrella-Spezifikation / Entscheidung 20.09.2026 (Sequencing supersediert)
 
 - **Status:** SPEC_NEEDED / OPEN; Controller-Implementierung noch nicht begonnen. Nach Nutzerentscheidung vom 22.09.2026 ist Adaptive von Fast Capture entkoppelt und folgt als eigener Spezifikationsblock nach Bereitstellung des Fast-Capture-Releases.
 - **Rolle:** Roadmap-/Umbrella-Eintrag für `ZEC-BL-CTRL-S3-001`, `ZEC-BL-CTRL-001` und `ZEC-BL-CTRL-CAP-001`. Die Child-IDs bleiben eigenständig erhalten und dürfen durch die Zusammenführung nicht verschwinden.
@@ -83,8 +193,13 @@ Damit ist keine historische S1–S9-Stufe mehr nur implizit oder unaufgelöst.
 
 ### ZEC-BL-CTRL-S3-001 – Saison-/Tagesprofile Completion & Effectiveness
 
-- **Status:** OPEN
-- **Roadmapbindung ab 20.09.2026:** Child-Scope von `ZEC-BL-CTRL-ADAPTIVE-001`; kein separater vorgelagerter S3-Release vorgesehen.
+- **Status 20.10.2026:** `IMPLEMENTED / TECHNICAL_PASS / FIELD_EFFECT_PENDING`; finale Produktionsspezifikation 19.10. freigegeben, Runtime/Settings/Tests und Opt-in/Legacy-Migration in V17.1.0 real ausgeliefert. Reale HOLD-S3-Diagnose `season_requested=sma_priority`, `season_effective=legacy_parallel`, `NOT_APPLICABLE`; natürliche Harvest-Wirksamkeit noch nicht belegt. Die folgenden 18.10.-Aussagen sind **historische Ausgangsbefunde**.
+
+- **Aktuelle Entscheidung 18.10.2026:** `OPEN / SPEC_DRAFT`, eigenständiger nächster Funktionsscope ohne Adaptive-Abhängigkeit; Zweck/Wirksamkeit, vollständige zehn S3-Settings, Legacy-Share-/Confirm-Migration, aktuelle `sma_priority`-New-Install-Default-Falle, `VAL-014` Jahreswechsel, Timergrenzen, Registry-ProductSurface, Testmatrix und transparente Nichtanwendbarkeit in `ZEC_S3_FACHLICHE_PRODUKTIONSSPEZIFIKATION_ENTWURF_20261018.md`. Der historische Child-/Sequencingtext darunter bleibt Provenienz, ist **nicht mehr aktuell**. Vor Reglercode: finale Spezifikation und explizite Scopefreigabe.
+
+
+- **Historischer Status vor V17.1.0:** OPEN
+- **Historische Roadmapbindung ab 20.09.2026:** Child-Scope von `ZEC-BL-CTRL-ADAPTIVE-001`; kein separater vorgelagerter S3-Release vorgesehen.
 - **Historische Herkunft:** S3 `Saison- und Tagesprofile`; Settings-/RC19-Planung und spätere Completion-Audits.
 - **Aktueller V16-Befund:** Registry und Validation enthalten Kalenderfenster, Tagesprofilzeiten und gestaffelte High-SOC-Entry-Confirm-Zeiten. Für repräsentative S3-Keys existiert außerhalb Registry/Validation/Tests kein Runtime-Consumer.
 - **Risiko:** UI/Config kann eine Wirksamkeit suggerieren, die der reale Regler nicht vollständig besitzt.
@@ -173,14 +288,17 @@ Damit ist keine historische S1–S9-Stufe mehr nur implizit oder unaufgelöst.
 
 ### ZEC-BL-CTRL-FASTCAP-001 – Fast Capture A400/R100
 
-- **Status:** IN_PROGRESS; `implementation_state=partial`; `sequencing=ACTIVE`; `spec_state=REVALIDATED_V16_2_5`; V17.0.0-Makro-Scope am 22.09.2026 ausdrücklich zur Sourceumsetzung freigegeben. Checkpoint A (Controllerkern/State/Differential-/Safetytests) fokussiert PASS: 110 Tests + 11 Subtests. Checkpoint B (Settings/Validation, Measurement V4, Fast-Feldanalyse, V17-Feldabnahme) fokussiert PASS: 114 Tests + 640 Subtests. Kein TECHNICAL BUILD PASS; Checkpoint C/UI-Follow-ups sind fokussiert PASS (12 Tests), vollständige Releasegates stehen noch aus.
-- **Provenienz:** Pretrainer V0.5 -> V0.6.1, Freeze-Spezifikation vom 19.09.2026 und V16.2.5-Revalidierung vom 22.09.2026. Aktive Blockautorität: `ZEC_FAST_CAPTURE_A400_R100_PRODUKTIONSSPEZIFIKATION_V16_2_5_REVALIDATED.md`.
-- **Scope:** Fast-Overlay ausschließlich für `FULL_IDLE` und `NEAR_LIMIT`; `RESERVE_UNKNOWN` bleibt im normalen Baseline-Regelpfad. Produktionskandidat A400/R100. Strategische Baseline `B` und kurzfristiger Fast-Overlay `O` sind strikt getrennte Schichten.
-- **Evidenz:** V0.6.1 Vollhistorie mit 2.141.031/2.141.031 Rows und exakter Replay-Parität; Replay ist keine Closed-Loop-Feldevidenz. Die V16.2.5-Revalidierung bestätigt den Reglerkern byteidentisch zur ursprünglichen Spezifikationsbasis und definiert die notwendigen Settings-/Measurement-/UI-/Evidence-Deltas.
-- **Analysewerkzeug-Audit:** `tools/v16_field_acceptance.py`, `tools/create_zec_analysis_package.sh` sowie `tools/replay_core.py`/`replay_report.py` sind als Basis wertvoll, aber allein nicht ausreichend für Zustand/Rechnung/physikalische Wirkung/Recovery des neuen Fast-Pfads. Der initiale Fast-Capture-Release muss deshalb ein releasegekoppeltes read-only Fast-Analysewerkzeug samt Tests und maschinenlesbarem Report mitliefern; fehlende natürliche Fast-Episoden sind `NOT_EVALUABLE`, niemals synthetischer PASS.
-- **Feldevidenzvertrag:** Build/Differential-PASS -> reale Shadow-Abnahme -> begrenzte Active-Feldabnahme. Shadow muss Klassifikation, Mathematik und Mutationsfreiheit belegen. Active muss zusätzlich reale Exportreduktion bzw. transparent nicht bewertbare Episoden, Import-Guard/Recovery, Command-Readback/Effect, Cross-Charge und Hardwareschonung episodespezifisch auswerten.
-- **Sequenzgrenze:** Nach Bereitstellung des Fast-Capture-Releases darf die Adaptive-Spezifikation beginnen, während Fast-Feldevidenz weiter gesammelt wird. Adaptive-Sourcearbeit bleibt separat freigabepflichtig und darf Fast Capture nicht stillschweigend verändern.
-- **Exit:** vollständiger Build-/Differentialnachweis, ausgelieferte Fast-Verifikationslogik, reale Shadow-Evidenz und anschließend begrenzte Active-Evidenz nach `ZEC_ANALYSE_REGELWERK_V1.1.md`; Safety, Command-Effect und Hardware-Schonung separat belegen.
+- **Status:** IN_PROGRESS / EVIDENCE_PENDING; `implementation_state=implemented`; `technical_state=TECHNICAL_BUILD_PASS`; `field_state=SHADOW_PASS_ACTIVE_NEAR_LIMIT_PASS_FULL_IDLE_PENDING`; Releasebasis `V17.0.2 / v17.0.2-20260923`.
+- **Provenienz:** Pretrainer V0.5 -> V0.6.1, Freeze-Spezifikation vom 19.09.2026, V16.2.5-Revalidierung vom 22.09.2026 und reale V17.0.2-Feldevidenz vom 23.–25.09.2026. Aktive Blockautorität: `ZEC_FAST_CAPTURE_A400_R100_PRODUKTIONSSPEZIFIKATION_V16_2_5_REVALIDATED.md`.
+- **Scope:** Fast-Capture-Overlay ausschließlich für `FULL_IDLE` und `NEAR_LIMIT`; `RESERVE_UNKNOWN` bleibt im normalen Baseline-Regelpfad. Produktionskandidat A400/R100. Strategische Baseline `B` und kurzfristiger Fast-Capture-Overlay `O` sind strikt getrennte Schichten.
+- **Release-/Allgemeinfeldbasis:** V17.0.2 real installiert; allgemeiner V17-Feldlauf PASS / FULL_READY. `controller_logic.py` SHA256 `113cb9cc60475cb59294bf07ab750e63580b59112f178948b7e386fd0539b031`.
+- **Shadow-Evidenz:** neuer V17.0.2-V4-Pfad real verwertbar. Ein natürlicher Shadow-Lauf mit zwei Episoden ist `PASS / SHADOW_ONLY`; ein zweiter Lauf ohne Episode korrekt `NOT_EVALUABLE`. Der definierte Shadow-Gate ist damit PASS.
+- **Active-Evidenz:** begrenzter Active-Rollout wurde freigegeben. Ein erster unbeaufsichtigter Lauf war wegen fehlender natürlicher Episode für Fast Capture `NOT_EVALUABLE`; ein externer Watchdog beendete ihn aufgrund eines inzwischen als False Positive identifizierten `TRANSITIONAL:LIMIT_READBACK_CONVERGENCE` und stellte `shadow` korrekt wieder her. Spätere reale Active-Daten enthalten 23.794 Active-Mode-Zeilen, 501 Zeilen mit positivem Overlay, 20 erkannte Fast-Capture-Episoden und max. Overlay 1.642 W. Für frische `NEAR_LIMIT`-Episoden liegen reale Exportreduktion, Command-Tracking, Import-Guard/Recovery und Cross-Charge-Evidenz ohne bestätigten Command-Mismatch vor.
+- **Noch offen:** eine belastbare Active-`FULL_IDLE`-Episode. Fehlende natürliche Episode bleibt `NOT_EVALUABLE`, niemals synthetischer PASS.
+- **Evidence-Tooling-Fund 25.09.2026:** Analyzer-Hotfix2 meldet bei langen gemischten Active-Zeitfenstern `PRIMARY_RESERVE_MISMATCH` auch in Zyklen, in denen die Fast-Capture-Rechnung wegen Night/SOC/Cross-Charge/anderen Blockern nicht anwendbar ist; Calculation-Prüfungen müssen applicability-aware werden. Zusätzlich materialisiert der Analyzer große CSVs aktuell vollständig in RAM und ist deshalb auf dem produktiven Pi für lange Historien ungeeignet. Releaseintegrierte Langzeitanalyse muss streaming/bounded-memory arbeiten oder ausschließlich auf vorher begrenzten Extrakten laufen.
+- **Feldevidenzvertrag:** Zustand, Rechnung, physikalische Wirkung und Recovery getrennt. Active muss reale Exportreduktion bzw. transparent nicht bewertbare Episoden, Import-Guard/Recovery, Command-Readback/Effect, Cross-Charge und Hardwareschonung episodespezifisch auswerten.
+- **Sequenzgrenze:** Adaptive-Spezifikation darf parallel zur verbleibenden Fast-Capture-Feldevidenz fortgeführt werden. Adaptive-Sourcearbeit bleibt separat freigabepflichtig und darf Fast Capture nicht stillschweigend verändern.
+- **Exit:** Active-`FULL_IDLE` ausreichend beobachtet oder transparent `NOT_EVALUABLE` bei klar dokumentiertem Beobachtungsfenster; Analyzer-Anwendbarkeit und ressourcensichere Langzeitanalyse korrigiert/regressionsgeprüft; Safety, Command-Effect und Hardware-Schonung separat belegt.
 
 ### ZEC-BL-PRIMARY-SMA-FLOOR-001 – Sunny-Island Entladeuntergrenze als Capability
 
@@ -194,6 +312,9 @@ Damit ist keine historische S1–S9-Stufe mehr nur implizit oder unaufgelöst.
 
 ### ZEC-BL-CTRL-USABLE-SOC-001 – Block B: strategische usable-SOC-Integration
 
+- **Aktueller Entscheid 18.10.2026:** `SPEC_NEEDED / OPEN` als unabhängiger deterministischer B2-Scope; diagnostischer usable SOC bleibt real implementiert, strategische Runtime-Wirkung **nicht**. Ganzjährige Anwendungsfälle untersuchen, Winter ist nur ein möglicher Kontext. Kein globaler RAW-SOC-Ersatz, kein aus Discharge-Floor erfundener Charge-Headroom, keine implizite Zendure-Netzladung. Die ältere Vorgabe „mit Adaptive zusammenführen“ gilt nur als historische Provenienz und ist im Sequencing abgelöst. Zweck, Nutzen, Kontext, Policy/Arbitration, Fallback und reale Wirksamkeit vor Coding klären.
+
+
 - **Status:** DEFERRED / SPEC_NEEDED; `implementation_state=none`.
 - **Provenienz:** Folgeblock der SMA-Capability-Entscheidung vom 19.09.2026.
 - **Ziel:** den aus realem Roh-SOC und aktueller geräteseitiger Entladeuntergrenze abgeleiteten nutzbaren Primär-SOC gezielt in Winter-/Schwachertragsstrategie verwenden.
@@ -202,12 +323,18 @@ Damit ist keine historische S1–S9-Stufe mehr nur implizit oder unaufgelöst.
 
 ### ZEC-BL-CTRL-CAP-001 – echte weiche Kapazitätsgewichtung
 
+- **Aktueller Entscheid 18.10.2026:** `SPEC_NEEDED / OPEN`, eigenständig von Adaptive/High-SOC und B2; explizites `off|soft`, Default `off` als Zielvertrag (Ist derzeit `diagnostic` ohne Sollwertwirkung); keine Nenn-kWh-Quotenautomatik. Nur bei validiertem Lade-Headroom, unabhängiger Aufnahmefähigkeit, tatsächlicher Allokationsfreiheit und nachweisbarer Endzielwertwirkung. Physische Export-/Safety-/Hardwaregrenzen haben Vorrang; Datenausfall -> neutral. Historischer Child-/Pretrainer-Text darunter als Provenienz erhalten, Sequencing supersediert.
+
+
 - **Status:** SPEC_NEEDED.
 - **Roadmapbindung ab 20.09.2026:** Child-Scope von `ZEC-BL-CTRL-ADAPTIVE-001`; die laufende Lernmodell-/Pretrainer-Arbeit ist primärer Spezifikationsinput.
 - `HARVEST_CAPACITY_WEIGHTING_MODE` ist historisch bewusst diagnostisch geblieben; keine echte Reglerwirkung vortäuschen.
 - Eine neue weiche Gewichtung ist eine Reglerstrategie. Vor produktiver Wirkung ist sie mit historischen Produktivdaten über belastbare Offline-/Replay-/Pretrainer-/Shadow- bzw. simulationsnahe Evidenz zu prüfen; der spätere allgemeine Produktiv-Simulator `ZEC-BL-SIM-001` ist dafür keine zwingende Vorbedingung. Danach Differential-/Konvergenz-/Hardwareschonungsbewertung und explizite Freigabe.
 
 ### ZEC-BL-CTRL-001 – ertrags-/SOC-bewusste Ladeverteilung weiterentwickeln
+
+- **Aktueller Entscheid 18.10.2026:** `DEFERRED / EVIDENCE_GAP` als lernender Teil unter der erhaltenen Adaptive-Historie. 23-Tage-A1-Evidenz belegt begrenzte Wirksamkeit des bestehenden High-SOC-Share-Gates, jedoch keine bewiesene Überlegenheit einer alternativen Regelung; bei Wiedervorlage Architektur jenseits High-SOC und echte Reglerstellbarkeit kritisch prüfen. Kein Coding bis erneute Nutzen-/Scopeentscheidung.
+
 
 - **Status:** OPEN.
 - **Roadmapbindung ab 20.09.2026:** Child-Scope von `ZEC-BL-CTRL-ADAPTIVE-001`; nicht mehr als separater späterer Block hinter `SIM-001` geplant.
@@ -216,6 +343,9 @@ Damit ist keine historische S1–S9-Stufe mehr nur implizit oder unaufgelöst.
 - Vor produktiver Reglerwirkung: Lernzustand/Persistenz/Reset, Confidence/Fallback, belastbare Offline-/Replay-/Pretrainer-/Shadow-/Differential-Evidenz, Konvergenz/Oszillation, Zustand/Rechnung/Wirkung/Recovery und Hardwarebelastung.
 
 ### ZEC-BL-BATCARE-001 – Battery Care / Winter- und Reserve-SOC-Erhaltung
+
+- **Aktuelle Winterpriorität 18.10.2026:** `SPEC_NEEDED`; nach S3 möglichst zeitnah, bei übergroßem B2/C1-Aufwand **vorziehen** statt komplexe Allokationsscopes vor Winter zu erzwingen. Primärer zu prüfender Zweck: Zendure in langen Schwachertragsphasen nicht unnötig auf sehr niedrigem SOC halten; reale Nutzerbeobachtung, dass bei ca. 9 % keine autonome Nachladung beobachtet wurde, ist keine Garantie über sämtliche BMS-Modi. Saison-Policy, PV-Vorrang, explizit genehmigte optionale Netzladung, Episode, Trigger/Ziel-SOC, Hysterese, Cross-Charge-Verbot, Hardware- und Recoveryvertrag vor Sourcearbeit spezifizieren. Keine Netzladefreigabe aus B2 oder C1 ableiten. Die historische „nach Adaptive“-Bindung unten ist durch diese Entscheidung hinsichtlich Reihenfolge supersediert.
+
 
 - **Status:** SPEC_NEEDED.
 - **Roadmappriorität ab 20.09.2026:** unmittelbar nach `ZEC-BL-CTRL-ADAPTIVE-001`, ausdrücklich wegen der zeitnahen Winterrelevanz.
@@ -233,11 +363,27 @@ Damit ist keine historische S1–S9-Stufe mehr nur implizit oder unaufgelöst.
   - Leap-Day-/Kalendersemantik, SOC-Freshness, Exit-Neutralisierung, Events/Measurement/Settings und No-Regression sind zu spezifizieren.
 - Beispielwerte aus dem Brainstorming (z. B. 12/20 %) sind **keine allgemeinen Softwaredefaults**.
 
+### ZEC-BL-BATTERY-SOH-001 – diagnostische reale Kapazitäts-/Alterungserkennung (NEU 18.10.2026)
+
+- **Status:** `DEFERRED / SPEC_NEEDED`; `implementation_state=none`; eigenständige Diagnostik, **nicht** B2/C1/Adaptive oder Battery Care automatisch integriert.
+- **Provenienz:** Herbst-/Adaptive-Fachgespräch vom 18.10.2026; bisheriger Hinweis auf Ladeannahme-/Taperlernen unter `ZEC-BL-CTRL-001` ersetzt keine reale Energie-/SOH-Kapazitätsbestimmung.
+- **Zweck:** langfristig erkennen, ob die unter definierten und vergleichbaren Bedingungen messbare effektive Batteriekapazität abnimmt. Messpunkt (AC/Batterieseite), Wirkungsgrad, BMS-SOC-Korrekturen, Temperatur, Anfangs-/End-SOC, Mindesthub, Metadatenqualität und Unsicherheit sind vor jeder quantitativen SOH-Aussage zu klären.
+- **Nichtziele:** kein unmittelbares Ändern von SOC-, Batterie-, Lade-/Entlade- oder Commandgrenzen; keine Alterungsdiagnose aus bloßer Ladeleistungs-/Taperabweichung; kein Automatik-Ersatz der Nennkapazität in C1. Erst Datentauglichkeit prüfen; bei unzureichender Evidenz `NOT_EVALUABLE`.
+
 ### ZEC-BL-MULTI-001 – echter Multi-Zendure-Command-/Regelpfad
 
 - **Status:** DEFERRED / SPEC_NEEDED.
 - Graph/Entitymodell kann mehrere Zendures darstellen. Der produktive Commandpfad ist weiterhin auf eine aktive Controller-/`DEVICE_ID`-Instanz ausgelegt.
 - Echte Zielallokation, Priorität, Safety, Readback, Wirkung, Ausfall einer Unit und gemeinsame Netzkonvergenz müssen separat spezifiziert werden.
+
+### ZEC-BL-DOC-ARCH-001 – versionsgebundene Architektur-/Historien-Dokumentation in `docs/` (NEU 19.10.2026)
+
+- **Status 20.10.2026:** `CLOSED / V17_1_0_DOC_GATE_PASS` für erstmalige technische Umsetzung; dauerhafte Releasepflicht weiterhin aktiv. Ursprünglich `OPEN / DOC_POLICY_DEFINED` zum Beschluss 19.10. (damals noch nicht im V17.0.2-Release).
+- **Zweck:** Der Releasestand muss neben ausführbarem Code die fachliche Absicht, die tatsächlich implementierten Daten-/Regler-/Safety-/Commandpfade, Designentscheidungen und deren Historie ohne Abhängigkeit von einem Chat nachvollziehbar dokumentieren.
+- **Releasepflicht ab nächstem Entwicklungs-/Produktrelease:** `docs/INDEX.md`, strukturierte `docs/architecture/`, `docs/specifications/`, `docs/decisions/`, `docs/history/` als schlanke, versions-/statusgetrennte Struktur; bei relevanten Sourceänderungen betroffene As-built-/Spec-/ADR-Dokumente gemeinsam aktualisieren. Source-/Manifest-/Hash-/Fresh-extract-Prüfung und `DOC_ARCH_HISTORY_GATE` gemäß `01` § 6b und `06` § 13 einführen. Bereits veröffentlichte V17.0.2-Dateien bleiben byteidentisch.
+- **Historie ausdrücklich erwünscht und pragmatisch:** Existierende historische Original-Spezifikationen/Entscheidungen bevorzugt im Original erhalten und indizieren, zuerst `ZEC_FAST_CAPTURE_A400_R100_PRODUKTIONSSPEZIFIKATION_V16_0_2.md`. Die im Ledger belegte V16.2.5-Revalidierungsfassung fehlt als zugängliches Original (`MISSING_ORIGINAL`), darf nicht fingiert werden. Aus realem V17.0.2-Code abgeleitete aktuelle Architektur erhält eigenen `AS_BUILT`-Status. Ältere Entscheidungen mit belegter Provenienz gern ergänzen, ohne ein vollständiges retrospektives Großprojekt zu erzwingen.
+- **Gates/No-Drop:** historisch nicht auffindbares Original allein kein Releaseblocker; fehlende/inkorrekte *aktuelle* As-built-Dokumentation einer relevanten Änderung oder falsche Releasebehauptung schon. Keine neue Roadmapautorität in `docs`, `docs/ZEC_Master_Backlog.md` bleibt Snapshot. Historische Quellen nicht vor bestandenem `BACKLOG_NO_DROP_GATE` entfernen.
+- **Abgrenzung:** keine aktuell genehmigte Controller-/Installer-Sourceänderung, keine eigenständige Versionsvergabe durch die Quellenpflege; Umsetzung im nächsten ohnehin anstehenden Entwicklungs-/Releaseblock statt Verzögerung von S3/B2/C1/Battery Care.
 
 ### ZEC-BL-REL-001 – repo-zentrierter/reproduzierbarer Releaseprozess
 
@@ -251,10 +397,33 @@ Damit ist keine historische S1–S9-Stufe mehr nur implizit oder unaufgelöst.
 - Strukturintegrität des XLSX ist belegt; Dashboard enthält noch historischen „Startwert V12.8.10“.
 - Werte/Bezeichnungen gegen reale V16-Registry und `config.example.json` prüfen; keine anlagenspezifischen Werte als allgemeine Defaults übernehmen.
 
+### ZEC-BL-CTRL-NIGHT-MINSOC-GRID-001 – Nachtfenster + Zendure-MIN_SOC darf Grid/AUTO nicht blindlegen
+
+- **Status 20.10.2026:** `FIX_IMPLEMENTED / TECHNICAL_PASS / NATURAL_NIGHT_MIN_SOC_EXPORT_FIELD_PENDING`; `implementation_state=implemented`, V17.1.0-Fix und deterministische Regressionsfälle PASS. Historische V17.0.2-Evidenz 25.09. bleibt, der damals geltende `RELEASE_BLOCKER_NEXT_RELEASE` ist technisch erfüllt.
+- **Realer Fund:** Im aktiven Nachtfenster erreicht Zendure den globalen `MIN_SOC`. `pause_fixed_night_discharge_for_reserve_soc()` ruft `soc_limit_hold(... MIN_SOC ...)` auf und liefert `False`; `run_once()` kehrt dadurch vor `refresh_grid_power_for_display()`/`read_grid_power()` und vor der normalen AUTO-Regelung zurück. Der allgemeine Grid-State altert anschließend bis `stale`. Im beobachteten Fall fror der letzte Wert ab ca. 01:24 ein und wurde im ersten Zyklus nach dem konfigurierten Nachtende 05:30 wieder aktualisiert.
+- **Control-Impact:** Der Defekt ist nicht nur UI-/Diagnosekosmetik. Entsteht bei `night_active && Zendure_SOC <= MIN_SOC` realer PV-Überschuss/Export, wird dieser im betroffenen Pfad nicht neu eingelesen und kann daher keine Zendure-Ladung auslösen. Das verletzt im betroffenen Zeitfenster die Invariante „aktuell vermeidbare Einspeisung vor strategischer Ladeverteilung“.
+- **Abgrenzung:** `MIN_SOC` bleibt harte Entladegrenze und darf keine weitere Zendure-Entladung erlauben; Laden bei realem Export muss dagegen weiterhin möglich sein, sofern MAX_SOC, Command-, Cross-Charge- und sonstige Safety-Grenzen es erlauben. Der Primärspeicher-SOC ist kein Trigger dieses Fehlers. Fast Capture ist nicht ursächlich; im realen Incident war Fast-Capture-Wirkung 0 W.
+- **Zielkorrektur:** Nacht-MIN_SOC darf die Entladung neutralisieren, aber nicht Grid-Telemetrie und exportseitige AUTO-Ladereaktion blindlegen. Der genaue Implementierungsweg ist im nächsten Release-Scope source-seitig zu bestimmen; eine reine Display-Refresh-Korrektur reicht **nicht**, wenn der AUTO-Ladepfad weiterhin vorzeitig verlassen wird.
+- **Pflichttests:** mindestens (1) Nacht+MIN_SOC+Netzbezug => keine Entladung/korrekte Neutralisierung; (2) Nacht+MIN_SOC+PV-Export => frische Grid-Evidenz und zulässige Ladeentscheidung; (3) Wechsel Import↔Export bei MIN_SOC; (4) Nachtende 05:30/konfiguriertes Ende ohne Latch; (5) MAX_SOC-/Cross-Charge-/Command-Guard-No-Regression; (6) Status/Measurement/Reason bleiben aktuell und konsistent.
+- **Exit:** Sourcefix + fokussierte Regression + vollständige Releasegates; reale Feldbeobachtung bei passender Low-SOC-/Nachtkonstellation oder ausdrücklich dokumentiertes `NOT_EVALUABLE`, falls die natürliche physische Exportepisode vor Release nicht entsteht. Technische Regression darf dadurch nicht entfallen.
+
+### ZEC-BL-GRID-SMA-OBIS-001 – SMA-Speedwire-/OBIS-Parser strukturell härten
+
+- **Status 20.10.2026:** `FIX_IMPLEMENTED / TECHNICAL_PASS / NATURAL_REOCCURRENCE_MONITORING`; `implementation_state=implemented`, V17.1.0 strukturierter Speedwire-/OBIS-Parser mit Negativtests PASS, real frische SMA-Grid-Werte im HOLD. Historischer V17.0.2-Fund bleibt dokumentiert; seine exakte Extremwertursache nicht rückwirkend als bewiesen behaupten.
+- **Realer Fund:** Wiederholt tritt exakt `-1.730.098,8 W` als dekodierter Netzleistungsrohwert auf. `GRID_POWER_PLAUSIBILITY_MAX_ABS_W=30000` verwirft ihn korrekt, sodass der Extremwert nicht in AUTO-Regelung oder Glättung eingeht.
+- **Bestätigter Sourcefehler:** V17.0.2 sucht die Gesamtwirkleistungs-OBIS-Kennungen `00 01 04 00` und `00 02 04 00` per globaler Bytefolgensuche im vollständigen UDP-Datagramm und liest die folgenden vier Bytes als Wert. Damit werden Speedwire-/Protokollstruktur, deklarierte Länge, echte OBIS-Recordgrenzen und 4-/8-Byte-Werttypen nicht ausreichend als Parservertrag erzwungen. Eine OBIS-ähnliche Bytefolge innerhalb eines anderen Payloadwertes kann dadurch prinzipiell fehlinterpretiert werden.
+- **Topologie:** Im realen Netz existieren zwei SMA-Messgeräte: der für ZEC ausgewählte Sunny Home Manager mit integriertem Hausanschlusspunktzähler sowie ein zweiter Energy Meter für die drei Zaun-Wechselrichter. Die Seriennummernselektion bleibt erforderlich, ersetzt aber keine strukturelle Frame-/OBIS-Validierung.
+- **Entscheidung 25.09.2026:** Ein 72-h-Raw-Frame-Auditor ist **keine Vorbedingung** für den Fix. Die Parserdefizienz ist unabhängig vom exakten historischen Raw-Frame reparaturwürdig. Ob genau der wiederkehrende Wert `-1.730.098,8 W` ausschließlich aus dieser Defektklasse stammt, bleibt bis zur Nachbeobachtung eine offene Kausalitätsdetailfrage.
+- **Zielkorrektur:** SMA-/Speedwire-Frame und Protokolltyp strukturell validieren; Geräteidentität sauber lesen; OBIS-Datensätze sequentiell an Recordgrenzen dekodieren; 4-/8-Byte-Werttypen und Längen respektieren; unbekannte zusätzliche OBIS-Felder robust überspringen; verkürzte, inkonsistente oder fremde Frames verwerfen; konfigurierte Seriennummernselektion beibehalten; 30-kW-Plausibilitätsfilter als zweite Schutzschicht unverändert erhalten.
+- **Pflichttests:** (1) bekannte valide Home-Manager-Telegramme liefern identische korrekte Leistung; (2) wechselnde OBIS-Reihenfolge/zusätzliche Felder; (3) `00 01 04 00` bzw. `00 02 04 00` innerhalb eines 8-Byte-Payloads erzeugt keinen False Match; (4) falsche Protokoll-ID => Reject; (5) Truncation/Längenfehler => Reject; (6) beide realen SMA-Seriennummern => nur ausgewählter Home Manager aktualisiert Grid Power; (7) Sentinel-/ungültige Werte; (8) Plausibilitätsfilter bleibt wirksam.
+- **Feldevidenz nach Fix:** normaler SMA-Netzleistungspfad muss stabil bleiben; bestehende Logs auf erneutes Auftreten des Extremwertes beobachten. Verschwindet er über ein repräsentatives Betriebsfenster, stützt dies die konkrete Root-Cause-Zuordnung. Tritt er erneut auf, wird erst dann ein gezielter Raw-Frame-Capture notwendig.
+- **Exit:** strukturierter Parser implementiert, fokussierte + vollständige Regression PASS, reale normale Netzleistungsmessung bestätigt; kein nächster Produktrelease mit unverändertem globalem Byte-Search-Parser.
+
 ### ZEC-BL-DIAG-001 – aktuelle Fehler vs. historisches `last_error`
 
 - **Status:** OPEN / observation-hardening.
 - Diagnosesemantik weiter schärfen, damit historische Fehler nicht als aktueller aktiver Incident erscheinen.
+- **Realfund 25.09.2026:** Während `NIGHT_RESERVE_STOP`/`SOC_LIMIT_HOLD:MIN_SOC` und gleichzeitig stale Grid-Telemetrie zeigte die Statusoberfläche `HOLD – Grund: Netzleistung nahe 0 W`. Reason-Auflösung muss aktuelle operative Limiter-/Target-Final-Gründe gegenüber generischem/sticky HOLD-Kontext korrekt priorisieren und darf einen stale Netzleistungswert nicht als aktuellen fachlichen HOLD-Grund suggerieren.
 
 ### ZEC-BL-CMD-OBS-001 – Command-/Readback-Feldevidenz
 
@@ -596,3 +765,55 @@ Technischer Nachweis: fokussierte Regression **51 Tests PASS**; realer `--latest
 Reale V17.0.2-Installation und neue Shadow-Feldevidenz bleiben **FIELD_PENDING**. V17.0.1-Shadow-V4-Daten werden wegen des real nachgewiesenen Evidence-Pfadddefekts nicht als Fast-Funktionsnachweis verwendet. `active` bleibt nicht freigegeben. Der Desktop-Warning-Chip/Popover ist real visuell PASS; die mobile Bottom-Sheet-Variante bleibt als UI-Feldevidenz offen.
 
 **BACKLOG_NO_DROP_GATE = PASS (85/85 IDs erhalten; 0 neue IDs)**
+
+
+### V17.0.2 Final Package / Release Reconciliation 23.09.2026
+
+Das exakt veröffentlichte Installerpaket `zendure_controller_v17_0_2.zip` hat SHA256 `82bd2db52a71b4a4e56f8e8c39e30511494fb02f8735909667052b73bd82f311` und Größe 14.402.481 Byte. Finaler Paketpfad: Release-Hygiene PASS; Source-Manifest **932/932 PASS**; kanonischer ZIP-Root `zendure_controller_v17_0_2/` PASS; ZIP-Integrität PASS; Fresh-extract Release-Hygiene PASS; Fresh-extract Manifest **932/932 PASS**; Build-Evidence PASS; Datenblatt-Gate PASS; Paket-Root-Verifikation PASS. Ein Build-Runtime-Lauf des echten Installers mit exakt diesem ZIP erreichte `Package-Identität: PASS`, Datenblatt PASS, Runtime-Readiness-Smoke PASS und Build-Evidence PASS und stoppte anschließend erwartungsgemäß am Host-Gate `Installer muss als Benutzer pi gestartet werden`; dies ist kein Ersatz für den realen Raspberry-Pi-Updatefeldtest.
+
+`ZEC-BL-CTRL-FASTCAP-001` bleibt **IN_PROGRESS / TECHNICAL_BUILD_PASS / FIELD_PENDING**. V17.0.1 bleibt reale Runtimebasis bis zum erfolgreichen V17.0.2-Update. Danach müssen neue Shadow-Daten erzeugt werden; V17.0.1-Fast-V4-Evidence wird nicht wiederverwendet. `active` bleibt nicht freigegeben.
+
+**BACKLOG_NO_DROP_GATE = PASS (85/85 IDs erhalten; 0 neue IDs)**
+
+### V17.0.2 Nacht-MIN_SOC-/SMA-Parser-Reconciliation 25.09.2026
+
+Die reale V17.0.2-Evidenz ergänzt genau zwei stabile Ledger-IDs:
+
+1. `ZEC-BL-CTRL-NIGHT-MINSOC-GRID-001` – real bestätigter Nacht-/MIN_SOC-Control-Gap; **RELEASE_BLOCKER_NEXT_RELEASE**.
+2. `ZEC-BL-GRID-SMA-OBIS-001` – strukturell unzureichender SMA-Speedwire-/OBIS-Parser; **BUG_CONFIRMED / FIX_REQUIRED_NEXT_RELEASE**. Die exakte historische Raw-Frame-Ursache des wiederkehrenden Extremwertes ist keine Fix-Vorbedingung.
+
+Alle bisherigen **85** stabilen IDs bleiben vollständig erhalten; keine Vorgänger-ID wurde entfernt oder umbenannt. Das aktuelle Ledger enthält damit **87 eindeutige stabile IDs**.
+
+**BACKLOG_NO_DROP_GATE = PASS (85/85 Vorgänger-IDs erhalten; 2 neue IDs; Gesamt 87)**
+
+### Projektquellen-/Realfeld-Synchronisation 25.09.2026
+
+Die kanonischen Quellen `00`, `01`, `05`, `06` und `07` wurden auf die reale V17.0.2-Basis synchronisiert. Festgehalten sind insbesondere:
+
+- V17.0.2 real installiert und allgemeiner Feldlauf PASS / FULL_READY;
+- Fast-Capture-Shadow-Gate PASS; Active-`NEAR_LIMIT` in den beobachteten Aspekten real PASS; Active-`FULL_IDLE` weiterhin EVIDENCE_PENDING;
+- Fast-Capture-Evidence-Tooling muss Calculation-Anwendbarkeit und bounded-memory-Langzeitanalyse härten;
+- `ZEC-BL-CTRL-NIGHT-MINSOC-GRID-001` und `ZEC-BL-GRID-SMA-OBIS-001` sind zwingender Scope des nächsten Produktreleases;
+- produktive Real-Pi-Analysen großer V4-Historien müssen streaming/bounded-memory erfolgen;
+- Nomenklatur: „Fast Capture“, bei Platzknappheit „FastC“, nicht kontextlos „Fast“.
+
+Keine der 85 Vorgänger-IDs wurde entfernt oder umbenannt. Die zwei neuen IDs bleiben stabil erhalten; Gesamtbestand 87.
+
+**BACKLOG_NO_DROP_GATE = PASS (85/85 Vorgänger-IDs erhalten; 2 neue IDs; Gesamt 87)**
+
+
+### Strategie-/Herbst-Reconciliation 18.10.2026
+
+- Abgestimmte Richtungsentscheidung nach 23-Tage-Herbstanalyse: Adaptive-A1 begründet `DEFERRED/EVIDENCE_GAP`; `ZEC-BL-CTRL-S3-001`, `ZEC-BL-CTRL-USABLE-SOC-001` (B2) und `ZEC-BL-CTRL-CAP-001` (C1) eigenständige fachliche Scopes; Battery Care winterpriorisiert. Historischer 20.09.-Umbrella-Zuschnitt und spätere Vorgänger-Roadmap-Zitate bleiben als Provenienz erhalten, ihre Sequenz ist supersediert.
+- Getrennte normative Ebenen: `05` alleinige Ledger-/Roadmapautorität; `ZEC_STRATEGIEARCHITEKTUR_ENTSCHEIDUNGSSTAND_20261018.md` hält fachliche Richtungsentscheidungen fest, **nicht** als freigegebene Implementierungsspezifikation; `ZEC_S3_FACHLICHE_PRODUKTIONSSPEZIFIKATION_ENTWURF_20261018.md` ist nicht freigegebener S3-Entwurf; `ZEC_A1_WIRKSAMKEIT_23T_DECISION_BRIEF_20261017.md` ist retrospektive Evidenz.
+- Neues eigenständiges diagnostisches Forschungsthema `ZEC-BL-BATTERY-SOH-001` bewahrt die konkrete Kapazitätsalterungs-Frage, ohne sie stillschweigend als C1/Adaptive-Produktwirkung zu deklarieren.
+- Zwei zwingende Fehlerkorrekturen `ZEC-BL-CTRL-NIGHT-MINSOC-GRID-001` und `ZEC-BL-GRID-SMA-OBIS-001` bleiben uneingeschränkte Next-Release-Blocker. Command-Episoden aus dem Oktober bleiben gezielte Analyse-/Recovery-Provenienz unter vorhandener Command-/Observability-Arbeit, ohne neuen pauschalen Pi-Langanalyseblock.
+- Aktuelle Produktbasis bleibt V17.0.2; keine S3-/B2-/C1-/Adaptive-/Battery-Care-Sourceänderung, keine neue Runtime oder Release-PASS durch die Quellpflege.
+- **BACKLOG_NO_DROP_GATE:** Alle **43** im gelieferten Ledgertext explizit vorhandenen stabilen ZEC-BL-/ZEC-EV-IDs bleiben erhalten; eine neue `ZEC-BL-BATTERY-SOH-001`, somit **44** textuell nachweisbare IDs. Die aus früheren Projektständen überlieferte Angabe „87 eindeutige IDs“ ist im aktuellen gelieferten Master-Ledger **nicht einzeln prüfbar**. Kein Dokument wird gelöscht, historische Entscheidungs-/Planungszeilen bleiben erhalten. Die historische 87er-Zählung ist bei späterer gezielter Auditierung zu klären, bevor Quellen entfernt/archiviert werden.
+
+**BACKLOG_NO_DROP_GATE = PASS für 43/43 im aktuellen Ledgertext verifizierbare Vorgänger-IDs; 1 neue explizite ID; keine entfernten Quellen. Historischer 87/87-Vollbestand = NOT_EVALUABLE aus diesem Dateiinhalt; deshalb keine Quellenbereinigung zulässig, bevor die Diskrepanz geklärt ist.**
+
+
+### Architektur- und Historien-Dokumentationsentscheid 19.10.2026
+
+Der Nutzer bestätigt die künftige Versionierung wesentlicher technischer As-built-Dokumente, Produktionsspezifikationen und Architekturentscheidungen im Source-`docs/`, einschließlich möglichst leicht zu übernehmender historischer Originalunterlagen. Die damals noch nicht implementierte Fast-Capture-Spezifikation für V16.0.2 liegt wieder als Original vor; die V16.2.5-Revalidierung ist nur historisch belegt, als Original aktuell nicht verfügbar. Dies wird unter der stabilen neuen ID `ZEC-BL-DOC-ARCH-001` geführt; die Dokumentationspolicy ist in `01`/`06` festgelegt, die Integration in einen realen Release samt QA steht noch aus. Kein anderer Backlogpunkt wird geändert, gelöscht oder ersetzt. Die vorher textuell erkennbaren 44 eindeutigen ZEC-BL-/ZEC-EV-IDs bleiben erhalten; neu 1 -> 45 belegbare IDs. Der historisch genannte 87er-Gesamtbestand bleibt **nicht unabhängig verifiziert**, daher weiterhin keine Projektquellenbereinigung/History-Drops.

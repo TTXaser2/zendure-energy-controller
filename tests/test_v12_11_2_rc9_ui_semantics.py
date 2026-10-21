@@ -17,8 +17,8 @@ class V12112Rc9UiSemanticsTests(unittest.TestCase):
         web_ui._replay_health_cache.update({"port": None, "available": False, "checked_epoch": 0.0, "refreshing": False})
 
     def test_version(self):
-        self.assertEqual("17.0.2", version.APP_VERSION)
-        self.assertEqual("V17.0.2", version.APP_VERSION_LABEL)
+        self.assertEqual("17.1.1", version.APP_VERSION)
+        self.assertEqual("V17.1.1", version.APP_VERSION_LABEL)
 
     def test_replay_probe_is_non_blocking_and_schedules_refresh(self):
         thread = Mock()
@@ -174,7 +174,7 @@ class V12112Rc9UiSemanticsTests(unittest.TestCase):
 
     def test_mini_graph_uses_newest_buffer_point_wording(self):
         js = Path("static/status_v2.js").read_text(encoding="utf-8")
-        self.assertIn("neuester: ${fmtPower(values.at(-1))}", js)
+        self.assertIn("Verlaufspunkt", js)
         self.assertNotIn("aktuell ${fmtPower(values.at(-1))}", js)
 
     def test_resync_empty_texts_are_compact(self):
