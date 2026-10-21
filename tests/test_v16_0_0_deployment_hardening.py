@@ -125,7 +125,7 @@ class TestV1600DeploymentHardening(unittest.TestCase):
         self.assertIn("else:\n        mqtt_bridge.start()", guard)
         self.assertNotIn("mqtt_bridge.start()\n    if first_install_setup", guard)
         field = (ROOT / "tools/v17_field_acceptance.py").read_text(encoding="utf-8")
-        self.assertIn('EXPECTED_VERSION = "17.1.1"', field)
+        self.assertIn('EXPECTED_VERSION = "17.1.2"', field)
         self.assertIn('"FIRST_INSTALL_SETUP"', field)
         self.assertIn('"CLEAN_FRESH_INSTALL"', field)
         self.assertIn("effective_local_web_endpoint", field)

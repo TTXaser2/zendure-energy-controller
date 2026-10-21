@@ -4,14 +4,14 @@
 **Status:** kanonische, persistente Entwicklungsledger- und Roadmap-Autorität  
 **Produktbasis:** V17.1.0 reale Pi-Runtime / `TECHNICAL_BUILD_PASS` / Update und allgemeine Feldabnahme `FULL_READY` **PASS** am 20.10.2026. Die V17.0.2-Pflichtdefekte sind in V17.1.0 implementiert und regressionsgeprüft; spezifische natürliche NIGHT/MIN_SOC-/Stale-/S3-Strategie-Evidenz bleibt entsprechend unten `EVIDENCE_PENDING`/`NOT_EVALUABLE`. Fast Capture: bisheriger Active-NEAR_LIMIT-Nachweis erhalten, Active-FULL_IDLE weiterhin EVIDENCE_PENDING.
 
-## V17.1.1 UX-Qualitätsrelease – technische Freigabe noch ausstehend
+### ZEC-BL-UI-SETTINGS-HELP-001 – Anwendergerechte Settings-Erklärungen und Bereichszwecke
 
-Die Änderungen des freigegebenen UX-Blocks sind auf der technisch bereits abgenommenen V17.1.0-Basis implementiert: `ZEC-BL-UI-SETTINGS-HELP-001` und `ZEC-BL-UI-GRID-MINICHART-001`. 190/190 operative Settings und 74/74 Bereiche erhalten nutzerorientierte Hilfe, deren Einzelwirkung gegen Source-Consumer und Schutzgrenzen zu prüfen bleibt. Minigraph 3-s-Poll, 5/15/60-min mit zeitgetreuen Punkten und read-only Graph-V3-Langfenster. Volle Regression inkl. ResourceWarning und Chromium-Funktionstests auf dem Entwicklungsstand PASS; **keine Produktivinstallation**, TECHNICAL_BUILD_PASS erst nach eigenständigem Paket-/Releasegate. Historische V17.1.0- und Roadmapeinträge sind Provenienz.
-
-## Freigegebener UX-Qualitätsblock 20.10.2026 – Vorrang vor Battery Care
-
-**Nutzerfreigabe:** Settings-Hilfen und Abschnittserklärungen zuerst vollständig fachlich überarbeiten, danach Minigraph mit 3-s-Aktualisierung und verständlich wählbarem zeitlichem Rückblick; erst danach S3-Feldwirkung und Battery-Care-Produktionsspezifikation. Kein Wechsel der aktuellen realen V17.1.0-Laufzeit vor einem vollständig bestandenen eigenen Release-/Feldgate.
-
+- **Status:** `IN_PROGRESS / USER_APPROVED_20261020 / IMPLEMENTATION_PARTIAL`; vollständige inhaltliche Umsetzung und Freigabe **noch offen**.
+- **Zweck/Pflicht:** Jede tatsächlich angebotene Einstellung muss ohne Entwicklungs- oder Elektrotechnik-Vorkenntnisse ihren konkreten Systemzweck und die Wirkung auf Regelung, Steuerausgabe oder reinen Diagnose-/Speicher-/Zugriffspfad erläutern. Der Zusammenhang zu benachbarten Einstellungen, Aktivierungsschaltern, Quellen, wirksamen Limits, Ausnahmen und Vorrangregeln ist **Pflichtbestandteil des einleitenden Haupttextes** und darf nicht in isolierte technische Unterkapitel ausgelagert werden. Benutzer müssen unterscheiden können zwischen *gespeichert*, *aktiviert*, *anwendbar*, *berechnet* und *physisch wirksam*.
+- **Hilfestruktur:** Direkt unter jeder Bereichsüberschrift steht eine sinnvolle, dauerhaft sichtbare Erklärung zum jeweiligen Zweck. Die Hilfe je Setting behandelt fachlich korrekt: (1) Wozu und Verhältnis zu anderen Settings/Reglerpfaden, (2) Ein/Aus bzw. Änderung und Optionen, (3) Wann/nicht anwendbar, (4) konkrete Auswirkungen und übergeordnete Schutzregeln, (5) passende anschauliche Beispiele. Technische Kennungen und Codes nur ergänzend für Experten.
+- **Kein generischer Fallback als fertige Hilfe:** Formeln wie `Konfiguration für …`, `wirkt gemäß …`, `zusammengehörige Parameter …`, `RICH/BASE` oder rein technische Metadaten gelten nicht als Endnutzer-Erklärung. Alle operativ sichtbaren Settings einschließlich Standard/Experte müssen individuell gegen echten V17.1.0-Source-Consumer/Registry und Hardware-Safety begründet werden. Fehlende oder nicht verifizierbare Beschreibung wird als Qualitäts-Finding inventarisiert und verhindert UI-Completion.
+- **Umsetzung in überprüfbaren Scheiben:** erster Source-Slice S3-Saison-/Tagesprofiltexte, Hilfedialog-Grundstruktur und sichtbare Abschnittszwecke; noch **kein** Gesamt-PASS für ca. 190 operative Settings. Erweiterung in der Registry automatisiert inventarisieren und in fachlichen Schritten abarbeiten, ohne die QA für Teilfortschritt als Gesamtabnahme auszugeben.
+- **Tests/Exit:** Quellenmapping und Vollständigkeits-/Placeholder-Gates, nachvollziehbare Text-/Wirkungsprüfung jedes aktiven Keys, i18n/mobile/standard/expert/accessibility, Headless-Browserprüfung, Negativfälle bei abgeschalteter S3-Policy und unveränderte Command-/Controllerlogik; vollständige Regression und Releasegates erst vor Produktivpaket.
 ### ZEC-BL-UI-SETTINGS-HELP-001 – Anwendergerechte Settings-Erklärungen und Bereichszwecke
 
 - **Status:** `IN_PROGRESS / USER_APPROVED_20261020 / IMPLEMENTATION_PARTIAL`; vollständige inhaltliche Umsetzung und Freigabe **noch offen**.
@@ -21,11 +21,34 @@ Die Änderungen des freigegebenen UX-Blocks sind auf der technisch bereits abgen
 - **Umsetzung in überprüfbaren Scheiben:** erster Source-Slice S3-Saison-/Tagesprofiltexte, Hilfedialog-Grundstruktur und sichtbare Abschnittszwecke; noch **kein** Gesamt-PASS für ca. 190 operative Settings. Erweiterung in der Registry automatisiert inventarisieren und in fachlichen Schritten abarbeiten, ohne die QA für Teilfortschritt als Gesamtabnahme auszugeben.
 - **Tests/Exit:** Quellenmapping und Vollständigkeits-/Placeholder-Gates, nachvollziehbare Text-/Wirkungsprüfung jedes aktiven Keys, i18n/mobile/standard/expert/accessibility, Headless-Browserprüfung, Negativfälle bei abgeschalteter S3-Policy und unveränderte Command-/Controllerlogik; vollständige Regression und Releasegates erst vor Produktivpaket.
 
-**Entwicklungsfortschritt nach CP06, noch kein Release-PASS:** `ZEC-BL-UI-GRID-MINICHART-001` ist `IN_PROGRESS / FOCUSED_QA_PARTIAL`, 5/15/60-Minuten-Fenster, 3-s-UI-Refresh, Zeitachse, echte Gap-/Validity-Semantik und read-only Historienweg prototypisch implementiert. Die endgültige Versionsfreigabe erfordert Source-/Browser-/Performance-/Fresh-Extract-Gates; V17.1.0 bleibt produktiv unverändert. Der Help-Block ist gemäß CP06 fokussiert und vollständig regressionsgeprüft, bleibt ohne eigenes neues Paket nicht produktiv ausgeliefert.
+### ZEC-EV-HOST-FREEZE-001 – Historischer externer Host-Freeze, Provenienz
+- **Status:** `HISTORICAL_EVIDENCE_GAP / NO_NEW_RELEASE_SCOPE`. `RELEASE_INFO_V12_12_2.md` erwähnt einen externen 14-Minuten-Host-Freeze ausdrücklich als damaligen Nicht-Scope. Dieser alte Hinweis wird erhalten, nicht als aktuell reproduzierter ZEC-Fehler eingestuft. Nur bei neuer Beweislage beurteilen.
 
-### ZEC-BL-UI-GRID-MINICHART-001 – Priorisierung und Ergänzung 20.10.2026
+### ZEC-BL-CTRL-REFACTOR-001 – Historische optionale Controllerzyklus-Refaktorierung
+- **Status:** `DEFERRED_IDEA / NO_APPROVED_CODE_SCOPE`. `TECHNICAL_NOTES_V12_8_6.md` nennt eine mögliche spätere größere Refaktorierung. Nicht als Entwicklungspflicht oder freigegebener Umbau der Safetysemantik interpretieren.
 
-- **Neu freigegeben:** Unter Beibehaltung der echten 1-Hz-Netzleistung einen unabhängig gewählten graphischen Rückblick (Ziel: 5/15/60 min, bevorzugter Startwert 15 min) mit sinnvollem Zeitachsen-/Gap-Vertrag und sichtbarer Pollsemantik konzipieren; 3-s-Refresh statt aktuell 10 s, sofern reale Source-/Pi-Performance-/Datenpfadtests das tragen. Keine synthetischen 1-Hz-Samples durch schnelleres Polling der historischen 3-s-Controllerpunkte; zeitlich begrenzte History/Graphdaten verwenden. Erste Umsetzung **nach Abschluss** des Settings-Help-Blocks, kein UI-Release-PASS vor Source-/Browser-/Speicherbudget-Gates.
+
+
+### ZEC-BL-DOC-ARCH-001 – Reconciliation historischer Release-Root-Originale V17.1.2
+
+**Status:** `RECONCILED_AS_HISTORICAL_PROVENANCE`, 185 ausschließlich versionsbezogene Root-Release-/Notes-/Build-Dokumente werden unverändert nach `docs/history/release_root` umgeordnet; Originalbytes/Hashes/Planungsmarker/Quellen und konkrete Ledger-Referenzen sind zusätzlich in `docs/history/release_root/ARCHIVE_NO_DROP_AUDIT.json` dokumentiert. Historische Nicht-Scope-Angaben sind keine nachträglichen Produktaufträge. Sämtliche Markertexte bleiben byteidentisch in den archivierten Originalen, neue separate EV-/Ideen-IDs sind explizit erhalten. Keine anderen oder unbekannten Dokumente werden entfernt.
+
+
+## V17.1.2 – Technische Folge-Reconciliation (21.10.2026)
+
+**Geltungsbereich:** Diese Fassung ist der versionsbezogene Snapshot der kanonischen Projektdatei `05_ZEC_BACKLOG_AND_ROADMAP.md` zuzüglich expliziter Release-Reconciliation; die Projektquelle `05` bleibt alleinige Masterautorität. Produktbasis für die Entwicklung: V17.1.1 mit realem `FULL_READY`-Feld-PASS. V17.1.2 hat ohne Installation noch **KEINEN** eigenen Realfeld-PASS. Historische Statusabschnitte darunter bleiben unverändert als Provenienz.
+
+- `ZEC-BL-UI-SETTINGS-HELP-001`: **IMPLEMENTED / TECHNICAL_QA_PASS / FIELD_UX_PENDING**. 190 operative Settings-Hilfen plus 74 Bereichserklärungen, inkl. Anwendbarkeit/Vorrang/A400-R100; vollständige Tests. Menschliche Feldlektüre und Realbrowserabnahme stehen getrennt aus.
+- `ZEC-BL-UI-GRID-MINICHART-001`: **IMPLEMENTED / TECHNICAL_QA_PASS / FIELD_UX_PENDING**. 60-Minuten-Darstellung einheitlich in Zeitminuten, Rohbelege im Tooltip, 5/15-Minuten-Rohdaten, echte Lücken. Kein neuer Regler-/Sensorpfad.
+- `ZEC-BL-UI-GRID-FOOTER-001`: **NEW / IMPLEMENTED / TECHNICAL_VISUAL_PASS / FIELD_VISUAL_PENDING**. V17.1.1-Fund: Provider-/Freshness-Footer in der Netzkarte bei 60 Min und kleinen Ansichten abgeschnitten. V17.1.2: variable Kartenhöhe/Umbruch, Chromium-15/15-Layoutbelege; auf dem realen Pi nachprüfen. Kein Safety-Change.
+- `ZEC-BL-DEP-README-001`: **NEW / IMPLEMENTED / TECHNICAL_QA_PASS / FIELD_INSTALL_PENDING**. Installations-/Checksum-Vertrag von V17.1.2: keine zirkuläre SHA-Platzhalterkennung im Archiv; echter SHA256 in externer Sidecar-Datei nach Finalfreeze; reguläres Update ausschließlich V17.1.1; Fresh Install nur mit ausdrücklichem `--fresh-install`. Simulierte Deployment-Gates ersetzen keinen Real-Fresh-Install.
+- `ZEC-BL-DOC-ARCH-001`: **IMPLEMENTED / TECHNICAL_HISTORY_NO_DROP_PASS / MAINTENANCE_CONTINUES**. 185 versionierte historische Root-Dokumente unter `docs/history/release_root` byteidentisch und einzeln sha256-/marker-/ledgerreconciliiert. Drei aktuelle Übersichten unter `docs/releases/v17.1.2/` sowie aktuelle As-built-Dokumentation. Historische Provenienz bleibt erhalten.
+- `ZEC-EV-DEP-001` **DEFERRED / REAL_CLEAN_FRESH_PENDING**. Produktiv-Pi ausdrücklich nicht destruktiv zurücksetzen.
+- Adaptive, Battery Care, S3-Naturepisoden, Night/MIN_SOC/GRID-Feldevidenz, Grid-Stale-Realtrigger und Fast-Capture-FULL_IDLE bleiben wie historisch vorgesehen offen; keine automatische Scope-/Statusänderung.
+
+### No-Drop-Status
+
+Sämtliche bisher belegten stabilen `ZEC-BL-`-/`ZEC-EV-`-Kennungen bleiben im Snapshot erhalten. Die historischen 185 Root-Dokumente wurden unter Erhalt der Original-Bytes verschoben; ihre Evidenz-/Planungsmarker sind in `docs/history/release_root/ARCHIVE_NO_DROP_AUDIT.json` je Original abgebildet. Dies ist **keine** Löschung oder Umdeutung früherer Roadmapentscheidungen.
 
 ## 1. Zweck und Persistenzvertrag
 

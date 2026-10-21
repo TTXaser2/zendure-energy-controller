@@ -672,11 +672,12 @@ def build_grid_mini_payload(
     snap: Dict[str, Any], max_points: int = 360, *, window_minutes: int = 15,
     history_points: Optional[List[Dict[str, Any]]] = None, now_epoch: Optional[float] = None,
 ) -> Dict[str, Any]:
-    """Bounded read-only timeline of true controller samples, optionally V3 history.
+    """Read-only measured timeline, minute-bucket *display* only for 60 minutes.
 
-    Never stretch index-spaced points across unknown times or synthesize fresh
-    grid data. The 60-minute window uses a bounded 1-minute V3 history when
-    available; absent V3 data is explicitly marked as incomplete.
+    The short windows preserve actual controller samples. V3 historical entries
+    already have one-minute resolution and must never be advertised as raw
+    instantaneous readings. A current-minute partial mean is not a full minute.
+    No gap is interpolated; no controller or database history is mutated.
     """
     minutes = int(window_minutes)
     if minutes not in (5, 15, 60):
@@ -684,7 +685,8 @@ def build_grid_mini_payload(
     now_s = float(time.time() if now_epoch is None else now_epoch)
     start_ms, end_ms = int((now_s - minutes * 60) * 1000), int(now_s * 1000)
     rows = list(snap.get("graph_history", []) or [])[-max(1, min(int(max_points), 500)):]
-    points: List[Dict[str, Any]] = []
+    raw: List[Dict[str, Any]] = []
+    older: List[Dict[str, Any]] = []
     if minutes == 60 and history_points:
         for item in history_points[:90]:
             if not isinstance(item, dict):
@@ -694,37 +696,83 @@ def build_grid_mini_payload(
             except (ValueError, TypeError, OverflowError):
                 continue
             if start_ms <= ts <= end_ms:
-                value = _safe_float(item.get("value"))
-                points.append({"epoch_ms": ts, "value": value, "time": datetime.fromtimestamp(ts / 1000).strftime("%H:%M:%S"),
-                               "status": "nicht verfügbar" if value is None else ("Bezug aus Netz" if value > 50 else ("Einspeisung / Export" if value < -50 else "ausgeglichen"))})
+                older.append({"epoch_ms": ts, "value": _safe_float(item.get("value")),
+                              "origin": "graph_v3_1min"})
     for row in rows:
         if not isinstance(row, dict):
             continue
         try:
             ts = int(float(row.get("epoch_s", row.get("epoch"))) * 1000)
         except (ValueError, TypeError, OverflowError):
-            continue  # old undated samples cannot be placed honestly on a timeline
+            continue
         if not start_ms <= ts <= end_ms:
             continue
         value = _safe_float(row.get("raw_grid_power_w", row.get("grid_power", row.get("grid_power_w"))))
         if row.get("grid_power_valid") is False or row.get("grid_power_fresh") is False:
             value = None
-        points.append({"epoch_ms": ts, "time": datetime.fromtimestamp(ts / 1000).strftime("%H:%M:%S"),
-                       "value": value,
-                       "status": "Messung nicht verfügbar" if value is None else ("Bezug aus Netz" if value > 50 else ("Einspeisung / Export" if value < -50 else "ausgeglichen"))})
-    # Prefer RAM points at overlapping timestamps; preserve explicit null/gap observations.
-    points = list({item["epoch_ms"]: item for item in sorted(points, key=lambda p: p["epoch_ms"])}.values())
+        raw.append({"epoch_ms": ts, "time": datetime.fromtimestamp(ts / 1000).strftime("%H:%M:%S"),
+                    "value": value, "origin": "controller_raw"})
+    # Identical source timestamps are represented once, including explicit gaps.
+    raw = list({p["epoch_ms"]: p for p in sorted(raw, key=lambda p: p["epoch_ms"])}.values())
+
+    def quality(value: Optional[float]) -> str:
+        return ("Messung nicht verfügbar" if value is None else
+                "Bezug aus Netz" if value > 50 else
+                "Einspeisung / Export" if value < -50 else "ausgeglichen")
+
+    if minutes == 60:
+        # One time slot per real minute. Prefer original controller readings in
+        # overlapping buckets instead of double-counting V3 stored aggregates.
+        buckets: Dict[int, List[Dict[str, Any]]] = {}
+        for item in raw:
+            buckets.setdefault(item["epoch_ms"] // 60000, []).append(item)
+        older_by_bucket = {item["epoch_ms"] // 60000: item for item in older}
+        points: List[Dict[str, Any]] = []
+        for minute in sorted(set(buckets) | set(older_by_bucket)):
+            begin = minute * 60000
+            if minute in buckets:
+                observations = buckets[minute]
+                valid = [p["value"] for p in observations if p["value"] is not None]
+                v = sum(valid) / len(valid) if valid else None
+                origin = "controller_minute_mean" if valid else "controller_invalid"
+                pmin, pmax = (min(valid), max(valid)) if valid else (None, None)
+                sample_count = len(valid)
+                # An invalid sample means we cannot call the minute complete.
+                incomplete = len(valid) != len(observations) or begin < start_ms or begin + 60000 > end_ms
+            else:
+                v = older_by_bucket[minute]["value"]
+                origin = "graph_v3_1min"
+                pmin = pmax = None  # V3 value cannot prove original extrema.
+                sample_count, incomplete = 0, False
+            points.append({"epoch_ms": begin, "interval_start_ms": begin,
+                           "interval_end_ms": begin + 60000, "value": v,
+                           "time": datetime.fromtimestamp(begin / 1000).strftime("%H:%M"),
+                           "status": quality(v), "origin": origin, "sample_count": sample_count,
+                           "min_raw_w": pmin, "max_raw_w": pmax,
+                           "partial_interval": incomplete})
+        display_resolution_s = 60
+    else:
+        points = [{**p, "status": quality(p["value"])} for p in raw]
+        display_resolution_s = None
     if len(points) > 450:
-        # Time-bucket sampling, not an unbounded payload; keep final point.
+        # Short-window overflow keeps chronological original observations, not
+        # synthesized linearly spaced values.
         step = (len(points) + 448) // 449
-        points = points[::step] + ([points[-1]] if points[-1] not in points[::step] else [])
-    valid = [point for point in points if point["value"] is not None]
+        selected = points[::step]
+        points = selected + ([points[-1]] if selected[-1] is not points[-1] else [])
+    valid_points = [p for p in points if p["value"] is not None]
     earliest = points[0]["epoch_ms"] if points else None
     return {"points": points, "count": len(points), "window_minutes": minutes,
-            "from_ms": start_ms, "to_ms": end_ms, "source": "graph_v3_1min+controller_ram" if history_points else "controller_ram",
-            "oldest_sample_ms": earliest, "coverage_partial": earliest is None or earliest > start_ms + 20000,
-            "last_sample_ms": valid[-1]["epoch_ms"] if valid else None,
-            "snapshot_epoch_ms": end_ms, "refresh_interval_s": 3}
+            "from_ms": start_ms, "to_ms": end_ms,
+            "source": "graph_v3_1min+controller_ram" if history_points else "controller_ram",
+            "oldest_sample_ms": earliest,
+            "coverage_partial": earliest is None or earliest > start_ms + (60000 if minutes == 60 else 20000),
+            "last_sample_ms": valid_points[-1]["epoch_ms"] if valid_points else None,
+            "snapshot_epoch_ms": end_ms, "refresh_interval_s": 3,
+            "display_resolution_s": display_resolution_s,
+            # Original points retained for truthful independent inspection; not
+            # used to draw the 60-minute line or to invent a sensor cadence.
+            "raw_points": raw if minutes == 60 else []}
 
 
 def _inventory_cache_path(cfg: Dict[str, Any]) -> str:

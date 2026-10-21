@@ -1,10 +1,10 @@
-# Zendure Energy Controller V17.1.1
+# Zendure Energy Controller V17.1.2
 
-**Release:** `V17.1.1` · **Build-ID:** `v17.1.1-20261020`
+**Release:** `V17.1.2` · **Build-ID:** `v17.1.2-20261021`
 
 ZEC ist ein lokaler, sicherheitsüberwachter Energiespeichercontroller für einen aktiv geregelten Zendure-Speicher mit optionaler Primärspeicherintegration. Unterstützte Netzleistungsmessung: SMA Energy Meter / Sunny Home Manager via Speedwire/UDP und Shelly Pro 3EM beziehungsweise kompatible HTTP-Messpunkte. Die Primärspeicherprofile `evcc_standard`, `custom` (MQTT) und `modbus_template` (u. a. Sunny Island) bleiben erhalten. Eine zweite Zendure-Einheit kann im Status dargestellt werden; daraus entsteht keine zweite produktive Command-Owner-Konfiguration.
 
-## Änderungen in V17.1.1 – anwendergerechte UI-Korrekturen
+## Änderungen in V17.1.2 – anwendergerechte UI-Korrekturen
 
 - Vollständige fachliche Settings-Hilfe und Bereichs-Zwecktexte (190 operative Einstellungen / 74 Bereiche).
 - 3-s-Netzleistungs-Minigraph mit Zeitachse, Gaps, Verlaufswahl 5/15/60 min und transparentem Datenalter.
@@ -23,10 +23,10 @@ Das unverändert deterministische Controller-/Command-/Cross-Charge-/Recovery-Ko
 
 ## Installation und Rollback
 
-Die **aktuelle** Installationsanleitung ist [`README_INSTALLATION.md`](README_INSTALLATION.md), identisch mit [`README_INSTALLATION_V17_1_1.md`](README_INSTALLATION_V17_1_1.md). Reguläre Updates sind ausschließlich von `17.1.0 / v17.1.0-20261019` erlaubt. Der kanonische Installer ist `tools/install_zendure_controller.sh`; er prüft Preflight und Backup vor produktiven Änderungen, installiert nur bei bestandenem Gate und rollt bei nachfolgendem Fehler zurück. Fresh Install erfordert ausdrücklich `--fresh-install` und beginnt fail-closed im `FIRST_INSTALL_SETUP`.
+Die **aktuelle** Installationsanleitung ist [`README_INSTALLATION.md`](README_INSTALLATION.md), identisch mit [`README_INSTALLATION_V17_1_2.md`](README_INSTALLATION_V17_1_2.md). Reguläre Updates sind ausschließlich von `17.1.1 / v17.1.1-20261020` erlaubt. Der kanonische Installer ist `tools/install_zendure_controller.sh`; er prüft Preflight und Backup vor produktiven Änderungen, installiert nur bei bestandenem Gate und rollt bei nachfolgendem Fehler zurück. Fresh Install erfordert ausdrücklich `--fresh-install` und beginnt fail-closed im `FIRST_INSTALL_SETUP`.
 
 ## Dokumentation und Qualitätsgrenzen
 
 Aktuelle Architektur, Scope, technische Begrenzungen und Historie: [`docs/INDEX.md`](docs/INDEX.md). Das technische Datenblatt liegt als DOCX und PDF unter `docs/`; die releasebezogene Backlog-Kopie liegt in `docs/ZEC_Master_Backlog.md`, während die externe kanonische Projektquelle `05_ZEC_BACKLOG_AND_ROADMAP.md` alleinige Roadmapautorität bleibt.
 
-**Technische QA und reale Feldabnahme sind getrennt.** Der Build-Evidence-Vertrag liegt in `validation/V17_1_1_BUILD_EVIDENCE.json`; realer Pi-Rollout, Browser-/Hardwarelast, physische Wirkung und Produktiv-Wiederherstellung sind erst nach der separaten Feldabnahme bestätigt. Produktiv auf dem Pi bleibt bis zur ausdrücklich durchgeführten Installation V17.1.0.
+**Technische QA und reale Feldabnahme sind getrennt.** Der Build-Evidence-Vertrag liegt in `validation/V17_1_2_BUILD_EVIDENCE.json`; realer Pi-Rollout, Browser-/Hardwarelast, physische Wirkung und Produktiv-Wiederherstellung sind erst nach der separaten Feldabnahme bestätigt. Die zuletzt real feldabgenommene Version ist V17.1.1; V17.1.2 ist bis zur gesonderten Installation und Feldabnahme ein technischer Releasekandidat.

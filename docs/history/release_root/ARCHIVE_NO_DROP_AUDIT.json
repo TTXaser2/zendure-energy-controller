@@ -1,0 +1,2178 @@
+{
+  "status": "PASS",
+  "gate": "BACKLOG_NO_DROP_GATE",
+  "release": "V17.1.2",
+  "created_utc": "2026-10-21T13:35:44.210799+00:00",
+  "reconciled_documents": 185,
+  "total_marker_lines": 51,
+  "policy": "Every original byte retained; each planning/status marker mapped to stable ledger entry, historical-only section markers not treated as current scope. New id references added for external host freeze and optional controller refactor.",
+  "items": [
+    {
+      "original_root": "BUILD_VALIDATION_V12_11_2_RC18.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V12_11_2_RC18.md",
+      "sha256": "3a3d8958644ddb514a198faff453662e00e0f290d850329dbc7637dcedc58945",
+      "bytes": 2070,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V12_11_2_RC19.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V12_11_2_RC19.md",
+      "sha256": "bf8e51e953efe01dba2671da6f64442dc7305c6d3e95fcbcbde49beddeaaa6b0",
+      "bytes": 2294,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V12_11_2_RC20.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V12_11_2_RC20.md",
+      "sha256": "eec5dc00c8c75c0edb899ce4441bd1ead00aaaced7120514e6d32326555ddea0",
+      "bytes": 4299,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V12_11_2_RC20_FIX6.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V12_11_2_RC20_FIX6.md",
+      "sha256": "eec5dc00c8c75c0edb899ce4441bd1ead00aaaced7120514e6d32326555ddea0",
+      "bytes": 4299,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V12_11_3.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V12_11_3.md",
+      "sha256": "33c300c1805a2b48d5f79be7d813a53fadfcf6f4e46cef390e7139bc32068b90",
+      "bytes": 673,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V12_11_4.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V12_11_4.md",
+      "sha256": "a6ac9ac8c1efecf3d4313307ad16894825fc260c10e06cb851a41eadbaa39216",
+      "bytes": 2931,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V12_11_5.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V12_11_5.md",
+      "sha256": "693a8956cf4556c62d6d1c5ac54a5171ea54045398b36a6f2b501c7efd29d2c6",
+      "bytes": 5514,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V12_11_6.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V12_11_6.md",
+      "sha256": "a6075dacc30216b2eaf632e22c2f98c1742de485829eb723e2f63708f59862f2",
+      "bytes": 3829,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V12_11_7.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V12_11_7.md",
+      "sha256": "0609bd33e17f2c3852acc476e07d8fd394b8b02d95ec020937c1fdc738f50e97",
+      "bytes": 4361,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V12_12_0.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V12_12_0.md",
+      "sha256": "5ae005b694d19b2bbcf9d3247a822d20aede64086280c465787691377d47f212",
+      "bytes": 2538,
+      "markers": [
+        {
+          "line": 90,
+          "matches": [
+            "Restpunkt"
+          ],
+          "context": "## Bekannter separater Restpunkt",
+          "ledger_refs": [
+            "ZEC-HIST-V12_13_0"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        },
+        {
+          "line": 92,
+          "matches": [
+            "nicht Bestandteil"
+          ],
+          "context": "Der historische V3-Kompatibilitätspfad ist nicht Bestandteil von V12.12.0. Measurement V4 bleibt unverändert produktiv.",
+          "ledger_refs": [
+            "ZEC-HIST-V12_13_0"
+          ],
+          "classification": "HISTORICAL_SCOPE_BOUNDARY"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V12_12_1.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V12_12_1.md",
+      "sha256": "020fbfea17f4df4acd6f9332420d5f6d1f7731295e01c5c56e2a6de1656f283b",
+      "bytes": 2811,
+      "markers": [
+        {
+          "line": 95,
+          "matches": [
+            "Restpunkt"
+          ],
+          "context": "## Bekannter separater Restpunkt",
+          "ledger_refs": [
+            "ZEC-HIST-V12_13_0"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        },
+        {
+          "line": 97,
+          "matches": [
+            "nicht Bestandteil"
+          ],
+          "context": "Der historische V3-Kompatibilitätspfad ist nicht Bestandteil von V12.12.1. Measurement V4 bleibt unverändert produktiv.",
+          "ledger_refs": [
+            "ZEC-HIST-V12_13_0"
+          ],
+          "classification": "HISTORICAL_SCOPE_BOUNDARY"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V12_12_2.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V12_12_2.md",
+      "sha256": "52db6bd8fa02c498ea4b4dfd605061291112411ad15cbcb17ae4de6c63584ce4",
+      "bytes": 5023,
+      "markers": [
+        {
+          "line": 101,
+          "matches": [
+            "offen"
+          ],
+          "context": "Panel bleibt dabei offen                        PASS",
+          "ledger_refs": [
+            "ZEC-BL-DIAG-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V12_13_0.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V12_13_0.md",
+      "sha256": "1a15780889d85511f4b4331d2f4336c4cb5c4a973a03762ab782a27bc2d80892",
+      "bytes": 2734,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V13_0_0.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V13_0_0.md",
+      "sha256": "b4d5aa5a3d19280fb786c9dbf8e945129760bc6a4c9f67d4f2e5a03c93615b1a",
+      "bytes": 6482,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V13_0_1.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V13_0_1.md",
+      "sha256": "689d6513d56816c935ad758af68a6d57f10320709b5df6daf07429ef6466a625",
+      "bytes": 2444,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V13_0_2.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V13_0_2.md",
+      "sha256": "ebf9b407bed4a08cad2eb74926db0af9506de466fe40089052ff9506b271da7c",
+      "bytes": 2664,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V13_0_3.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V13_0_3.md",
+      "sha256": "f7f967a855c7dd337ee7a52646994d1294f2cc86f10357448097e9a63aa7c474",
+      "bytes": 1913,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V14_0_0.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V14_0_0.md",
+      "sha256": "6cbddbe67389f1ccdd12a326b3ec7f658a595e47b2351aee0fea2fc84d96e5f2",
+      "bytes": 3222,
+      "markers": [
+        {
+          "line": 42,
+          "matches": [
+            "offen"
+          ],
+          "context": "## Bewusst offen / nicht erfunden",
+          "ledger_refs": [
+            "ZEC-BL-STORAGE-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V14_1_0.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V14_1_0.md",
+      "sha256": "57814fab4f7c6e3bd61ae0c0da0dc9c7186e2cf4b58ae802da0d19d64ad775b5",
+      "bytes": 1843,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V14_1_1.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V14_1_1.md",
+      "sha256": "b723dbb623389bf8055a21db631a72cdd99f348ba4cb678b4a8c2b50ff6b0c19",
+      "bytes": 1437,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V14_1_2.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V14_1_2.md",
+      "sha256": "1cfa77d87fdcb92b93a94fb834cb42956af6a5fc60bd98acad8590b38a502d3c",
+      "bytes": 2352,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V14_1_3.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V14_1_3.md",
+      "sha256": "67bb8a4ba9da09fe0e1199a9b1f679c4efc5646a8ab67fec4590a2e08c894340",
+      "bytes": 1925,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V14_1_4.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V14_1_4.md",
+      "sha256": "05caec5dc9bd195b2ac9f0c97e096416fa3c9e639ca4b5ab331ef22893a5eb49",
+      "bytes": 2165,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V15_0_0.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V15_0_0.md",
+      "sha256": "bce0fd13f59b5d27b1868773a9754260adfff59e1c9b8a9010c887dca0642cb0",
+      "bytes": 2904,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V15_0_1.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V15_0_1.md",
+      "sha256": "def9532f820f9949a50a4a86da5aca5098f90a19fe0565615745893b6029ee22",
+      "bytes": 2198,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V15_0_2.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V15_0_2.md",
+      "sha256": "1120175446dccf52576918156d01f385d4abaa347aa33fe2570a81634e773217",
+      "bytes": 1162,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V15_0_3.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V15_0_3.md",
+      "sha256": "a3a098bd290a928eb19dc8bafc27bbab8ac855a4adf71b4447fad34de3e37f50",
+      "bytes": 2209,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V16_0_0.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V16_0_0.md",
+      "sha256": "1a6a320a0803db2452a97bf7ab5e84da6e8eed93e1b7399f9737602642a02d68",
+      "bytes": 2199,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V16_0_1.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V16_0_1.md",
+      "sha256": "c084d313001ce29535b6665dc66a5983411a16d320ed8a85c9cd4b5c02186d91",
+      "bytes": 1435,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V16_0_2.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V16_0_2.md",
+      "sha256": "2ed198bbbff52e52e36bea61334c4c5acc286692e3aec3609e42fe1847cb488f",
+      "bytes": 2313,
+      "markers": [
+        {
+          "line": 52,
+          "matches": [
+            "offen"
+          ],
+          "context": "Ein vollständiger `PRODUCTIVE-PASS` ist weiterhin nicht zulässig. Für V16.0.2 steht mindestens die reale Update-Feldabnahme V16.0.1 → V16.0.2 aus. Die bereits separat zurückgestellte reale Clean-Fresh-/FIRST_INSTALL_SETUP-/Uninstaller-Abnahmekette bleibt ebenfalls offen.",
+          "ledger_refs": [
+            "ZEC-EV-DEP-001",
+            "ZEC-BL-DEP-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V16_1_0.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V16_1_0.md",
+      "sha256": "285c4aefe5c9eaf72e85e661beba953feedc56faa66fffcddd7012ed5df4897b",
+      "bytes": 2910,
+      "markers": [
+        {
+          "line": 27,
+          "matches": [
+            "Folgeblock"
+          ],
+          "context": "- `BACKLOG_NO_DROP_GATE`: Fast Capture, SMA-Acquisition und der Folgeblock „Strategic Usable-SOC Integration“ sind im Release-Snapshot `docs/ZEC_Master_Backlog.md` explizit erhalten.",
+          "ledger_refs": [
+            "ZEC-BL-PRIMARY-SMA-FLOOR-001",
+            "ZEC-BL-CTRL-USABLE-SOC-001",
+            "ZEC-BL-CTRL-FASTCAP-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        },
+        {
+          "line": 33,
+          "matches": [
+            "Backlog"
+          ],
+          "context": "- Fresh-Extract des finalen ZIPs: Source-Manifest, Releaseidentität, Datenblatt, Master-Backlog, Reglerkernschutz und Ausschluss von Runtime-SQLite-/DB-Artefakten **PASS**.",
+          "ledger_refs": [
+            "ZEC-BL-DOC-ARCH-001",
+            "ZEC-BL-DEP-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        },
+        {
+          "line": 44,
+          "matches": [
+            "offen"
+          ],
+          "context": "Der übergreifende vollständige `PRODUCTIVE-PASS` bleibt zusätzlich solange unzulässig, wie die separat zurückgestellte Clean-Fresh-/FIRST_INSTALL_SETUP-/Uninstaller-Gesamtabnahme (`ZEC-EV-DEP-001`) offen ist. Eine erfolgreiche V16.1.0-Update-Feldabnahme schließt diesen separaten Deployment-Evidenzpunkt nicht automatisch.",
+          "ledger_refs": [
+            "ZEC-EV-DEP-001",
+            "ZEC-BL-DEP-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        }
+      ],
+      "ledger_ids": [
+        "ZEC-EV-DEP-001"
+      ]
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V16_2_0.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V16_2_0.md",
+      "sha256": "9db8bebf64ff013e7f1cd487a886dfb434ed21de5c303c82b2295620b2b2c2c2",
+      "bytes": 2630,
+      "markers": [],
+      "ledger_ids": [
+        "ZEC-BL-PRIMARY-METADATA-001",
+        "ZEC-BL-UI-STATUS-002",
+        "ZEC-EV-DEP-001"
+      ]
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V16_2_1.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V16_2_1.md",
+      "sha256": "3c6f4faaac83bff8ca9d95cacd77c0cf3e425226cc583c737133ad16a8583978",
+      "bytes": 1667,
+      "markers": [
+        {
+          "line": 31,
+          "matches": [
+            "offen"
+          ],
+          "context": "Der bereinigte paketierte Fresh Extract hat Source-Manifest, vollständige Regression, `ResourceWarning=error`, Syntax/Compile, Deployment-Harness, Root-Rollback und Datenblatt-Gate PASS bestanden. Die reale Update-Feldabnahme V16.2.0 → V16.2.1 bleibt separat erforderlich; der projektweite vollständige PRODUCTIVE-PASS bleibt zusätzlich durch `ZEC-EV-DEP-001` offen.",
+          "ledger_refs": [
+            "ZEC-EV-DEP-001",
+            "ZEC-BL-DEP-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        }
+      ],
+      "ledger_ids": [
+        "ZEC-EV-DEP-001"
+      ]
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V16_2_2.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V16_2_2.md",
+      "sha256": "44001d7afba0ebdbc5ae9ff87184268e95e86bf51ce085831dc283ee8f2bafee",
+      "bytes": 1864,
+      "markers": [
+        {
+          "line": 32,
+          "matches": [
+            "offen"
+          ],
+          "context": "Noch offen vor `TECHNICAL BUILD PASS`: finales Source-Manifest, paketierter Fresh-Extract und vollständige Wiederholung der Paketgates auf exakt dem freizugebenden ZIP.",
+          "ledger_refs": [
+            "ZEC-EV-DEP-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V16_2_3.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V16_2_3.md",
+      "sha256": "0f4ea9dda22606789faeaee4f31d9709b78e92c48489a8022acf972aca0ebc46",
+      "bytes": 1544,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V16_2_4.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V16_2_4.md",
+      "sha256": "df079fb83fdd4bb107728b786960bb9af28d77dc05a948ce036aae8794cdb372",
+      "bytes": 1237,
+      "markers": [],
+      "ledger_ids": [
+        "ZEC-EV-DEP-001"
+      ]
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V16_2_5.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V16_2_5.md",
+      "sha256": "c05d37e40e97cf22a6bc99fa5073e2b5a75e4295089b00485bfe23c22b7c02de",
+      "bytes": 1504,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V17_0_1.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V17_0_1.md",
+      "sha256": "b008b5c888ed8534ffbbf8f9130ab510eca590ad85f179741f4f3d4312e66333",
+      "bytes": 1970,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "BUILD_VALIDATION_V17_0_2.md",
+      "archive_path": "docs/history/release_root/BUILD_VALIDATION_V17_0_2.md",
+      "sha256": "f9b8307d2c1227e7c324179cd2d2f678746127c3e3978a132809f91bec669f4b",
+      "bytes": 2274,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V12_11_2_RC10.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V12_11_2_RC10.md",
+      "sha256": "b350b760bcfda6240a91903088feb5eb32d0cf343c7c66285cf43a4a66d6d00f",
+      "bytes": 2044,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V12_11_2_RC11.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V12_11_2_RC11.md",
+      "sha256": "af1f584ce1626e88ad7067aded6d34c289daab038a40860af6e18843194f1295",
+      "bytes": 2283,
+      "markers": [
+        {
+          "line": 16,
+          "matches": [
+            "offen"
+          ],
+          "context": "- offene Mismatches bleiben bei Telemetrieunsicherheit offen,",
+          "ledger_refs": [
+            "ZEC-BL-CMD-OBS-001",
+            "ZEC-BL-PRIMARY-SMA-FLOOR-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V12_11_2_RC12.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V12_11_2_RC12.md",
+      "sha256": "d3e9776501131cbea29ab2d9183f6d782f801c707f9b2fe6033d5d6d91ff08a5",
+      "bytes": 3496,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V12_11_2_RC13.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V12_11_2_RC13.md",
+      "sha256": "d46edeaf4350ee1f8317d6979557b91e3457fa020fcb337367a40f6befcf6985",
+      "bytes": 1456,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V12_11_2_RC14.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V12_11_2_RC14.md",
+      "sha256": "a026102b86a5195e3ea611d2f36dd56b349ec1b47c569700764dace53dd7f764",
+      "bytes": 2084,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V12_11_2_RC15.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V12_11_2_RC15.md",
+      "sha256": "b2b9873baa43195918f838f2dc37556c76bd982219d70848e0a2d022e3a07cd0",
+      "bytes": 3966,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V12_11_2_RC16.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V12_11_2_RC16.md",
+      "sha256": "289b0c54c69659ddcb485796ac13050210e8413b6b4956a7698e62a8c43ecaf4",
+      "bytes": 3267,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V12_11_2_RC17.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V12_11_2_RC17.md",
+      "sha256": "af8c0189a3ccd2683a880db6cb640068fbba9bdefd59bd5d5c30603fef091721",
+      "bytes": 3590,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V12_11_2_RC18.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V12_11_2_RC18.md",
+      "sha256": "1366acbc8c225d3275d0d1db778ae2d28026326a528842754856d8a98f2fcc1c",
+      "bytes": 1109,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V12_11_2_RC19.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V12_11_2_RC19.md",
+      "sha256": "a228950b63e2405fa0404def47892129eb8e0714a84b348b602640fb9fb3a204",
+      "bytes": 2119,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V12_11_2_RC20.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V12_11_2_RC20.md",
+      "sha256": "6abb40c530ce7df8b2e516632cd62b323577f5aa910ba79ed9bca9f5f322dc2c",
+      "bytes": 5188,
+      "markers": [
+        {
+          "line": 43,
+          "matches": [
+            "S1"
+          ],
+          "context": "Die S1.7-Matrix ist explizit und idempotent:",
+          "ledger_refs": [
+            "ZEC-BL-UI-SETTINGS-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        },
+        {
+          "line": 48,
+          "matches": [
+            "S2"
+          ],
+          "context": "- vier noch produktiv gelesene Kompatibilitätskeys bleiben bewusst bis S2 erhalten;",
+          "ledger_refs": [
+            "ZEC-BL-UI-SETTINGS-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V12_11_2_RC6.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V12_11_2_RC6.md",
+      "sha256": "ae8a66621f831576988ce3b92893cfe1a0ce00b64fa95c92969780afa6e421f3",
+      "bytes": 2395,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V12_11_2_RC7.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V12_11_2_RC7.md",
+      "sha256": "356670cfe52107404f83374207262716c8a867451d6ead7901428c73618d9038",
+      "bytes": 4303,
+      "markers": [
+        {
+          "line": 109,
+          "matches": [
+            "Backlog"
+          ],
+          "context": "Release V12.11.2-RC7: MQTT-Freshness und Diagnose-Backlog",
+          "ledger_refs": [
+            "ZEC-BL-CMD-OBS-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V12_11_2_RC8.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V12_11_2_RC8.md",
+      "sha256": "98bf25912f2df9d7edc2bf63ab7cf96a60f78bd7e782de82d8dfcd64b7dce4fa",
+      "bytes": 2596,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V12_11_2_RC9.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V12_11_2_RC9.md",
+      "sha256": "5ae57d4d4a7cc54d955af926a2da3aae2ce5486b1f3e2f8e288d79960a075463",
+      "bytes": 1138,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V12_11_3.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V12_11_3.md",
+      "sha256": "b902e424cf1fcc88482ff9ad85d6314fff24a4d60b47d5e7097ab96ea8e6ab81",
+      "bytes": 1190,
+      "markers": [
+        {
+          "line": 12,
+          "matches": [
+            "offen"
+          ],
+          "context": "`ready=true` bleibt der bevorzugte vollständige Nachweis. Alternativ darf der Installer einen stabilen sicheren Übergangszustand akzeptieren, wenn alle kritischen Daten-, Controller-, Command-Path- und statischen Command-State-Prüfungen gesund sind und ausschließlich ein Limit-Readback beziehungsweise ein ungefährlicher Beobachtungszustand offen ist.",
+          "ledger_refs": [
+            "ZEC-BL-CMD-OBS-001",
+            "ZEC-BL-CTRL-001",
+            "ZEC-BL-DEP-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V12_11_4.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V12_11_4.md",
+      "sha256": "cdcece951d26b574b8148e1e79946b4ce08909463279d985a62da697265fc09b",
+      "bytes": 1326,
+      "markers": [
+        {
+          "line": 24,
+          "matches": [
+            "Nicht Bestandteil"
+          ],
+          "context": "## 3. Nicht Bestandteil  - keine Regleränderung; - keine neue Zielwertformel; - keine Änderung des Command-Vertrags; - keine Änderung von Readiness oder Installer-Abnahme; - keine Settings-Hilfe-/Redaktionsneuentwicklung;",
+          "ledger_refs": [
+            "ZEC-BL-CTRL-001",
+            "ZEC-BL-CMD-OBS-001",
+            "ZEC-BL-DEP-001",
+            "ZEC-BL-UI-SETTINGS-001"
+          ],
+          "classification": "HISTORICAL_SCOPE_BOUNDARY"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V12_11_5.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V12_11_5.md",
+      "sha256": "a737cb7a3699fb03f93215c4519a95cade63eca1c232c8cc7e07b696d6a96eb9",
+      "bytes": 2560,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V12_11_6.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V12_11_6.md",
+      "sha256": "c3b360c673bf475ec7524318503cd8d71e368860898a15f27a25f59cbc47bb43",
+      "bytes": 1767,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V12_11_7.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V12_11_7.md",
+      "sha256": "251931ba28bd068607499e211bb671fc0c6fc205c1acbbe1e2eb4db5b484a893",
+      "bytes": 2694,
+      "markers": [
+        {
+          "line": 66,
+          "matches": [
+            "nicht Bestandteil"
+          ],
+          "context": "Der separat geplante V3-Legacy-Cleanup ist nicht Bestandteil von V12.11.7.  ## Geschützte No-Regression-Dateien  Byteidentität zur V12.11.6-Basis ist Releasegate für:  ```text",
+          "ledger_refs": [
+            "ZEC-HIST-V12_13_0"
+          ],
+          "classification": "HISTORICAL_SCOPE_BOUNDARY"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V12_12_0.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V12_12_0.md",
+      "sha256": "650fd3a8db76a59688c00c56651b1af3c36dae3f6827ab15181eaacb3a5af9cd",
+      "bytes": 2232,
+      "markers": [
+        {
+          "line": 55,
+          "matches": [
+            "Nicht Bestandteil"
+          ],
+          "context": "## Nicht Bestandteil  - produktiver V3-Legacy-Cleanup - Regler-/Harvest-/Cross-Charge-Algorithmusänderungen - Measurement-Storage-Härtung - benannte Konfigurationsstände / Import / Export - Graph-Redesign",
+          "ledger_refs": [
+            "ZEC-HIST-V12_13_0",
+            "ZEC-BL-CTRL-001",
+            "ZEC-BL-STORAGE-001",
+            "ZEC-BL-UI-SETTINGS-001",
+            "ZEC-BL-STORAGE-GRAPH-001"
+          ],
+          "classification": "HISTORICAL_SCOPE_BOUNDARY"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V12_12_1.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V12_12_1.md",
+      "sha256": "ee756292dc356a5a382c2d7bf1393ae6ad7f6f5f525170483e31c1b43740cb92",
+      "bytes": 1499,
+      "markers": [
+        {
+          "line": 30,
+          "matches": [
+            "Nicht Bestandteil"
+          ],
+          "context": "## Nicht Bestandteil  - produktiver V3-Legacy-Cleanup; - Regler-/Harvest-/Cross-Charge-Algorithmusänderungen; - Measurement-Storage-Härtung; - benannte Konfigurationsstände / Import / Export; - Graph-Redesign.",
+          "ledger_refs": [
+            "ZEC-HIST-V12_13_0",
+            "ZEC-BL-CTRL-001",
+            "ZEC-BL-STORAGE-001",
+            "ZEC-BL-UI-SETTINGS-001",
+            "ZEC-BL-STORAGE-GRAPH-001"
+          ],
+          "classification": "HISTORICAL_SCOPE_BOUNDARY"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V12_12_2.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V12_12_2.md",
+      "sha256": "1051fafe5217b33f06d353c0a46b79acfce252bfb95c45b9d57455ea8802e7e1",
+      "bytes": 1303,
+      "markers": [
+        {
+          "line": 22,
+          "matches": [
+            "Nicht Bestandteil"
+          ],
+          "context": "Nicht Bestandteil sind der externe 14-Minuten-Host-Freeze, allgemeines Regler-/Harvest-/Cross-Charge-/NIGHT-Tuning, zusätzliche Installed-Tree-/Supply-Chain-Provenance, V3-Legacy-Cleanup und Änderungen an nicht ausreichend beobachteten Branches ohne neue Evidenz.  ## Measurement  Produktiver Vertrag bleibt `ZEC-MEASUREMENT-V4`; Header/Feldschema werden nicht geändert. Der Writer-Lifecycle des Manifests wird korrigiert.",
+          "ledger_refs": [
+            "ZEC-EV-HOST-FREEZE-001",
+            "ZEC-HIST-V12_13_0",
+            "ZEC-BL-CTRL-NIGHT-MINSOC-GRID-001",
+            "ZEC-BL-CTRL-001"
+          ],
+          "classification": "HISTORICAL_SCOPE_BOUNDARY"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V12_13_0.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V12_13_0.md",
+      "sha256": "e5ab97a1d09a6fea03a55e5a9265d67e69f010e6255f976412646290c4025903",
+      "bytes": 1551,
+      "markers": [
+        {
+          "line": 37,
+          "matches": [
+            "Nicht Bestandteil"
+          ],
+          "context": "Nicht Bestandteil sind Regler-/Harvest-/Cross-Charge-/NIGHT-/Command-Änderungen, ein neues Measurement-Schema, SQLite-/Storage-Redesign oder die Löschung historischer V3-Datendateien.",
+          "ledger_refs": [
+            "ZEC-HIST-V12_13_0",
+            "ZEC-BL-STORAGE-001",
+            "ZEC-BL-CTRL-NIGHT-MINSOC-GRID-001",
+            "ZEC-BL-CTRL-001"
+          ],
+          "classification": "HISTORICAL_SCOPE_BOUNDARY"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V13_0_0.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V13_0_0.md",
+      "sha256": "213cf473ac5c4fa5bad6ace1ee7ad5a53ca173cd117c632fb87e96376334f411",
+      "bytes": 4377,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V13_0_1.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V13_0_1.md",
+      "sha256": "8bbaf41b78747bf6779df63713db414ea76e56c13ad65c5547cd690d55d55e4a",
+      "bytes": 1463,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V13_0_2.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V13_0_2.md",
+      "sha256": "162bec9a27320d5ba383ac6c4516effed05fc0017e3156ed67a07cbf84dc4417",
+      "bytes": 3397,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V13_0_3.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V13_0_3.md",
+      "sha256": "eefafa4ed5febca6619688fd40380c10fe3fc24d7fd690db3be293242821a897",
+      "bytes": 1564,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V14_0_0.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V14_0_0.md",
+      "sha256": "847d6eea7aaf043f9cd89c5993395874e2e669961c7e0bf2099227023877d505",
+      "bytes": 2458,
+      "markers": [
+        {
+          "line": 38,
+          "matches": [
+            "nicht Bestandteil"
+          ],
+          "context": "## Bewusst nicht Bestandteil  - keine eigenmächtig gewählte produktive Retentiondauer; - kein Retention-Scheduler; - keine automatische VACUUM-Policy.  ## Installation",
+          "ledger_refs": [
+            "ZEC-BL-STORAGE-001"
+          ],
+          "classification": "HISTORICAL_SCOPE_BOUNDARY"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V14_1_0.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V14_1_0.md",
+      "sha256": "212c01218ff6466c453841acbd6dc384d1e7fcfe215a259ddc560c1406118c54",
+      "bytes": 2086,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V14_1_1.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V14_1_1.md",
+      "sha256": "7d60e6347642631afaf4d654c8bc9bb78f084c80a424dc0dbac0479dcf9ff670",
+      "bytes": 1140,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V14_1_2.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V14_1_2.md",
+      "sha256": "75a2782660f0c2426400d81f7ca6e5ebf597447267d8a7157deddb3feeae5d0f",
+      "bytes": 2367,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V14_1_3.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V14_1_3.md",
+      "sha256": "943329f250f9c6cbd3a130babf312809ad856d4f2185097de089d1e15bf84315",
+      "bytes": 2651,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V14_1_4.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V14_1_4.md",
+      "sha256": "ceb0edcb0deef7a4c597fe73e774df67d7c605522c120eb291be3a72c64e2d1e",
+      "bytes": 2230,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V15_0_0.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V15_0_0.md",
+      "sha256": "b7211439258463ec7074d62a91946f42bcb042cd2fbc231fa07da435b9c86b7e",
+      "bytes": 4508,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V15_0_1.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V15_0_1.md",
+      "sha256": "76064be73bda8b7f54cd35cf7d34846a645a06aba9ca165f73b363f011c295a8",
+      "bytes": 2930,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V15_0_2.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V15_0_2.md",
+      "sha256": "e311aa15cd80cf9e99748b7a0716b08eb8688d54d888b7d0c0c807c21ede3dae",
+      "bytes": 1619,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V15_0_3.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V15_0_3.md",
+      "sha256": "4c8a1ffc8823639813433ed461003c9dc120538aaca13cff54ded203a2a56b1b",
+      "bytes": 1162,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V16_0_0.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V16_0_0.md",
+      "sha256": "39c27aaea1110d93fdb7b91cc9d59823b254a8426b8d03676972e3314ff0c2da",
+      "bytes": 2610,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V16_0_1.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V16_0_1.md",
+      "sha256": "f24bb6e33d47af761b0004213834585e1596bd843803b00157b677977bd42e14",
+      "bytes": 2119,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V16_0_2.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V16_0_2.md",
+      "sha256": "4bee238f271e3572805fc5b022f9b9062978c351a3d9f5060adaf1ac55df2564",
+      "bytes": 2153,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V16_1_0.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V16_1_0.md",
+      "sha256": "d9f5a833be061cedc4e4a8ec7c5fd763eec9ed40608ac9cfac9bb611ff97050e",
+      "bytes": 2573,
+      "markers": [
+        {
+          "line": 32,
+          "matches": [
+            "nicht Bestandteil",
+            "Backlog"
+          ],
+          "context": "Block B – die spätere strategische Verwendung des nutzbaren Primär-SOC in Winter-/Schwachertragslogik – ist ausdrücklich nicht Bestandteil von V16.1.0 und bleibt im Master-Backlog erhalten.  ## Releaseidentität  - Version: `16.1.0` - Label: `V16.1.0` - Build-ID: `v16.1.0-20260919`",
+          "ledger_refs": [
+            "ZEC-BL-CTRL-USABLE-SOC-001"
+          ],
+          "classification": "HISTORICAL_SCOPE_BOUNDARY"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V16_2_0.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V16_2_0.md",
+      "sha256": "dcf6b19355e74df765ac291b71c051673d31d636cfc20346ddbd01f2a5f52e20",
+      "bytes": 3235,
+      "markers": [
+        {
+          "line": 47,
+          "matches": [
+            "offen"
+          ],
+          "context": "V16.2.0 besitzt **TECHNICAL BUILD PASS**. Der releasespezifische Real-Field-PASS bleibt bis zur realen Update-Feldabnahme V16.1.0 → V16.2.0 offen. Ein vollständiger projektweiter PRODUCTIVE-PASS bleibt zusätzlich ohne die separat zurückgestellte Clean-Fresh-/FIRST_INSTALL_SETUP-/Uninstaller-Gesamtabnahme unzulässig.",
+          "ledger_refs": [
+            "ZEC-EV-DEP-001",
+            "ZEC-BL-DEP-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        }
+      ],
+      "ledger_ids": [
+        "ZEC-BL-DEP-002"
+      ]
+    },
+    {
+      "original_root": "RELEASE_INFO_V16_2_1.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V16_2_1.md",
+      "sha256": "36e27c62d854c62ca971d0effebeb33f514e7ff4d2d532efbfba80096d8d6d15",
+      "bytes": 3699,
+      "markers": [],
+      "ledger_ids": [
+        "ZEC-BL-DEP-002",
+        "ZEC-BL-PRIMARY-METADATA-001",
+        "ZEC-BL-UI-STATUS-EXPERT-001",
+        "ZEC-EV-DEP-001"
+      ]
+    },
+    {
+      "original_root": "RELEASE_INFO_V16_2_2.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V16_2_2.md",
+      "sha256": "a3dba20b7786bfd63ed886e0029433d994cb2f1d8676f54f3300c35c5b1b977d",
+      "bytes": 2485,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V16_2_3.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V16_2_3.md",
+      "sha256": "90e547a6cd10f35b95ccc8ddcc9d60faceeb57cd9e8605e90507442fe28884b9",
+      "bytes": 1738,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V16_2_4.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V16_2_4.md",
+      "sha256": "257397f44b18b893a17ec6e871857a3aeb2c563d90efc4f20685711a2193cabe",
+      "bytes": 1525,
+      "markers": [
+        {
+          "line": 10,
+          "matches": [
+            "S1"
+          ],
+          "context": "- expliziter Settings-Product-Surface-/Applicability-Vertrag statt S1/RC19-Provenienzfilter;",
+          "ledger_refs": [
+            "ZEC-BL-UI-SETTINGS-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        },
+        {
+          "line": 12,
+          "matches": [
+            "S3",
+            "S4",
+            "S6",
+            "S7"
+          ],
+          "context": "- S3/S4/S6/S7-Zielsettings bleiben fail-closed verborgen;",
+          "ledger_refs": [
+            "ZEC-BL-UI-SETTINGS-001",
+            "ZEC-BL-CTRL-S3-001",
+            "ZEC-BL-STORAGE-S4-001",
+            "ZEC-BL-STORAGE-S6-001",
+            "ZEC-BL-STORAGE-S7-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        },
+        {
+          "line": 20,
+          "matches": [
+            "nicht Bestandteil"
+          ],
+          "context": "Regler-, Command-, Safety- und Recoverysemantik bleiben unverändert. Fast Capture, Adaptive, strategischer usable SOC, Battery Care und automatische Primärspeicher-Metadaten sind nicht Bestandteil dieses Releases. `controller_logic.py` bleibt byteidentisch.   ## Technischer Nachweis  150 Testdateien, vollständige Regression `1123 Tests + 698 Subtests PASS` und identischer `ResourceWarning=error`-Lauf. Bash `13/13`, Browser-JS `3/3`, Compileall, Deployment-Harness `11/11`, Root-Artefakt-Transaktion, Datenblatt-, Build-Evidence-, Manifest-/Hygiene- und Fresh-extract-Gates sind PASS.",
+          "ledger_refs": [
+            "ZEC-BL-PRIMARY-SMA-FLOOR-001",
+            "ZEC-BL-CTRL-USABLE-SOC-001",
+            "ZEC-BL-BATCARE-001",
+            "ZEC-BL-CTRL-ADAPTIVE-001",
+            "ZEC-BL-CTRL-FASTCAP-001",
+            "ZEC-BL-CTRL-001"
+          ],
+          "classification": "HISTORICAL_SCOPE_BOUNDARY"
+        }
+      ],
+      "ledger_ids": [
+        "ZEC-BL-DEP-002"
+      ]
+    },
+    {
+      "original_root": "RELEASE_INFO_V16_2_5.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V16_2_5.md",
+      "sha256": "07a9025dd8778e5296eceacd8e72337acd952559751410cae0d1212e3eb2642c",
+      "bytes": 1357,
+      "markers": [
+        {
+          "line": 19,
+          "matches": [
+            "nicht Bestandteil"
+          ],
+          "context": "Regler-, Command-, Safety- und Recoverysemantik bleiben unverändert. Fast Capture, Adaptive, strategischer usable SOC, Battery Care und automatische Primärspeicher-Metadaten sind nicht Bestandteil dieses Releases. `controller_logic.py` muss byteidentisch bleiben.",
+          "ledger_refs": [
+            "ZEC-BL-PRIMARY-SMA-FLOOR-001",
+            "ZEC-BL-CTRL-USABLE-SOC-001",
+            "ZEC-BL-BATCARE-001",
+            "ZEC-BL-CTRL-ADAPTIVE-001",
+            "ZEC-BL-CTRL-FASTCAP-001",
+            "ZEC-BL-CTRL-001"
+          ],
+          "classification": "HISTORICAL_SCOPE_BOUNDARY"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "RELEASE_INFO_V17_0_1.md",
+      "archive_path": "docs/history/release_root/RELEASE_INFO_V17_0_1.md",
+      "sha256": "5e0284aec5b63cbb3016d6152255761b66da65ff209957318ef4fdadaa8a5c97",
+      "bytes": 1932,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_10_0_RC1.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_10_0_RC1.md",
+      "sha256": "a272779241fcb24af9d8353894a9b82d4f3897ebb87cb393267780047d0800f6",
+      "bytes": 1399,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_10_0_RC10.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_10_0_RC10.md",
+      "sha256": "3af75550ad1063f4c27d2564fdfd4eef2ff8184ca307d6c2553ca0990df448c2",
+      "bytes": 1260,
+      "markers": [
+        {
+          "line": 19,
+          "matches": [
+            "Backlog"
+          ],
+          "context": "- Keine vollständige allumfassende Settings-Querabhängigkeitsprüfung; diese bleibt als eigenes Backlog-Thema bestehen.",
+          "ledger_refs": [
+            "ZEC-BL-UI-SETTINGS-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_10_0_RC2.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_10_0_RC2.md",
+      "sha256": "72388fb889b51f604dc72cda6f2f9d0bfa933fdbe4a7a8b1b21e8b246203a4b7",
+      "bytes": 1648,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_10_0_RC3.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_10_0_RC3.md",
+      "sha256": "a1eff3dffdf99aed6f2a405905cdbe8f3d5cd616db3594a08a9b3b59caaa4f48",
+      "bytes": 1721,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_10_0_RC4.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_10_0_RC4.md",
+      "sha256": "ede344db71448e6615792fd2bbafae805c4d1a65fb959f63c0b0011d9451e412",
+      "bytes": 3199,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_10_0_RC5.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_10_0_RC5.md",
+      "sha256": "4673735b4312b2a8edb3e0872363ee2f9760968e3799d7fbc59d7a473c8554d5",
+      "bytes": 2229,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_10_0_RC6.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_10_0_RC6.md",
+      "sha256": "e1d2b75395e79941365af8c5ca26a1c33dd5c3cfcf4cbf48d3d8065fbac7afc3",
+      "bytes": 1192,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_10_0_RC7.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_10_0_RC7.md",
+      "sha256": "6870b16c5282fdfb3fc096195ae5f89731762ac46917656758c0e28d373cecd5",
+      "bytes": 2238,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_10_0_RC8.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_10_0_RC8.md",
+      "sha256": "b68042316c88b5d7012fbeb27d3080b4bd1370a854fbe2a0b0c67ce015161d93",
+      "bytes": 1810,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_10_0_RC9.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_10_0_RC9.md",
+      "sha256": "bc1d40dc11c33a3a63829c451d96cd533def85e27d3f558d492bab622dff0860",
+      "bytes": 2901,
+      "markers": [
+        {
+          "line": 25,
+          "matches": [
+            "später"
+          ],
+          "context": "Das V4-Standardprofil wurde um Harvest-Diagnosefelder erweitert. Dadurch kann später nachvollzogen werden, wann die Funktion eligible war, wann sie aktiv wurde, wie weit der Entry fortgeschritten war, warum sie beendet wurde und welche Schwellen galten.",
+          "ledger_refs": [
+            "ZEC-BL-DIAG-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_0_RC1.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_0_RC1.md",
+      "sha256": "6d85494cedd86e00f3bc4458521b000c1916cef91623f170ab31c5b82c298b16",
+      "bytes": 1605,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_0_RC10.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_0_RC10.md",
+      "sha256": "71f1d994a54ba3c8d5c3a6d381d4e16b904576aa660d9224fe7e57b7d8f1c595",
+      "bytes": 1102,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_0_RC11.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_0_RC11.md",
+      "sha256": "210220be3b7349cc194b5da36060cd3abab6b9ee4a2901606a1a84b77aa6fb2b",
+      "bytes": 1096,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_0_RC12.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_0_RC12.md",
+      "sha256": "f63b4a6f160a010914057e30ecec07c885a3d8508fb78a8faed2211386a483e9",
+      "bytes": 1063,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_0_RC13.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_0_RC13.md",
+      "sha256": "d6b93b6495b9a45059bd72abb1f1ededf53bdd40b61dff1b574f84a5204a5999",
+      "bytes": 1604,
+      "markers": [
+        {
+          "line": 17,
+          "matches": [
+            "offen"
+          ],
+          "context": "- startet das bestehende Diagnosepaket-Script in einer terminalfreundlichen Variante und hält das Fenster offen.",
+          "ledger_refs": [
+            "ZEC-BL-DIAG-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_0_RC14.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_0_RC14.md",
+      "sha256": "aac2153e25e41263c15aa146bee9b0c5a7489971b66cc29ff719d5de510dd4ae",
+      "bytes": 1718,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_0_RC15.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_0_RC15.md",
+      "sha256": "3f06c363c29d323fb8b87f498a9cf1585a0e56d1efc2219ecc303ceaec8e2ea8",
+      "bytes": 2363,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_0_RC16.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_0_RC16.md",
+      "sha256": "5ef24af7686529b1a049c9db73e08f8a651989d99ba45a6b1adb066e5b898886",
+      "bytes": 2107,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_0_RC17.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_0_RC17.md",
+      "sha256": "bb429da7e5aa7e6364428397e6543f866a29f01ea36412b1ecb5bfa6241e9959",
+      "bytes": 3205,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_0_RC18.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_0_RC18.md",
+      "sha256": "f33c15c28b83b69e310f17c287d28c77d498f7163c4c36cd1eb8b00eb6469486",
+      "bytes": 2018,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_0_RC2.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_0_RC2.md",
+      "sha256": "92a12a86340266d13781e7a268fdf03a56f1d5113d4bd5a6ecfff46ffdc0384c",
+      "bytes": 1565,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_0_RC3.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_0_RC3.md",
+      "sha256": "69eaadda143194b507dbf8582447f54a0319b178a58dac5fb723da0670a878b0",
+      "bytes": 2395,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_0_RC4.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_0_RC4.md",
+      "sha256": "19c175dacbad4ad0174e6a10ba117a0c83e39e067b8285834a19c0dbfee8d35c",
+      "bytes": 2647,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_0_RC5.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_0_RC5.md",
+      "sha256": "524ee17f8a273e8a14a3db9c522340e325dc22c65bea880d56f64c6f56a0d751",
+      "bytes": 3823,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_0_RC6.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_0_RC6.md",
+      "sha256": "32d0ee2a8ebda796bfc484285d6b90cbc871f6e3fa0288ac756845ef56ad22c1",
+      "bytes": 3339,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_0_RC7.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_0_RC7.md",
+      "sha256": "b90513e0438519e2669fa44a92dbe8434ebf2f2af0dde9287d5ff556e8101a77",
+      "bytes": 2982,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_0_RC8.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_0_RC8.md",
+      "sha256": "d7e5d9651a44d0a41621a02f4805bd0f039b0fdf9d5535d5d9401872cbc09616",
+      "bytes": 3007,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_0_RC9.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_0_RC9.md",
+      "sha256": "1759c051d8aba57d4a4a730bd39fda38280fa3036225bb929cf90329bfccdfe6",
+      "bytes": 2307,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_1_RC1.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_1_RC1.md",
+      "sha256": "3d26d33afd023b97a1b3fb43843fdcdae5e2d02460f90829aab2ef8fcd47d33b",
+      "bytes": 3927,
+      "markers": [
+        {
+          "line": 59,
+          "matches": [
+            "Backlog"
+          ],
+          "context": "Kapazität wird in RC1 nur diagnostisch ausgewertet. Eine spätere weiche Kapazitätsgewichtung bleibt als prüfbarer Backlog-Punkt vorbereitet, verändert aber in RC1 den Zielwert nicht hart.",
+          "ledger_refs": [
+            "ZEC-BL-CTRL-CAP-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_1_RC2.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_1_RC2.md",
+      "sha256": "bafaafae9ba77d26c81a7cb174b2218b3fb7137417daad87b3da23f525e5bcf7",
+      "bytes": 2261,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_1_RC3.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_1_RC3.md",
+      "sha256": "0e81cc98f83184aefaf4db177b3082d9a7583da13dafc2ebeaef5a8986c10306",
+      "bytes": 2454,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_2_RC1.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_2_RC1.md",
+      "sha256": "d8b91253190f7741a85e81f3a23ecad3b88abf43fc4970b2dbe0ad0477a913ad",
+      "bytes": 2717,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_2_RC10.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_2_RC10.md",
+      "sha256": "15bd0531e2eea2e0cf6536acc71f5e36457532170ceb58cdfe9d23814600c1c4",
+      "bytes": 4396,
+      "markers": [
+        {
+          "line": 106,
+          "matches": [
+            "Nicht Bestandteil"
+          ],
+          "context": "Nicht Bestandteil von RC10:  - reale Multi-Headunit-Regelung, - allgemeiner Szenario-Editor, - Integration mit dem späteren Simulationsdienst, - Settings-Redesign, - Graph-Seiten-Redesign,",
+          "ledger_refs": [
+            "ZEC-BL-MULTI-001",
+            "ZEC-BL-SCENARIO-001",
+            "ZEC-BL-SIM-001",
+            "ZEC-BL-UI-SETTINGS-001",
+            "ZEC-BL-STORAGE-GRAPH-001",
+            "ZEC-BL-UI-STATUS-EXPERT-001"
+          ],
+          "classification": "HISTORICAL_SCOPE_BOUNDARY"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_2_RC11.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_2_RC11.md",
+      "sha256": "8d04886193b8ef2cd7a88e047a1223dbd71ffc2aae83845f41248853b95f28ac",
+      "bytes": 7639,
+      "markers": [
+        {
+          "line": 143,
+          "matches": [
+            "offen"
+          ],
+          "context": "Ein bestätigter Mismatch bleibt bei vorübergehend unklarer Telemetrie offen. Verlust der Beobachtbarkeit ist keine Wiederherstellung.",
+          "ledger_refs": [
+            "ZEC-BL-CMD-OBS-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        },
+        {
+          "line": 213,
+          "matches": [
+            "Nicht Bestandteil"
+          ],
+          "context": "Nicht Bestandteil von RC11:  ### RC-B  `SMA_FULL_OR_IDLE` muss das absolute Ziel künftig aus einer vertrauenswürdigen aktuellen Zendure-Ladung plus verbleibendem Export minus Reserve bilden. Dieser Eingriff folgt erst nach Produktivvalidierung der neuen Power-Observation.  ### RC-C",
+          "ledger_refs": [
+            "ZEC-BL-CTRL-001",
+            "ZEC-BL-CMD-OBS-001"
+          ],
+          "classification": "HISTORICAL_SCOPE_BOUNDARY"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_2_RC12.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_2_RC12.md",
+      "sha256": "b3d952284db6e57c881b7117f2483983076afaff5b52814c68d4f646b3d0aa7e",
+      "bytes": 7765,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_2_RC13.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_2_RC13.md",
+      "sha256": "7b7a87105bcd6a646988ecedd5adb8d238f9a2037cfd17878f61d947bca690c7",
+      "bytes": 2284,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_2_RC14.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_2_RC14.md",
+      "sha256": "d68575d14f1347bbed0580f2bb3145f1eaae15044077bfc9feb522065676d78b",
+      "bytes": 4247,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_2_RC15.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_2_RC15.md",
+      "sha256": "c247038159e5ac39175ce2b60fdb3c470f98052d87fb28776e55e6471fb5989a",
+      "bytes": 6145,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_2_RC16.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_2_RC16.md",
+      "sha256": "b52cc1f514edbe3b8e4fbffab4360e849e4f133f0086423563b4385f986fd73a",
+      "bytes": 4485,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_2_RC17.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_2_RC17.md",
+      "sha256": "a7f1bc83c764bdf4ac74cbe070a4ad18bae5b335176ea3c27e705b143eced3c0",
+      "bytes": 4866,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_2_RC18.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_2_RC18.md",
+      "sha256": "904c3162ca6bbd4922b40f1f0b1c7fdd7482c014b1f865f5cb1196af4c79e1aa",
+      "bytes": 2622,
+      "markers": [
+        {
+          "line": 71,
+          "matches": [
+            "offen"
+          ],
+          "context": "Die seit RC15 implementierte Publish-/Readback-Trennung und der Late-Effect-Guard werden unverändert übernommen. Der Codefix bleibt regressionstestvalidiert; der kontrollierte produktive End-to-End-Test für `FIXED_DISCHARGE` ist weiterhin offen.",
+          "ledger_refs": [
+            "ZEC-BL-CMD-OBS-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_2_RC19.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_2_RC19.md",
+      "sha256": "61dcc84ddce4b9ff833f9ff9c7225f2ce19efc15b6ff43cc3d31b43ef5d5059b",
+      "bytes": 3020,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_2_RC2.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_2_RC2.md",
+      "sha256": "7cd93ad04e589e6d2b2ec29d7441221017b818390a1d07062070bd7ee180ce06",
+      "bytes": 1012,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_2_RC20.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_2_RC20.md",
+      "sha256": "a494242dcfc72ee093ecef6f66d56be6389113febac623971af87025113d2a7c",
+      "bytes": 6566,
+      "markers": [
+        {
+          "line": 17,
+          "matches": [
+            "später"
+          ],
+          "context": "Bei einer später invaliden Datei bleibt `effective_source=last_valid_runtime`. Bei Startup-Recovery bleibt die invalide Primärconfig als `configured` sichtbar; Last-Good ist ausschließlich `effective`.",
+          "ledger_refs": [
+            "ZEC-BL-PRIMARY-SMA-FLOOR-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        },
+        {
+          "line": 83,
+          "matches": [
+            "S1"
+          ],
+          "context": "## 9. S1.7-Legacyentscheidung",
+          "ledger_refs": [
+            "ZEC-BL-UI-SETTINGS-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        },
+        {
+          "line": 85,
+          "matches": [
+            "S2"
+          ],
+          "context": "Zwölf Keys sind explizit klassifiziert: zwei konfliktfreie Transformationen, sechs Entfernungen ohne Runtimewirkung und vier bewusste Runtime-Kompatibilitätskeys bis S2. Die Migration materialisiert keine Defaults, verändert keine Unknown Keys und ist idempotent.",
+          "ledger_refs": [
+            "ZEC-BL-UI-SETTINGS-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_2_RC3.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_2_RC3.md",
+      "sha256": "af94a1542c708a1d0563d8300481bf8f149b59ae333054eb01ecd6e845db62cb",
+      "bytes": 2733,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_2_RC4.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_2_RC4.md",
+      "sha256": "94ed30d485655c19e093809d32a0930d87ad6b54098a6b83ea4860cb30bef1e9",
+      "bytes": 2607,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_2_RC5.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_2_RC5.md",
+      "sha256": "ee4427df2ac287c2ec62a6a6e22e88607cd4873102a0c1a2d402393b572459ad",
+      "bytes": 1907,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_2_RC6.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_2_RC6.md",
+      "sha256": "6bcedc42022f63c01c6d3b27e5ab8bdcadc03b9e1fefd21457dcd0cce9696235",
+      "bytes": 3409,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_2_RC7.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_2_RC7.md",
+      "sha256": "21b1f44c851da24b64d569c384baf88e943af6dcb82794670c33b6e6940c61c0",
+      "bytes": 8108,
+      "markers": [
+        {
+          "line": 5,
+          "matches": [
+            "Backlog"
+          ],
+          "context": "V12.11.2-RC7 ist ein Stabilisierungs-, Diagnose- und UI-Release auf Basis von V12.11.2-RC6. Es setzt den nach der RC6-Liveauswertung bestätigten Backlog um. Kernpunkt ist die Korrektur eines MQTT-Freshness-Fehlers, der frisch eingetroffene Zendure-Werte mit `age_s == 0` kurzzeitig als veraltet bewertet hatte.",
+          "ledger_refs": [
+            "ZEC-BL-CMD-OBS-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        },
+        {
+          "line": 113,
+          "matches": [
+            "offen"
+          ],
+          "context": "- ein bereits beim Start des Event-Beobachters bestehender stabiler Fehler wird nach dem gleichen Fenster korrekt als offen erfasst,",
+          "ledger_refs": [
+            "ZEC-BL-DIAG-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_2_RC8.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_2_RC8.md",
+      "sha256": "3b6ff0fd7d63d20aed9c8a51860865e7ba65bb00b74ca74d61ee02229a3dcfaf",
+      "bytes": 4890,
+      "markers": [
+        {
+          "line": 28,
+          "matches": [
+            "später"
+          ],
+          "context": "Ein bei unsicherer MQTT-Telemetrie angeforderter Nicht-Null-Sollwert konnte als Warnung sichtbar bleiben, obwohl der aktuelle Sollwert später 0 W und die Gerätewirkung neutral war.",
+          "ledger_refs": [
+            "ZEC-BL-CMD-OBS-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_2_RC9.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_2_RC9.md",
+      "sha256": "bc8e79ab48f75d610ccd8c8dd9a29bd231886ad8708924b76076963a0e9d18ac",
+      "bytes": 3062,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_3.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_3.md",
+      "sha256": "5750ef9f18252749ff2139d988fc9ad40e66638d57b4dad83ec12a1d50c17586",
+      "bytes": 638,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_4.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_4.md",
+      "sha256": "80532dd38dcb0d07406a95dbcc82c3b82341c2af758b93f63280ce6c34610e28",
+      "bytes": 1952,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_5.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_5.md",
+      "sha256": "d9a8dc9bf5dbb5c0f1113cf35a2af8fa96e7975d91ff5766d69194872d697ae0",
+      "bytes": 3123,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_6.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_6.md",
+      "sha256": "f95f18b182b5e1f7187ba1ca46847baf122bca1cddbb5c95b390a0b90accc0d3",
+      "bytes": 2887,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_11_7.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_11_7.md",
+      "sha256": "adeeaedda7b252da1df03d31c1b3b468838ae4244473374c8225dc5aa4900264",
+      "bytes": 4542,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_12_0.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_12_0.md",
+      "sha256": "a77047b73d892af88355986366ee2380e0d0a212a3b5744b8eb631272047c474",
+      "bytes": 3356,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_12_1.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_12_1.md",
+      "sha256": "d80402c075953acd3290a09b85818070ad5421050ac50a36bf36f03608c54330",
+      "bytes": 3196,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_12_2.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_12_2.md",
+      "sha256": "1923ac399c9febbb1e818f98c37824d16a8678df6fbc72639afb2a39a796f5fb",
+      "bytes": 3796,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_13_0.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_13_0.md",
+      "sha256": "0e92468b1e3b0f5fc036873ae2f8e4cb982250e5cf0b3caded9c0224e60c39be",
+      "bytes": 3177,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_8.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_8.md",
+      "sha256": "e8289a8dbbebe4d663f6142baf862e1a2b1b36b209aff97061579fdddb8344a0",
+      "bytes": 2894,
+      "markers": [
+        {
+          "line": 93,
+          "matches": [
+            "Nicht Bestandteil"
+          ],
+          "context": "Nicht Bestandteil von V12.8:  ```text Umstellung auf SQLite/Datenbankdatei dauerhaftes historisches Betriebsprotokoll über Logrotationen hinweg automatische Parameteroptimierung Simulation alternativer Regelparameter",
+          "ledger_refs": [
+            "ZEC-BL-STORAGE-001",
+            "ZEC-BL-DIAG-001",
+            "ZEC-BL-CTRL-ADAPTIVE-001",
+            "ZEC-BL-SIM-001",
+            "ZEC-BL-CTRL-001"
+          ],
+          "classification": "HISTORICAL_SCOPE_BOUNDARY"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_8_10.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_8_10.md",
+      "sha256": "a326c546f47cc4465e423998f30b32db2336f697a5f24e37f20bb83175994ec9",
+      "bytes": 928,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_8_11.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_8_11.md",
+      "sha256": "95c02f351671378d99c7e05c449434016a9fe030e9814e0d3164baa2bd2be810",
+      "bytes": 3813,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_8_12.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_8_12.md",
+      "sha256": "e75cb877460e54f45898049951688113b9ffb45a8350f1282f61de2d0a32c369",
+      "bytes": 1947,
+      "markers": [
+        {
+          "line": 46,
+          "matches": [
+            "Nicht Bestandteil"
+          ],
+          "context": "Nicht Bestandteil von V12.8.12:  - keine Änderung der eigentlichen Regelstrategie, - kein vollständiger Standard-/Expertenmodus, - kein Analyse-Streaming-/Aggregationsumbau, - keine Datenbank-/Betriebsprotokoll-Funktion, - keine Änderung der Excel-Lernsimulation.",
+          "ledger_refs": [
+            "ZEC-BL-CTRL-001",
+            "ZEC-BL-UI-STATUS-EXPERT-001",
+            "ZEC-BL-ANALYSIS-HANDOFF-001",
+            "ZEC-BL-STORAGE-001"
+          ],
+          "classification": "HISTORICAL_SCOPE_BOUNDARY"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_8_13.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_8_13.md",
+      "sha256": "0669ddf14ef9a0819a30f0de57a265e1bb48945a33610c12feb67671210ddee7",
+      "bytes": 1862,
+      "markers": [
+        {
+          "line": 53,
+          "matches": [
+            "Nicht Bestandteil"
+          ],
+          "context": "Nicht Bestandteil von V12.8.13:  - keine Änderung der eigentlichen Regelstrategie, - keine Änderung am MQTT-Diagnosemodus selbst, - kein vollständiger Standard-/Expertenmodus, - kein Analyse-Streaming-/Aggregationsumbau, - keine Änderung der Excel-Lernsimulation.",
+          "ledger_refs": [
+            "ZEC-BL-CTRL-001",
+            "ZEC-BL-CMD-OBS-001",
+            "ZEC-BL-UI-STATUS-EXPERT-001",
+            "ZEC-BL-ANALYSIS-HANDOFF-001"
+          ],
+          "classification": "HISTORICAL_SCOPE_BOUNDARY"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_8_14.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_8_14.md",
+      "sha256": "5f06a481b98a4e1b6be3323a4e4e288a0b17e628fbc5ac6daaa4d7ab712c369d",
+      "bytes": 2037,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_8_15.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_8_15.md",
+      "sha256": "d360e5852096a89f7abdda6d8d146571f25ec672d9fd5d744115a4be4f08d093",
+      "bytes": 2232,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_8_16.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_8_16.md",
+      "sha256": "06c7c9321f070c48aabf9b6ef20eeb01689f850ac22b0d683c0e5e7fb32204b5",
+      "bytes": 1806,
+      "markers": [
+        {
+          "line": 7,
+          "matches": [
+            "später"
+          ],
+          "context": "`NIGHT_DISCHARGE_STOP_SOC_PERCENT` soll keine einmalige Sperre für das gesamte Nachtfenster sein, sondern eine laufende Untergrenze für die Nachtentladung. Damit entspricht die Logik der Bedienintention: nachts nicht unter den Reserve-SOC entladen, aber bei später wieder höher gemeldetem SOC im selben Nachtfenster wieder laufen dürfen.",
+          "ledger_refs": [
+            "ZEC-BL-CTRL-NIGHT-MINSOC-GRID-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_8_17.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_8_17.md",
+      "sha256": "0a291cd3b73f46443a69e8558642abc31f18bf4c8c52bbee888009f15cd486ed",
+      "bytes": 1963,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_8_19.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_8_19.md",
+      "sha256": "d5fe981fad9308f8e5010158c07af1c8c7deff2070718be2451d3a15b9c0294f",
+      "bytes": 2517,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_8_2.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_8_2.md",
+      "sha256": "83263291494ddf3806502b34083aa496eafe88335872f45b35e9dcf7375aca6e",
+      "bytes": 1274,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_8_20.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_8_20.md",
+      "sha256": "0667bfe32c931d69006c36b6858f0bc01ab34a3f4b0450d6407f478a930e4669",
+      "bytes": 1872,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_8_21.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_8_21.md",
+      "sha256": "d9008a7efd5fbbfae153ae536274838bb4f0699a42e8648726fa559a5cf2f127",
+      "bytes": 1324,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_8_3.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_8_3.md",
+      "sha256": "0b34f1325b2cea3051f5664cea25113bb9b8da4f659f32ccf21c03447e418c42",
+      "bytes": 1290,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_8_4.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_8_4.md",
+      "sha256": "f78e32516693ac184be99217a223d9010ab417f306d5fbd9bde14ec7b210b343",
+      "bytes": 1364,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_8_5.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_8_5.md",
+      "sha256": "683a0f0ab01cdebd443cd2022b463bf70375a4bdcab8b862016e95e02a075697",
+      "bytes": 3527,
+      "markers": [
+        {
+          "line": 25,
+          "matches": [
+            "später"
+          ],
+          "context": "Alles darüber wird lokal abgelehnt. Große Mehrtages-/Langzeitanalysen sollen auf einem PC/offline oder später über eine DB-/Aggregationslösung erfolgen.",
+          "ledger_refs": [
+            "ZEC-BL-ANALYSIS-HANDOFF-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_8_6.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_8_6.md",
+      "sha256": "c73dc0223615cba0c54a68ea857ee4ddfde707aead006d04decfbfad32edeedf",
+      "bytes": 2979,
+      "markers": [
+        {
+          "line": 72,
+          "matches": [
+            "später"
+          ],
+          "context": "- später ggf. größere Refaktorierung des Controller-Zyklus",
+          "ledger_refs": [
+            "ZEC-BL-CTRL-REFACTOR-001",
+            "ZEC-BL-CTRL-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_8_7.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_8_7.md",
+      "sha256": "3ef7c01ecd5a2e36a03a2a63e162fd2bb47ebaf168684b0e7214ae217285f095",
+      "bytes": 881,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_8_8.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_8_8.md",
+      "sha256": "7e18deb36bdd30ea4324135d1741ecbcb02eb0b96cba0bf276265d1c2c839871",
+      "bytes": 861,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_8_9.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_8_9.md",
+      "sha256": "97b26f34cb75b8d12873508b80645408ca3dca0bfdb2a7ae46c5ee8e4c27d62f",
+      "bytes": 2178,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_9_0.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_9_0.md",
+      "sha256": "76fabc6c6ee8a3f2f7c3f8cc1cf5989a174bb891d0051a33e8642f7667beaff9",
+      "bytes": 2338,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_9_1.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_9_1.md",
+      "sha256": "16e53fd164f839f0628b8b58e9400ddf2313d5843d4288e251883e65f89bbd0b",
+      "bytes": 3431,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_9_2.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_9_2.md",
+      "sha256": "7339694d6133a92a3763b2b5ac90cc18e8b78c4c637a145268fd7e6a9f035724",
+      "bytes": 1900,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_9_3.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_9_3.md",
+      "sha256": "7b4f3098c14a7e5b61de4b9a421e288ad5220f40207c09a2c80060333904c851",
+      "bytes": 2177,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V12_9_4.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V12_9_4.md",
+      "sha256": "5ddfa3d20930c2e6f169721bdb84132389ec586aece47359c75c7f6cb9e7b237",
+      "bytes": 2870,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V16_0_0.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V16_0_0.md",
+      "sha256": "a5f49dcf49446f1a19abc9653c8e1586429c8afb67edd20af579f9534c48d862",
+      "bytes": 2299,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V16_0_1.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V16_0_1.md",
+      "sha256": "272e4d54fddd784a8c39241d82ece3246d9c28d4158d85965aa18326cb51216c",
+      "bytes": 1289,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V16_0_2.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V16_0_2.md",
+      "sha256": "2591bdc6899471f09a71e189d688c936f2fb97ebd45a2e3478e697114cc1014d",
+      "bytes": 1992,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V16_1_0.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V16_1_0.md",
+      "sha256": "3c313bba327db012208d00f3b0c3827f18a897f2c2f46f8b49d0c1d691f13922",
+      "bytes": 2211,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V16_2_0.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V16_2_0.md",
+      "sha256": "179f55cf1a031dfa1536c2061ae9dc3306d6bb4a8715401869dda7f565e51e3c",
+      "bytes": 3260,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V16_2_1.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V16_2_1.md",
+      "sha256": "43f8fe258f843f9a53ba378c519f72a33fdd5bf1ed1341953dfd7c8ff24a606b",
+      "bytes": 2879,
+      "markers": [],
+      "ledger_ids": [
+        "ZEC-BL-PRIMARY-METADATA-001",
+        "ZEC-BL-UI-STATUS-EXPERT-001"
+      ]
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V16_2_2.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V16_2_2.md",
+      "sha256": "fb9a430bace7fe0d342b30d7f578c41ab6632727903517b654d8028ddf70758e",
+      "bytes": 2793,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V16_2_3.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V16_2_3.md",
+      "sha256": "c687616b854480de8ff926df45ac88fb6ab4229f4380f48727683921efe172e3",
+      "bytes": 1425,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V16_2_4.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V16_2_4.md",
+      "sha256": "9c38094261d08be5b4266c5d7d1409edf6e735a72625e5f2576513b608d57927",
+      "bytes": 1817,
+      "markers": [
+        {
+          "line": 11,
+          "matches": [
+            "offen"
+          ],
+          "context": "Im Expertenmodus rendert die Primärspeicherkarte kompakt Harmonisierung, Harvest/Strategie, diagnostischen usable SOC und Quellenstatus. Standard bleibt unverändert. Der vollständige kartenübergreifende Expertenmodus bleibt offen.",
+          "ledger_refs": [
+            "ZEC-BL-UI-STATUS-EXPERT-001",
+            "ZEC-BL-PRIMARY-SMA-FLOOR-001",
+            "ZEC-BL-CTRL-USABLE-SOC-001"
+          ],
+          "classification": "LEDGER_MAPPED_OR_NON_ACTIONABLE_STATUS"
+        }
+      ],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V16_2_5.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V16_2_5.md",
+      "sha256": "c790e56abe53b32ff951fb8f519357c49ba58d1731c703f8b63dd7d209121f24",
+      "bytes": 1798,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V17_0_1.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V17_0_1.md",
+      "sha256": "b9d4fef7da6206ee0c86590906078aa4f25c097770a6d94ec11b6fbcf792e4a1",
+      "bytes": 3007,
+      "markers": [],
+      "ledger_ids": []
+    },
+    {
+      "original_root": "TECHNICAL_NOTES_V17_0_2.md",
+      "archive_path": "docs/history/release_root/TECHNICAL_NOTES_V17_0_2.md",
+      "sha256": "03452e776a997a178f2aa1ba4a5526d35fcdc987e177bab92e9299a170d62835",
+      "bytes": 1629,
+      "markers": [],
+      "ledger_ids": []
+    }
+  ]
+}

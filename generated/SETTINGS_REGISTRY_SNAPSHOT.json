@@ -609,7 +609,7 @@
           "CAPACITY"
         ],
         "short": "Gesamtkapazität der installierten Zendure-Batterien in Wh für Prognose und Diagnose. Leer bedeutet: Kapazität ist nicht bekannt; ZEC erfindet keinen Anlagenwert.",
-        "when": null
+        "when": "Nur für Energieanzeige und Prognosen mit einer verlässlichen Kapazitätsangabe. Der Wert öffnet weder die Lade-/Entladegrenzen noch veranlasst er eine Ladung."
       },
       "key": "ZENDURE_BATTERY_CAPACITY_WH",
       "label": "Zendure Batteriekapazität für Prognose",
@@ -671,7 +671,7 @@
           "DEVICE"
         ],
         "short": "Kennung der Zendure-Headunit, für die ZEC MQTT-Telemetrie empfängt und Leistungsbefehle erstellt. Sie muss zu den Topics des tatsächlich gesteuerten Geräts passen und schaltet keine zusätzliche Headunit frei.",
-        "when": null
+        "when": "Bei der Zuordnung der MQTT-Nachrichten zu der einen tatsächlich gesteuerten Zendure-Headunit. Stimmt die Kennung nicht zum Gerät, können aktuelle Messungen oder sichere Befehle fehlen."
       },
       "key": "DEVICE_ID",
       "label": "Zendure Device ID",
@@ -1251,7 +1251,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Begrenzt die Änderung des Leistungsziels pro Regelzyklus. Der Wert bestimmt nicht das absolute Leistungsmaximum, sondern die maximale Zielwertänderung zwischen zwei Schritten.",
+        "extended": "Dieser Wert begrenzt nach der Glättung, wie stark das normale Lade- oder Entladeziel in einem Regelzyklus verändert werden darf. Wenn Fast Capture ausdrücklich aktiv und zulässig ist, kann anschließend ein eigener zusätzlicher Ladeanteil entstehen. Dessen Anstieg ist auf 400 Watt pro Sekunde begrenzt, und er wird normalerweise mit 100 Watt pro Sekunde zurückgenommen. Die beiden Grenzen werden nicht einfach als feste Wattzahl pro Zyklus addiert. Weder eine höhere Schrittgrenze noch Fast Capture überstimmen Ladezustand, tatsächliche Geräteleistung, Schutzfunktionen oder Messdatenqualität. Größere Schritte sind keine generelle Empfehlung; sie können die Regelung unruhiger machen.",
         "guidance_rule_ids": [
           "GUIDE-AUTO-AGGRESSIVE",
           "GUIDE-HARVEST-STEP"
@@ -1274,8 +1274,8 @@
           "MAX",
           "POWER"
         ],
-        "short": "Begrenzt, wie stark ZEC das Leistungsziel in einem normalen Regelzyklus ändern darf. Kleine Schritte beruhigen die Geräteansteuerung, verzögern aber Lastsprünge; übergeordnete Schutz- und Neutralisierungspfade bleiben wirksam.",
-        "when": "Die Schrittbegrenzung wirkt bei Zielwertänderungen der normalen Reglerpfade und begrenzt die Änderung von einem Regelzyklus zum nächsten. Sie ersetzt keine absolute Leistungsgrenze."
+        "short": "Begrenzt die normale Änderung des Zendure-Leistungsziels je Regelzyklus nach der Glättung. Ein kleiner Wert reagiert ruhiger, ein großer schneller; das ist keine zusätzliche Watt-pro-Sekunde-Grenze.",
+        "when": "Bei normalen Lade- und Entladekorrekturen im AUTO-Betrieb nach der Glättung. Die eigene Fast-Capture-Zusatzrate wirkt nur im separat freigegebenen Aktivfall. Sicherheitsbedingte Abbrüche und Neutralisierung sind keine gewöhnlichen, langsam begrenzten Regeländerungen."
       },
       "key": "MAX_POWER_STEP_W",
       "label": "Maximale Sollwertänderung je Zyklus",
@@ -2134,7 +2134,7 @@
           "SECONDS"
         ],
         "short": "Nach dieser Zeit ohne vollständiges Primärspeicher-Update gelten die Daten für die Regelung als veraltet. Das gilt quellenneutral für MQTT und native Modbus-Templates; Source Health kann bereits vorher DEGRADED melden, solange der letzte vollständige Snapshot noch frisch ist.",
-        "when": null
+        "when": "Nur bei eingeschalteter Primärspeicher-Integration und eingehenden Daten. Nach Ablauf gelten alte Werte nicht mehr als verlässliche Grundlage für Ladeverteilung und Gegenladeschutz."
       },
       "key": "SECOND_BATTERY_STALE_TIMEOUT_SECONDS",
       "label": "Daten-Timeout",
@@ -2197,7 +2197,7 @@
           "NAME"
         ],
         "short": "Freier Anzeigename des Primärspeichers. Dieser Name wird in Status, Graph, Inspector und Diagnose verwendet; interne IDs und Historienidentität bleiben stabil.",
-        "when": null
+        "when": "Nur für den angezeigten Namen, nicht für Messwerte oder Ladeentscheidungen. Ein selbst vergebener Name hat Vorrang vor dem Gerätenamen des Profils."
       },
       "key": "SECOND_BATTERY_DISPLAY_NAME",
       "label": "Primärspeicher-Anzeigename",
@@ -2329,7 +2329,7 @@
           "PROFILE"
         ],
         "short": "Wählt genau eine Primärspeicher-Anbindung: EVCC, benutzerdefiniertes MQTT oder direktes read-only Modbus über ein geprüftes Geräteprofil. Die jeweils benötigten Verbindungsparameter werden unmittelbar darunter geführt. Ein Quellenwechsel erfordert einen Dienstneustart.",
-        "when": null
+        "when": "Nur bei eingeschalteter Primärspeicher-Integration. EVCC, eigenes MQTT und direktes Modbus haben jeweils andere Anschlussfelder; die Auswahl sendet keine Primärspeicher-Steuerbefehle."
       },
       "key": "SECOND_BATTERY_SOURCE_PROFILE",
       "label": "Primärspeicher-Anbindung",
@@ -2410,7 +2410,7 @@
           "TEMPLATE"
         ],
         "short": "Geprüftes read-only Geräteprofil für die direkte Modbus-Anbindung. Derzeit ist SMA Sunny Island verfügbar. Weitere Geräteprofile werden versioniert mit ZEC-Releases ausgeliefert; Register sind nicht frei editierbar.",
-        "when": null
+        "when": "Nur bei gewählter direkter Modbus-Anbindung. Das Geräteprofil bestimmt die tatsächlich lesbaren Register und deren Bedeutung; es führt keine Schreibbefehle aus."
       },
       "key": "SECOND_BATTERY_MODBUS_TEMPLATE",
       "label": "Gerät / Modell",
@@ -2480,7 +2480,7 @@
           "HOST"
         ],
         "short": "Host oder IP-Adresse des Primärspeichers für Modbus TCP. Der Wert ist installationsspezifisch.",
-        "when": null
+        "when": "Nur bei direkter Modbus-Anbindung. Ohne erreichbare Adresse des Primärspeichers können aktuelle Leistung und Ladezustand nicht aus diesem Pfad übernommen werden."
       },
       "key": "SECOND_BATTERY_MODBUS_HOST",
       "label": "Host / IP-Adresse",
@@ -2545,7 +2545,7 @@
           "PORT"
         ],
         "short": "Modbus-TCP-Port. Das Geräteprofil SMA Sunny Island verwendet 502 als Default; der Wert kann installationsseitig überschrieben werden.",
-        "when": null
+        "when": "Nur bei direkter Modbus-Anbindung zusammen mit Host, Geräteprofil und Geräteadresse; ein falscher Port verhindert aktuelle Messungen, statt Ersatzwerte zu erfinden."
       },
       "key": "SECOND_BATTERY_MODBUS_PORT",
       "label": "Modbus-Port",
@@ -2610,7 +2610,7 @@
           "UNIT"
         ],
         "short": "Modbus Unit-ID. Das Geräteprofil SMA Sunny Island verwendet 3 als Default; der Wert kann installationsseitig überschrieben werden.",
-        "when": null
+        "when": "Nur bei direkter Modbus-Anbindung und passender Geräteadresse. Diese Nummer wählt das angesprochene Gerät am Modbus-Anschluss, nicht die Zendure-Headunit."
       },
       "key": "SECOND_BATTERY_MODBUS_UNIT_ID",
       "label": "Unit-ID",
@@ -2677,7 +2677,7 @@
           "TOPIC"
         ],
         "short": "Optionales MQTT-Topic für die Primärspeicher-Kapazität im MQTT-Profil. Die Kapazität dient Anzeige und Diagnose, ist aber nicht zwingend für die Schutzentscheidung erforderlich.",
-        "when": null
+        "when": "Nur im benutzerdefinierten MQTT-Profil, wenn die optionale Kapazität von einem Topic gelesen werden soll. Ohne verlässliche Kapazität bleibt die davon abhängige Energieanzeige eingeschränkt."
       },
       "key": "SECOND_BATTERY_CAPACITY_TOPIC",
       "label": "Kapazitäts-Topic",
@@ -2743,7 +2743,7 @@
           "TOPIC"
         ],
         "short": "Vollständiges MQTT-Topic der Primärspeicher-Leistung. Dieses Topic ist nur im benutzerdefinierten MQTT-Profil Pflicht.",
-        "when": null
+        "when": "Nur im benutzerdefinierten MQTT-Profil. Leistung ist für die sichere Erkennung von Laden, Entladen und Gegenladen entscheidend; fehlende oder alte Werte dürfen das nicht bestätigen."
       },
       "key": "SECOND_BATTERY_POWER_TOPIC",
       "label": "Leistungs-Topic",
@@ -2809,7 +2809,7 @@
           "TOPIC"
         ],
         "short": "Optionales MQTT-Topic für den Ladezustand des Primärspeichers in Prozent. Das native Sunny-Island-Template liest den SOC direkt per Modbus und benötigt dieses MQTT-Topic nicht.",
-        "when": null
+        "when": "Nur im benutzerdefinierten MQTT-Profil, soweit Ladezustandsdaten für die gewählte Funktion benötigt werden. Ein nicht empfangener Wert darf nicht als neuer Ladezustand gelten."
       },
       "key": "SECOND_BATTERY_SOC_TOPIC",
       "label": "SOC-Topic",
@@ -2875,7 +2875,7 @@
           "TOPIC"
         ],
         "short": "Basis-Topic des Primärspeichers bei EVCC-Standardstruktur, z. B. evcc/site/battery/devices/1. Daraus werden Leistung, SOC und Kapazität automatisch als /power, /soc und /capacity abgeleitet.",
-        "when": null
+        "when": "Nur mit dem EVCC-Standardprofil; ZEC ergänzt die vorgesehenen Untertopics für die benötigten Messgrößen. Kein Effekt bei direkter Modbus- oder eigener MQTT-Anbindung."
       },
       "key": "SECOND_BATTERY_EVCC_BASE_TOPIC",
       "label": "EVCC Batterie-Basis-Topic",
@@ -2938,7 +2938,7 @@
           "PATH"
         ],
         "short": "Feldpfad innerhalb eines JSON-Payloads, z. B. capacity oder battery.capacity. Nur relevant, wenn Kapazitäts-Payload = JSON gewählt ist.",
-        "when": null
+        "when": "Nur wenn das Kapazitäts-Topic ein JSON-Objekt sendet. Bei direktem Zahlenwert wird dieser Feldpfad nicht gebraucht."
       },
       "key": "SECOND_BATTERY_CAPACITY_JSON_PATH",
       "label": "Kapazität JSON-Feldpfad",
@@ -3002,7 +3002,7 @@
           "TYPE"
         ],
         "short": "Gibt an, ob das Kapazitäts-Topic direkt eine Zahl enthält oder ein JSON-Objekt liefert.",
-        "when": null
+        "when": "Nur bei eigener MQTT-Kapazitätsquelle. Zahlenwert und JSON-Objekt benötigen unterschiedliche Auswertung; ein falscher Typ führt nicht zu einer erfundenen Kapazität."
       },
       "key": "SECOND_BATTERY_CAPACITY_PAYLOAD_TYPE",
       "label": "Kapazitäts-Payload",
@@ -3074,7 +3074,7 @@
           "PATH"
         ],
         "short": "Feldpfad innerhalb eines JSON-Payloads, z. B. power oder battery.power. Nur relevant, wenn Leistungs-Payload = JSON gewählt ist.",
-        "when": null
+        "when": "Nur wenn das benutzerdefinierte Leistungs-Topic ein JSON-Objekt sendet. Bei einer direkt gesendeten Zahl ist kein Feldpfad erforderlich."
       },
       "key": "SECOND_BATTERY_POWER_JSON_PATH",
       "label": "Leistung JSON-Feldpfad",
@@ -3138,7 +3138,7 @@
           "TYPE"
         ],
         "short": "Gibt an, ob das Leistungs-Topic direkt eine Zahl enthält oder ein JSON-Objekt liefert.",
-        "when": null
+        "when": "Nur bei eigener MQTT-Leistungsquelle. Das Format muss zur tatsächlichen Nachricht passen, sonst fehlt eine belastbare Primärspeicher-Istleistung."
       },
       "key": "SECOND_BATTERY_POWER_PAYLOAD_TYPE",
       "label": "Leistungs-Payload",
@@ -3210,7 +3210,7 @@
           "PATH"
         ],
         "short": "Feldpfad innerhalb eines JSON-Payloads, z. B. soc oder battery.soc. Nur relevant, wenn SOC-Payload = JSON gewählt ist.",
-        "when": null
+        "when": "Nur wenn das benutzerdefinierte Ladezustands-Topic ein JSON-Objekt sendet. Ein einzelner Zahlenwert benötigt keinen Feldpfad."
       },
       "key": "SECOND_BATTERY_SOC_JSON_PATH",
       "label": "SOC JSON-Feldpfad",
@@ -3274,7 +3274,7 @@
           "TYPE"
         ],
         "short": "Gibt an, ob das SOC-Topic direkt eine Zahl enthält oder ein JSON-Objekt liefert.",
-        "when": null
+        "when": "Nur bei eigener MQTT-Ladezustandsquelle. Ohne Übereinstimmung von Format und Nachricht wird kein verlässlicher Ladezustand abgeleitet."
       },
       "key": "SECOND_BATTERY_SOC_PAYLOAD_TYPE",
       "label": "SOC-Payload",
@@ -3345,7 +3345,7 @@
           "UNIT"
         ],
         "short": "Einheit des Kapazitätswerts der Zusatzbatterie. Die Statusseite zeigt den Wert in kWh an.",
-        "when": null
+        "when": "Nur bei eigener MQTT-Kapazitätsquelle. ZEC rechnet den empfangenen Wert für Energieanzeigen in eine gemeinsame Einheit um; dies ändert nicht die gemeldete Batterieleistung."
       },
       "key": "SECOND_BATTERY_CAPACITY_UNIT",
       "label": "Kapazitätseinheit",
@@ -3419,7 +3419,7 @@
           "SIGN"
         ],
         "short": "+1 bedeutet: positive MQTT-Leistung = Zusatzbatterie entlädt. -1 bedeutet: negative MQTT-Leistung = Zusatzbatterie entlädt. Die Statusanzeige normiert danach auf positiv = Ladung, negativ = Entladung.",
-        "when": null
+        "when": "Nur bei eigener MQTT-Leistungsquelle. Hier wird festgelegt, welches Vorzeichen Laden oder Entladen bedeutet; eine falsche Zuordnung verfälscht auch die Gegenlade-Erkennung."
       },
       "key": "SECOND_BATTERY_DISCHARGE_SIGN",
       "label": "Bedeutung des MQTT-Leistungsvorzeichens",
@@ -3482,7 +3482,7 @@
           "UNIT"
         ],
         "short": "Einheit des Leistungswerts der Zusatzbatterie. Intern wird immer auf Watt normalisiert.",
-        "when": null
+        "when": "Nur bei eigener MQTT-Leistungsquelle. Die empfangene Leistung wird entsprechend in Watt umgerechnet; dies setzt keine reale Leistungsgrenze."
       },
       "key": "SECOND_BATTERY_POWER_UNIT",
       "label": "Leistungseinheit",
@@ -3560,7 +3560,7 @@
           "POWER"
         ],
         "short": "Maximale Ladeleistung des Primärspeichers bzw. der Zweitbatterie. Dieser installationsabhängige Wert muss aus der konkreten Anlage bzw. deren Datenblatt stammen; leer bedeutet unbekannt.",
-        "when": null
+        "when": "Nur für die Einordnung und Begrenzung der zulässigen Primärspeicher-/Harvest-Berechnungen bei aktivem Primärspeicher. ZEC befiehlt dem Primärspeicher damit keine Ladung."
       },
       "key": "SECOND_BATTERY_MAX_CHARGE_POWER_W",
       "label": "Maximale Ladeleistung Primärspeicher",
@@ -4261,7 +4261,7 @@
       ],
       "editability": "editable",
       "help": {
-        "extended": "Fast Capture ist ein strikt zusätzliches Overlay auf der bestehenden langsamen Baseline. FULL_IDLE und NEAR_LIMIT dürfen A400/R100 nutzen; RESERVE_UNKNOWN erzeugt kein Fast-Overlay. Shadow berechnet dieselbe Kandidatenlogik, verändert aber weder Zielwert noch Command. Roh-SOC, unabhängige Leistungsbeobachtung, Cross-Charge, Command-Safety und vorhandene Gerätegrenzen bleiben autoritativ.",
+        "extended": "Die normale AUTO-Regelung bildet zuerst ihre Ladeanforderung aus Netzabweichung, Glättung und begrenzter Änderung pro Regelzyklus. Erst danach darf Fast Capture bei bestätigtem Restexport einen zusätzlichen positiven Ladeanteil daraufsetzen. Dessen Anstieg ist auf 400 Watt pro Sekunde begrenzt; bei normalem Rückgang wird er mit höchstens 100 Watt pro Sekunde abgebaut. Das sind Raten pro tatsächlich vergangener Sekunde, nicht jeweils 400 oder 100 Watt pro Regelzyklus. Bei plötzlichem Netzbezug, Messwertausfall, unerwünschtem Umladen oder anderem Schutzgrund fällt der Zusatz sofort weg. Eine tatsächliche Zunahme der Ladeleistung ist nicht garantiert: Geräteleistung, Ladezustand und alle Schutzvorgaben können sie begrenzen.",
         "guidance_rule_ids": [],
         "handbook": {
           "page": 9,
@@ -4278,8 +4278,8 @@
           "CAPTURE",
           "MODE"
         ],
-        "short": "Wählt das A400/R100 Fast-Capture-Verhalten: Aus, Shadow nur für Diagnose oder Aktiv mit realer zusätzlicher Exportaufnahme in bestätigten FULL_IDLE-/NEAR_LIMIT-Situationen.",
-        "when": "Fast Capture wird ausschließlich in AUTO mit frischen, gültigen Netz-, Primärspeicher-, Zendure-SOC- und unabhängigen Zendure-Leistungsdaten bewertet. Aktiv darf erst nach erfolgreicher Shadow-Evidenz produktiv verwendet werden; Hard-Aborts, Cross-Charge und Command-Recovery besitzen Vorrang."
+        "short": "Fast Capture nimmt zusätzlichen PV-Überschuss schneller auf, wenn der Primärspeicher nachweislich voll und kaum noch lädt oder fast seine Ladeleistungsgrenze erreicht. Aus lässt die normale Automatik unverändert; Testbetrieb berechnet nur, Aktiv erlaubt eine zusätzliche Ladeanforderung innerhalb aller Schutzgrenzen.",
+        "when": "Nur im AUTO-Modus, bei bestätigter Netzeinspeisung und frischen Netz-, Primärspeicher- und Zendure-Messwerten. Der Primärspeicher muss entweder voll und praktisch ohne Ladeleistung sein oder seine bekannte Ladeleistungsgrenze fast erreichen. Ist diese Lage nicht sicher, bleibt die Zusatzfunktion ohne Wirkung; normale AUTO-Ladung läuft unverändert weiter."
       },
       "key": "HARVEST_FAST_CAPTURE_MODE",
       "label": "Fast Capture",
@@ -7621,7 +7621,7 @@
           "BYTES"
         ],
         "short": "Bei Überschreitung wird rotiert. Zusammen mit der Dateianzahl bestimmt dieser Wert die geschätzte Aufbewahrung.",
-        "when": null
+        "when": "Nur bei eingeschalteter zyklischer Messdatenaufzeichnung. Größere Dateien werden später rotiert; der Wert ändert keine Netz- oder Batterieregelung."
       },
       "key": "MEASUREMENT_LOG_MAX_BYTES",
       "label": "Max Dateigröße",
@@ -7683,7 +7683,7 @@
           "ALLOW"
         ],
         "short": "Wenn das externe Speicherziel nicht verfügbar ist, darf begrenzt auf die interne SD geschrieben werden. Der Fallback wird sichtbar markiert und enger rotiert.",
-        "when": null
+        "when": "Nur wenn das gewählte Messdaten-Speicherziel ausfällt oder nicht nutzbar ist. Die Reserveablage erlaubt weitere Aufzeichnung unter ihren eigenen Platzgrenzen, aber keinen unbeschränkten Schreibbetrieb."
       },
       "key": "MEASUREMENT_LOG_ALLOW_SD_FALLBACK",
       "label": "SD-Fallback bei USB-Ausfall",
@@ -7745,7 +7745,7 @@
           "DIR"
         ],
         "short": "Begrenztes Fallback-Verzeichnis auf der internen SD, falls ein externes Logziel ausfällt.",
-        "when": null
+        "when": "Nur bei ausdrücklich erlaubtem Ausweichen auf eine Ersatzablage. Der Pfad muss erreichbar und beschreibbar sein; sonst fallen neue Messdaten aus, nicht die Schutzgrenzen."
       },
       "key": "MEASUREMENT_LOG_FALLBACK_DIR",
       "label": "SD-Fallback-Verzeichnis",
@@ -7805,7 +7805,7 @@
           "BYTES"
         ],
         "short": "Kleinere Rotationsgrenze für den SD-Fallback, damit ein USB-Ausfall die SD nicht unbegrenzt belastet.",
-        "when": null
+        "when": "Nur wenn die Ersatzablage tatsächlich genutzt wird. Die Grenze schützt deren Speicherplatz und begrenzt nicht die Leistungsregelung."
       },
       "key": "MEASUREMENT_LOG_FALLBACK_MAX_BYTES",
       "label": "Fallback Max Dateigröße",
@@ -7991,7 +7991,7 @@
           "FILE"
         ],
         "short": "Dateiname der aktuellen Measurement-V4-Datei. Beim Standardnamen schreibt der Controller automatisch zendure_measurements_v4.csv; produktive Messdaten werden ausschließlich im V4-Vertrag erzeugt.",
-        "when": null
+        "when": "Nur für aktivierte CSV-Messdatenaufzeichnung; Dateiname und Speicherziel bestimmen, wo neue Zeilen landen, nicht ob Zendure lädt."
       },
       "key": "MEASUREMENT_LOG_FILE",
       "label": "Messdaten-Datei",
@@ -8052,7 +8052,7 @@
           "MODE"
         ],
         "short": "Aus: keine zyklischen Messdaten, schont die SD-Karte. Standard: vollständige Reglerdiagnose inklusive Datenaktualität, MQTT-Veraltet-Aggregat, Sollwertkaskade, Kommando und Szenario ohne Zendure. Erweitert: Standard plus Detaildaten für Simulation, What-if und tiefe MQTT-/Aktualitätsanalyse; erzeugt größere Dateien und sollte gezielt genutzt werden.",
-        "when": null
+        "when": "Aus unterbindet neue zyklische Measurement-V4-Dateizeilen; Standard und Erweitert schreiben unterschiedliche Diagnosedetails. Der unabhängig arbeitende Controller bleibt aktiv."
       },
       "key": "MEASUREMENT_LOG_MODE",
       "label": "V4-Messwertaufzeichnung",
@@ -8127,7 +8127,7 @@
           "ENABLED"
         ],
         "short": "Schreibt parallel zu CSV/V4 einen leichten SQLite-Store für schnelle Status- und Graphdaten. Läuft auch, wenn Messdaten-CSV deaktiviert ist; die Regelung wird bei DB-Fehlern nicht blockiert.",
-        "when": null
+        "when": "Nur für die separate Graphdatenbank. Ausschalten stoppt deren neue Speicherung, nicht den Echtzeitregler oder die bereits vorhandene CSV-Messdatenaufzeichnung."
       },
       "key": "MEASUREMENT_DB_ENABLED",
       "label": "SQLite-Graphstore",
@@ -8246,7 +8246,7 @@
           "PATH"
         ],
         "short": "Optionaler absoluter Pfad zur SQLite-Datei. Leer bedeutet: automatisch neben den Messdaten im aktiven Speicherziel.",
-        "when": null
+        "when": "Nur bei eingeschaltetem Graphdatenbankspeicher; die Datenbank benötigt einen zugänglichen Speicherort. Der Pfad ist kein Eingangssensor für die Regelung."
       },
       "key": "MEASUREMENT_DB_PATH",
       "label": "SQLite-Pfad optional",
@@ -8649,7 +8649,7 @@
           "ROWS"
         ],
         "short": "Schreibt gepufferte Messdaten periodisch aus dem Python-Puffer. Kein hartes fsync pro Zeile; bei Stromausfall können letzte Messdaten fehlen.",
-        "when": null
+        "when": "Nur bei laufender CSV-Aufzeichnung: nach dieser Anzahl gesammelter Zeilen wird zum Speichermedium geschrieben. Häufigeres Schreiben kann die SD-Karte stärker belasten."
       },
       "key": "MEASUREMENT_LOG_FLUSH_EVERY_ROWS",
       "label": "Flush alle X Zeilen",
@@ -8710,7 +8710,7 @@
           "SECONDS"
         ],
         "short": "Zeitbasierte Flush-Grenze für gepuffertes Logging. Reduziert kleine Sync-Schreibvorgänge gegenüber hartem Schreiben pro Messpunkt.",
-        "when": null
+        "when": "Nur bei laufender CSV-Aufzeichnung: spätestens nach dieser Wartezeit werden zwischengespeicherte Zeilen geschrieben. Längere Wartezeiten können beim Ausfall jüngste Aufzeichnungen kosten."
       },
       "key": "MEASUREMENT_LOG_FLUSH_EVERY_SECONDS",
       "label": "Flush alle X Sekunden",
@@ -8771,7 +8771,7 @@
           "DISK"
         ],
         "short": "Mindestfreier Speicher am aktuell aktiven Messdatenziel: interne SD, externer USB-/Mountpoint oder bei aktivem Fallback der SD-Fallback-Pfad. Wenn weniger Speicher frei ist, pausiert das Messdaten-Logging; die Regelung läuft weiter.",
-        "when": null
+        "when": "Nur beim Schreiben neuer Messdaten. Bei zu wenig freiem Speicher greift der Platzschutz; das ist kein Befehl an Zendure."
       },
       "key": "MEASUREMENT_LOG_MIN_FREE_DISK_MB",
       "label": "Mindestfreier Speicher",
@@ -8832,7 +8832,7 @@
           "DIR"
         ],
         "short": "Verzeichnis für ZEC-MEASUREMENT-Messdaten. Bei internal_sd/custom_path wird dieses Feld direkt verwendet. Bei external_mount wird es als Unterordner auf dem USB-/Mountpoint verwendet, z. B. USB + ZEC/logs.",
-        "when": null
+        "when": "Nur bei aktivierter CSV-Aufzeichnung und passender Wahl des Speicherziels. Ein fehlendes Verzeichnis erzeugt keine Ersatzmesswerte."
       },
       "key": "MEASUREMENT_LOG_DIR",
       "label": "Messdaten-Verzeichnis / Custom-Pfad",
@@ -8894,7 +8894,7 @@
           "MOUNTPOINT"
         ],
         "short": "Optionaler Mountpoint für externes Messdaten-Logging, z. B. /media/pi/USBSTICK oder /mnt/zec-logs. Wenn leer, wird bei Speicherziel external_mount ein erkannter schreibbarer USB-/Mountpoint automatisch verwendet.",
-        "when": null
+        "when": "Nur wenn Messdaten auf einen separaten Datenträger geschrieben werden sollen. Ohne passenden eingehängten Datenträger wird nicht stillschweigend ein beliebiger Systempfad benutzt."
       },
       "key": "MEASUREMENT_LOG_MOUNTPOINT",
       "label": "USB-/Mountpoint",
@@ -8958,7 +8958,7 @@
           "TARGET"
         ],
         "short": "Legt fest, wo Messdaten primär geschrieben werden. Bei erkanntem USB-/Mountpoint wird ein schreibbarer externer Mount automatisch verwendet; das Feld USB-/Mountpoint kann optional einen bestimmten Mountpoint festlegen.",
-        "when": null
+        "when": "Nur für neue CSV-Messdaten: bestimmt SD-Karte oder vorgesehenes externes Ziel. Ein Wechsel verschiebt keine vorhandene Historie und verändert keinen Regelzyklus."
       },
       "key": "MEASUREMENT_LOG_STORAGE_TARGET",
       "label": "V4-Speicherziel",
@@ -9032,7 +9032,7 @@
           "LIMIT"
         ],
         "short": "Anzahl der im RAM gehaltenen Graph-Datenpunkte. Diese Historie ist unabhängig vom dauerhaften Messdaten-Logging.",
-        "when": null
+        "when": "Nur für den begrenzten kurzfristigen RAM-Verlauf. Mehr Einträge benötigen mehr Arbeitsspeicher; die Datenmenge ändert weder den Sensor- noch den Reglertakt."
       },
       "key": "GRAPH_HISTORY_LIMIT",
       "label": "Graph-Historie",
@@ -9094,7 +9094,7 @@
           "SECONDS"
         ],
         "short": "Zeit, für die ein aus Messdaten aufgebauter SOC-Tagesgraph-Bootstrap im Speicher wiederverwendet werden darf.",
-        "when": null
+        "when": "Nur beim vorbereiteten Tagesgraphen aus gespeicherten Messdaten. Größere Cachezeit spart Ladeaufwand, kann aber die anfänglich sichtbare Kurve länger unverändert lassen."
       },
       "key": "SOC_DAY_GRAPH_BOOTSTRAP_CACHE_SECONDS",
       "label": "SOC_DAY_GRAPH_BOOTSTRAP_CACHE_SECONDS",
@@ -9159,7 +9159,7 @@
           "MEASUREMENTS"
         ],
         "short": "Versucht beim Abruf der SOC-Tageskurve, heutige Measurement-V4-Logs best-effort einzulesen. Fehler sind nicht kritisch; die Kurve startet dann ab jetzt.",
-        "when": null
+        "when": "Nur für die anfängliche Tageskurve, wenn passende ältere Messdaten vorhanden sind. Es werden keine fehlenden Sensorwerte erfunden und keine Controllerzustände zurückgesetzt."
       },
       "key": "SOC_DAY_GRAPH_BOOTSTRAP_FROM_MEASUREMENTS",
       "label": "SOC-Tageskurve aus Messdaten starten",
@@ -9219,7 +9219,7 @@
           "ENABLED"
         ],
         "short": "Zeigt auf der Statusseite eine leichte 24h-Zendure-SOC-Kurve für den aktuellen lokalen Tag.",
-        "when": null
+        "when": "Nur für die separate Aufzeichnung und Darstellung des Tages-Ladezustandsverlaufs. Ausschalten beendet diese Graphfunktion, nicht die Batterie-SOC-Schutzentscheidung."
       },
       "key": "SOC_DAY_GRAPH_ENABLED",
       "label": "SOC-Tageskurve anzeigen",
@@ -9283,7 +9283,7 @@
           "SECONDS"
         ],
         "short": "Samplingintervall der SOC-Tageskurve im RAM. Default 60 Sekunden; der Controller hält maximal etwa 1440 Punkte pro Tag.",
-        "when": null
+        "when": "Nur bei aktivierter Tagesgraph-Aufzeichnung. Bestimmt die Graph-Speicherkadenz, nicht die reale SOC-Erfassungsrate der Zendure."
       },
       "key": "SOC_DAY_GRAPH_SAMPLE_SECONDS",
       "label": "CSV-/V4-Fallback-Auflösung der SOC-Tageskurve",
@@ -9742,7 +9742,7 @@
           "ROWS"
         ],
         "short": "Schreibt das V4-Manifest gepuffert statt pro Zyklus. Niedrigere Werte sind aktueller, höhere Werte reduzieren I/O.",
-        "when": null
+        "when": "Nur bei aktivem Measurement-V4-Dateibetrieb. Weniger häufige Indexaktualisierung spart Schreibvorgänge; die Messdaten bleiben weiterhin eigenständig."
       },
       "key": "MEASUREMENT_V4_MANIFEST_UPDATE_EVERY_ROWS",
       "label": "V4 Manifest-Update nach Zeilen",
@@ -9803,7 +9803,7 @@
           "SECONDS"
         ],
         "short": "Spätester gepufferter V4-Manifest-Update. Beim Schließen wird immer final aktualisiert.",
-        "when": null
+        "when": "Nur bei aktivem Measurement-V4-Dateibetrieb. Regelt die zeitliche Aktualisierung der Dateiliste für Analyse/Inventar, nicht die Leistung des Controllers."
       },
       "key": "MEASUREMENT_V4_MANIFEST_UPDATE_EVERY_SECONDS",
       "label": "V4 Manifest-Update spätestens nach Sekunden",
@@ -9863,7 +9863,7 @@
           "ENABLED"
         ],
         "short": "Wenn aktiv, abonniert das Script zusätzlich das konfigurierte Diagnose-Topic, standardmäßig Zendure/#, und zeigt die letzten MQTT-Nachrichten unter /mqtt-diagnostics an. Nur für Analysephasen empfohlen, weil dadurch mehr MQTT-Daten verarbeitet werden.",
-        "when": null
+        "when": "Nur für die zusätzliche Topic-Diagnose. Sie zeigt empfangene MQTT-Nachrichten, schaltet aber weder den MQTT-Kommandoweg noch eine zusätzliche Gerätesteuerung ein."
       },
       "key": "MQTT_TOPIC_DIAGNOSTIC_ENABLED",
       "label": "MQTT Topic-Diagnose aktiv",
@@ -9923,7 +9923,7 @@
           "FILTER"
         ],
         "short": "MQTT-Topic-Filter für den Diagnosemitschnitt, z. B. Zendure/# oder evcc/#. MQTT Topic Matching ist groß-/kleinschreibungssensitiv; EVCC/# passt also nicht auf evcc/site/... . Änderungen an diesem Filter erfordern meist einen Neustart oder erneutes Speichern der Config.",
-        "when": null
+        "when": "Nur bei aktivierter Topic-Diagnose. Der Filter schränkt sichtbare Diagnoseeinträge ein, nicht die produktiv abonnierten Steuer- und Messdaten."
       },
       "key": "MQTT_TOPIC_DIAGNOSTIC_FILTER",
       "label": "MQTT Topic-Diagnose Filter",
@@ -9984,7 +9984,7 @@
           "LIMIT"
         ],
         "short": "Anzahl der letzten MQTT-Diagnosemeldungen, die im RAM gehalten werden. Höhere Werte brauchen mehr Speicher, sind aber für Topic-Analyse hilfreich.",
-        "when": null
+        "when": "Nur bei aktivierter MQTT-Topic-Diagnose. Mehr gespeicherte Diagnoseeinträge erhöhen den Speicherbedarf; sie verändern weder Gerätetakte noch Sollwerte."
       },
       "key": "MQTT_TOPIC_DIAGNOSTIC_HISTORY_LIMIT",
       "label": "MQTT Topic-Diagnose Historie",
@@ -10045,7 +10045,7 @@
           "MODE"
         ],
         "short": "filtered speichert/zeigt nur Nachrichten, die zum MQTT Topic-Diagnose Filter passen. all speichert alle vom Controller empfangenen MQTT-Nachrichten und ist nur für kurze Fehlersuche empfohlen.",
-        "when": null
+        "when": "Nur für die Darstellungsform der MQTT-Topic-Diagnose. Rohdatenansicht und verdichtete Ansicht ändern keine an das Gerät gesendeten Befehle."
       },
       "key": "MQTT_TOPIC_DIAGNOSTIC_VIEW_MODE",
       "label": "MQTT Diagnose Anzeige",
@@ -10112,7 +10112,7 @@
           "BROKER"
         ],
         "short": "Netzwerkadresse des MQTT-Brokers, über den ZEC Zendure-Gerätedaten und Befehle austauscht. Der Broker muss erreichbar sein; ein falscher Wert kann Telemetrie und sichere Gerätesteuerung unterbrechen.",
-        "when": null
+        "when": "Bei jeder MQTT-Verbindung zu Zendure; ohne erreichbaren Broker fehlen der sichere Gerätebefehlskanal und aktuelle MQTT-Telemetrie. Eine Änderung benötigt die vorgesehene Neuverbindung."
       },
       "key": "MQTT_BROKER",
       "label": "MQTT Broker",
@@ -10172,7 +10172,7 @@
           "PASSWORD"
         ],
         "short": "Kennwort für die Anmeldung am konfigurierten MQTT-Broker. Es ist nur erforderlich, wenn der Broker Authentifizierung verlangt; fehlende Anmeldung verhindert aktuelle Gerätedaten und Befehlsübertragung.",
-        "when": null
+        "when": "Nur falls der konfigurierte Broker eine Anmeldung verlangt. Dieses Kennwort ist geheim; eine Änderung betrifft die Verbindung, nicht die gewünschte Ladeleistung."
       },
       "key": "MQTT_PASSWORD",
       "label": "MQTT Passwort",
@@ -10233,7 +10233,7 @@
           "PORT"
         ],
         "short": "Netzwerkport des eingestellten MQTT-Brokers (häufig 1883). Er gehört zur Brokeradresse und zur optionalen Anmeldung; bei falschem Port kann ZEC keine verlässlichen Zendure-MQTT-Daten oder Kommandos übertragen.",
-        "when": null
+        "when": "Zusammen mit Brokeradresse und gegebenenfalls Benutzeranmeldung. Ein nicht erreichbarer Port bedeutet keine verlässliche Verbindung; er ist kein Port der Weboberfläche."
       },
       "key": "MQTT_PORT",
       "label": "MQTT Port",
@@ -10293,7 +10293,7 @@
           "USER"
         ],
         "short": "Benutzername für MQTT. Leer lassen, wenn keine Authentifizierung verwendet wird.",
-        "when": null
+        "when": "Nur wenn der MQTT-Broker eine Anmeldung verlangt. Benutzer und Passwort müssen zusammenpassen; die Einstellung wählt keine andere Zendure-Headunit."
       },
       "key": "MQTT_USER",
       "label": "MQTT Benutzer",
@@ -10356,7 +10356,7 @@
           "ABS"
         ],
         "short": "Absolute Obergrenze für plausible Netzleistungswerte. Messwerte oberhalb dieser Grenze werden verworfen und nicht für AUTO-Regelung oder Glättung verwendet. Default 30000 W schützt vor offensichtlich defekten SMA-/Shelly-Ausreißern.",
-        "when": null
+        "when": "Nur zur Prüfung, ob ein eingehender Netzleistungswert physikalisch plausibel ist. Auffällige Extremwerte dürfen nicht als echte Import-/Exportgrundlage für AUTO verwendet werden."
       },
       "key": "GRID_POWER_PLAUSIBILITY_MAX_ABS_W",
       "label": "Netzleistungs-Plausibilitätsgrenze",
@@ -10417,7 +10417,7 @@
           "DIAGNOSTICS"
         ],
         "short": "Schreibt kompakte SMA-Socket-/Paketdiagnosen in das Runtime-Textlog. Zusätzlich muss Datei-Logging aktiv sein, damit die Meldungen in zendure_runtime.log landen.",
-        "when": null
+        "when": "Nur für den SMA-Direktempfang und dessen zusätzliche Textdiagnose bei eingeschaltetem Datei-Logging. Ein Logeintrag beweist keine neue Regelentscheidung."
       },
       "key": "SMA_ENERGY_METER_LOG_DIAGNOSTICS",
       "label": "SMA-Direktquelle Diagnose ins Runtime-Log",
@@ -10479,7 +10479,7 @@
           "SECONDS"
         ],
         "short": "Mindestabstand zwischen periodischen SMA_DIAG-Zeilen im Runtime-Log, wenn SMA-Diagnoselogging aktiv ist.",
-        "when": null
+        "when": "Nur bei eingeschalteter periodischer SMA-Paketdiagnose. Kürzere Intervalle erhöhen Logvolumen, nicht die Häufigkeit der SMA-Messungen."
       },
       "key": "SMA_ENERGY_METER_LOG_INTERVAL_SECONDS",
       "label": "SMA-Diagnose Log-Intervall",
@@ -10542,7 +10542,7 @@
           "SECONDS"
         ],
         "short": "Ab dieser Lücke zwischen empfangenen SMA-Speedwire-Paketen wird die Lücke in der SMA-Diagnose markiert. Der Stream kommt typischerweise ungefähr sekündlich.",
-        "when": null
+        "when": "Nur bei der SMA-Paketdiagnose. Längere Empfangslücken werden gemeldet; die separate Frischeprüfung entscheidet unabhängig über die Verwendbarkeit der Netzleistung."
       },
       "key": "SMA_ENERGY_METER_PACKET_GAP_WARN_SECONDS",
       "label": "SMA Paketlücken-Warnung",
@@ -10602,7 +10602,7 @@
           "GROUP"
         ],
         "short": "Multicast-Adresse der SMA Energy Meter Daten. Typischer Standard: 239.12.255.254.",
-        "when": null
+        "when": "Nur für direkt empfangene SMA-Speedwire-Pakete. Die Multicast-Gruppe muss zum lokalen Messgerät passen; sie wird bei Shelly-HTTP als aktiver Quelle nicht benötigt."
       },
       "key": "SMA_ENERGY_METER_GROUP",
       "label": "SMA Energy Meter Multicast-Gruppe",
@@ -10662,7 +10662,7 @@
           "INTERFACE"
         ],
         "short": "Optional: lokale IPv4-Adresse oder Interface-Name wie eth0 für den Multicast-Join. Bei mehreren Netzwerkinterfaces bevorzugt eth0 eintragen.",
-        "when": null
+        "when": "Nur bei SMA-Direktempfang, insbesondere wenn der Host mehrere Netzwerkschnittstellen hat. Eine falsche Auswahl kann den Paketempfang verhindern."
       },
       "key": "SMA_ENERGY_METER_INTERFACE",
       "label": "SMA Energy Meter Interface/IP",
@@ -10723,7 +10723,7 @@
           "ENABLED"
         ],
         "short": "Nur relevant, wenn als Netzleistungsquelle die Shelly-kompatible HTTP-Quelle gewählt ist: startet zusätzlich einen passiven SMA Energy Meter / Sunny Home Manager 2.0 Listener zum Vergleich. Wenn SMA Home Manager direkt als Netzleistungsquelle gewählt ist, wird der Listener automatisch aktiviert; dieser Schalter ist dann fachlich redundant.",
-        "when": null
+        "when": "Nur wenn Shelly als aktive Netzquelle gewählt ist. SMA darf dann zusätzlich zur Diagnose beobachtet werden, ohne die aktive Leistungsregelung unbemerkt auf SMA umzustellen."
       },
       "key": "SMA_ENERGY_METER_PASSIVE_ENABLED",
       "label": "SMA-Direktquelle zusätzlich passiv beobachten",
@@ -10783,7 +10783,7 @@
           "PORT"
         ],
         "short": "UDP-Port für SMA Energy Meter / Sunny Home Manager 2.0 Multicast. Typischer Standard: 9522.",
-        "when": null
+        "when": "Nur für den lokalen SMA-Speedwire-Empfänger. Dieser UDP-Port ist weder der ZEC-Webport noch der MQTT-Brokerport."
       },
       "key": "SMA_ENERGY_METER_PORT",
       "label": "SMA Energy Meter UDP-Port",
@@ -10845,7 +10845,7 @@
           "SERIAL"
         ],
         "short": "Optionaler Filter auf die Seriennummer des Energy Meters am Netzbezugspunkt. Bei mehreren SMA Energy Metern vor produktiver Nutzung zwingend empfohlen.",
-        "when": null
+        "when": "Nur für den SMA-Direktempfang mit gewünschtem Gerätefilter. Ohne sichere Zuordnung darf ein anderes SMA-Gerät nicht als Hausnetz-Zähler ausgegeben werden."
       },
       "key": "SMA_ENERGY_METER_SERIAL",
       "label": "SMA Energy Meter Seriennummer",
@@ -10910,7 +10910,7 @@
           "MODE"
         ],
         "short": "Experten-/Diagnoseoption für die Koexistenz mit EVCC, UniMeter oder weiteren SMA-Speedwire-Listenern auf demselben Host. Default group_bind bindet auf die SMA-Multicast-Gruppe und war im Nachtlauf mit EVCC auf demselben Raspberry Pi stabil. Wildcard-Modi auf 0.0.0.0:9522 bleiben reine Diagnoseoptionen und können EVCC stören.",
-        "when": null
+        "when": "Nur für die SMA-Speedwire-Netzwerkschnittstelle. Die gewählte Empfangsart betrifft das Teilen des Messdatenports mit anderen Diensten; sie verändert nicht den Messwert selbst."
       },
       "key": "SMA_ENERGY_METER_SOCKET_MODE",
       "label": "SMA Socket-Modus",
@@ -10989,7 +10989,7 @@
           "SECONDS"
         ],
         "short": "Maximales Alter eines direkt per SMA Energy Meter empfangenen Netzleistungswerts, falls die direkte SMA-Quelle als Regelquelle verwendet wird.",
-        "when": null
+        "when": "Nur für die Frischeentscheidung des direkten SMA-Empfängers. Ein abgelaufener Paketwert ist nicht mehr aktuell, auch wenn die Statusseite jede Sekunde neu zeichnet."
       },
       "key": "SMA_ENERGY_METER_STALE_TIMEOUT_SECONDS",
       "label": "SMA Direkt Timeout",
@@ -11049,7 +11049,7 @@
           "SUSY"
         ],
         "short": "Optionaler Filter auf die SMA SUSy-ID des gewünschten Energy Meters. Bei mehreren SMA Energy Metern empfohlen. Beispiel: <SMA-SUSY-ID>.",
-        "when": null
+        "when": "Nur beim gewählten SMA-Empfangsfilter. Zusammen mit einer eventuellen Seriennummer wird das richtige physische Messgerät identifiziert."
       },
       "key": "SMA_ENERGY_METER_SUSY_ID",
       "label": "SMA Energy Meter SUSy-ID",
@@ -11108,7 +11108,7 @@
           "SHELLY"
         ],
         "short": "IP-Adresse der Shelly- oder Shelly-kompatiblen Messdatenquelle. Das kann ein echter Shelly Pro 3EM oder ein anderer Shelly-kompatibler HTTP-Endpunkt sein.",
-        "when": null
+        "when": "Nur wenn Shelly-kompatibles HTTP als aktive Netzquelle gewählt wurde. Die Adresse muss zum tatsächlichen Endpunkt am Hausanschluss passen; ein beliebiges Shelly-Gerät genügt nicht."
       },
       "key": "SHELLY_IP",
       "label": "Shelly-kompatible HTTP-Quelle IP",
@@ -11168,7 +11168,7 @@
           "SECONDS"
         ],
         "short": "Maximales Alter einer gültigen Netzleistungsmessung aus der Shelly-kompatiblen Quelle. Wird der Wert zu alt, darf ZEC ihn nicht als frische Grundlage für AUTO interpretieren; die direkte SMA-Quelle hat eigene Frischegrenzen.",
-        "when": null
+        "when": "Nur für die Shelly-kompatible Netzquelle. Fehlt länger ein gültiger HTTP-Messwert, darf dessen alte Leistung nicht als neue AUTO-Information gelten."
       },
       "key": "SHELLY_STALE_TIMEOUT_SECONDS",
       "label": "Shelly Timeout",
@@ -11231,7 +11231,7 @@
           "SOURCE"
         ],
         "short": "Quelle für die Netzleistung am Hausanschlusspunkt. Shelly-kompatibles HTTP bleibt dauerhaft als Alternative für echte Shelly Pro 3EM und kompatible Endpunkte erhalten. SMA direkt nutzt das lokale SMA Energy Meter / Sunny Home Manager UDP-Multicast-Protokoll.",
-        "when": null
+        "when": "Immer dann, wenn ZEC Netzbezug oder Einspeisung für AUTO/Safety beurteilt. Die Auswahl ist exklusiv: Shelly-HTTP oder SMA-Speedwire; eine passive Diagnosequelle übernimmt nicht unbemerkt die Regelung."
       },
       "key": "GRID_METER_SOURCE",
       "label": "Netzleistungsquelle",
@@ -11303,7 +11303,7 @@
           "ENABLED"
         ],
         "short": "Aktiviert den Diagnose-Endpunkt /zendure-properties. Diese Option steuert die Web-Diagnoseseite; die Telemetrie-Fallback-Nutzung wird separat über die folgenden Optionen gesteuert.",
-        "when": null
+        "when": "Nur für die lokale Zendure-Diagnoseseite. Einschalten allein ersetzt weder die MQTT-Anbindung noch aktiviert es eine zusätzliche Leistungssteuerung."
       },
       "key": "ZENDURE_LOCAL_API_ENABLED",
       "label": "Zendure lokale API Diagnose aktiv",
@@ -11365,7 +11365,7 @@
           "SECONDS"
         ],
         "short": "Pause nach einem Timeout oder Fehler der lokalen Zendure-API, bevor der Controller erneut /properties/report abfragt. Schützt EVCC und die Zendure-Headunit vor aggressiven Wiederholungen.",
-        "when": null
+        "when": "Nur nach einem fehlgeschlagenen lokalen Zendure-API-Aufruf. Die Pause schützt den kleinen Host vor wiederholter Hintergrundlast und ist kein Regler-Cooldown."
       },
       "key": "ZENDURE_LOCAL_API_ERROR_BACKOFF_SECONDS",
       "label": "Zendure lokale API Fehler-Backoff",
@@ -11427,7 +11427,7 @@
           "SECONDS"
         ],
         "short": "Mindestabstand zwischen zwei lokalen Zendure-API-Abfragen für Telemetrie und Temperaturdiagnose.",
-        "when": null
+        "when": "Nur bei eingeschalteter lokaler Zendure-Abfrage. Der Wert begrenzt die Hintergrundabfragen, ohne die 1-s-Anzeige oder den eigentlichen Reglertakt zu versprechen."
       },
       "key": "ZENDURE_LOCAL_API_POLL_INTERVAL_SECONDS",
       "label": "Zendure lokale API Poll-Intervall",
@@ -11488,7 +11488,7 @@
           "PRIORITY"
         ],
         "short": "Legt fest, welcher SOC-Wert aus /properties/report bevorzugt wird, falls sowohl properties.electricLevel als auch packData[0].socLevel vorhanden sind.",
-        "when": null
+        "when": "Nur wenn die lokale Geräteantwort mehrere unterschiedliche SOC-Felder liefert. Die gewählte Quelle muss tatsächlich vorhanden und gültig sein; eine Priorität erfindet keinen Ladezustand."
       },
       "key": "ZENDURE_LOCAL_API_SOC_PRIORITY",
       "label": "Zendure lokale API SOC-Priorität",
@@ -11562,7 +11562,7 @@
           "ONLY"
         ],
         "short": "Wenn aktiv, bleibt MQTT die bevorzugte Quelle für SOC und Istleistung. Die lokale API aktualisiert den aktiven SOC nur dann, wenn MQTT fehlt oder veraltet ist. Sobald MQTT wieder gültige Werte liefert, wechselt die Anzeige automatisch zurück zu MQTT.",
-        "when": null
+        "when": "Nur bei erlaubter lokaler Telemetrie. Bei Aktiv bleibt gültiges MQTT führend und die lokale Antwort darf nur bei entsprechendem Ausfall einspringen."
       },
       "key": "ZENDURE_LOCAL_API_TELEMETRY_FALLBACK_ONLY",
       "label": "Zendure lokale API nur als Fallback",
@@ -11627,7 +11627,7 @@
           "TELEMETRY"
         ],
         "short": "Wenn aktiv, darf der Controller die lokale Zendure-API als zusätzliche Telemetriequelle für SOC, Istleistung und Akkutemperatur verwenden. Das ist ein Fallback gegen den bekannten Fall, dass Zendure nach Broker-/Raspberry-Neustart keine MQTT-Sensordaten mehr publiziert.",
-        "when": null
+        "when": "Nur bei gültiger lokaler Geräteverbindung. Ergänzende Werte werden auf Aktualität geprüft; diese Einstellung sendet keine zusätzlichen Leistungskommandos."
       },
       "key": "ZENDURE_LOCAL_API_USE_FOR_TELEMETRY",
       "label": "Zendure lokale API für Telemetrie nutzen",
@@ -11689,7 +11689,7 @@
           "LOCAL"
         ],
         "short": "IP-Adresse der Zendure-Headunit für lokale Abfragen wie /properties/report. Wird sowohl für die Diagnose-Webseite als auch für den optionalen Telemetrie-Fallback verwendet.",
-        "when": null
+        "when": "Nur für aktivierte lokale Zendure-Diagnose beziehungsweise zugelassene zusätzliche Telemetrie. Die IP muss zur Headunit gehören; das ist nicht die Broker-Adresse."
       },
       "key": "ZENDURE_LOCAL_IP",
       "label": "Zendure lokale IP",
@@ -11756,7 +11756,7 @@
           "SECONDS"
         ],
         "short": "Begrenzt den Hintergrundrequest unabhängig vom höheren allgemeinen API-Timeout. Die lokale API arbeitet asynchron und blockiert den Regelzyklus nicht.",
-        "when": null
+        "when": "Nur für die Laufzeitbegrenzung der lokalen Hintergrundabfrage. Ein zu großer Wert kann Ressourcen länger binden, ohne den Controller nachweislich schneller zu machen."
       },
       "key": "ZENDURE_LOCAL_API_CONTROL_TIMEOUT_CAP_SECONDS",
       "label": "Zendure lokale API Request-Timeoutdeckel",
@@ -11822,7 +11822,7 @@
           "SECONDS"
         ],
         "short": "Maximale Wartezeit eines asynchronen lokalen Zendure-API-Requests. Der Regelzyklus wartet nicht auf diesen Request.",
-        "when": null
+        "when": "Nur für einzelne lokale API-Anfragen. Bei Ausbleiben einer Antwort gelten deren Werte nicht automatisch als frisch; MQTT und Control-Safety bleiben getrennt."
       },
       "key": "ZENDURE_LOCAL_API_TIMEOUT_SECONDS",
       "label": "Zendure lokale API Timeout",
@@ -11882,7 +11882,7 @@
           "ENABLED"
         ],
         "short": "Erlaubt der Weboberfläche, nach dem Speichern neustartrelevanter Einstellungen den systemd-Dienst kontrolliert neu zu starten. Aus Sicherheitsgründen ist diese Funktion standardmäßig deaktiviert und benötigt zusätzlich ein freigegebenes Restart-Hilfsscript mit sudoers-Regel.",
-        "when": null
+        "when": "Nur beim ausdrücklich bestätigten administrativen Dienstneustart aus der Weboberfläche. Einstellungen, die einen Neustart benötigen, wirken nicht durch die bloße Freigabe dieses Schalters."
       },
       "key": "WEB_SERVICE_RESTART_ENABLED",
       "label": "Service-Neustart aus Weboberfläche erlauben",
@@ -11942,7 +11942,7 @@
           "FILES"
         ],
         "short": "Erweiterte Dateianzahl für bewusst bestätigte größere Analysen. Auf dem Raspberry Pi nur mit Warnung verwenden.",
-        "when": null
+        "when": "Nur für bewusst bestätigte größere Offline-Analysen. Mehr Dateien erhöhen den möglichen Rechen- und I/O-Aufwand auf dem Raspberry Pi; der Echtzeitregler bleibt getrennt."
       },
       "key": "ANALYSIS_EXTENDED_MAX_FILES",
       "label": "Analyse Extended Dateien",
@@ -12002,7 +12002,7 @@
           "ROWS"
         ],
         "short": "Erweiterte Messpunktzahl für bewusst bestätigte größere Analysen. Alles darüber wird fail-closed abgelehnt.",
-        "when": null
+        "when": "Nur für ausdrücklich erweiterte Offline-Auswertungen. Ein höheres Limit lässt größere Datenmengen zu, ist aber keine Empfehlung, große V4-Historien ungebremst in den Arbeitsspeicher zu laden."
       },
       "key": "ANALYSIS_EXTENDED_MAX_ROWS",
       "label": "Analyse Extended Messpunkte",
@@ -12063,7 +12063,7 @@
           "BYTES"
         ],
         "short": "Erweiterte Gesamtgröße für bewusst bestätigte größere Analysen. Alles darüber wird lokal abgelehnt und sollte offline/auf dem PC analysiert werden.",
-        "when": null
+        "when": "Nur für bewusst größere Analyseaufträge. Ein höheres Dateivolumen erhöht Host-/Datenträgerbelastung; der Analyseauftrag muss trotzdem die eigenen Sicherheitsgrenzen einhalten."
       },
       "key": "ANALYSIS_EXTENDED_MAX_TOTAL_BYTES",
       "label": "Analyse Extended Gesamtgröße",
@@ -12124,7 +12124,7 @@
           "LIMIT"
         ],
         "short": "Begrenzt den Arbeitsspeicher bewusst freigegebener größerer Analysejobs. Ein höherer Wert kann komplexere Auswertungen erlauben, erhöht aber das Risiko, den Raspberry Pi zu überlasten; die Reglerfunktion selbst wird nicht umgestellt.",
-        "when": null
+        "when": "Nur für den separaten erweiterten Analyseprozess. Mehr RAM kann zulässige Auswertungen ermöglichen, aber bei knapper Hardware die laufenden Dienste beeinträchtigen."
       },
       "key": "ANALYSIS_EXTENDED_WORKER_MEMORY_LIMIT_MB",
       "label": "Analyse Extended Speicherlimit",
@@ -12185,7 +12185,7 @@
           "SECONDS"
         ],
         "short": "Legt die maximale Laufzeit eines bewusst erweiterten Analysejobs fest. Ein langer Timeout gestattet umfangreichere Auswertungen, kann Ressourcen länger binden; er beschleunigt oder verändert keine Reglerentscheidung.",
-        "when": null
+        "when": "Nur für ausdrücklich erweiterte Analysejobs. Ein größeres Zeitbudget macht keine Analyse automatisch genauer und verändert die Ladeentscheidung nicht."
       },
       "key": "ANALYSIS_EXTENDED_WORKER_TIMEOUT_SECONDS",
       "label": "Analyse Extended Timeout",
@@ -12244,7 +12244,7 @@
           "FILES"
         ],
         "short": "Maximale Dateianzahl für normale lokale Analysen auf dem Raspberry Pi. Standard ist bewusst konservativ, um EVCC, MQTT und Live-Regler zu schützen.",
-        "when": null
+        "when": "Nur für normale lokale Analysejobs. Die Dateigrenze verhindert übergroße Aufträge, ohne die bereits gesammelten Messdaten zu löschen."
       },
       "key": "ANALYSIS_MAX_FILES",
       "label": "Analyse Pi-Safe Dateien",
@@ -12303,7 +12303,7 @@
           "ROWS"
         ],
         "short": "Maximale Messpunktzahl für normale lokale Analysen. Das Limit wird bereits beim Lesen geprüft; zusätzlich läuft die Analyse in einem isolierten Worker.",
-        "when": null
+        "when": "Nur für normale lokale Auswertungen. Begrenzte Zeilenzahl schützt CPU und Arbeitsspeicher; sie verändert weder Datenerfassung noch Regelung."
       },
       "key": "ANALYSIS_MAX_ROWS",
       "label": "Analyse Pi-Safe Messpunkte",
@@ -12363,7 +12363,7 @@
           "BYTES"
         ],
         "short": "Maximale Gesamtgröße der ausgewählten CSV-Dateien für normale lokale Analysen. Standard ist bewusst konservativ, weil Python-/HTML-/Diagrammstrukturen deutlich mehr RAM benötigen als die CSV-Datei auf der SD-Karte.",
-        "when": null
+        "when": "Nur bei Auswahl von Dateien für eine normale Analyse. Überlange Datensätze werden abgewiesen und dürfen nicht ungeprüft den produktiven Pi blockieren."
       },
       "key": "ANALYSIS_MAX_TOTAL_BYTES",
       "label": "Analyse Pi-Safe Gesamtgröße",
@@ -12423,7 +12423,7 @@
           "LIMIT"
         ],
         "short": "Speicherlimit für normale Analyse-Worker. Bei Überschreitung wird nur der Analyse-Worker beendet, nicht der Live-Controller.",
-        "when": null
+        "when": "Nur für den eigenständigen Analyseprozess. Bei Überlast wird die Analyse begrenzt, nicht der Controller absichtlich neu gestartet."
       },
       "key": "ANALYSIS_WORKER_MEMORY_LIMIT_MB",
       "label": "Analyse Worker Speicherlimit",
@@ -12483,7 +12483,7 @@
           "SECONDS"
         ],
         "short": "Zeitlimit für normale Analyse-Worker. Bei Überschreitung wird der Worker abgebrochen.",
-        "when": null
+        "when": "Nur während eines normalen Analysejobs. Ein Ablauf beendet die Analyse nach ihrer Zeitgrenze; er schaltet weder Zendure noch den Webserver ab."
       },
       "key": "ANALYSIS_WORKER_TIMEOUT_SECONDS",
       "label": "Analyse Timeout",
@@ -12542,7 +12542,7 @@
           "PORT"
         ],
         "short": "Port des optionalen separaten Analyse-/Replay-Webdienstes. Der Dienst wird mitgeliefert, aber nicht automatisch aktiviert.",
-        "when": null
+        "when": "Nur bei separat gestartetem Analyse-/Replay-Dienst. Der Port ist nicht der ZEC-Statusseitenport und hat keinen Einfluss auf produktive Leistungsbefehle."
       },
       "key": "REPLAY_WEB_PORT",
       "label": "Analyse-Web Port",
@@ -12600,7 +12600,7 @@
           "MODE"
         ],
         "short": "Aktiviert ein dunkles Farbschema für Statusseite, Settings, Graph, Diagnose, Analyse-Linkseiten und Headless-Hinweisseite. Die Änderung wird nach dem Speichern sofort bei neu geladenen Webseiten sichtbar.",
-        "when": null
+        "when": "Nur für das Farbschema der Oberfläche. Ein-/Ausschalten hat keinen Einfluss auf Netz- oder Speicherleistung und darf Warnhinweise nicht unsichtbar machen."
       },
       "key": "UI_DARK_MODE",
       "label": "Dark Mode aktiv",
@@ -12657,7 +12657,7 @@
           "MODE"
         ],
         "short": "Vorbereitung für eine reduzierte Standardansicht und eine vollständige Expertenansicht. Expertenmodus ist fachlich ein Superset des Standardmodus: Kernstatus und Warnungen bleiben immer sichtbar, Expert-only-Details kommen zusätzlich hinzu.",
-        "when": null
+        "when": "Nur für die Menge sichtbarer Details in der Weboberfläche. Im Expertenmodus bleiben alle Standardinformationen und Warnungen erhalten; die Regelstrategie bleibt unverändert."
       },
       "key": "UI_MODE",
       "label": "Oberflächenmodus",
@@ -12784,7 +12784,7 @@
           "WARN"
         ],
         "short": "Schreibt einen Runtime-Hinweis, wenn ein Reglerzyklus ohne Sleep länger dauert. Dient der Laufzeit- und Timingdiagnose.",
-        "when": null
+        "when": "Nur für eine Laufzeitwarnung, wenn ein Rechenschritt ungewöhnlich lange dauert. Der Grenzwert beschleunigt den tatsächlichen Regler nicht."
       },
       "key": "SLOW_CYCLE_WARN_MS",
       "label": "Warnschwelle langsamer Zyklus",
@@ -12844,7 +12844,7 @@
           "COUNT"
         ],
         "short": "Anzahl älterer Laufzeit-Logdateien, die ZEC nach einer Rotation aufbewahrt. Mehr Backups erleichtern die rückblickende Fehlersuche, brauchen aber mehr Speicherplatz; das verändert keine Batteriekommandos.",
-        "when": null
+        "when": "Nur bei aktivem Datei-Logging und Rotation. Ältere Textdateien belegen zusätzlichen Speicher und dokumentieren Ereignisse, nicht die tatsächliche Batteriealterung."
       },
       "key": "FILE_LOG_BACKUP_COUNT",
       "label": "Datei-Log Backup-Dateien",
@@ -12905,7 +12905,7 @@
           "DIR"
         ],
         "short": "Speicherverzeichnis für die normalen Controller-Textprotokolle. Es wirkt zusammen mit aktiviertem Datei-Logging und der Rotationsgrenze; ein falscher Pfad beeinträchtigt die Diagnoseaufzeichnung, nicht die Sollwertformel.",
-        "when": null
+        "when": "Nur bei eingeschaltetem Datei-Logging. Das Verzeichnis muss beschreibbar sein; ein unbrauchbarer Logpfad autorisiert keine neuen Kommandos."
       },
       "key": "FILE_LOG_DIR",
       "label": "Datei-Log Verzeichnis",
@@ -12966,7 +12966,7 @@
           "ENABLED"
         ],
         "short": "Schreibt Betriebs-, Fehler- und Diagnosemeldungen zusätzlich rollierend in eine Text-Logdatei. Das ersetzt nicht das CSV-Datenlogging.",
-        "when": null
+        "when": "Nur für zusätzliche persistente Textprotokolle. Ohne diese Option bleiben Laufzeit- und Gerätesteuerung getrennt; die Aufbewahrungsgrenzen sind eigene Einstellungen."
       },
       "key": "FILE_LOG_ENABLED",
       "label": "Datei-Logging aktiv",
@@ -13024,7 +13024,7 @@
           "LOG"
         ],
         "short": "Dateiname der aktuellen Runtime-Text-Logdatei, standardmäßig zendure_runtime.log.",
-        "when": null
+        "when": "Nur für aktiviertes Datei-Logging. Der Name legt die Textprotokolldatei fest, nicht den Ort der Measurement-V4-CSV-Dateien."
       },
       "key": "FILE_LOG_FILE",
       "label": "Datei-Log Dateiname",
@@ -13084,7 +13084,7 @@
           "BYTES"
         ],
         "short": "Bei Überschreitung wird die Text-Logdatei rotiert. Alte Dateien werden nach dem Schema zendure_runtime_1.log, zendure_runtime_2.log usw. gehalten.",
-        "when": null
+        "when": "Nur bei eingeschaltetem Datei-Logging. Beim Erreichen der Größenobergrenze wird das Textlog rotiert; der Wert ersetzt keine Speicherplatzüberwachung."
       },
       "key": "FILE_LOG_MAX_BYTES",
       "label": "Max Datei-Log Größe",
@@ -13140,7 +13140,7 @@
           "Runtime-Logging · Detailkanäle"
         ],
         "short": "Schaltet zusätzliche technische Konsolenmeldungen für die Fehlersuche ein. Die Meldungen können unübersichtlich werden und Ressourcen beanspruchen; sie verändern nicht die gewählte AUTO-/Nacht-/Harvest-Strategie.",
-        "when": null
+        "when": "Nur für technische Fehlersuche mit zusätzlichen Meldungen. Abschalten mindert Logvolumen und ändert weder AUTO-Berechnung noch Geräteschutz."
       },
       "key": "DEBUG",
       "label": "Debug Logging",
@@ -13198,7 +13198,7 @@
           "CONTROL"
         ],
         "short": "Schreibt zusätzliche menschenlesbare Debug-Meldungen zu Zielwerten und Regelentscheidungen ins Runtime-Textlog. Das ist kein strukturiertes Measurement-Logging; die V4-Standard-Messdaten enthalten die Reglerdiagnose bereits.",
-        "when": null
+        "when": "Nur für zusätzliche protokollierte Reglerentscheidungen bei aktivierter Diagnoseausgabe. Ein Debug-Text ist kein unabhängiger Beweis einer Gerätewirkung."
       },
       "key": "LOG_CONTROL",
       "label": "Regelentscheidungen ins Textlog schreiben (Debug)",
@@ -13256,7 +13256,7 @@
           "MANUAL"
         ],
         "short": "Loggt Aktionen des manuellen Modus, z. B. Start, Ziel erreicht und automatische Umschaltung nach Ziel-SOC.",
-        "when": null
+        "when": "Nur bei Aktionen im manuellen Modus und eingeschaltetem relevantem Logging. Die Option startet oder beendet keinen manuellen Lade-/Entladevorgang."
       },
       "key": "LOG_MANUAL",
       "label": "Manuellen Modus loggen",
@@ -13314,7 +13314,7 @@
           "MQTT"
         ],
         "short": "Protokolliert MQTT-Kommandos an die Zendure-Headunit zur Diagnose des Befehlsablaufs. Mehr Logeinträge sind kein Beweis für eine physische Gerätewirkung und aktivieren keine zusätzlichen Kommandos.",
-        "when": null
+        "when": "Nur für die Diagnose gesendeter MQTT-Befehle. Ein protokollierter Versand belegt nicht, dass Zendure die Leistung physisch umgesetzt hat."
       },
       "key": "LOG_MQTT",
       "label": "MQTT loggen",
@@ -13373,7 +13373,7 @@
           "RESPONSE"
         ],
         "short": "Schreibt bei aktivem Diagnoselogging vollständige Antworten der Shelly-kompatiblen Netzleistungsquelle. Nur zur Fehlersuche einschalten: die Texte können groß sein; der Regler verwendet weiterhin dieselben validierten Messwerte.",
-        "when": null
+        "when": "Nur bei entsprechender Shelly-HTTP-Diagnose. Vollständige Antworten können umfangreich oder vertraulich sein und sind kein Grund, die Datenquelle zu wechseln."
       },
       "key": "LOG_RAW_RESPONSE",
       "label": "Shelly RAW loggen",
@@ -13431,7 +13431,7 @@
           "SOC"
         ],
         "short": "Protokolliert empfangene Zendure-Ladezustände, um Datenlücken und Reserveentscheidungen nachzuvollziehen. Das Logging verändert weder den tatsächlich gemeldeten SOC noch die Schutzgrenzen.",
-        "when": null
+        "when": "Nur für zusätzliche Empfangsprotokolle des Zendure-Ladezustands. Die SOC-Schutzgrenzen werden dadurch nicht verschoben."
       },
       "key": "LOG_SOC",
       "label": "SOC loggen",
@@ -13489,7 +13489,7 @@
           "VALUES"
         ],
         "short": "Protokolliert Netzleistungs-Rohwerte und die von ZEC verwendete Glättung zur Fehleranalyse. Die zusätzlichen Ausgaben beeinflussen nicht die Auswahl der Netzleistungsquelle oder die Reglerformel.",
-        "when": null
+        "when": "Nur für zusätzliche Netzleistungs- und Glättungsdiagnose. Die Eingangsquelle und die tatsächliche Messfrequenz bleiben unverändert."
       },
       "key": "LOG_VALUES",
       "label": "Werte loggen",
@@ -13548,7 +13548,7 @@
           "ERRORS"
         ],
         "short": "Nach dieser Anzahl direkt aufeinanderfolgender Fehler aktiviert der Controller den Safe-State. Safe-State bedeutet: Ladeleistung und Entladeleistung werden per MQTT auf 0 W gesetzt, der Modus wird auf SAFE_STATE gestellt und die Regelung versucht nicht weiter aktiv Leistung zu verschieben, bis wieder gültige Daten vorliegen und der nächste Regelzyklus sauber laufen kann.",
-        "when": null
+        "when": "Nur für den Schutz bei unmittelbar aufeinanderfolgenden Laufzeitfehlern. Die Schwelle ist keine normale Reaktionsverstärkung und darf echte Störungen nicht maskieren."
       },
       "key": "MAX_CONSECUTIVE_ERRORS",
       "label": "Max Fehler in Folge",
@@ -13608,7 +13608,7 @@
           "STATE"
         ],
         "short": "Wenn aktiv, setzt der Controller bei erkannter MQTT-Trennung Lade- und Entladeleistung auf 0 W. Das ist die konservativste Variante, weil ohne MQTT keine zuverlässigen neuen Befehle und teilweise keine aktuellen Rückmeldungen möglich sind. Wenn diese Option nicht aktiv ist, läuft die Logik weiter und zeigt den MQTT-Fehler an; bereits zuletzt an Zendure gesendete Werte können dort aber weiter gültig bleiben, weil der Controller sie während der Trennung nicht sicher ändern kann. Nicht aktiv ist daher toleranter bei kurzen Broker-Aussetzern, aber weniger sicher bei längeren MQTT-Problemen.",
-        "when": null
+        "when": "Nur wenn die produktive MQTT-Verbindung ausfällt. Der Schutz soll eine unsichere weitere Leistungsanforderung verhindern; er prüft nicht den normalen Export-Sollwert."
       },
       "key": "MQTT_DISCONNECTED_SAFE_STATE",
       "label": "Safe-State bei MQTT-Trennung",
@@ -13672,7 +13672,7 @@
           "ERROR"
         ],
         "short": "Bei anhaltendem Fehler der Shelly-kompatiblen Netzmessung darf ZEC sicherheitshalber 0 W anfordern statt mit veralteten Leistungswerten weiterzuregeln. Das betrifft nicht automatisch die unabhängig konfigurierte SMA-Direktquelle.",
-        "when": null
+        "when": "Nur bei entsprechendem Ausfall des aktiven Shelly-HTTP-Netzleistungswegs. Wird stattdessen SMA direkt genutzt, hat dieser seinen eigenen Frische- und Schutzvertrag."
       },
       "key": "SAFE_STATE_ON_SHELLY_ERROR",
       "label": "Safe-State bei Ausfall der aktiven Netzquelle",
@@ -13734,7 +13734,7 @@
           "SECONDS"
         ],
         "short": "Legt fest, wie alt ein Zendure-Ladezustand höchstens sein darf, bevor er für eine sichere Entladefreigabe nicht mehr genügt. Die Grenze schützt insbesondere Nacht-/AUTO-/manuelle Entladung vor Entscheidungen auf alten Akkudaten.",
-        "when": null
+        "when": "Nur für die Frische des Zendure-Akku-Ladezustands. Ein veralteter Wert darf nicht als Grundlage für weiter erlaubte Entladung dienen."
       },
       "key": "SOC_STALE_TIMEOUT_SECONDS",
       "label": "SOC Timeout",
@@ -13795,7 +13795,7 @@
           "SECONDS"
         ],
         "short": "Nach diesem Datenalter markiert ZEC die Zendure-Istleistungsmessung als veraltet. Das ist eine Aktualitäts- und Diagnosegrenze, keine neue Sollleistung und kein Beweis, dass ein zuvor gesendeter Befehl ausgeführt wurde.",
-        "when": null
+        "when": "Nur für das Alter der unabhängigen Zendure-Istleistung. Ein alter Messwert bestätigt weder die Wirksamkeit eines neuen Befehls noch eine neue Ladung."
       },
       "key": "ZENDURE_POWER_STALE_TIMEOUT_SECONDS",
       "label": "Zendure Istwert Timeout",
@@ -13853,7 +13853,7 @@
           "MODE"
         ],
         "short": "Schaltet die Weboberflächen ab. Beim Aufruf der Web-URLs wird nur noch eine Hinweisseite angezeigt. Die Regelung läuft weiter; Änderungen sind dann ausschließlich über die config.json und den regulären Config-Reload möglich. Ein Neustart ist zum Beenden des Headless Mode nicht erforderlich, wenn die config.json während des laufenden Programms angepasst wird.",
-        "when": null
+        "when": "Nur für die Auslieferung der Weboberflächen. Im Headless-Modus bleibt der Controller nicht automatisch abgeschaltet; für einen Eingriff in die Steuerung sind andere Einstellungen zuständig."
       },
       "key": "HEADLESS_MODE",
       "label": "Headless Mode",
@@ -13911,7 +13911,7 @@
           "HOST"
         ],
         "short": "Bind-Adresse des HTTP-Webservers. Eine Änderung betrifft den Netzwerkzugriff und wird erst nach Dienstneustart wirksam.",
-        "when": null
+        "when": "Nur für die Netzwerkadresse, an die der ZEC-Webserver bindet. Eine falsche Bind-Adresse kann den Webzugriff verhindern, nicht die Batteriebelastung reduzieren."
       },
       "key": "WEB_HOST",
       "label": "WEB_HOST",
@@ -13969,7 +13969,7 @@
           "PORT"
         ],
         "short": "Port, über den du die ZEC-Weboberfläche im Netzwerk erreichst. Eine Änderung betrifft den HTTP-Zugang und erfordert einen geeigneten Dienstneustart; sie verändert nicht die Lade-/Entladestrategie.",
-        "when": null
+        "when": "Nur für die Erreichbarkeit der Status-, Graph- und Einstellungsseiten. Ein anderer Port benötigt passende Netz-/Dienstkonfiguration und verändert keinen Regelwert."
       },
       "key": "WEB_PORT",
       "label": "Web Port",
@@ -14033,7 +14033,7 @@
           "SECONDS"
         ],
         "short": "Wartezeit nach MQTT-Reconnect/Broker-Neustart, bevor fehlende nicht-retained Live-Werte als Neustart-/App-Neuspeicherproblem gemeldet werden.",
-        "when": null
+        "when": "Nur in der begrenzten Wiederanlaufphase nach Broker- oder MQTT-Neustart. Ein kurzfristig fehlendes Telegramm darf nicht als langanhaltender Defekt fehlgedeutet werden."
       },
       "key": "ZENDURE_MQTT_AFTER_RESTART_GRACE_SECONDS",
       "label": "Zendure MQTT Neustart-Toleranz",
@@ -14095,7 +14095,7 @@
           "SECONDS"
         ],
         "short": "Maximales Alter kritischer Zendure-MQTT-Gruppen für die Live-/Partial-Stale-Diagnose. Warnungen verschwinden automatisch, sobald wieder frische nicht-retained Live-Werte eintreffen.",
-        "when": null
+        "when": "Nur für die Diagnose kritischer Zendure-MQTT-Gruppen. Zu alte Gruppen können nicht als frischer Sensorwert gelten, auch wenn andere Topics noch eintreffen."
       },
       "key": "ZENDURE_MQTT_CRITICAL_GROUP_STALE_SECONDS",
       "label": "Zendure MQTT Live-Timeout",

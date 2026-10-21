@@ -8,12 +8,12 @@ PACKAGE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck source=root_artifact_transaction.sh
 source "$SCRIPT_DIR/root_artifact_transaction.sh"
 
-EXPECTED_VERSION_ARG="v17_1_1"
-EXPECTED_SOURCE_VERSION="17.1.0"
-EXPECTED_SOURCE_BUILD_ID="v17.1.0-20261019"
-EXPECTED_TARGET_VERSION="17.1.1"
-EXPECTED_TARGET_BUILD_ID="v17.1.1-20261020"
-SOURCE_MANIFEST="V17_1_1_SOURCE_MANIFEST.sha256"
+EXPECTED_VERSION_ARG="v17_1_2"
+EXPECTED_SOURCE_VERSION="17.1.1"
+EXPECTED_SOURCE_BUILD_ID="v17.1.1-20261020"
+EXPECTED_TARGET_VERSION="17.1.2"
+EXPECTED_TARGET_BUILD_ID="v17.1.2-20261021"
+SOURCE_MANIFEST="V17_1_2_SOURCE_MANIFEST.sha256"
 TARGET="/opt/zendure-controller"
 BOOTSTRAP="$TARGET/.zec_first_install_bootstrap.json"
 DOWNLOAD_DIR="/home/pi/Downloads"
@@ -39,7 +39,7 @@ while [ "$#" -gt 0 ]; do
       cat <<EOF
 Usage: $0 ${EXPECTED_VERSION_ARG} [options]
   --preflight-only       vollständige Vorprüfung, keine Produktivmutation
-  --fresh-install        CLEAN_FRESH_INSTALL explizit bestätigen
+  --fresh-install        bei CLEAN_FRESH_INSTALL zwingend; bestätigt absichtliche Neuinstallation
   --web-port PORT        nur Fresh Install; 1024..65535, Default 8080
 EOF
       exit 0 ;;
@@ -71,8 +71,8 @@ ROLLBACK_STARTED=0
 SUPPORT_WORK=""
 SUPPORT_ZIP=""
 BACKUP="$DOWNLOAD_DIR/zendure-controller-backup-${STAMP}.tar.gz"
-CONFIG_BACKUP="$DOWNLOAD_DIR/config.pre-v17.1.1.${STAMP}.json"
-ROOT_ARTIFACT_BACKUP="/var/backups/zec-v17.1.1-root-artifacts-${STAMP}"
+CONFIG_BACKUP="$DOWNLOAD_DIR/config.pre-v17.1.2.${STAMP}.json"
+ROOT_ARTIFACT_BACKUP="/var/backups/zec-v17.1.2-root-artifacts-${STAMP}"
 INSTALL_REPORT="$DOWNLOAD_DIR/zec_${VERSION}_install_report_${STAMP}.json"
 INSTALL_REPORT_COMPAT="/tmp/zec_${VERSION}_install_report.json"
 BACKUP_SHA256=""
@@ -97,7 +97,7 @@ start_support_capture() {
   local tool="$SCRIPT_DIR/zec_support_bundle.py"
   [ -f "$tool" ] || return 0
   SUPPORT_WORK="$(python3 "$tool" collect \
-    --label "v17.1.1-installer-failure" --output-dir "$DOWNLOAD_DIR" \
+    --label "v17.1.2-installer-failure" --output-dir "$DOWNLOAD_DIR" \
     --target "$TARGET" --config "$TARGET/config.json" --install-log "$INSTALL_LOG" \
     --since-epoch "$INSTALL_START_EPOCH" --stage "$stage" --error-code "$code" \
     --package-sha256 "$PACKAGE_SHA256" --source-version "$EXPECTED_SOURCE_VERSION" \
@@ -160,7 +160,7 @@ on_error() {
   trap - ERR EXIT
   set +e
   echo
-  echo "FEHLER: V17.1.1 Installer abgebrochen (rc=$code, line=$line, mode=$INSTALL_MODE)."
+  echo "FEHLER: V17.1.2 Installer abgebrochen (rc=$code, line=$line, mode=$INSTALL_MODE)."
   start_support_capture "pre_rollback" "RC_${code}_LINE_${line}"
   local rollback_result="not_required_preflight"
   if [ "$INSTALLATION_STARTED" -eq 1 ]; then
@@ -204,10 +204,10 @@ verify_release_tree_hygiene_at() {
 verify_build_evidence_at() {
   local root="$1"
   PYTHONDONTWRITEBYTECODE=1 python3 "$root/tools/deployment_contract.py" verify-build-evidence \
-    --root "$root" --evidence "validation/V17_1_1_BUILD_EVIDENCE.json" \
-    --expected-version "$EXPECTED_TARGET_VERSION" --expected-label "V17.1.1" \
+    --root "$root" --evidence "validation/V17_1_2_BUILD_EVIDENCE.json" \
+    --expected-version "$EXPECTED_TARGET_VERSION" --expected-label "V17.1.2" \
     --expected-build "$EXPECTED_TARGET_BUILD_ID" --json >/dev/null
-  echo "Build-Testevidenz für V17.1.1 verifiziert."
+  echo "Build-Testevidenz für V17.1.2 verifiziert."
 }
 
 verify_js_at() {
@@ -304,6 +304,10 @@ print('Identität:',p.get('identity'))
 PY
     return 1
   fi
+  if [ "$INSTALL_MODE" = "CLEAN_FRESH_INSTALL" ] && [ "$FRESH_ASSERT" -ne 1 ]; then
+    echo "FEHLER: Neuer Clean Fresh Install verlangt ausdrücklich --fresh-install; keine automatische Umdeutung eines Aufrufs." >&2
+    return 1
+  fi
   if [ "$FRESH_ASSERT" -eq 1 ] && [ "$INSTALL_MODE" != "CLEAN_FRESH_INSTALL" ]; then
     echo "FEHLER: --fresh-install darf ausschließlich bei CLEAN_FRESH_INSTALL verwendet werden."
     return 1
@@ -370,7 +374,7 @@ if [ "$INSTALL_MODE" = "SUPPORTED_UPDATE" ]; then
   python3 "$STAGED_ROOT/tools/deployment_contract.py" cleanup-obsolete-caches \
     --target "$TARGET" --staged-root "$STAGED_ROOT" --apply --json \
     >"$STAGE_BASE/obsolete_cache_cleanup.json"
-  echo "Kopiere V17.1.1-Dateien; Benutzerdaten bleiben erhalten..."
+  echo "Kopiere V17.1.2-Dateien; Benutzerdaten bleiben erhalten..."
   rsync -a --delete \
     --exclude 'config.json' --exclude 'config.json.last-good*' --exclude 'logs/' \
     --exclude 'config-states/' --exclude '*.sqlite3' --exclude 'zec_config_snapshots.json' \
@@ -381,7 +385,7 @@ if [ "$INSTALL_MODE" = "SUPPORTED_UPDATE" ]; then
   (cd "$TARGET" && python3 tools/migrate_config_to_current.py --config config.json --json >"$STAGE_BASE/migration_result.json")
   (cd "$TARGET" && python3 tools/v14_cutover.py verify --config "$TARGET/config.json" --runtime-root "$TARGET" --json >"$STAGE_BASE/graph_verify_prestart.json")
 else
-  echo "Erzeuge saubere V17.1.1-Fresh-Installation ohne config.json..."
+  echo "Erzeuge saubere V17.1.2-Fresh-Installation ohne config.json..."
   sudo install -d -o pi -g pi -m 0750 "$TARGET"
   rsync -a --exclude '__pycache__/' --exclude '.pytest_cache/' "$STAGED_ROOT/" "$TARGET/"
   sudo chown -R pi:pi "$TARGET"
@@ -495,7 +499,7 @@ else
     echo "WARNUNG: Controller ist noch nicht global ready=true, aber der Produktivstart ist sicher bestätigt."
     [ -s "$READY_JSON" ] && cat "$READY_JSON"
   else
-    echo "FEHLER: V17.1.1 erreichte weder ready=true noch einen stabilen sicheren Übergangszustand."
+    echo "FEHLER: V17.1.2 erreichte weder ready=true noch einen stabilen sicheren Übergangszustand."
     [ -s "$READY_JSON" ] && cat "$READY_JSON"
     false
   fi
@@ -551,7 +555,7 @@ PY
 
 trap - ERR EXIT
 cleanup_stage
-echo "V17.1.1 erfolgreich installiert."
+echo "V17.1.2 erfolgreich installiert."
 echo "Installationsmodus: $INSTALL_MODE"
 [ "$INSTALL_MODE" = "SUPPORTED_UPDATE" ] && echo "Backup: $BACKUP" || true
 [ "$INSTALL_MODE" = "SUPPORTED_UPDATE" ] && echo "Backup-SHA256: $BACKUP_SHA256" || true

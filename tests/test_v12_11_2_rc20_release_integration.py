@@ -15,8 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class Rc20ReleaseIntegrationTests(unittest.TestCase):
     def test_version_is_rc20_without_measurement_schema_change(self):
-        self.assertEqual("17.1.1", version.APP_VERSION)
-        self.assertEqual("V17.1.1", version.APP_VERSION_LABEL)
+        self.assertEqual("17.1.2", version.APP_VERSION)
+        self.assertEqual("V17.1.2", version.APP_VERSION_LABEL)
         self.assertFalse(hasattr(version, "CSV_SCHEMA"))
 
     def test_migration_cli_check_apply_and_idempotence(self):
@@ -101,12 +101,12 @@ class Rc20ReleaseIntegrationTests(unittest.TestCase):
     def test_updater_is_exact_sequential_atomic_and_rollback_capable(self):
         script = (ROOT / "tools/install_zendure_controller.sh").read_text(encoding="utf-8")
         for marker in (
-            'EXPECTED_VERSION_ARG="v17_1_1"',
-            'EXPECTED_SOURCE_VERSION="17.1.0"',
-            'EXPECTED_SOURCE_BUILD_ID="v17.1.0-20261019"',
-            'EXPECTED_TARGET_VERSION="17.1.1"',
-            'EXPECTED_TARGET_BUILD_ID="v17.1.1-20261020"',
-            'SOURCE_MANIFEST="V17_1_1_SOURCE_MANIFEST.sha256"',
+            'EXPECTED_VERSION_ARG="v17_1_2"',
+            'EXPECTED_SOURCE_VERSION="17.1.1"',
+            'EXPECTED_SOURCE_BUILD_ID="v17.1.1-20261020"',
+            'EXPECTED_TARGET_VERSION="17.1.2"',
+            'EXPECTED_TARGET_BUILD_ID="v17.1.2-20261021"',
+            'SOURCE_MANIFEST="V17_1_2_SOURCE_MANIFEST.sha256"',
             'SUPPORTED_UPDATE', 'CLEAN_FRESH_INSTALL', 'AMBIGUOUS_OR_PARTIAL_INSTALL',
             'migrate_config_to_current.py', 'tools/v14_cutover.py verify',
             'start_support_capture "pre_rollback"', 'finalize_support_capture',

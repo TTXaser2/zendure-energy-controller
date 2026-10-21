@@ -431,8 +431,8 @@
       if(caption){
         const minutes=Number(this.payload.window_minutes||15);
         const note=this.payload.coverage_partial?' · Ältere Messwerte nicht vollständig verfügbar':'';
-        const source=this.payload.source==='graph_v3_1min+controller_ram'?' · ältere Werte in 1-Min.-Auflösung':'';
-        caption.textContent=`Verlauf: ${minutes} Minuten · Aktualisierung alle 3 s · Livewert separat alle 1 s${source}${note}`;
+        const source=minutes===60?' · Kurve: 1-Min.-Werte (aktuelle Minute ggf. unvollständig)':' · Kurve: einzelne Regler-Messwerte';
+        caption.textContent=`Verlauf: ${minutes} Minuten · Aktualisierung alle 3 s · Letzter Verlaufspunkt ist nicht der Livewert · Livewert separat alle 1 s${source}${note}`;
       }
     }
     draw(){
@@ -471,7 +471,27 @@
         if(nearest&&dist<=tolerance){const ms=Number(nearest.epoch_ms),v=number(nearest.value),px=x(ms),py=y(v);
           ctx.strokeStyle=css('--zec-blue');ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px,pad.t);ctx.lineTo(px,h-pad.b);ctx.stroke();
           ctx.fillStyle=css('--zec-blue');ctx.beginPath();ctx.arc(px,py,3.5,0,Math.PI*2);ctx.fill();
-          this.showTooltip(`<strong>${escapeHtml(nearest.time||'')}</strong><div class="zec-chart-tooltip-row"><span>Verlaufspunkt</span><b>${escapeHtml(fmtPower(v))}</b></div><div class="zec-chart-tooltip-row"><span>Status</span><b>${escapeHtml(nearest.status||'—')}</b></div>`,px,py);
+          let detail='';
+          if(Number(p.window_minutes)===60){
+            const begin=Number(nearest.interval_start_ms),end=Number(nearest.interval_end_ms);
+            const hhmm=ms=>new Date(ms).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+            const label=nearest.origin==='graph_v3_1min'?'1-Minuten-Wert aus Graphspeicher':
+                        (nearest.origin==='controller_invalid'?'Keine gültigen Originalmessungen':
+                        'Mittelwert vorhandener Originalmessungen');
+            detail=`<div class="zec-chart-tooltip-row"><span>${escapeHtml(label)}</span><b>${escapeHtml(fmtPower(v))}</b></div>`+
+                   `<div class="zec-chart-tooltip-row"><span>Intervall</span><b>${escapeHtml(hhmm(begin)+'–'+hhmm(end))}</b></div>`;
+            if(nearest.origin==='controller_minute_mean'){
+              detail+=`<div class="zec-chart-tooltip-row"><span>Einzelwerte</span><b>${Number(nearest.sample_count)}</b></div>`;
+              detail+=`<div class="zec-chart-tooltip-row"><span>Gemessene Spanne</span><b>${escapeHtml(fmtPower(number(nearest.min_raw_w))+' bis '+fmtPower(number(nearest.max_raw_w)))}</b></div>`;
+              const source=(Array.isArray(p.raw_points)?p.raw_points:[]).filter(s=>Number(s.epoch_ms)>=begin&&Number(s.epoch_ms)<end&&number(s.value)!==null);
+              if(source.length){const closest=source.reduce((a,b)=>Math.abs(b.epoch_ms-target)<Math.abs(a.epoch_ms-target)?b:a);
+                detail+=`<div class="zec-chart-tooltip-row"><span>Originalmessung ${escapeHtml(closest.time||'')}</span><b>${escapeHtml(fmtPower(number(closest.value)))}</b></div>`;}
+            }
+            if(nearest.partial_interval)detail+='<div>Intervall nur teilweise oder mit ungültigen Messungen verfügbar</div>';
+          }else{
+            detail=`<div class="zec-chart-tooltip-row"><span>Originalmessung</span><b>${escapeHtml(fmtPower(v))}</b></div>`;
+          }
+          this.showTooltip(`<strong>${escapeHtml(nearest.time||'')}</strong>${detail}<div class="zec-chart-tooltip-row"><span>Status</span><b>${escapeHtml(nearest.status||'—')}</b></div>`,px,py);
         } else this.tooltip.hidden=true;
       }
     }

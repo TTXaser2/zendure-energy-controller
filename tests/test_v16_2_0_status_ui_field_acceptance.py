@@ -53,8 +53,8 @@ def _snap(zendure_power=1200, primary_power=2300):
     }
 
 
-def test_release_identity_is_v17_1_1():
-    assert (APP_VERSION, APP_VERSION_LABEL, APP_BUILD_ID) == ("17.1.1", "V17.1.1", "v17.1.1-20261020")
+def test_release_identity_is_v17_1_2():
+    assert (APP_VERSION, APP_VERSION_LABEL, APP_BUILD_ID) == ("17.1.2", "V17.1.2", "v17.1.2-20261021")
 
 
 def test_directional_remaining_energy_and_power_bars_charge():
@@ -239,4 +239,4 @@ def test_midnight_rebuilds_previous_day_instead_of_reusing_partial_today_cache()
 
 
 def test_field_tool_derives_supported_update_source_from_installer_contract():
-    assert _expected_update_source() == {"version": "17.1.0", "build_id": "v17.1.0-20261019"}
+    assert _expected_update_source() == {"version": "17.1.1", "build_id": "v17.1.1-20261020"}

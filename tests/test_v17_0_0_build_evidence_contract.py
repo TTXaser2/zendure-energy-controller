@@ -31,17 +31,17 @@ def good_payload():
 
 class TestV1700BuildEvidenceContract(unittest.TestCase):
     def test_release_identity_and_update_source(self):
-        self.assertEqual(("17.1.1", "V17.1.1", "v17.1.1-20261020"),
+        self.assertEqual(("17.1.2", "V17.1.2", "v17.1.2-20261021"),
                          (version.APP_VERSION, version.APP_VERSION_LABEL, version.APP_BUILD_ID))
         text = INSTALLER.read_text(encoding="utf-8")
         for token in (
-            'EXPECTED_VERSION_ARG="v17_1_1"',
-            'EXPECTED_SOURCE_VERSION="17.1.0"',
-            'EXPECTED_SOURCE_BUILD_ID="v17.1.0-20261019"',
-            'EXPECTED_TARGET_VERSION="17.1.1"',
-            'EXPECTED_TARGET_BUILD_ID="v17.1.1-20261020"',
-            'SOURCE_MANIFEST="V17_1_1_SOURCE_MANIFEST.sha256"',
-            'validation/V17_1_1_BUILD_EVIDENCE.json',
+            'EXPECTED_VERSION_ARG="v17_1_2"',
+            'EXPECTED_SOURCE_VERSION="17.1.1"',
+            'EXPECTED_SOURCE_BUILD_ID="v17.1.1-20261020"',
+            'EXPECTED_TARGET_VERSION="17.1.2"',
+            'EXPECTED_TARGET_BUILD_ID="v17.1.2-20261021"',
+            'SOURCE_MANIFEST="V17_1_2_SOURCE_MANIFEST.sha256"',
+            'validation/V17_1_2_BUILD_EVIDENCE.json',
         ):
             self.assertIn(token, text)
 

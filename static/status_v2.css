@@ -244,3 +244,11 @@ html[data-theme="dark"] .zec-wordmark{color:#f4f7fb}
 .zec-mini-range-buttons button:focus-visible{outline:2px solid var(--zec-blue);outline-offset:2px}
 .zec-mini-chart-caption{font-size:10px;color:var(--zec-muted);padding:0 3px 5px;line-height:1.4;overflow-wrap:anywhere}
 @media(max-width:390px){.zec-mini-range-buttons button{padding:4px 5px}.zec-mini-chart-controls{gap:4px}}
+
+/* V17.1.2: the grid source/freshness footer must never be clipped by a fixed card. */
+.zec-card.zec-grid-card{height:auto;min-height:300px;overflow:visible}
+.zec-grid-card .zec-card-footer{flex:0 0 auto;min-width:0;overflow:visible}
+.zec-grid-card .zec-card-footer>span:last-child{min-width:0;overflow-wrap:anywhere;white-space:normal}
+.zec-grid-card .zec-mini-chart-wrap{flex-shrink:0}
+.zec-grid-card .zec-mini-chart-caption{flex-shrink:0}
+@media(max-width:760px){.zec-card.zec-grid-card{min-height:300px}}

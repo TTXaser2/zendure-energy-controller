@@ -72,3 +72,64 @@ class TestMiniGridTimeline(unittest.TestCase):
         self.assertIn('aria-pressed',py)
         self.assertIn('.zec-mini-chart-caption',css)
         self.assertNotIn("neuester: ${fmtPower(values.at(-1))}",js)
+
+class TestV1712MiniMinuteSemantics(unittest.TestCase):
+    def test_minute_mean_true_samples_and_outlier_range(self):
+        now=1_800_000_020.0
+        # A whole previous minute, where a short high spike must remain in raw evidence.
+        minute=int((now-120)//60)*60
+        samples=[20,-200,80]
+        snap={'graph_history':[{'epoch_s':minute+2+i*3,'raw_grid_power_w':v}
+                               for i,v in enumerate(samples)]}
+        p=build_grid_mini_payload(snap,window_minutes=60,now_epoch=now)
+        self.assertEqual(p['display_resolution_s'],60)
+        self.assertEqual(p['count'],1)
+        self.assertAlmostEqual(p['points'][0]['value'],sum(samples)/3)
+        self.assertEqual(p['points'][0]['min_raw_w'],-200)
+        self.assertEqual(p['points'][0]['max_raw_w'],80)
+        self.assertEqual([r['value'] for r in p['raw_points']],samples)
+        self.assertEqual(p['points'][0]['sample_count'],3)
+
+    def test_historical_minute_never_passes_as_original_measurement(self):
+        now=1_800_000_020.0
+        minute=int((now-1800)//60)*60000
+        p=build_grid_mini_payload({},window_minutes=60,history_points=[{'epoch_ms':minute,'value':-7}],now_epoch=now)
+        self.assertEqual(p['points'][0]['origin'],'graph_v3_1min')
+        self.assertEqual(p['points'][0]['interval_end_ms']-p['points'][0]['interval_start_ms'],60000)
+        self.assertIsNone(p['points'][0]['min_raw_w'])
+        self.assertFalse(p['raw_points'])
+
+    def test_ram_precedence_and_stale_samples_conservative(self):
+        now=1_800_000_020.0
+        minute=int((now-120)//60)*60
+        snap={'graph_history':[{'epoch_s':minute+3,'raw_grid_power_w':99,'grid_power_fresh':False},
+                               {'epoch_s':minute+6,'raw_grid_power_w':-30,'grid_power_valid':True}]}
+        p=build_grid_mini_payload(snap,window_minutes=60,history_points=[{'epoch_ms':int(minute*1000),'value':200}],now_epoch=now)
+        self.assertEqual(p['count'],1)
+        self.assertEqual(p['points'][0]['value'],-30)
+        self.assertTrue(p['points'][0]['partial_interval'])
+        self.assertEqual(p['points'][0]['sample_count'],1)
+
+    def test_missing_minute_is_not_synthesized(self):
+        now=1_800_000_020.0
+        a=int((now-1200)//60)*60000
+        b=a+180000
+        p=build_grid_mini_payload({},window_minutes=60,history_points=[{'epoch_ms':a,'value':4},{'epoch_ms':b,'value':-9}],now_epoch=now)
+        self.assertEqual([r['epoch_ms'] for r in p['points']],[a,b])
+
+    def test_raw_5_and_15_are_not_aggregated(self):
+        now=1_800_000_020.0
+        snap={'graph_history':[{'epoch_s':now-9,'raw_grid_power_w':10},{'epoch_s':now-6,'raw_grid_power_w':25}]}
+        for minutes in (5,15):
+            p=build_grid_mini_payload(snap,window_minutes=minutes,now_epoch=now)
+            self.assertEqual([r['value'] for r in p['points']],[10,25])
+            self.assertIsNone(p['display_resolution_s'])
+            self.assertEqual(p['raw_points'],[])
+
+    def test_grid_footer_uses_natural_height_and_no_clipping(self):
+        css=(ROOT/'static/status_v2.css').read_text()
+        self.assertIn('.zec-card.zec-grid-card{height:auto;min-height:300px;overflow:visible}',css)
+        self.assertIn('.zec-grid-card .zec-card-footer>span:last-child{min-width:0;overflow-wrap:anywhere;white-space:normal}',css)
+        js=(ROOT/'static/status_v2.js').read_text()
+        self.assertIn('1-Min.-Werte',js)
+        self.assertIn('Originalmessung',js)

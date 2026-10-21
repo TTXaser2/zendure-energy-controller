@@ -10,3 +10,7 @@ Hier werden vorhandene Originale **unverändert** und mit Herkunft/Status refere
 - [A1-Wirksamkeitsbrief vom 17.10.2026](strategy/ZEC_A1_WIRKSAMKEIT_23T_DECISION_BRIEF_20261017.md) – bereits vorhandene **read-only retrospektive Evidenz**, keine Reglerfreigabe.
 
 Weitere ältere originale Architektur-/Specs-/Entscheidungsdokumente können nach Fund aufgenommen werden. Historische Gespräche werden nicht ohne belegte Herkunft zu Original-Artefakten erklärt.
+
+## Versionsbezogene Original-Releasedokumente, V17.1.2
+
+Die **185** historischen Rootdateien aus den Serien `RELEASE_INFO_V*`, `TECHNICAL_NOTES_V*`, `BUILD_VALIDATION_V*` wurden **byteidentisch** unter [release_root](release_root/) archiviert. Der konkrete SHA256-/Größen-/Marker-/Ledger-Abgleich jeder Datei steht in [`ARCHIVE_NO_DROP_AUDIT.json`](release_root/ARCHIVE_NO_DROP_AUDIT.json). `BACKLOG_NO_DROP_GATE=PASS` gilt für diesen konkret inventarisierten Umzug; andere Dateien und Planungsquellen sind davon nicht erfasst. Historische Nicht-Scope-Hinweise bleiben damalige Grenzen und sind keine nachträgliche Freigabe.

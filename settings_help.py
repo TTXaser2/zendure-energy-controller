@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
+from settings_help_v1712 import WHEN as WHEN_V1712, FAST_CAPTURE_PLAIN
 
 
 @dataclass(frozen=True)
@@ -117,16 +118,16 @@ CATEGORY_DESCRIPTIONS = {
 CATEGORY_HELP_TEXT = {
     "Betriebsart & manuelle Steuerung": "AUTO nutzt die normale Netzleistungsregelung. STOP/HOLD und feste manuelle Modi haben Vorrang vor AUTO; ein manueller Modus ungleich AUTO verhindert den Nachtmodus im betreffenden Zyklus. Feste Lade- und Entlademodi arbeiten mit festen Leistungszielen bis zum Ziel-SOC. Safe-State sowie harte SOC- und Gerätegrenzen behalten immer Vorrang.",
     "Leistungsgrenzen & SOC-Schutz": "Lade-/Entladegrenzen sowie MIN/MAX-SOC sind anlagen- und geräteabhängige Schutzwerte. Sie begrenzen auch manuelle, Nacht- und AUTO-Ziele. Diese Werte sind keine universellen Empfehlungen und müssen zur konkreten Hardware passen.",
-    "AUTO-Regelung": "Die Netzabweichung wird über Mittelwert, Totzone, Gain, Smoothing und Step kontrolliert nachgeführt. MIN_COMMAND_CHANGE_W beeinflusst die Publish-Auflösung, nicht die interne Sollwertrechnung. Mehr Reaktionsgeschwindigkeit ist nicht automatisch bessere Regelung.",
+    "AUTO-Regelung": "ZEC bildet aus dem Netzbezug beziehungsweise der Netzeinspeisung eine passende Lade- oder Entladeanforderung. Mittelwert und Totzone beruhigen Messschwankungen; Verstärkung und Glättung bestimmen die Reaktion, danach begrenzt die maximale Änderung je Regelzyklus gewöhnliche Zielwertsprünge. Die Mindeständerung für Gerätebefehle kommt erst beim Versand hinzu. Fast Capture darf nur in besonders bestätigten Fällen einen zusätzlich begrenzten Ladeanteil ergänzen. Mehr Tempo ist nicht automatisch sicherer oder besser.",
     "Nachtbetrieb": "Der Nachtmodus erzeugt eine feste Basisentladung und ist keine netzleistungsnachgeführte AUTO-Entladung. Start und Ende dürfen über Mitternacht laufen. Eine optionale Nachtreserve pausiert die feste Basisentladung; globale MIN-SOC-Grenzen und aktive 0-W-Neutralisierung beim Exit bleiben Schutzinvarianten.",
     "Primärspeicher": "Die Primärspeicher-Anbindung kann über EVCC, benutzerdefiniertes MQTT oder ein geprüftes read-only Modbus-Geräteprofil erfolgen. Nach Auswahl einer Quelle zeigt ZEC unmittelbar die dafür relevanten Verbindungsparameter. Vorzeichen-, Einheits- und Freshness-Semantik bleiben quellenneutral und sicherheitsrelevant.",
-    "Harvest / Restüberschuss": "Der Primärspeicher hat grundsätzlich Vorrang. Harvest nutzt nur Restüberschuss oder ausdrücklich spezifizierte Parallel-Harvest-Leistung. Floor, Restart und Near-Limit sind geordnete Schwellen; positive W-Overrides ersetzen den jeweiligen Ratio-Wert. Restexport ist nicht automatisch ein absoluter Zendure-Sollwert.",
+    "Harvest / Restüberschuss": "Der Primärspeicher hat grundsätzlich Vorrang. Wenn am Hausanschluss trotzdem tatsächlich nutzbarer PV-Überschuss eingespeist würde, darf Zendure diesen innerhalb seiner Grenzen aufnehmen. Einschalt-, Wiederanlauf- und Nahe-Maximum-Schwellen legen fest, wann bestimmte zusätzliche Ladewege überhaupt zugelassen sind; absolute Wattwerte ersetzen jeweils den passenden Prozentanteil. Die Saison-/Tagesstrategie verteilt nur geeignete Leistung, sie sperrt keine notwendige Restüberschussaufnahme. Netzwerte sind keine unveränderten festen Gerätezielwerte.",
     "Cross-Charge-Schutz": "Cross-Charge wird symmetrisch behandelt. Gegenläufiger Zendure-Sollwert wird proportional reduziert, aber der Schutz kehrt die Richtung nicht selbstständig um. Frische Zweitbatteriedaten sind erforderlich; Sollwertkonflikt und tatsächlich beobachteter Gegenfluss bleiben getrennte Sachverhalte.",
-    "Kommandowirkung & Resync": "Ein MQTT-Publish ist kein Wirkungsnachweis. Diagnose trennt Publish, Richtungsreaktion, Sollwerttracking und Systemziel. 0-W-Neutralisierung ist ein aktives Kommando. Resync-Parameter steuern Recovery bei bestätigter Nichtwirkung und sind keine normale Reglerdynamik.",
+    "Kommandowirkung & Resync": "Das Senden (Publish) eines Gerätebefehls beweist noch keine tatsächliche Lade- oder Entladeleistung. ZEC prüft getrennt, ob das Gerät die Richtung übernimmt, wie genau die Leistung folgt und ob sich der Netzbezug verbessert. Auch das sichere Zurücknehmen auf null Watt muss bestätigt werden. Wiederabgleich-Zeiten betreffen Fehlerbehandlung und nicht die Geschwindigkeit der normalen AUTO-Regelung.",
     "Zendure-Geräte": "Geräte-ID und Batteriekapazität sind installationsabhängig. Unbekannte Hardwarewerte werden nicht erfunden; Kapazität dient vor allem Prognose und Diagnose.",
-    "Schnittstellen & Datenquellen": "MQTT ist Command-/Telemetriepfad. Die Netzleistungsquelle ist eine bewusste Anlagenentscheidung. SMA-Direktquelle und Shelly-kompatibler HTTP-Pfad besitzen unterschiedliche Voraussetzungen. Die lokale Zendure-API kann ergänzend oder als Fallback arbeiten.",
+    "Schnittstellen & Datenquellen": "MQTT überträgt Zendure-Gerätedaten und zulässige Leistungsanforderungen. Für die Hausnetzleistung wird entweder SMA Energy Meter/Sunny Home Manager direkt oder ein Shelly-kompatibler HTTP-Zähler gewählt. Die jeweils passende Adresse, Gerätekennung und Aktualitätsgrenze sind Voraussetzung; ein passiv beobachteter Zähler ersetzt nicht die aktive Quelle. Lokale Zendure-Geräteabfragen können ergänzende Diagnose beziehungsweise ausdrücklich zugelassene Ersatzwerte liefern, aber keinen zweiten Regler.",
     "Messdaten & Speicherung": "Measurement V4 ist die produktive Messdatengrundlage. Logging ist nachgelagert und darf die Regelung nicht blockieren. off, standard und extended unterscheiden Umfang und Speichervolumen; Fallback- und Storagezustände müssen sichtbar bleiben.",
-    "System & Diagnose": "Diagnose- und Loggingparameter verändern nicht automatisch die physische Regelfunktion. Administrative Aktionen sind keine normalen Settings-Änderungen und bleiben explizit geschützt.",
+    "System & Diagnose": "Hier stellst du Webzugang, Protokolle, Messwert-Aktualitätsüberwachung und ressourcenbegrenzte Analysen ein. Mehr Logdaten und größere Analysen beanspruchen Speicher, CPU und Datenträger, steuern aber nicht selbst die Ladeleistung. Sicherheitsgrenzen können bei echten Daten- oder Kommunikationsproblemen eine unsichere Geräteanforderung stoppen; ein Webserver-Neustart benötigt eine gesonderte administrative Bestätigung.",
 }
 
 # Page numbers are build-verified against the V12.12.1 generic manual.
@@ -1060,13 +1061,43 @@ def build_setting_help(row: Mapping[str, Any]) -> SettingHelpSpec:
     key = str(row["key"])
     category = str(row["category"])
     s3_help = S3_USER_GUIDANCE.get(key) or PRIMARY_HELP_VNEXT.get(key)
-    short = s3_help["short"] if s3_help else (GENERAL_SHORT_HELP_VNEXT.get(key) or SHORT_HELP.get(key) or f"Konfiguration für {LABEL_OVERRIDES.get(key, row.get('label', key))}.")
+    short = (FAST_CAPTURE_PLAIN[key]["short"] if key in FAST_CAPTURE_PLAIN else
+             s3_help["short"] if s3_help else
+             (GENERAL_SHORT_HELP_VNEXT.get(key) or SHORT_HELP.get(key) or f"Konfiguration für {LABEL_OVERRIDES.get(key, row.get('label', key))}."))
     rich = category in RICH_CATEGORIES
-    extended = s3_help["purpose"] if s3_help else (EXPLICIT_PURPOSE_VNEXT.get(key) or INTERFACE_PURPOSE_VNEXT.get(key) or SYSTEM_PURPOSE_VNEXT.get(key) or RICH_EXTENDED.get(key) or _generic_extended(short, row))
+    extended = (FAST_CAPTURE_PLAIN[key]["purpose"] if key in FAST_CAPTURE_PLAIN else
+                s3_help["purpose"] if s3_help else
+                (EXPLICIT_PURPOSE_VNEXT.get(key) or INTERFACE_PURPOSE_VNEXT.get(key) or SYSTEM_PURPOSE_VNEXT.get(key) or RICH_EXTENDED.get(key) or _generic_extended(short, row)))
+    when = (FAST_CAPTURE_PLAIN[key]["when"] if key in FAST_CAPTURE_PLAIN else
+            s3_help["when"] if s3_help else
+            (RICH_WHEN.get(key) or WHEN_V1712.get(key)))
     deps = _dependencies(row)
     dep_help = None
     if deps:
-        dep_help = ("Der Saison-Schalter aktiviert die gewählte Strategie. Der Modus bestimmt deren Verhalten; die Datumsgrenzen gelten nur für Kalender. Die eigenständigen Tagesprofile und die übliche Restüberschussaufnahme werden dadurch nicht ein- oder ausgeschaltet." if key.startswith("HARVEST_SEASON_") else (RICH_DEPENDENCY_HELP.get(category) if rich else "Verknüpfte Einstellungen können Aktivierung, Grenzen, Quelle oder Vorrang beeinflussen. Die konkrete Beziehung ist unten aufgeführt."))
+        # Do not repeat one generic category slogan for dozens of unrelated
+        # operational settings. Each text must start from the actual consumer
+        # of THIS setting; the UI follows it with typed dependency links.
+        if key == "HARVEST_FAST_CAPTURE_MODE":
+            dep_help = ("Normale Restüberschussregelung, eingeschaltete Primärspeichermessung, "
+                        "Schutz gegen unerwünschtes Umladen und die Zendure-Ladeobergrenze "
+                        "bestimmen gemeinsam, ob der zusätzliche Anteil überhaupt zulässig ist. "
+                        "Die normale AUTO-Schrittbegrenzung wird weder ersetzt noch verändert.")
+        elif key == "MAX_POWER_STEP_W":
+            dep_help = ("Die Glättung und das Regelintervall bestimmen mit, wie schnell die normale "
+                        "Regelung reagiert. Mindeständerungen für MQTT beeinflussen erst den "
+                        "Befehlsversand; die zusätzliche Fast-Capture-Rate ist davon getrennt.")
+        elif key.startswith("HARVEST_SEASON_"):
+            dep_help = ("Die Saisonstrategie wirkt erst nach eigenständiger Aktivierung und nur "
+                        "innerhalb geeigneter strategischer High-SOC-Situationen. Restexportaufnahme, "
+                        "Tagesprofil und Schutzgrenzen werden nicht ausgeschaltet.")
+        elif when:
+            dep_help = ("Voraussetzung und Grenze dieser Einstellung: " + when +
+                        " Die unten aufgeführten verknüpften Einstellungen steuern "
+                        "zusätzliche Freigaben, Grenzen oder Datenquellen.")
+        else:
+            # Guarded by the operational registry quality gate. For hidden
+            # target-only keys we retain the original conservative fallback.
+            dep_help = RICH_DEPENDENCY_HELP.get(category) or "Die unten verknüpften Einstellungen müssen ebenfalls berücksichtigt werden."
     risk = RISK_HELP.get(key)
     if rich and not risk:
         risk = RICH_RISK_BY_CATEGORY.get(category)
@@ -1079,7 +1110,7 @@ def build_setting_help(row: Mapping[str, Any]) -> SettingHelpSpec:
     return SettingHelpSpec(
         short_help=short,
         extended_help=extended,
-        when_help=s3_help["when"] if s3_help else (RICH_WHEN.get(key) if rich else None),
+        when_help=when,
         help_level="rich" if rich else "base",
         search_terms=_search_terms(row, short),
         handbook_ref=_handbook_ref(category),
