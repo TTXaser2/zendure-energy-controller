@@ -20,8 +20,8 @@ class V1302InstallerIdentityHotfixTests(unittest.TestCase):
         }
 
     def test_evaluator_identity_is_single_sourced_from_release_version(self):
-        self.assertEqual("17.1.2", version.APP_VERSION)
-        self.assertEqual("v17.1.2-20261021", version.APP_BUILD_ID)
+        self.assertEqual("17.1.3", version.APP_VERSION)
+        self.assertEqual("v17.1.3-20261022", version.APP_BUILD_ID)
         self.assertEqual(version.APP_VERSION, EXPECTED_VERSION)
         self.assertEqual(version.APP_BUILD_ID, EXPECTED_BUILD_ID)
 
@@ -37,12 +37,12 @@ class V1302InstallerIdentityHotfixTests(unittest.TestCase):
     def test_installer_targets_v14_1_and_keeps_v14_0_0_r2_as_only_source(self):
         script = (ROOT / "tools" / "install_zendure_controller.sh").read_text(encoding="utf-8")
         for marker in (
-            'EXPECTED_VERSION_ARG="v17_1_2"',
-            'EXPECTED_SOURCE_VERSION="17.1.1"',
-            'EXPECTED_SOURCE_BUILD_ID="v17.1.1-20261020"',
-            'EXPECTED_TARGET_VERSION="17.1.2"',
-            'EXPECTED_TARGET_BUILD_ID="v17.1.2-20261021"',
-            'SOURCE_MANIFEST="V17_1_2_SOURCE_MANIFEST.sha256"',
+            'EXPECTED_VERSION_ARG="v17_1_3"',
+            'EXPECTED_SOURCE_VERSION="17.1.2"',
+            'EXPECTED_SOURCE_BUILD_ID="v17.1.2-20261021"',
+            'EXPECTED_TARGET_VERSION="17.1.3"',
+            'EXPECTED_TARGET_BUILD_ID="v17.1.3-20261022"',
+            'SOURCE_MANIFEST="V17_1_3_SOURCE_MANIFEST.sha256"',
         ):
             self.assertIn(marker, script)
     def test_existing_v3_is_verified_before_start_and_runtime_graph_gate_follows_readiness(self):

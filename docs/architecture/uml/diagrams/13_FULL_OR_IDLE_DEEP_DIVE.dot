@@ -1,0 +1,35 @@
+digraph G {
+graph [rankdir=TB, bgcolor="white", pad=0.25, nodesep=0.38, ranksep=0.48, labelloc=t, fontsize=20, fontname="DejaVu Sans"];
+node [shape=box, style="rounded,filled", fillcolor="white", fontname="DejaVu Sans", fontsize=10.3, margin="0.14,0.08"];
+edge [fontname="DejaVu Sans", fontsize=8.5, color="#444444"];
+graph [label="13 — FULL/IDLE Deep Dive: Harvest vs. Fast Capture getrennt"];
+s [shape=circle,width=.18,label="",fillcolor="#222222",style=filled];
+subgraph cluster_h { label="Harvest-Klassifikation: SMA_FULL_OR_IDLE"; color="#bbbbbb";
+hcond [label="Harvest enabled + Primary valid + Zendure < MAX_SOC\nPrimary SOC ≥ HARVEST_SMA_FULL_SOC_PERCENT (Default 98%)\nExport ≥ HARVEST_HIGH_SMA_SOC_MIN_EXPORT_W (Default 300 W)"];
+hconfirm [label="Entry-Confirm über DISTINCT/FRESH Beobachtungen\nHigh-SOC-Zeitprofil: morgens 60 s, mittags 30 s, nachmittags 15 s\n(default/fallback konfigurierbar)"];
+hactive [label="Harvest active\nreason = SMA_FULL_OR_IDLE"];
+ref [shape=diamond,label="unabhängige physische Zendure-AC-Referenz valide?"];
+abs [label="ABSOLUTE_EXPORT_CAPTURE\nexport_capture_target = actual_zendure_charge + grid_export\nraw baseline target = export_capture_target"];
+fb [label="Referenz nicht valide → INCREMENTAL_FALLBACK\nlast_input + effective_export × CONTROL_GAIN"];
+B [label="Clamp → Smoothing → Ramp → langsame Baseline B"];
+hcond->hconfirm->hactive->ref; ref->abs[label="ja"]; ref->fb[label="nein"]; abs->B; fb->B;
+}
+subgraph cluster_f { label="Fast-Klassifikation: FULL_IDLE (eigener Vertrag)"; color="#bbbbbb";
+fcond [label="Primary SOC ≥ 99%\n|Primary power| ≤ 100 W\nExport ≥ 100 W\nalle Fast-Guards/Command-Readiness erfüllt"];
+fconfirm [label="15 s Bestätigung über eigene DISTINCT/FRESH Zeitleiste\nBeobachtungslücke >10 s bricht Kontinuität"];
+state [label="fast_capture_primary_state = FULL_IDLE\ndesired O = export"];
+head [label="O auf Zendure-Headroom begrenzen\nAttack 400 W/s, Release 100 W/s"];
+mode [shape=diamond,label="Fast mode"];
+shadow [label="shadow: B physisch\nO nur Diagnose"];
+active [label="active: command = min(ZendureLimit, B+O)"];
+fcond->fconfirm->state->head->mode; mode->shadow[label="shadow"]; mode->active[label="active"];
+}
+cc [label="Cross-Charge danach\nbei Konflikt O=0 und Schutz gegen B neu bewerten"];
+e [shape=doublecircle,width=.2,label=""];
+s->hcond; B->fcond[style=dashed,label="Fast wird nach B separat berechnet"]; shadow->cc; active->cc; cc->e;
+
+warn [shape=note,fillcolor="#fff7df",label="WICHTIG: SMA_FULL_OR_IDLE ≠ Fast FULL_IDLE.\nÄhnliche Namen, aber unterschiedliche Schwellen, Bestätigungszeiten und Rollen.\nHarvest bildet B; Fast bildet nur Overlay O."];
+hactive->warn[style=dashed,arrowhead=none]; state->warn[style=dashed,arrowhead=none];
+
+  uml_update_note [shape=note, style="filled", fillcolor="#eef5ff", fontcolor="#162e4d", fontsize=9, label="High-SOC-Profil-Confirm ist konfigurierbar; genannte 60/30/15 s sind Defaultwerte.\nSourceabgleich: V17.1.3; keine Feldwirkungsbehauptung"];
+}

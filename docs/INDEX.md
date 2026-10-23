@@ -1,9 +1,9 @@
 # ZEC – Releasebezogener Architektur- und Historienindex
 
-**Aktueller Source-Release:** V17.1.2 / `v17.1.2-20261021`. **Architekturstatus:** As-built bezogen auf diese Sourcebasis. **Nachweis:** technischer Build-/Feldstatus ausschließlich nach dokumentierten tatsächlichen Gates.
+**Aktueller Source-Release:** V17.1.3 / `v17.1.3-20261022`. **Architekturstatus:** As-built bezogen auf diese Sourcebasis. **Nachweis:** technischer Build-/Feldstatus ausschließlich nach dokumentierten tatsächlichen Gates.
 
-- [As-built V17.1.2](architecture/ZEC_V17_1_2_As_Built.md): Sourceunterschiede, Safety-Abgrenzung und QA-Vertrag.
-- [V17.1.2 Release-Dokumentation](releases/v17.1.2/RELEASE_INFO_V17_1_2.md): aktueller releasegebundener Dokumentenstand.
+- [As-built V17.1.3](architecture/ZEC_V17_1_3_As_Built.md): Sourceunterschiede, Safety-Abgrenzung und QA-Vertrag.
+- [V17.1.3 Release-Dokumentation](releases/v17.1.3/RELEASE_INFO_V17_1_3.md): aktueller releasegebundener Dokumentenstand.
 - [As-built V17.1.1](architecture/ZEC_V17_1_1_As_Built.md): UI-Hilfe, Minigraph-Zeitmodell, unveränderte Controller-/Safetygrenzen.
 - [Historische As-built V17.1.0](architecture/ZEC_V17_1_0_As_Built.md): S3, unabhängiges Live-Monitoring, SMA-Parser, Nacht-/MIN_SOC, Ereignis- und Diagnosepfade.
 - [Fast Capture V17.0.2 – historischer Releasebezug](architecture/ZEC_Fast_Capture_V17_0_2.md): historisch versionierte Basis, nicht überschrieben.
@@ -17,4 +17,6 @@
 
 **Wirkungsgrenze:** ZEC liefert nur Sollwerte/diagnostische Beobachtungen. Physischer Erfolg, Pi-Last und realer Update-/Fresh-Install-Status sind ausschließlich über gesonderte Feldabnahme nachzuweisen.
 
-**Entwicklungsprovenienz vor V17.1.1:** [UX-Hilfen & Minigraph – Development 20.10.](architecture/ZEC_UX_HELP_MINIGRAPH_DEV_20261020.md). V17.1.1 ist als unmittelbar vorheriger Source-Release eingefroren; V17.1.2 wird in eigener As-built beschrieben.
+**Entwicklungsprovenienz vor V17.1.1:** [UX-Hilfen & Minigraph – Development 20.10.](architecture/ZEC_UX_HELP_MINIGRAPH_DEV_20261020.md). V17.1.1 ist als unmittelbar vorheriger Source-Release eingefroren; V17.1.3 wird in eigener As-built beschrieben.
+
+**Aktueller UML-Regleratlas:** [22 Diagramme, DOT/SVG/PNG](architecture/uml/INDEX.md), [fachliches Einzelreview](architecture/uml/SOURCE_REVIEW_V17_1_3.md), vollständiger `DOC_UML_RELEASE_GATE` im Architekturvalidator.

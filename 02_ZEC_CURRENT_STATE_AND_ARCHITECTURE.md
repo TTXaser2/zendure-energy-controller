@@ -1,7 +1,35 @@
 # ZEC – Current State & Architecture
 
-**Stand:** 22.09.2026  
-**Status:** kanonischer aktueller Architekturstand; versionsspezifische Feldidentität siehe `07_ZEC_CURRENT_RELEASE_AND_FIELD_STATUS.md`
+**Stand:** 21.10.2026 – neuester Feld-/UX-Nachtrag; historische Architekturkapitel erhalten  
+**Status:** kanonischer aktueller Architekturstand (V17.1.0-Nachtrag 20.10.2026); ältere kapitelbezogene Versionshinweise sind historische As-built-Stände. Feldidentität siehe `07_ZEC_CURRENT_RELEASE_AND_FIELD_STATUS.md`
+
+## Neuester Feld-/Entwicklungsabgleich – V17.1.2, 21.10.2026
+
+- Reale produktive Runtime **V17.1.2 / v17.1.2-20261021**, allgemeine Feldabnahme `PASS / FULL_READY / READY:FULL_READY`, Rollback `RELEASE_BACKUP_EXACT`. Die älteren Nachträge sprechen jeweils aus dem Stand ihrer Erstellung und sind keine konkurrierende aktuelle Releaseidentität.
+- Die ausgelieferte V17.1.2-Source bleibt byteidentisch; geschützter `controller_logic.py` unverändert. Der in Bibliothek gesicherte, **nicht freigegebene** kompakte UI-Folgekandidat CP02 gehört nicht zum produktiven As-built. Keine S3- oder sonstige Regelstrategieänderung aus dem UX-Finding ableiten.
+- Reale Nutzer-Screenshots zeigen lesbare Netzquellen-/Freshness-Zeile in den gezeigten 5-/15-/60-Minuten-Ansichten, zugleich einen unerwünschten Höhenzuwachs der Status-Kartenreihe durch den ausführlichen Minigraph-Footer. UI-Konsequenzen gehören in `04`, offene Umsetzung in `05`, nicht in den Reglerkern.
+- Einstellungen besitzen zwar 190 technische Vollständigkeitsnachweise und 74 Bereichstexte, aber die reale Verständlichkeits- und Kontextabnahme ist **nicht abgeschlossen**. Nutzerbefunde zu Entwicklerbegriffen, Optionslabels, Aus-Verhalten und Sektionskontext sind keine Änderung der vorhandenen Runtime-Safetyfunktion.
+
+
+## Neuester As-built-Nachtrag – V17.1.2 technisch, 21.10.2026
+
+- **Produkt-Sources:** archiviertes finales ZIP `zendure_controller_v17_1_2.zip`, Root `zendure_controller_v17_1_2/`, Build `v17.1.2-20261021`. Detail-As-built `docs/architecture/ZEC_V17_1_2_As_Built.md` im exakt veröffentlichten Paket. Die aktuelle reale Pi-Runtime bleibt V17.1.1 (Feld-PASS 21.10.2026).
+- `controller_logic.py` ist SHA256 `8bf439456e773aa84097e54059b3da1065deac5200d9304c0dc5960a5e24b1d7` (byteidentisch zur V17.1.1-Basis); keine neuen Control-/Command-/Safety-Änderungen.
+- Settings: 190 operative individuelle Hilfen und 74 Kategorie-/Bereichserklärungen; bewusst nachvollziehbarer Anwendbarkeits-/Prioritäts- und Nichtwirkungsvertrag. `/grid-mini-data` und `static/status_v2.js`/CSS bieten 60-Minuten-Darstellung mit einheitlicher Minutenauflösung und 5-/15-Minuten-Rohdaten, kein neuer Mess- oder Controllerzyklus. Netzquellen-/Freshness-Footer responsiv sichtbar.
+- Installer: V17.1.1-only Supported Update; Clean-Fresh ausschließlich mit `--fresh-install` als ausdrückliche Nutzerwahl. Separate nach Source-Freeze erstellte SHA256-Datei, keine sich selbst referenzierende Hashbehauptung im Paket. Reale Fresh-Install-Evidenz fehlt weiter.
+- Tests/Manifest/Bibliotheksrücklese-Gates des technischen Pakets PASS. Reales V17.1.2-UI-/Performance-/Installationsfeldgate noch **PENDING**. Die folgenden älteren Releasekapitel sind lediglich historisch.
+
+
+## Aktuelle V17.1.0-As-built-Ergänzung – 20.10.2026
+
+- **Aktuelle reale Runtime:** `V17.1.0 / v17.1.0-20261019`; technischer Build und reales Update von V17.0.2 **PASS**, allgemeine Pi-Feldabnahme `FULL_READY` **PASS**. V17.0.2-Angaben in älteren Kapiteln sind historische Release-Provenienz.
+- **Controller-Takt:** weiterhin typischerweise **3 s**, unverändert. Der reine Mess-/Status-Endpunkt `/status-live-data` wird von `static/status_v2.js` im Browser alle **1.000 ms** abgefragt; Grid kann direkt aus `sma_udp_receiver` unabhängig von einem laufenden Controllerzyklus gelesen werden, Primärspeicher aus unabhängig frischem Modbus-Pfad. Quellenalter wird offen gezeigt; nicht jeder Device-Wert ändert sich jede Sekunde. Reale `HOLD`-Feldmessung 20.10. belegt Netzalter ~0,3 s und Primärspeicheralter ~0,2 s; keine generelle 1-Hz-Device-Erfassungsbehauptung.
+- **Statusseiten-Minigraph (eigener Pfad):** `static/status_v2.js`: `/grid-mini-data` **alle 10.000 ms**; `web_ui.build_grid_mini_payload` nutzt 48 letzte Punkte der Controller-`graph_history`, nicht den 1-Hz-Livestream. Daher zeitversetzter sichtbarer Verlauf bzw. abweichender letzter Chartwert. Der bestehende Text „letzte 48 Punkte“ benennt weder Sample-/Polltakt; UX-Follow-up unter `ZEC-BL-UI-GRID-MINICHART-001`. Das ist kein Beleg für eine langsame SMA-Quelle.
+- **S3:** Jahreszeit-/Tagesprofil-Auswahl mit Legacy-/Opt-in-Sicherheitsvertrag, Runtime-, Settings- und Diagnosepfad in V17.1.0 implementiert. Reales `HOLD`: angeforderte `sma_priority`, effektiv `legacy_parallel`, `day_profile=morning`, `s3_applicability=NOT_APPLICABLE`; noch **keine** reale physische S3-Wirksamkeit im natürlichen Harvest belegt. Zusätzliche Strategiefunktionen B2/C1/Adaptive/Battery Care bleiben getrennt offen.
+- **Netz-Stale-Incidents:** open/resolve und Quelle-/Processing-Stale-Abgrenzung implementiert und regressionsgeprüft. In 155 realen 2-Tages-Ereignissen kein solches Event, kein offenes Event; daher reale Trigger-/Recoverywirkung `NOT_EVALUABLE`, nicht `PASS`.
+- **Pflichtfixes:** NIGHT/MIN_SOC/GRID-Branch und struktureller SMA-OBIS-/Speedwire-Parser in V17.1.0 quell-/testspezifisch repariert. Natürliches Low-SOC+PV-Export-Feldereignis und historische Extremwert-Kausalität bleiben in der Beobachtung.
+- **Mode/Safety-Feldlog 20.10.:** `systemd Started` 10:03:12, MQTT verbunden 10:03:16, Command-Resync 10:03:21 und `SAFE_STATE → HOLD` 10:03:22 sprechen für eine Wiederanlaufsequenz; Grund des Starts um 10:03 ist nicht dokumentiert. Keine weitere Mode-Transition seit Update im abgefragten Fenster.
+- **Referenz für V17.1.0 Source:** `docs/architecture/ZEC_V17_1_0_As_Built.md` im unveränderten finalen Release-ZIP; dieser Projekt-Nachtrag ersetzt nicht dessen vollständiges Source-Mapping.
 
 ## 1. Systemkontext
 
@@ -163,7 +191,9 @@ Ab V16.2.4 wird der maschinenlesbare Installationsreport atomar und timestamped 
 
 Der reale Clean-Fresh-/FIRST_INSTALL_SETUP-/Uninstaller-Gesamtpfad ist automatisiert abgedeckt, aber noch nicht vollständig auf echter Hardware produktiv abgenommen. V16.2.4 wurde real erfolgreich von V16.2.3 installiert; der automatische Feldlauf bestand 27/27 Checks mit `FULL_READY`. V16.2.4 ist damit die aktuelle real bestätigte Runtimebasis. V16.2.5 besitzt TECHNICAL BUILD PASS und ändert keine Deploymentsemantik; für die reale Freigabe ist weiterhin ein Update V16.2.4 → V16.2.5 mit UI-/Diagnosefeldabnahme erforderlich. Siehe `05` und `07`.
 
-## Strategiearchitektur – fachliche Zielrichtung 18.10.2026 (NICHT implementiert)
+## Historische Strategiearchitektur – fachliche Zielrichtung 18.10.2026 (damals NICHT implementiert)
+
+**Abgrenzung 20.10.2026:** Die damalige Aussage „S3 nicht implementiert“ ist durch V17.1.0 überholt; S3 ist nun mit opt-in / Legacy-Schutz umgesetzt, während die übrigen genannten künftigen Strategieblöcke offen bleiben. Die folgenden Bulletpoints dokumentieren **den 18.10.-Planungsstand**, nicht den aktuellen Code.
 
 Der reale V17.0.2-Controller bleibt normative Implementierungsbasis; die folgenden Punkte sind **keine Beschreibung vorhandener Runtimefähigkeiten**:
 

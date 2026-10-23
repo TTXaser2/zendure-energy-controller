@@ -1,0 +1,37 @@
+digraph G {
+graph [rankdir=TB, bgcolor="white", pad=0.25, nodesep=0.38, ranksep=0.48, labelloc=t, fontsize=20, fontname="DejaVu Sans"];
+node [shape=box, style="rounded,filled", fillcolor="white", fontname="DejaVu Sans", fontsize=10.3, margin="0.14,0.08"];
+edge [fontname="DejaVu Sans", fontsize=8.5, color="#444444"];
+graph [label="11 — AUTO_GRID_EXPORT: inkrementeller Lade-Regelweg"];
+s [shape=circle,width=.18,label="",fillcolor="#222222",style=filled];
+entry [shape=diamond,label="AUTO + Grid-Export\n(grid_power < -DEADBAND)?"];
+pre [label="Fast-Reversal-/Cross-Charge-Vorprüfung\n+ Harvest-State bereits aktualisiert"];
+h [shape=diamond,label="Harvest aktiv?"];
+other [label="Ja → Harvest-Rechenzweig\n(siehe 13/14)"];
+eff [label="effective_export_power = max(0, -grid_power)\n(Cross-Charge nicht doppelt vorab abziehen)"];
+low [shape=diamond,label="effective_export < MIN_EFFECTIVE_SURPLUS_FOR_CHARGE_W\nund Fast kann nicht helfen?"];
+down [label="bestehende Ladeleistung schrittweise reduzieren\nLOW_EFFECTIVE_SURPLUS"];
+raw [label="INKREMENTELLER AUTO-ROHWERT\nraw = last_input + int(effective_export × CONTROL_GAIN)"];
+clamp [label="target = clamp(raw, 0, MAX_CHARGE_POWER_W)"];
+smooth [label="Smoothing\nint(last_input × (1-f) + target × f)"];
+ramp [label="Power-Step-Limit\n|Δ| ≤ MAX_POWER_STEP_W"];
+B [label="langsame Baseline B"];
+fast [shape=diamond,label="Fast off / shadow / active?"];
+shadow [label="off: O=0\nshadow: O nur Diagnose\nphysischer Sollwert bleibt B"];
+active [label="active: Fast-Guards + Klassifikation\nB + O (A400/R100, Headroom)"];
+cc [label="symmetrischer Cross-Charge-Guard\nreduziert nur Richtung 0\nCross-Charge > Fast"];
+pub [label="signed_final ≥ 0 publizieren\nCommand Lifecycle / Readback / Effect"];
+e [shape=doublecircle,width=.2,label=""];
+
+s->entry; entry->pre[label="ja"]; entry->e[label="nein"];
+pre->h; h->other[label="ja"]; other->e;
+h->eff[label="nein"]; eff->low; low->down[label="ja"]; down->e;
+low->raw[label="nein"]; raw->clamp->smooth->ramp->B->fast;
+fast->shadow[label="off/shadow"]; fast->active[label="active"];
+shadow->cc; active->cc; cc->pub->e;
+
+n1 [shape=note,fillcolor="#f7f7f7",label="Vorzeichen: Grid < 0 = Export; Zendure signed target > 0 = Laden.\nAUTO_GRID_EXPORT ist ein DELTA-/inkrementeller Regler: der neue Rohwert baut auf last_input auf."];
+raw->n1[style=dashed,arrowhead=none];
+n2 [shape=note,fillcolor="#f7f7f7",label="config.example: CONTROL_GAIN=0.3, SMOOTHING_FACTOR=0.25,\nMAX_POWER_STEP_W=150, DEADBAND_W=80.\nLeistungslimits sind installations-/geräteabhängig, nicht pauschal aus diesen Beispielen abzuleiten."];
+clamp->n2[style=dashed,arrowhead=none];
+}

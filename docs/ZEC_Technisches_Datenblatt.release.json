@@ -1,8 +1,8 @@
 {
-  "build_id": "v17.1.2-20261021",
+  "build_id": "v17.1.3-20261022",
   "document_status": "SOURCE_DEVELOPMENT_QA_PENDING_FIELD_PENDING",
-  "docx_sha256": "7a34a849f26063040cbac5b8c6fe9676fcc2ba612d07f98e6ba53c0ae0974f5e",
-  "pdf_sha256": "38ff671ff01432c68e55eaea06a3f46ebd0e76a0c453ab11711bd871b8e76be9",
-  "release_label": "V17.1.2",
-  "release_version": "17.1.2"
+  "docx_sha256": "4b18434bc2747c0f97a1fff38d2a87f5d94ceabdb078d6632f8889ecd707253f",
+  "pdf_sha256": "07f64683500703c6f4a36a8f85fb28f112bd56f9978469bba9686b266f9d1529",
+  "release_label": "V17.1.3",
+  "release_version": "17.1.3"
 }

@@ -1,9 +1,79 @@
 # ZEC – Current Release & Field Status
 
-**Stand:** 25.09.2026, V17.0.2 real installiert / allgemeine Feldabnahme PASS-FULL_READY; Fast-Capture-Feldevidenz teilweise PASS, Gesamtabschluss EVIDENCE_PENDING  
+## V17.1.3 – technischer Buildkandidat (Nachtrag 22.10.2026)
+
+**Aktuelle reale Runtime bleibt V17.1.2**, allgemeine automatische Feldabnahme am 21.10.2026 `PASS / FULL_READY / READY:FULL_READY`, Backup `RELEASE_BACKUP_EXACT`. Für V17.1.3 wurden bisher **keine** reale Pi-Installation, keine eigene Feldabnahme und kein echter Clean Fresh Install durchgeführt. Diese Unterscheidung hat Vorrang vor älteren historischen Texten.
+
+Die neuere technische V17.1.3-Source erbt den byteidentischen Reglerkern `controller_logic.py` SHA256 `8bf439456e773aa84097e54059b3da1065deac5200d9304c0dc5960a5e24b1d7`. In der Buildumgebung bestanden je 1.254 Tests/1.126 Subtests regulär und unter `ResourceWarning=error`, UML 22/22 Source-/Visualreview samt `DOC_UML_RELEASE_GATE=PASS`, Architektur- und Datenblatt- sowie Browser-/Deployment-Verträge. Technischer Paketfreeze, Fresh-extract und Bibliotheks-Readback sind zusätzliche Releasegates; ein technischer PASS daraus ersetzt niemals reale S3-/FAST-`FULL_IDLE`-/Grid-Stale-/NIGHT-/Clean-Fresh-Evidenz.
+
+
+**Stand:** 21.10.2026 – V17.1.2 real installiert, allgemeine Feldabnahme `PASS / FULL_READY`; separate natürliche Strategie-/Fehler- und Real-Clean-Fresh-Evidenz weiterhin offen  
 **Status:** aktuelle versionsspezifische Autorität für Release- und Feldstatus
 
-## A. Aktueller Stand V17.0.2
+## A-NEU. Aktueller tatsächlicher Produktiv- und Feldstatus – V17.1.2 (21.10.2026)
+
+**Maßgeblicher neuester Stand:** Der Nutzer hat **V17.1.2** auf dem produktiven Raspberry Pi installiert. Der angezeigte Aufruf `python3 tools/v17_field_acceptance.py --expect-primary-profile modbus_template --output /home/pi/Downloads/ZEC_V17_1_2_FIELD_ACCEPTANCE.json` meldete global `PASS`. Diese neue reale Evidenz **überstimmt** die unmittelbar folgenden älteren Textpassagen vom V17.1.1-Stand, die weiterhin historische Provenienz bleiben. Auf dem Pi behaupteter konkreter Installationszeitpunkt/Installerreport-Inhalt wurde nicht vollständig übertragen.
+
+- **Aktuelle Release-/Buildidentität:** `V17.1.2 / 17.1.2 / v17.1.2-20261021`, final veröffentlichtes unverändertes Archiv `zendure_controller_v17_1_2.zip`, SHA256 `d8128796c897ee1fcd610ab530760c492422d4c23d6a73e3a3da5ce3630ab02e`, 14.828.172 Bytes; Manifest/CRC/Bytevergleich/Fresh-extract und Library-Gate beim technischen Release bestanden. `controller_logic.py` SHA256 `8bf439456e773aa84097e54059b3da1065deac5200d9304c0dc5960a5e24b1d7`.
+- **Allgemeines Realfeld-PASS:** `release_identity`, `release_datasheet`, `controller_service`, `health`, `controller_ready: FULL_READY`, `controller_readiness_acceptance: READY:FULL_READY`, `primary_storage_source_expected`, optionale SMA-Entladeboden-Capability, Graph-Runtime/-Workspace/-Page/-Assets/-Inspector/-Control-Intervals/-Overviews/-Comparison, Settings-/Darkmode-/Primärspeicher-Surface, Episode-/Command-Follow, SOC-Day, DB-Integrität, Install-Report, Rollback-Backup-Integrität `RELEASE_BACKUP_EXACT`, Fast-Capture-Settings-/Runtime-/Analyzer-Surfaces und `performance_requests_bounded`: alle in der vollständig geposteten Terminalausgabe genannten Felder `PASS`.
+- **Evidenzgrenze:** Das maschinenlesbare Original `ZEC_V17_1_2_FIELD_ACCEPTANCE.json` liegt nach Nutzerausgabe auf dem Pi unter `/home/pi/Downloads`, ist aber hier nicht im Original zur Prüfung hochgeladen. Kein eigenständiger echter `CLEAN_FRESH_INSTALL`-/Uninstaller-Feldnachweis, kein aus diesem generischen Lauf ableitbarer physischer S3-Naturfall, GRID_STALE-Trigger/Resolve, NIGHT/MIN_SOC-/Export-Naturepisode oder Fast-Capture-Active-`FULL_IDLE`. `ZEC-EV-DEP-001` bleibt separat offen; kein pauschaler projektweiter `PRODUCTIVE_PASS`.
+- **Reale UI-Screenshots vom 21.10.2026:** Netzkarte in den dargestellten 5-/15-/60-Minuten-Ansichten zeigt eine sichtbare Netzquellen-/Frischeinformation ohne frühere Abschneidung. Zugleich demonstriert der Desktop-Screenshot, dass ausführlicher Minigraph-Hilfetext die gemeinsame obere Kartenzeile vergrößern und den SOC-Tagesgraphen nach unten verschieben kann (`ZEC-BL-UI-STATUS-COMPACT-001`, offen). Screenshots sind reale Darstellungsevidenz, **kein vollständiger automatisierter Browser-/Device-Matrix-PASS**.
+- **Settings-UX:** Fast-Capture- und Tagesprofil-Screenshots plus wörtliche Nutzerbefunde dokumentieren weiterhin Entwicklungsjargon, unklare Aus-Optionen/Meta-Hinweise, inkonsistente Bezeichnungen und zu knappe Sektionszusammenhänge trotz technisch bestandener 190/74-Inventarprüfungen; `ZEC-BL-UI-SETTINGS-HELP-001` ist wieder `FIELD_UX_REOPENED`.
+- **Installationshandhabung:** Nutzer verwendet den SHA256-Erwartungswert direkt im Bash-Befehl und muss damit nur das Produkt-ZIP übertragen; die separat veröffentlichte Sidecar-Datei ist nicht notwendig. V17.1.2-Installer-ZIP selbst bleibt unverändert.
+- **V17.1.3-Folgestand:** Ausschließlich als nicht autorisierter, eingefrorener Sourcekandidat CP02 (SHA256 `9a7ff51fe1c237c05555bf17e8ef589646ee8db242add8cbba90bea7ba77695a`) in persönlicher Bibliothek; unabhängig rücklesegeprüft. `NO_SOURCE_AUTHORIZATION / DEVELOPMENT_NOT_INSTALLABLE`; produktiver Pi bleibt V17.1.2, keine noch ausstehende V17.1.3-Freigabe oder Installation. Hilfsskripte und Freeze-Protokoll sind separat gesichert.
+- **Projektquellen:** Der neu erstellte Ersatzsatz `00`–`07` wird erst nach tatsächlichem Austausch und Nachprüfung zur aktuellen Projektquelle. Die persönliche Bibliothek ist unabhängiger externer Sicherungsort, keine automatische Project-Quellenmitgliedschaft.
+
+
+## Aktuelle Freigabe- und Quellidentität, Nachtrag 21.10.2026 – V17.1.2
+
+**Neuester Stand (Vorrang vor älteren Abschnitten darunter):** Auf dem produktiven Raspberry Pi ist weiterhin die **real installierte V17.1.1**, Build `v17.1.1-20261020`, mit allgemeiner V17-Feldabnahme `PASS / FULL_READY` am 21.10.2026 belegt. **V17.1.2 ist ausschließlich technisch gebaut und überprüft, nicht auf dem Pi installiert und nicht feldfreigegeben.** Die nachstehenden V17.1.0-Abschnitte behalten ihre historische Provenienz, sind aber keine aktuelle Runtimeidentität.
+
+- **Exakte aktuelle Entwicklungs-/Release-Source:** `zendure_controller_v17_1_2.zip` aus persönlicher Bibliothek `/ZEC - Zendure Energy Controller/Releases/`, SHA256 `d8128796c897ee1fcd610ab530760c492422d4c23d6a73e3a3da5ce3630ab02e`, **14.828.172 Bytes**, Root `zendure_controller_v17_1_2/`, 987 Archivdateien, 986/986 Manifest, CRC, unabhängiger Bibliotheks-Readback und Fresh-extract **PASS**. Die Entwicklungsbasis war die verifizierte V17.1.1 (`a3a055c4e4ff5b7f140cdb324ecaf00e8ab76048ef7e3cdcf56ca5f81b4db3ef`); das ältere V17.1.0-Archiv ist ausschließlich historische Provenienz.
+- **Letzter extern verifizierter Source-Freeze:** `ZEC_V17_1_2_DEV_CHECKPOINT_10_SOURCE_FREEZE_20261021.zip`, SHA256 `2ec0b7c9a0810e6c1b7120e7d455c2b65ad54fa672476634485a51f537076d45`, persönlicher Bibliothekspfad `/ZEC - Zendure Energy Controller/Checkpoints/`, unabhängiges Rücklesen PASS. Keinerlei Änderungen am eingefrorenen Source-Build nach CP10.
+- **QA:** jeweils 1.249 Tests + 1.095 Subtests in der normalen und ResourceWarning=strict-Suite, 53 Tests + 377 Subtests am Fresh-extract, Deployment-Harness 11/11, Browser-Layout mit Fake-API in 15/15 Ansichten, Datenblatt DOCX/PDF, No-Drop-/History- und Build-/Manifest-Gates PASS. Der Buildhost verwendete ausschließlich im Test einen externen paho-mqtt-Importshim – dies ersetzt keinen echten MQTT-/Pi-Test.
+- **Reglerkern unverändert:** `controller_logic.py` SHA256 `8bf439456e773aa84097e54059b3da1065deac5200d9304c0dc5960a5e24b1d7`. V17.1.2 ist ein UI-/Hilfe-/Installer-Dokumentations-Korrekturrelease ohne Control-/Fast-Capture-/Safety-Neuentwicklung.
+- **Evidenzgrenze:** `TECHNICAL_BUILD_PASS`, aber `PRODUCTIVE_PASS=NOT_EVALUATED`, V17.1.2-Pi-Update und reale UI-/Performancefeldabnahme ausstehend; `ZEC-EV-DEP-001` echter sauberer Fresh-Install-/Uninstaller-Lauf separat weiterhin offen. Destruktiver Pi-Reset wurde ausdrücklich nicht durchgeführt.
+- **Projektquellenübernahme:** Bis zum tatsächlichen Austausch dieser Projektdateien im Projekt ist `PROJECT_SOURCE_ADOPTION=PENDING`; ein Download dieses ZIPs ist keine automatische Quellenaktualisierung.
+
+
+## A0. Aktueller Release- und Realfeldstatus V17.1.0 (20.10.2026)
+
+**Aktuelle Produkt-/Runtimebasis:** `V17.1.0 / 17.1.0 / v17.1.0-20261019`. Der folgende Abschnitt A zu V17.0.2 ist nur noch **historische Vorgänger-Provenienz**.
+
+### Release/Package/QA
+
+- Finales unverändertes ZIP `zendure_controller_v17_1_0.zip`, SHA256 `11dddaaaa7831e2339a19b9b7f46412ee72f35917935b7292a005a47bfe61669`, 14.561.945 Bytes, Root `zendure_controller_v17_1_0/`, 967 ZIP-Dateien, 966/966 Source-Manifest, CRC/Fresh-extract/Byteidentität PASS.
+- Release-ZIP und `ZEC_V17_1_0_DEV_CHECKPOINT_15_20261019.zip` in persönlicher Bibliothek hochgeladen, unabhängig rückmaterialisiert und SHA256-/Byte-/CRC-verifiziert. Sourcecheckpoint-SHA256 `68418e4436efaad7ddeae3b72310211ce78498cd8916c1dd4c6390abf9b281b2`.
+- `TECHNICAL_BUILD_PASS`; 1.220 Tests + 718 Subtests regulär sowie identisch unter `ResourceWarning=error` PASS, 37+9 fokussierte Fresh-extract-Regression PASS; Deployment 11/11, AST 258/258, Bash 13/13, JS 3/3, Datenblatt und As-built-/History-Gate PASS. `controller_logic.py` SHA256 `8bf439456e773aa84097e54059b3da1065deac5200d9304c0dc5960a5e24b1d7`.
+- Produktumfang: S3 Saison-/Tagesprofile mit Opt-in/Legacy-Schutz; 1-Hz-Statusansicht getrennt vom Controller; Grid-/Processing-Stale-Open/Resolve-Diagnostik; beide Pflichtfixes NIGHT/MIN_SOC/GRID und strukturierter SMA-Speedwire-/OBIS-Parser. Technischer PASS ist nicht gleich vollständiger realer physikalischer Nachweis aller neuen Funktionen.
+- Releasebericht `ZEC_V17_1_0_TECHNICAL_RELEASE_REPORT_20261020.md`; der als `PRELIMINARY_REJECTED_README` gekennzeichnete ältere Installerkandidat darf **nicht** eingesetzt werden.
+
+### Reale Pi-Installation und allgemeine Feldabnahme
+
+- Nutzerseitige Installation am **20.10.2026 09:52:25 MESZ** von `V17.0.2` mit `INSTALL_MODE=SUPPORTED_UPDATE`, `PREFLIGHT_RESULT=PASS`, `SAFE_TO_INSTALL=yes`, Dependency/Datasheet/Build-Evidence PASS; Dienst danach `ready=true`, Installation `PASS`. Rollback `zendure-controller-backup-20261020_095225.tar.gz`, SHA256 `08ece9cef9fb11df927f6d3b23ca02aaabe1f98f2d4dd8807ba3dc3bbce088fa`.
+- Allgemeiner `tools/v17_field_acceptance.py --expect-primary-profile modbus_template` **PASS** über alle ausgegebenen Prüfungen, Controller `FULL_READY`, Snapshot/Graph/Settings/Primary/Fast-Capture-Verträge, Rollbackstatus `RELEASE_BACKUP_EXACT`, Performance-/Timeout-Budgets PASS. Persistente Feld-JSОN `ZEC_V17_1_0_FIELD_ACCEPTANCE.json` liegt auf dem Pi unter `/home/pi/Downloads`; Rohdaten wurden nicht in die Projektquellen importiert.
+- `Node.js ist nicht installiert` ist beim erfolgreichen realen Installer lediglich optionaler Prüfausfall mit gültigem Manifestersatz, kein Release-/Installationsfehler.
+
+### Reale Funktionsbeobachtungen, Geltungsgrenzen
+
+1. **HOLD-Livestatus 1-Hz:** 10 erfolgreiche sekündliche `/status-live-data`-GETs. Gridwerte wechselnd (-0,9 bis +20,7 W), SMA-Quelle `sma_energy_meter_udp` / `sma_udp_receiver`, `grid_age~0,3 s`, Primärspeicher `age~0,2 s` und Werte 700→680 W; der Regler-Grid-Snapshot alterte unabhängig 1,3→3,3 s und resetet. Sourcefrische im HOLD real **PASS**. Zendure 0 W, Age 0–3,3 s; schnelle eigene Zendure-Neumessung oder andere Betriebsmodi daraus nicht ableiten.
+2. **S3 read-only:** `season_requested=sma_priority`, effektiv `legacy_parallel`, `day_profile=morning`, `profile_confirm_s=60`, `primary_share=0.6`, `s3_applicability=NOT_APPLICABLE`, Sollwert 0 W im HOLD. Legacy-/Opt-in-Nichtanwendbarkeit für beobachteten Fall **PASS**; realer S3-Harvest-Zielwert-/Hardwareeffekt **NOT_EVALUABLE**.
+3. **Grid-Stale-Events:** 2-Tage-Abfrage mit Limit 1000 lieferte vollständig 155 Ereignisse (`mode=152`, `controller_start=1`, `command_effect=2`), 0 Grid-Stale und 0 open. Gesunder realer Frischepfad belegt, aber ohne Incident **kein** Trigger-/Debounce-/Resolve-Feld-PASS. Kein absichtliches Abschalten eines Sensors.
+4. **Moduswechsel seit Update:** Vor Installation 151, danach exakt 1: `SAFE_STATE → HOLD` am 20.10. um 10:03:22 MESZ. Journal: `systemd Started Zendure Energy Controller` 10:03:12; `[MQTT] Verbunden` 10:03:16; `COMMAND_RESYNC target=0W reason=RESYNC_AFTER_LONG_STALE` 10:03:21. Das ist zeitlich konsistent mit Restart-/Resync-Sequenz und **keine Modeoszillation**; Grund, weshalb der Dienst 10:03 neu startete, aus diesen drei Zeilen noch nicht geklärt. Safety-Vertrag wird nicht als pauschal healthy erklärt.
+5. **UI-Finding 20.10.:** Screenshot realer Statuskarte: große Netzleistung `+8 W`, Mini-Verlauf `neuester: -3 W`; Source zeigt UI-Livewert Poll **1 s** vs. Minigraph Poll **10 s**, letzte 48 Punkte aus Controller-`graph_history` (typisch 3-s-Zyklus), ohne direkten Refreshhinweis. UI-Semantik/Transparenz als nichtblockierendes Follow-up `ZEC-BL-UI-GRID-MINICHART-001` im Master-Ledger `05` aufgenommen. Kein Beleg eines 1-Hz-Netz-Quellenproblems. V17.1.0-Paket bleibt unverändert.
+
+**Feld-/Release-Grenze:** `INSTALLATION_PASS`, `GENERAL_FIELD_PASS_FULL_READY`, `LIVE_GRID_PRIMARY_HOLD_PASS`, `S3_HOLD_APPLICABILITY_PASS`, `GRID_INCIDENT_REAL_NOT_EVALUABLE`, `S3_HARVEST_REAL_NOT_EVALUABLE`, `NIGHT_MIN_SOC_EXPORT_NATURAL_FIELD_PENDING`, `FAST_CAPTURE_FULL_IDLE_EVIDENCE_PENDING`, `ZEC-EV-DEP-001` noch deferred. Daher kein pauschaler projektweiter `PRODUCTIVE_PASS`.
+
+### Evidenz- und Kontextbelege
+
+- `ZEC_V17_1_0_TECHNICAL_RELEASE_REPORT_20261020.md`
+- `ZEC_V17_1_0_LIVE_STATUS_HOLD_FIELD_EVIDENCE_20261020.md`
+- `ZEC_V17_1_0_S3_GRID_READONLY_FIELD_EVIDENCE_20261020.md`
+- `ZEC_V17_1_0_EVENT_INVENTORY_2D_20261020.md`
+- `ZEC_V17_1_0_MODE_TRANSITIONS_FIELD_EVIDENCE_20261020.md`
+- Nutzerevidenz: Installations-Terminalprotokoll, allgemeine Feldabnahme, Livewerte und Journal-Read-only-Abfragen dieses Chats. Weitere reale Runtimebelege sind nicht aus der Software-Source zu erfinden.
+
+## A. Historischer Stand V17.0.2 (vor Update V17.1.0)
 
 - **Reale Runtimebasis:** `V17.0.2 / 17.0.2 / v17.0.2-20260923`. Reales Update V17.0.1 -> V17.0.2 am 23.09.2026 erfolgreich; Installer-Preflight/Backup/Copy/Postchecks PASS; Controller anschließend vollständig `ready=true`.
 - **Allgemeine Feldabnahme:** `tools/v17_field_acceptance.py` real PASS / FULL_READY. Persistente Feldartefakte liegen auf dem Pi vor. Dies ist von der funktionsspezifischen Fast-Capture-Abnahme zu trennen.

@@ -1,0 +1,28 @@
+digraph G {
+graph [bgcolor="white", pad=0.28, nodesep=0.42, ranksep=0.52, labelloc=t, fontsize=20, fontname="DejaVu Sans"];
+node [shape=box, style="rounded,filled", fillcolor="white", fontname="DejaVu Sans", fontsize=10.2, margin="0.14,0.08"];
+edge [fontname="DejaVu Sans", fontsize=8.5, color="#444444"];
+graph [rankdir=TB, label="17 — Ein Regelzyklus unter dem Mikroskop (didaktisches NEAR_LIMIT-Beispiel)"];
+inputs [label="BEISPIELWERTE — bewusst didaktisch, keine Softwaredefaults\nGrid = -500 W (500 W Export)\nPrimary lädt Pp=2900 W; Pmax=3000 W\nZendure physisch lädt Pz=600 W (valide unabhängige Referenz)\nvorherige langsame Baseline Bprev=600 W\nZendure-Limit=2400 W; f=0.25; MAX_STEP=150 W\nFast: previous O=0, dt=1.0 s"];
+classh [label="Harvest: SMA_NEAR_LIMIT\nBeispiel: Near-Limit-Schwelle ≤ 2900 W und Export ≥ Min-Export"];
+raw [label="Absolute Harvest-Rechnung\nraw B = Pz + E = 600 + 500 = 1100 W"];
+clamp [label="Clamp: 1100 W (unter Beispiel-Limit 2400 W)"];
+smooth [label="Smoothing\nB_smooth = int(600×0.75 + 1100×0.25) = 725 W"];
+ramp [label="Ramp\nΔ=+125 W ≤ 150 W → B=725 W"];
+fastclass [label="Fast NEAR_LIMIT ebenfalls erfüllt\nPp ≥ Pmax-150 = 2850 W"];
+reserve [label="Primary reserve R = 3000-2900 = 100 W\ndesired O = Export - R = 500-100 = 400 W"];
+attack [label="A400 bei dt=1 s, previous O=0\nmax Attack +400 W → O=400 W\nHeadroom 2400-725=1675 W reicht"];
+shadow [label="SHADOW (diagnostische Konfigurationswahl):\nDiagnose B=725, O=400, combined=1125\nphysischer Sollwert bleibt 725 W"];
+active [label="ACTIVE (implementiert; natürliche FULL_IDLE-Feldevidenz noch offen):\ncombined = B+O = 1125 W"];
+cc [label="Cross-Charge-Prüfung\nPrimary lädt (+), Zendure-Ziel lädt (+) → kein Gegenflusskonflikt\nTarget unverändert"];
+final [label="Ergebnis dieses Beispiels\nshadow → +725 W Command\nactive → +1125 W Command\nReadback/physische Wirkung danach separat beurteilen"];
+
+inputs->classh->raw->clamp->smooth->ramp->fastclass->reserve->attack;
+attack->shadow[label="mode=shadow"]; attack->active[label="mode=active"];
+shadow->cc; active->cc; cc->final;
+
+n1 [shape=note,fillcolor="#eef7ff",label="Warum das Beispiel nützlich ist:\nDie absolute Harvest-Rechnung möchte 1100 W, aber B reagiert absichtlich langsam (725 W).\nFast O ist eine getrennte Kurzzeitkorrektur und darf niemals in B zurückgefüttert werden."];
+ramp->n1[style=dashed,arrowhead=none];
+n2 [shape=note,fillcolor="#fff7df",label="Active ist hier nur zur Erklärung der implementierten Mathematik dargestellt.\nFeldstatus: Active NEAR_LIMIT im Vorgänger beobachtet; belastbare FULL_IDLE-Episode weiterhin offen."];
+active->n2[style=dashed,arrowhead=none];
+}

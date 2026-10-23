@@ -1,0 +1,54 @@
+@startuml
+hide empty description
+state "PASSIVE CONFIG / STARTUP\n(no device commands)" as PASSIVE
+state "Cycle dispatch" as DISPATCH <<choice>>
+state SAFE_STATE
+state STOP_HOLD
+state MANUAL_FIXED_CHARGE
+state MANUAL_FIXED_DISCHARGE
+state NIGHT_DISCHARGE
+state HOLD
+state CHARGE
+state CHARGE_RAMP_DOWN
+state DISCHARGE
+state DISCHARGE_RAMP_DOWN
+
+[*] --> PASSIVE
+PASSIVE --> DISPATCH : control_allowed
+DISPATCH --> PASSIVE : !control_allowed
+DISPATCH --> SAFE_STATE : required data/command/runtime safety fault
+DISPATCH --> STOP_HOLD : manual STOP
+DISPATCH --> MANUAL_FIXED_CHARGE : manual fixed charge + allowed by SOC
+DISPATCH --> MANUAL_FIXED_DISCHARGE : manual fixed discharge + allowed by SOC
+DISPATCH --> NIGHT_DISCHARGE : night window + SOC above effective stop
+DISPATCH --> HOLD : MIN/MAX_SOC or deadband/hold condition
+DISPATCH --> CHARGE : AUTO export / Harvest-driven charge
+DISPATCH --> DISCHARGE : AUTO import
+
+CHARGE --> CHARGE_RAMP_DOWN : target must move toward 0 before stop/reversal
+CHARGE_RAMP_DOWN --> HOLD : reaches 0
+DISCHARGE --> DISCHARGE_RAMP_DOWN : target must move toward 0 before reversal
+DISCHARGE_RAMP_DOWN --> HOLD : reaches 0
+
+SAFE_STATE --> DISPATCH : next cycle; re-evaluate from fresh state
+STOP_HOLD --> DISPATCH : next cycle
+MANUAL_FIXED_CHARGE --> DISPATCH : next cycle / target-SOC completion
+MANUAL_FIXED_DISCHARGE --> DISPATCH : next cycle / target-SOC completion
+NIGHT_DISCHARGE --> DISPATCH : next cycle; reserve/window exit actively neutralizes as needed
+HOLD --> DISPATCH : next cycle
+CHARGE --> DISPATCH : next cycle
+DISCHARGE --> DISPATCH : next cycle
+
+note right of DISPATCH
+Priority within run_once():
+control gate -> MQTT safety -> Manual -> Night ->
+AUTO SOC/Grid -> Harvest update -> Cross-Charge existing target ->
+Fast reversal guard -> Deadband / Import / Export.
+end note
+note bottom of CHARGE
+Orthogonal layers, not current_mode states:
+Harvest selects/modifies charge baseline.
+Fast Capture overlays O on baseline B.
+Cross-Charge can reduce the signed target toward 0.
+end note
+@enduml

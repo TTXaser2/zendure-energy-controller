@@ -1,0 +1,27 @@
+@startuml
+skinparam shadowing false
+start
+partition "Harvest: SMA_FULL_OR_IDLE" {
+  :Primary SOC >= konfigurierbarer Full-SOC\n(Default config.example 98%);\nExport >= High-SOC-Min-Export;
+  :Entry-Confirm über distinct/fresh Beobachtungen;
+  :reason = SMA_FULL_OR_IDLE;
+  if (independent Zendure AC reference valid?) then (ja)
+    :raw B = actual Zendure charge + Grid export;\nABSOLUTE_EXPORT_CAPTURE;
+  else (nein)
+    :raw B = last_input + effective_export * gain;\nINCREMENTAL_FALLBACK;
+  endif
+  :Clamp -> Smoothing -> Ramp -> Baseline B;
+}
+partition "Fast: FULL_IDLE" {
+  :eigene Kriterien: Primary SOC >=99%,\n|Primary power|<=100W, Export>=100W;
+  :15s distinct/fresh confirmation;\n>10s gap breaks continuity;
+  :desired O = export;\nA400/R100 + Headroom;
+  if (Fast mode active?) then (ja)
+    :physical command = B + O;
+  else (shadow)
+    :physical command = B; O diagnostic only;
+  endif
+}
+:Cross-Charge outranks Fast;
+stop
+@enduml

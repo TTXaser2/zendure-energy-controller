@@ -1,0 +1,34 @@
+digraph CrossCharge {
+  graph [rankdir=TB, bgcolor="white", pad=0.25, nodesep=0.42, ranksep=0.48, labelloc=t,
+         label="06 — Symmetrischer Cross-Charge-Schutz", fontsize=20, fontname="DejaVu Sans"];
+  node [shape=box, style="rounded,filled", fillcolor="white", fontname="DejaVu Sans", fontsize=11, margin="0.14,0.08"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#444444"];
+
+  s [shape=circle, width=.18, label="", fillcolor="#222222", style=filled];
+  in [label="Signed Target T\n+ = Zendure laden\n− = Zendure entladen"];
+  pp [label="Primärspeicher-Leistung Pp\n+ = Primärspeicher lädt\n− = Primärspeicher entlädt"];
+  prereq [shape=diamond, label="enabled + T≠0 +\nPrimärdaten fresh/valid?"];
+  opposite [shape=diamond, label="T und Pp\nin Gegenrichtung?"];
+  unchanged [label="Target unverändert\nLatch ggf. gemäß Release-Hysterese lösen"];
+  latch [label="Engage-/Release-Hysterese\nLatch nur bei belastbarem Gegenfluss"];
+  calc [label="Korrektur\nT' = T + round(Pp)"];
+  clamp [label="Richtungsinvariante\nKorrektur darf nur Richtung 0 gehen\nniemals in Gegenrichtung überschwingen"];
+  fast [shape=diamond, label="Cross-Charge aktiv\nnach B+O?"];
+  drop [label="Fast Capture O := 0\nCross-Charge erneut nur gegen Baseline B"];
+  pub [label="Korrigiertes signed Target\nin Command Lifecycle"];
+  end [shape=doublecircle, width=.2, label=""];
+  note [shape=note, fillcolor="#f7f7f7", label="Symmetrisch:\nZendure-Laden vs. Primär-Entladen\nund Zendure-Entladen vs. Primär-Laden.\nSollwert-Gegenfluss und physisch beobachteter\nGegenfluss bleiben getrennte Sachverhalte."];
+
+  s -> in -> pp -> prereq;
+  prereq -> unchanged [label="nein"];
+  prereq -> opposite [label="ja"];
+  opposite -> unchanged [label="nein"];
+  opposite -> latch [label="ja"];
+  latch -> calc -> clamp -> fast;
+  fast -> drop [label="ja"];
+  fast -> pub [label="nein"];
+  drop -> pub;
+  unchanged -> end;
+  pub -> end;
+  clamp -> note [style=dashed, arrowhead=none];
+}

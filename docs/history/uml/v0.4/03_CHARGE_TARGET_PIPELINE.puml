@@ -1,0 +1,63 @@
+@startuml
+title ZEC V17.0.2 — AUTO Charge Target Pipeline
+start
+:Grid export / Harvest-deadband calls handle_charge();
+if (SOC >= MAX_SOC?) then (yes)
+  :Fast O := 0;\nactive neutralization;\nHOLD with MAX_SOC limiter;
+  stop
+endif
+if (discharge target still active?) then (yes)
+  :Fast O := 0;\nramp down discharge first;
+  stop
+endif
+:Determine isolated slow baseline history B_prev;\n(active Fast never feeds B+O back into B);
+if (low effective surplus\nand Fast cannot matter?) then (yes)
+  :legacy baseline ramp-down;\nshadow may calculate diagnostics only;
+  stop
+endif
+if (Harvest active?) then (yes)
+  :Build Harvest candidate;
+  if (independent physical Zendure AC reference valid?) then (yes)
+    if (HIGH_SMA_SOC branch?) then (yes)
+      :Select current Harvest time profile;\nshare = profile Primary-target share;
+      :T = primary_charge + zendure_charge + export;\nprimary_share = clamp(max(floor, share*T));\nzendure_share = T-primary_share;\nexport_capture = zendure_charge + export;
+      :raw B = max(zendure_share, export_capture);\nABSOLUTE_SHARE_OR_EXPORT_CAPTURE;
+      :harvest_target_selected_by =\nSTRATEGIC_SHARE | EXPORT_CAPTURE | BOTH_EQUAL;
+    else (NEAR_LIMIT / FULL_IDLE / EXPORT_HOLD)
+      :raw B = zendure_charge + export;\nABSOLUTE_EXPORT_CAPTURE;
+    endif
+  else (no)
+    :raw B = B_prev + effective_export * CONTROL_GAIN;\nINCREMENTAL_FALLBACK;
+  endif
+else (no)
+  :raw B = B_prev + effective_export * CONTROL_GAIN;\nAUTO_GRID_EXPORT incremental control;
+endif
+:Clamp B to configured MAX_CHARGE_POWER;
+:Smoothing;
+:MAX_POWER_STEP / ramp limit;
+:baseline B = max(0, target_ramped);
+:Fast Capture computes desired overlay O;
+if (Fast mode?) then (off)
+  :O = 0; combined = B;
+elseif (shadow)
+  :classify FULL_IDLE/NEAR_LIMIT/RESERVE_UNKNOWN;\ncalculate A400/R100 O for diagnostics;\ncombined command = B;
+else (active)
+  :guards: fresh Grid/SOC/Primary/Zendure power,\ncommand path ready, no import abort, headroom known;
+  if (FULL_IDLE confirmed?) then (yes)
+    :desired O = export;
+  elseif (NEAR_LIMIT?) then (yes)
+    :primary reserve = primary_max - primary_power;\ndesired O = max(0, export - reserve);
+  else (RESERVE_UNKNOWN)
+    :O := 0 immediately;
+  endif
+  :Apply attack 400 W/s / release 100 W/s;\ncombined = min(Zendure limit, B + O);
+endif
+:Apply symmetric Cross-Charge to combined;
+if (Cross-Charge active?) then (yes)
+  :Force O := 0;\nre-evaluate Cross-Charge against B only;
+endif
+:Signed final target;
+:Command lifecycle\nSmartMode + AC mode + input/output limits;
+:Readback + effect monitor + possible Resync\n(separate from target calculation);
+stop
+@enduml

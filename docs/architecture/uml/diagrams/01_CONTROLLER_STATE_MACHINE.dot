@@ -1,0 +1,63 @@
+digraph G {
+  graph [rankdir=LR, labelloc=t, label="01 — ZEC V17.1.3: Controller current_mode State Machine", compound=true, fontsize=20, fontname="DejaVu Sans", pad=0.3, nodesep=0.45, ranksep=0.75];
+  node [shape=box, style="rounded,filled", fillcolor="white", fontsize=10.5, fontname="DejaVu Sans", margin="0.13,0.07"];
+  edge [fontsize=8.7, fontname="DejaVu Sans", color="#444444"];
+
+  start [shape=circle, width=.18, label="", fillcolor="#222222", style=filled];
+  passive [label="PASSIVE CONFIG / STARTUP\ncontrol_allowed=false\nkeine Gerätekommandos"];
+  dispatch [shape=diamond, label="CYCLE DISPATCH\nPrioritäten pro run_once()"];
+  safe [label="SAFE_STATE\naktive 0-W-Neutralisierung\nbei echten Daten/Command/Runtime-Fehlern", shape=doubleoctagon];
+
+  subgraph cluster_manual {
+    label="Manual current_mode family"; fontname="DejaVu Sans"; color="#aaaaaa";
+    stoph [label="STOP_HOLD"];
+    mch [label="MANUAL_FIXED_CHARGE"];
+    mdis [label="MANUAL_FIXED_DISCHARGE"];
+  }
+  subgraph cluster_night {
+    label="Night path"; fontname="DejaVu Sans"; color="#aaaaaa";
+    night [label="NIGHT_DISCHARGE\nfixed configured discharge"];
+    nnote [shape=note, fillcolor="#f7f7f7", label="Reserve-SOC erreicht:\nfixed Night-Entladung aktiv auf 0 W neutralisieren;\nAUTO darf im selben Nachtfenster weiterlaufen.\nGlobal MIN_SOC bleibt harte HOLD-Grenze."];
+  }
+  subgraph cluster_auto {
+    label="AUTO current_mode family"; fontname="DejaVu Sans"; color="#aaaaaa";
+    hold [label="HOLD"];
+    ch [label="CHARGE"];
+    chrd [label="CHARGE_RAMP_DOWN"];
+    dis [label="DISCHARGE"];
+    disrd [label="DISCHARGE_RAMP_DOWN"];
+    ch -> chrd [label="vor Stop/Gegenrichtung\nRampenabbau"];
+    chrd -> hold [label="0 erreicht"];
+    dis -> disrd [label="vor Gegenrichtung\nRampenabbau"];
+    disrd -> hold [label="0 erreicht"];
+  }
+
+  start -> passive;
+  passive -> dispatch [label="control_allowed=true"];
+  dispatch -> passive [label="control_allowed=false"];
+  dispatch -> safe [label="Safety-Fault / stale required data"];
+  dispatch -> stoph [label="Manual STOP"];
+  dispatch -> mch [label="FIXED_CHARGE + SOC erlaubt"];
+  dispatch -> mdis [label="FIXED_DISCHARGE + SOC erlaubt"];
+  dispatch -> night [label="Night active + SOC > effective stop"];
+  dispatch -> hold [label="MIN/MAX_SOC, Deadband/Hold\noder Night global MIN_SOC"];
+  dispatch -> ch [label="AUTO: Export / Harvest charge"];
+  dispatch -> dis [label="AUTO: Import"];
+
+  safe -> dispatch [label="nächster Zyklus: frisch neu bewerten"];
+  stoph -> dispatch [label="nächster Zyklus"];
+  mch -> dispatch [label="nächster Zyklus / Target-SOC Exit"];
+  mdis -> dispatch [label="nächster Zyklus / Target-SOC Exit"];
+  night -> dispatch [label="nächster Zyklus / Reserve- oder Fenster-Exit"];
+  hold -> dispatch [label="nächster Zyklus"];
+  ch -> dispatch [label="nächster Zyklus"];
+  dis -> dispatch [label="nächster Zyklus"];
+
+  priority [shape=note, fillcolor="#f7f7f7", label="run_once()-Priorität\n1 control_allowed\n2 MQTT Safety\n3 Telemetrie / Night-Exit-Neutralisierung\n4 Manual\n5 Night fixed discharge\n6 AUTO SOC/Grid\n7 Harvest state update\n8 bestehendes Target gegen Cross-Charge\n9 Fast reversal/release guard\n10 Deadband / Import / Export"];
+  layer [shape=note, fillcolor="#f7f7f7", label="NICHT current_mode:\n• Harvest = Baseline-Branch/State im Ladepfad\n• Fast Capture = Overlay O auf Baseline B\n• Cross-Charge = höherrangige signed-target-Korrektur\nDiese Ebenen laufen orthogonal zum Betriebsmodus."];
+  dispatch -> priority [style=dashed, arrowhead=none];
+  ch -> layer [style=dashed, arrowhead=none];
+  night -> nnote [style=dashed, arrowhead=none];
+
+  uml_update_note [shape=note, style="filled", fillcolor="#eef5ff", fontcolor="#162e4d", fontsize=9, label="S3-Saisonpolicy und GRID_STALE sind keine neuen current_mode-Werte.\nSourceabgleich: V17.1.3; keine Feldwirkungsbehauptung"];
+}

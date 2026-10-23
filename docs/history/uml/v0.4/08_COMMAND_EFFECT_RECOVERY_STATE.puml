@@ -1,0 +1,49 @@
+@startuml
+hide empty description
+[*] --> COMMAND_IDLE
+COMMAND_IDLE --> COMMAND_BELOW_DIAGNOSTIC_THRESHOLD : active intent, |target| < min diagnostic target
+COMMAND_IDLE --> COMMAND_TELEMETRY_UNCERTAIN : command-state / power evidence not trustworthy
+COMMAND_IDLE --> COMMAND_PENDING : new evaluable CHARGE/DISCHARGE intent
+COMMAND_BELOW_DIAGNOSTIC_THRESHOLD --> COMMAND_PENDING : target becomes evaluable
+COMMAND_TELEMETRY_UNCERTAIN --> COMMAND_PENDING : fresh command-state + independent power telemetry
+COMMAND_PENDING --> COMMAND_TARGET_TRACKING_EFFECTIVE : direction matches AND tracking within tolerance
+COMMAND_PENDING --> COMMAND_PARTIALLY_EFFECTIVE : direction matches, tracking outside tolerance
+COMMAND_PARTIALLY_EFFECTIVE --> COMMAND_TARGET_TRACKING_EFFECTIVE : tracking recovers
+COMMAND_PENDING --> COMMAND_MISMATCH_CONFIRMED : no direction response until timeout
+COMMAND_PARTIALLY_EFFECTIVE --> COMMAND_MISMATCH_CONFIRMED : tracking mismatch persists until timeout
+COMMAND_MISMATCH_CONFIRMED --> RESYNC : resend threshold/cooldown + guards permit
+RESYNC --> COMMAND_RECOVERY_VERIFYING : full-state resend issued
+COMMAND_RECOVERY_VERIFYING --> COMMAND_TARGET_TRACKING_EFFECTIVE : independent physical recovery
+COMMAND_TARGET_TRACKING_EFFECTIVE --> RECOVERED : prior mismatch was active
+COMMAND_PENDING --> COMMAND_CHARGE_ACCEPTANCE_LIMITED : independently confirmed high-SOC/BMS acceptance limitation
+COMMAND_PARTIALLY_EFFECTIVE --> COMMAND_CHARGE_ACCEPTANCE_LIMITED : high-SOC limitation reclassified
+
+state COMMAND_IDLE
+state COMMAND_BELOW_DIAGNOSTIC_THRESHOLD
+state COMMAND_TELEMETRY_UNCERTAIN
+state COMMAND_PENDING
+state COMMAND_PARTIALLY_EFFECTIVE
+state COMMAND_TARGET_TRACKING_EFFECTIVE
+state COMMAND_CHARGE_ACCEPTANCE_LIMITED
+state COMMAND_MISMATCH_CONFIRMED
+state RESYNC
+state COMMAND_RECOVERY_VERIFYING
+state RECOVERED
+
+note bottom of COMMAND_PENDING
+The watch is intent-based: changing +1200 -> +1350 -> +1290 W
+within CHARGE does not hide persistent non-effect by resetting the episode.
+end note
+note right of COMMAND_BELOW_DIAGNOSTIC_THRESHOLD
+Below COMMAND_EFFECT_MIN_TARGET_W is explicitly not evaluable,
+not automatically effective.
+end note
+note right of COMMAND_MISMATCH_CONFIRMED
+A full-state resync sends SmartMode, AC mode and both limits.
+Late-effect guards may require proven neutrality before an opposite direction.
+end note
+note bottom of COMMAND_IDLE
+NEUTRALIZE has a separate active 0-W watch:
+PENDING -> CONFIRMED or NEUTRALIZATION_MISMATCH -> resync.
+end note
+@enduml

@@ -1,0 +1,40 @@
+digraph G {
+graph [bgcolor="white", pad=0.28, nodesep=0.42, ranksep=0.52, labelloc=t, fontsize=20, fontname="DejaVu Sans"];
+node [shape=box, style="rounded,filled", fillcolor="white", fontname="DejaVu Sans", fontsize=10.2, margin="0.14,0.08"];
+edge [fontname="DejaVu Sans", fontsize=8.5, color="#444444"];
+graph [rankdir=TB, label="15 — Prioritäten & Overrides: Wer darf wen begrenzen?"];
+legend [shape=note, fillcolor="#f7f7f7", label="Pfeil A → B bedeutet: A wird vor B geprüft oder kann B begrenzen/unterdrücken.\nDies ist bewusst KEINE einzige lineare Prioritätsliste: einige Regeln wirken nur lokal in einem Pfad."];
+config [label="CONFIG / STARTUP GATE\ncontrol_allowed=false → nur passive Recovery-Evidenz\nkeine Gerätekommandos"];
+mqtt [label="Harte Runtime-/Safety-Gates\nz.B. MQTT_DISCONNECTED_SAFE_STATE, erforderliche Daten stale/invalid\n→ SAFE_STATE / Neutralisierung"];
+manual [label="Explizite Betriebswahl\nMANUAL_MODE ≠ AUTO → Manual-Pfad\nsonst Night-Prüfung → sonst AUTO"];
+night [label="NIGHT\nfixe Entladung hat Vorrang vor AUTO\nReserve-SOC pausiert nur die fixe Basis; AUTO darf danach weiterlaufen"];
+soc [label="Harte SOC-Grenzen im jeweiligen Pfad\nMAX_SOC blockiert Laden; MIN_SOC blockiert Entladen\n→ aktive 0-W-Neutralisierung/HOLD"];
+transition [label="Richtungs-/Transitionsschutz\nkeine direkte Charge↔Discharge-Umkehr\naktive Gegenrichtung zuerst Richtung 0 rampen\nFast-Overlay vor Discharge entfernen"];
+existingcc [label="Cross-Charge gegen bereits laufendes Target\nwird vor neuer Grid-Richtungsentscheidung geprüft"];
+auto [label="AUTO Grid-Entscheidung\nDeadband / Import / Export"];
+baseline [label="Baseline-Ziel B\nAUTO inkrementell oder Harvest absolut/fallback"];
+capture [label="Harvest-Strategie (HIGH_SMA_SOC-Zweige)\naktuelles Zeitprofil bestimmt Primary-Share\nraw B=max(ZendureShare, ExportCapture)\n→ harvest_target_selected_by = STRATEGIC_SHARE / EXPORT_CAPTURE / BOTH_EQUAL\nphysikalisch nötige Capture-Untergrenze kann strategische Rückhaltung überstimmen"];
+fast [label="Fast Overlay O\nnur nach B und nur bei eigenen Guards\nShadow: Diagnose; Active: B+O"];
+cc [label="Cross-Charge NACH B+O\nexplizit höher als Fast: bei Konflikt O=0, Schutz gegen B neu bewerten\nTarget nur Richtung 0, nie durch Guard umkehren"];
+cmd [label="Command-State-/Recovery-Safety\nSmartMode + AC mode + beide Limits + Late-Effect-Guard\nkann gewünschtes Target blockieren/neutralisieren/resyncen"];
+effect [label="Physische Wirkung\nPublish ≠ Effect\nDirection → Tracking → Systemziel; bei Mismatch Recovery/Resync"];
+
+legend->config[style=invis];
+config->mqtt->manual;
+manual->night[label="AUTO + Night window"];
+manual->soc[label="Manual local limits",style=dashed];
+night->soc[label="Night/AUTO limits"];
+soc->transition->existingcc->auto->baseline;
+baseline->capture[label="wenn Harvest/High-SOC",style=dashed];
+capture->fast; baseline->fast[label="sonst",style=dashed];
+fast->cc->cmd->effect;
+
+x1 [shape=note,fillcolor="#fff7df",label="Explizite Source-Regel: Cross-Charge outranks Fast."];
+cc->x1[style=dashed,arrowhead=none];
+x2 [shape=note,fillcolor="#eef7ff",label="Normative Regel: aktuell vermeidbare Einspeisung hat Vorrang vor strategischer Ladeverteilung."];
+capture->x2[style=dashed,arrowhead=none];
+x3 [shape=note,fillcolor="#f7f7f7",label="SAFE_STATE ist Fehlerpfad. MIN/MAX_SOC bei gesunden Daten sind normale limitierende Zustände."];
+soc->x3[style=dashed,arrowhead=none];
+
+  uml_update_note [shape=note, style="filled", fillcolor="#eef5ff", fontcolor="#162e4d", fontsize=9, label="S3 darf nur die strategische Verteilung beeinflussen; Safety, SOC, Cross-Charge bleiben vorrangig.\nSourceabgleich: V17.1.3; keine Feldwirkungsbehauptung"];
+}

@@ -83,8 +83,8 @@ def test_settings_surface_contract_rejects_missing_required_or_target_only_leak(
 
 
 def test_report_discovery_prefers_latest_persistent_then_compatibility(tmp_path):
-    old = tmp_path / "zec_v17_1_2_install_report_20260921_100000.json"
-    new = tmp_path / "zec_v17_1_2_install_report_20260921_110000.json"
+    old = tmp_path / "zec_v17_1_3_install_report_20260921_100000.json"
+    new = tmp_path / "zec_v17_1_3_install_report_20260921_110000.json"
     old.write_text("{}\n", encoding="utf-8")
     new.write_text("{}\n", encoding="utf-8")
     now = time.time_ns()
@@ -104,7 +104,7 @@ def test_report_discovery_prefers_latest_persistent_then_compatibility(tmp_path)
 
 
 def test_report_discovery_never_overrides_explicit_path(tmp_path):
-    persistent = tmp_path / "zec_v17_1_2_install_report_20260921_120000.json"
+    persistent = tmp_path / "zec_v17_1_3_install_report_20260921_120000.json"
     persistent.write_text("{}\n", encoding="utf-8")
     explicit = tmp_path / "chosen.json"
     selected, mode = _resolve_install_report(str(explicit), persistent_dir=tmp_path)

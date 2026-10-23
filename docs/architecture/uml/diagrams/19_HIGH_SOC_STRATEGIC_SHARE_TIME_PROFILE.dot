@@ -1,0 +1,53 @@
+digraph G {
+graph [rankdir=TB, bgcolor="white", pad=0.28, nodesep=0.38, ranksep=0.48, labelloc=t, fontsize=20, fontname="DejaVu Sans", label="19 — HIGH_SMA_SOC Strategic Share & Time Profile"];
+node [shape=box, style="rounded,filled", fillcolor="white", fontname="DejaVu Sans", fontsize=10.1, margin="0.14,0.08"];
+edge [fontname="DejaVu Sans", fontsize=8.4, color="#444444"];
+s [shape=circle,width=.18,label="",fillcolor="#222222",style=filled];
+branch [shape=diamond,label="Harvest reason = HIGH_SMA_SOC\nor HIGH_SMA_SOC_SMA_NEAR_LIMIT?"];
+notshare [label="Nein: keine Strategic-Share-Rechnung\nSMA_NEAR_LIMIT / SMA_FULL_OR_IDLE / EXPORT_HOLD\nverwenden bei valider Referenz ABSOLUTE_EXPORT_CAPTURE"];
+profileon [shape=diamond,label="HARVEST_HIGH_SMA_SOC_TIME_PROFILE_ENABLED?"];
+clock [shape=diamond,label="Lokale Uhrzeit"];
+morning [label="Profilstart ≤ t < Mittagbeginn\nprofile=morning\nPrimary share = HARVEST_PRIMARY_CHARGE_TARGET_SHARE_MORNING\nKonfigurationsbeispiel 0,60\nEntry confirm: konfigurierbar (Standard 60 s)"];
+midday [label="Mittagbeginn ≤ t < Nachmittagbeginn\nprofile=midday\nPrimary share = ..._MIDDAY\nKonfigurationsbeispiel 0,50\nEntry confirm: konfigurierbar (Standard 30 s)"];
+afternoon [label="Nachmittagbeginn ≤ t < Profilende\nprofile=afternoon\nPrimary share = ..._AFTERNOON\nKonfigurationsbeispiel 0,35\nEntry confirm: konfigurierbar (Standard 15 s)"];
+defaultp [label="sonst / Zeitprofil deaktiviert\nprofile=default\nPrimary share = ..._MIDDAY (Konfigurationsbeispiel 0,50)\nEntry confirm = HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_SECONDS"];
+ref [shape=diamond,label="Unabhängige physische Zendure-Ladereferenz valide?"];
+fallback [label="Nein → INCREMENTAL_FALLBACK\nraw B = last_input + effective_export × CONTROL_GAIN\nharvest_target_selected_by = INCREMENTAL_FALLBACK"];
+math [label="Ja → absolute High-SOC-Rechnung\nPp=max(0, Primary charge), Pz=Zendure actual charge, E=Grid export\nT = Pp + Pz + E\nPrimaryShare = min(Pmax, max(Floor, share × T))\nZendureShare = max(0, T - PrimaryShare)\nExportCapture = Pz + E"];
+compare [shape=diamond,label="Vergleich ZendureShare vs. ExportCapture"];
+strategic [label="ZendureShare > ExportCapture\nraw B = ZendureShare\nharvest_target_selected_by = STRATEGIC_SHARE"];
+capture [label="ExportCapture > ZendureShare\nraw B = ExportCapture\nharvest_target_selected_by = EXPORT_CAPTURE"];
+equal [label="|ZendureShare-ExportCapture| < 0,5 W\nraw B ≈ beide\nharvest_target_selected_by = BOTH_EQUAL"];
+pipeline [label="Danach normale langsame Ladepipeline\nClamp → Smoothing → Ramp → Baseline B\nanschließend ggf. Fast Overlay O → Cross-Charge → Command"];
+e [shape=doublecircle,width=.2,label=""];
+
+s->branch;
+branch->notshare[label="nein"];
+notshare->e;
+branch->profileon[label="ja"];
+profileon->clock[label="ja"];
+profileon->defaultp[label="nein"];
+clock->morning[label="Morgenfenster"];
+clock->midday[label="Mittagsfenster"];
+clock->afternoon[label="Nachmittagsfenster"];
+clock->defaultp[label="außerhalb"];
+morning->ref; midday->ref; afternoon->ref; defaultp->ref;
+ref->fallback[label="nein"];
+fallback->pipeline;
+ref->math[label="ja"];
+math->compare;
+compare->strategic[label="Share größer"];
+compare->capture[label="Capture größer"];
+compare->equal[label="praktisch gleich"];
+strategic->pipeline; capture->pipeline; equal->pipeline;
+pipeline->e;
+
+meaning [shape=note,fillcolor="#eef7ff",label="Begriffsebenen sauber trennen:\nHIGH_SMA_SOC = Harvest-Branch/Reason\nmorning|midday|afternoon|default = Zeitprofil\nSTRATEGIC_SHARE|EXPORT_CAPTURE|BOTH_EQUAL = Auswahlprovenienz\nCHARGE/HOLD/... = current_mode\n→ STRATEGIC_SHARE ist kein Betriebsmodus."];
+math->meaning[style=dashed,arrowhead=none];
+future [shape=note,fillcolor="#fff7df",label="Aktueller V17.1.3-Runtimevertrag:\nVier freigegebene HARVEST_HIGH_SMA_SOC_PROFILE_*-TIME-Settings\nsteuern die Zeitfenster in _harvest_time_profile(); Standardwerte 09:30/11:30/14:30/18:00.\nBei ungültiger Reihenfolge fallen alle vier Grenzen sicher auf die Standardwerte zurück."];
+clock->future[style=dashed,arrowhead=none];
+rule [shape=note,fillcolor="#f7f7f7",label="Normative Grenze:\nAktuell vermeidbare Einspeisung hat Vorrang vor strategischer Ladeverteilung.\nDarum gewinnt ExportCapture immer dann, wenn Strategic Share weniger Zendure-Ladung verlangen würde."];
+compare->rule[style=dashed,arrowhead=none];
+
+  uml_update_note [shape=note, style="filled", fillcolor="#eef5ff", fontcolor="#162e4d", fontsize=9, label="HARVEST_SEASON_POLICY_ENABLED=false => legacy_parallel, auch wenn requested=sma_priority; Kalender nur opt-in.\nSourceabgleich: V17.1.3; keine Feldwirkungsbehauptung"];
+}

@@ -1,0 +1,46 @@
+@startuml
+skinparam shadowing false
+title 19 — HIGH_SMA_SOC Strategic Share & Time Profile
+start
+if (Harvest reason HIGH_SMA_SOC\nor HIGH_SMA_SOC_SMA_NEAR_LIMIT?) then (yes)
+  if (HARVEST_HIGH_SMA_SOC_TIME_PROFILE_ENABLED?) then (yes)
+    if (09:30 <= time < 11:30?) then (morning)
+      :profile=morning;\nPrimary share setting MORNING (default 0.60);\nentry confirm=60s;
+    elseif (11:30 <= time < 14:30?) then (midday)
+      :profile=midday;\nPrimary share setting MIDDAY (default 0.50);\nentry confirm=30s;
+    elseif (14:30 <= time < 18:00?) then (afternoon)
+      :profile=afternoon;\nPrimary share setting AFTERNOON (default 0.35);\nentry confirm=15s;
+    else (outside)
+      :profile=default;\nMIDDAY share (default 0.50);\nconfigured entry-confirm;
+    endif
+  else (no)
+    :profile=default;\nMIDDAY share (default 0.50);\nconfigured entry-confirm;
+  endif
+  if (independent physical Zendure charge reference valid?) then (yes)
+    :T = PrimaryCharge + ZendureCharge + GridExport;
+    :PrimaryShare=min(Pmax,max(Floor,share*T));\nZendureShare=max(0,T-PrimaryShare);\nExportCapture=ZendureCharge+GridExport;
+    if (ZendureShare > ExportCapture?) then (yes)
+      :raw B=ZendureShare;\nharvest_target_selected_by=STRATEGIC_SHARE;
+    elseif (ExportCapture > ZendureShare?) then (yes)
+      :raw B=ExportCapture;\nharvest_target_selected_by=EXPORT_CAPTURE;
+    else (difference < 0.5 W)
+      :raw B≈both;\nharvest_target_selected_by=BOTH_EQUAL;
+    endif
+  else (no)
+    :raw B=last_input+effective_export*CONTROL_GAIN;\nharvest_target_selected_by=INCREMENTAL_FALLBACK;
+  endif
+else (no)
+  :No Strategic-Share calculation;\nother Harvest branches use Export-Capture semantics when applicable;
+endif
+:Clamp -> Smoothing -> Ramp -> Baseline B;\nthen Fast O -> Cross-Charge -> Command;
+stop
+note right
+HIGH_SMA_SOC = Branch/Reason
+morning|midday|afternoon|default = time profile
+STRATEGIC_SHARE|EXPORT_CAPTURE|BOTH_EQUAL = target-selection provenance
+CHARGE/HOLD/... = current_mode
+
+V17.0.2: 09:30/11:30/14:30/18:00 are hard-coded in runtime.
+Profile start/end settings are TARGET_ONLY and not consumed by _harvest_time_profile().
+end note
+@enduml

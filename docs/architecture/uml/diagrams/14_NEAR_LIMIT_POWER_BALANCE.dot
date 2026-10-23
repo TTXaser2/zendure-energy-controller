@@ -1,0 +1,31 @@
+digraph G {
+graph [rankdir=TB, bgcolor="white", pad=0.25, nodesep=0.38, ranksep=0.48, labelloc=t, fontsize=20, fontname="DejaVu Sans"];
+node [shape=box, style="rounded,filled", fillcolor="white", fontname="DejaVu Sans", fontsize=10.3, margin="0.14,0.08"];
+edge [fontname="DejaVu Sans", fontsize=8.5, color="#444444"];
+graph [label="14 — NEAR_LIMIT: Leistungsbilanz, Baseline und Fast-Reserve"];
+s [shape=circle,width=.18,label="",fillcolor="#222222",style=filled];
+inputs [label="Messgrößen\nPrimary charge Pp > 0\nZendure actual charge Pz (independent reference)\nGrid export E = max(0,-grid_power)\nPrimary max charge Pmax"];
+hnear [label="Harvest SMA_NEAR_LIMIT\nPp ≥ Harvest-Near-Limit-Schwelle\nund E ≥ REST_SURPLUS_MIN_EXPORT_W"];
+valid [shape=diamond,label="Pz als unabhängige physische Referenz valide?"];
+cap [label="ABSOLUTE_EXPORT_CAPTURE\nraw B = Pz + E\nZiel: aktuell verbleibenden Export in Zendure übernehmen"];
+fb [label="INCREMENTAL_FALLBACK\nraw B = last_input + effective_export × gain"];
+slow [label="Clamp / Smoothing / Ramp → Baseline B"];
+fastcond [label="Fast NEAR_LIMIT ist eigene, engere Klassifikation:\nPp ≥ Pmax - 150 W und E ≥ 100 W"];
+reserve [label="Primärreserve R = max(0, Pmax - Pp)\ndesired O = max(0, E - R)\nO ≤ Zendure-Headroom"];
+ar [label="A400/R100 auf Overlay O\nactive: B+O; shadow: B"];
+cc [label="Cross-Charge zuletzt\nbei Konflikt O entfernen und Schutz gegen B neu bewerten"];
+e [shape=doublecircle,width=.2,label=""];
+
+s->inputs->hnear->valid; valid->cap[label="ja"]; valid->fb[label="nein"]; cap->slow; fb->slow; slow->fastcond->reserve->ar->cc->e;
+
+balance [shape=note,fillcolor="#f7f7f7",label="Energie-/Leistungsbilanz (Analysepflicht):\nPrimäranteil + Zendure-Anteil + Restexport müssen zur verfügbaren Leistung passen.\nFloor / Restart / Near-Limit / Share dürfen nicht doppelt angewandt werden."];
+hnear->balance[style=dashed,arrowhead=none];
+
+high [shape=note,fillcolor="#eef7ff",label="Falls gleichzeitig HIGH_SMA_SOC gilt, wechselt die Harvest-Baseline in\nABSOLUTE_SHARE_OR_EXPORT_CAPTURE:\nZeitprofil → share; T=Pp+Pz+E; PrimaryShare=min(Pmax,max(Floor,share×T));\nZendureShare=max(0,T-PrimaryShare); Capture=Pz+E; raw B=max(ZendureShare,Capture).\nAuswahlfeld harvest_target_selected_by:\nSTRATEGIC_SHARE wenn ZendureShare > Capture; EXPORT_CAPTURE wenn Capture > ZendureShare;\nBOTH_EQUAL bei Differenz < 0,5 W. Die Capture-Untergrenze wird nie unterschritten."];
+slow->high[style=dashed,arrowhead=none];
+
+nuance [shape=note,fillcolor="#fff7df",label="SMA_NEAR_LIMIT (Harvest) ≠ Fast NEAR_LIMIT.\nHarvest-Schwelle ist konfigurierbar/ratio-basiert; Fast nutzt Pmax-150 W.\nBeide Schichten greifen nacheinander, nicht doppelt auf dieselbe Größe."];
+fastcond->nuance[style=dashed,arrowhead=none];
+
+  uml_update_note [shape=note, style="filled", fillcolor="#eef5ff", fontcolor="#162e4d", fontsize=9, label="S3-SMA-Priorität unterdrückt bei Anwendbarkeit strategischen Share, nicht real nutzbare Exportaufnahme.\nSourceabgleich: V17.1.3; keine Feldwirkungsbehauptung"];
+}

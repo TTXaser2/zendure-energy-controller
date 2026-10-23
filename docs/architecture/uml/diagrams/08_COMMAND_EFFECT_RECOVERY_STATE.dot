@@ -1,0 +1,47 @@
+digraph Effect {
+  graph [rankdir=LR, bgcolor="white", pad=0.3, nodesep=0.38, ranksep=0.7, labelloc=t,
+         label="08 — Command Effect & Recovery: reale Diagnose-/Lifecycle-Kategorien", fontsize=20, fontname="DejaVu Sans"];
+  node [shape=box, style="rounded,filled", fillcolor="white", fontname="DejaVu Sans", fontsize=9.8, margin="0.13,0.07"];
+  edge [fontname="DejaVu Sans", fontsize=8.2, color="#444444"];
+
+  idle [label="COMMAND_IDLE"];
+  below [label="COMMAND_BELOW_DIAGNOSTIC_THRESHOLD\n|target| < COMMAND_EFFECT_MIN_TARGET_W\nWirkung nicht belastbar bewertbar"];
+  uncertain [label="COMMAND_TELEMETRY_UNCERTAIN\nReadback / physische Richtungsbeobachtung\nnicht belastbar"];
+  pending [label="COMMAND_PENDING / ACTIVE_OBSERVING\nneuer evaluierbarer CHARGE/DISCHARGE-Intent"];
+  partial [label="COMMAND_PARTIALLY_EFFECTIVE\nRichtung reagiert, Target-Tracking\nnoch außerhalb Toleranz"];
+  tracking [label="COMMAND_TARGET_TRACKING_EFFECTIVE\nSoll und unabhängige Istbeobachtung\ninnerhalb Toleranz"];
+  accept [label="COMMAND_CHARGE_ACCEPTANCE_LIMITED\nHigh-SOC/BMS-Ladeannahme unabhängig belegt;\nnicht als Command-Mismatch behandeln"];
+  mismatch [label="COMMAND_MISMATCH_CONFIRMED\nRichtungs- oder Trackingfehler\nüber Timeout bestätigt"];
+  resync [label="FULL-STATE RESYNC / FORCE RESEND\nSmartMode + AC-Mode + beide Limits"];
+  verify [label="COMMAND_RECOVERY_VERIFYING\nResync gesendet; physische Wirkung\nnoch separat zu bestätigen"];
+  recovered [label="RECOVERED\nfrische unabhängige physische Wirkung\nhebt vorherigen Mismatch auf"];
+
+  neutral [shape=note, fillcolor="#f7f7f7", label="Separater NEUTRALIZE-Pfad:\n0 W ist ein aktives Kommando.\nCOMMAND_NEUTRALIZATION_PENDING\n→ CONFIRMED oder MISMATCH → Resync."];
+  intent [shape=note, fillcolor="#f7f7f7", label="Intent-Kontinuität:\n+1200 → +1350 → +1290 W bleibt CHARGE.\nDynamische Targets dürfen den Effect-Timer\nnicht permanent zurücksetzen."];
+  late [shape=note, fillcolor="#f7f7f7", label="Late-Effect-Guard:\nbei bestätigtem alten Mismatch + angeforderter\nNeutralität/Gegenrichtung kann zuerst belastbare\nphysische Neutralität erforderlich sein."];
+
+  idle -> below [label="kleines aktives Target"];
+  idle -> uncertain [label="Evidenz unzureichend"];
+  idle -> pending [label="neuer evaluierbarer Intent"];
+  below -> pending [label="Target >= Diagnosegrenze"];
+  uncertain -> pending [label="frische belastbare Evidenz"];
+  pending -> tracking [label="Richtung + Tracking passen"];
+  pending -> partial [label="Richtung passt, Tracking nicht"];
+  partial -> tracking [label="Tracking erholt"];
+  pending -> mismatch [label="Timeout ohne Richtungsreaktion"];
+  partial -> mismatch [label="Trackingfehler persistiert"];
+  pending -> accept [label="High-SOC acceptance belegt"];
+  partial -> accept [label="reklassifiziert"];
+  mismatch -> resync [label="Resend threshold/cooldown + guards"];
+  resync -> verify [label="Full-State gesendet"];
+  verify -> tracking [label="physische Recovery"];
+  mismatch -> recovered [label="spätere unabhängige Recovery"];
+  tracking -> recovered [label="wenn vorher Mismatch aktiv"];
+  recovered -> pending [label="neuer Intent"];
+  tracking -> pending [label="gleiches Intent, neues dynamisches Target"];
+  pending -> uncertain [label="Telemetrie wird unsicher"];
+
+  idle -> neutral [style=dashed, arrowhead=none];
+  pending -> intent [style=dashed, arrowhead=none];
+  mismatch -> late [style=dashed, arrowhead=none];
+}

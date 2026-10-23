@@ -1,0 +1,28 @@
+@startuml
+skinparam shadowing false
+start
+:Inputs Pp (Primary charge), Pz (independent Zendure charge),\nE (Grid export), Pmax;
+:Harvest SMA_NEAR_LIMIT eligibility;
+if (Pz physical reference valid?) then (ja)
+  :raw B = Pz + E;\nABSOLUTE_EXPORT_CAPTURE;
+else (nein)
+  :raw B = last_input + effective_export * gain;\nINCREMENTAL_FALLBACK;
+endif
+:Clamp -> Smoothing -> Ramp -> Baseline B;
+:Fast NEAR_LIMIT separately checks\nPp >= Pmax-150W and E>=100W;
+:R = max(0, Pmax-Pp);\ndesired O=max(0,E-R);\nHeadroom limit;
+:A400/R100;\nshadow=B, active=B+O;
+:Cross-Charge last; if active O=0 and re-evaluate B;
+stop
+note right
+If HIGH_SMA_SOC also applies:
+share = current Harvest time profile
+T=Pp+Pz+E
+PrimaryShare=min(Pmax,max(Floor,share*T))
+ZendureShare=max(0,T-PrimaryShare)
+Capture=Pz+E
+raw B=max(ZendureShare,Capture)
+harvest_target_selected_by =
+STRATEGIC_SHARE / EXPORT_CAPTURE / BOTH_EQUAL
+end note
+@enduml

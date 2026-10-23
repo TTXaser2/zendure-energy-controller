@@ -4012,7 +4012,7 @@
           "ENTER",
           "PERCENT"
         ],
-        "short": "Primärspeicher-SOC-Schwelle für den Eintritt in den High-SOC-Bereich. Zusammen mit dem niedrigeren Austrittswert bildet sie eine Hysterese.",
+        "short": "Primärspeicher-SOC-Schwelle für den Eintritt in den High-SOC-Bereich. Der niedrigere Austrittswert sorgt dafür, dass die Funktion nicht bei jeder kleinen Ladezustandsschwankung sofort wieder ein- und ausgeschaltet wird.",
         "when": "Die Eintrittsschwelle wird nur bei aktivem High-SOC-Parallel-Harvest und gültigem aktuellem Primärspeicher-SOC ausgewertet. Ein Eintritt benötigt zusätzlich die Export-/Zeit-/Bestätigungsbedingungen; der niedrigere Austrittswert beendet den Zustand wieder."
       },
       "key": "HARVEST_HIGH_SMA_SOC_ENTER_PERCENT",
@@ -4243,7 +4243,7 @@
     },
     {
       "apply_class": "live_next_cycle",
-      "apply_text": "Wirksam im nächsten Regelzyklus; Aktivierung startet immer mit Overlay 0",
+      "apply_text": "Nach dem Bestätigen beim nächsten Regelzyklus wirksam. Die zusätzliche Ladeanforderung beginnt bei 0 W und erhöht sich nur bei geeigneten Messwerten. Kein Neustart nötig.",
       "bootstrap_value": "off",
       "category": "Harvest / Restüberschuss",
       "codec_id": "select",
@@ -4278,7 +4278,7 @@
           "CAPTURE",
           "MODE"
         ],
-        "short": "Fast Capture nimmt zusätzlichen PV-Überschuss schneller auf, wenn der Primärspeicher nachweislich voll und kaum noch lädt oder fast seine Ladeleistungsgrenze erreicht. Aus lässt die normale Automatik unverändert; Testbetrieb berechnet nur, Aktiv erlaubt eine zusätzliche Ladeanforderung innerhalb aller Schutzgrenzen.",
+        "short": "Fast Capture kann zusätzlichen Solarüberschuss schneller für die Zendure-Ladung nutzen, wenn der Primärspeicher nachweislich voll ist und praktisch nicht mehr lädt oder fast seine Ladeleistungsgrenze erreicht. „Aus“: keine zusätzliche Ladeanforderung, die normale Automatik bleibt erhalten. „Shadow (nur Diagnose)“: berechnet Möglichkeiten, ohne die Ladeanforderung zu ändern. „Aktiv“: darf innerhalb aller Schutzgrenzen zusätzliches Laden anfordern.",
         "when": "Nur im AUTO-Modus, bei bestätigter Netzeinspeisung und frischen Netz-, Primärspeicher- und Zendure-Messwerten. Der Primärspeicher muss entweder voll und praktisch ohne Ladeleistung sein oder seine bekannte Ladeleistungsgrenze fast erreichen. Ist diese Lage nicht sicher, bleibt die Zusatzfunktion ohne Wirkung; normale AUTO-Ladung läuft unverändert weiter."
       },
       "key": "HARVEST_FAST_CAPTURE_MODE",
@@ -6602,7 +6602,7 @@
           "TIMEOUT",
           "SECONDS"
         ],
-        "short": "Nach dieser Zeit muss eine sicherheitsrelevante 0-W-Neutralisierung physisch bestätigt sein. Bei fortbestehender Leistung sendet ZEC AC-Modus sowie beide Limits als vollständige 0-W-Zustandsneutralisierung erneut.",
+        "short": "Wenn ZEC aus Sicherheitsgründen 0 W anfordert, muss innerhalb dieser Zeit an der gemeldeten Istleistung erkennbar sein, dass das Gerät nicht mehr lädt oder entlädt. Bei fortbestehender Leistung sendet ZEC AC-Modus sowie beide Limits als vollständige 0-W-Zustandsneutralisierung erneut.",
         "when": "Der Timeout wird bei sicherheitsrelevanten 0-W-Zielen verwendet. Bleibt physische Leistung bestehen, kann ZEC die vollständige 0-W-Zustandsneutralisierung mit AC-Modus und beiden Limits erneut anfordern."
       },
       "key": "COMMAND_NEUTRALIZATION_TIMEOUT_SECONDS",
@@ -7439,7 +7439,7 @@
           "TIMEOUT",
           "SECONDS"
         ],
-        "short": "Nach dieser zusammenhängenden Zeit desselben Lade-/Entlade-Intents bestätigt ZEC fehlende Richtungsreaktion oder dauerhaft erhebliches Untertracking. Kleine Wattänderungen derselben Richtung starten die Zeit nicht neu.",
+        "short": "Wenn das Gerät während dieser Zeit trotz einer Lade- oder Entladeanforderung die Leistungsrichtung nicht übernimmt oder dauerhaft deutlich weniger Leistung liefert als angefordert, wertet ZEC die Anforderung als nicht ausreichend wirksam. Kleine Wattänderungen derselben Richtung starten die Zeit nicht neu.",
         "when": "Der Timeout läuft während einer zusammenhängenden Wirkungsprüfung desselben fachlichen Intents. Kleine Sollwertänderungen innerhalb derselben Richtung sollen eine anhaltende Nichtwirkung nicht analytisch verstecken."
       },
       "key": "COMMAND_EFFECT_TIMEOUT_SECONDS",

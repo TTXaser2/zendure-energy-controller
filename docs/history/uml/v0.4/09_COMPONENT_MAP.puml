@@ -1,0 +1,40 @@
+@startuml
+package "Inputs" {
+  [Grid Meter] as Grid
+  [Primary Storage Source] as Primary
+  [Zendure MQTT / API Telemetry] as ZT
+  [SettingsRegistry / Effective Config] as Config
+}
+package "Control Core" {
+  [ZendureController / controller_logic.py] as Core
+  [ControllerState] as State
+  [Command Lifecycle] as Cmd
+}
+package "Device" {
+  [MQTT Client] as MQTT
+  [Zendure SolarFlow] as Zendure
+}
+package "Evidence & UI" {
+  [Measurement V4 / SQLite] as Meas
+  [Status / Diagnostics] as Status
+  [Graph Core V3] as Graph
+  [Fast Field Analyzer] as FastA
+}
+Grid --> Core
+Primary --> Core
+ZT --> State
+Config --> Core
+Core <--> State
+Core --> Cmd
+Cmd --> MQTT
+MQTT --> Zendure
+Zendure --> ZT
+State --> Meas
+State --> Status
+Meas --> Graph
+Meas --> FastA
+note right of Core
+No blocking external operation in the control cycle.
+primary_usable_soc_percent is diagnostic only.
+end note
+@enduml

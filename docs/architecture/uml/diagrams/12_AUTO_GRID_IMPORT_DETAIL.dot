@@ -1,0 +1,37 @@
+digraph G {
+graph [rankdir=TB, bgcolor="white", pad=0.25, nodesep=0.38, ranksep=0.48, labelloc=t, fontsize=20, fontname="DejaVu Sans"];
+node [shape=box, style="rounded,filled", fillcolor="white", fontname="DejaVu Sans", fontsize=10.3, margin="0.14,0.08"];
+edge [fontname="DejaVu Sans", fontsize=8.5, color="#444444"];
+graph [label="12 — AUTO_GRID_IMPORT: inkrementeller Entlade-Regelweg"];
+s [shape=circle,width=.18,label="",fillcolor="#222222",style=filled];
+entry [shape=diamond,label="AUTO + Grid-Import\n(grid_power > DEADBAND)?"];
+fast0 [label="Fast Overlay sofort O=0\n(DISCHARGE_DIRECTION)"];
+soc [shape=diamond,label="SOC frisch und > MIN_SOC?"];
+hold [label="SOC stale → SAFE_STATE\nMIN_SOC → aktive 0-W-Neutralisierung + HOLD"];
+charge [shape=diamond,label="noch Ladeleistung > 0?"];
+rdown [label="Ladeleistung zuerst Richtung 0 rampen\nkeine direkte Richtungsumkehr"];
+lock [shape=diamond,label="vorher CHARGE und MODE_CHANGE_LOCK aktiv?"];
+lockhold [label="MODE_CHANGE_LOCK\nDeadband/HOLD statt sofortiger Umkehr"];
+raw [label="INKREMENTELLER ENTLADE-ROHWERT\nraw = last_output + int(grid_power × CONTROL_GAIN)"];
+clamp [label="target = clamp(raw, 0, MAX_DISCHARGE_POWER_W)"];
+smooth [label="Smoothing aus last_output → target"];
+ramp [label="MAX_POWER_STEP-Limit"];
+sign [label="signed_before_cross = -target_ramped"];
+cc [shape=diamond,label="Primärspeicher lädt gleichzeitig?\nCross-Charge-Konflikt?"];
+reduce [label="signed target proportional Richtung 0 reduzieren\nniemals durch Guard die Richtung umkehren"];
+pub [label="signed_final ≤ 0 publizieren\n0 W bei aktiver Neutralisierung ist aktives Kommando"];
+mode [label="current_mode = DISCHARGE\noder HOLD, falls Cross-Charge bis 0 neutralisiert"];
+e [shape=doublecircle,width=.2,label=""];
+
+s->entry; entry->fast0[label="ja"]; entry->e[label="nein"];
+fast0->soc; soc->hold[label="nein"]; hold->e; soc->charge[label="ja"];
+charge->rdown[label="ja"]; rdown->e; charge->lock[label="nein"];
+lock->lockhold[label="ja"]; lockhold->e; lock->raw[label="nein"];
+raw->clamp->smooth->ramp->sign->cc; cc->reduce[label="ja"]; reduce->pub; cc->pub[label="nein"];
+pub->mode->e;
+
+n1 [shape=note,fillcolor="#f7f7f7",label="AUTO_GRID_IMPORT ist ebenfalls inkrementell: last_output + Grid-Import × Gain.\nDie Entladegröße wird erst danach als negatives signed Target dargestellt."];
+raw->n1[style=dashed,arrowhead=none];
+n2 [shape=note,fillcolor="#f7f7f7",label="MIN_SOC ist bei gesunden Daten ein normaler begrenzender Betriebszustand,\nnicht automatisch SAFE_STATE. SAFE_STATE bleibt Daten-/Command-/Runtimefehlern vorbehalten."];
+hold->n2[style=dashed,arrowhead=none];
+}

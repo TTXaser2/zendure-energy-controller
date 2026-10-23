@@ -1,0 +1,19 @@
+@startuml
+skinparam shadowing false
+start
+:Didaktische Inputs:\nGrid=-500W, Pp=2900W, Pmax=3000W,\nPz=600W, Bprev=600W, limit=2400W, f=0.25, step=150W;
+:Harvest SMA_NEAR_LIMIT;
+:raw B = Pz + export = 600+500 = 1100W;
+:smoothed = int(600*0.75 + 1100*0.25) = 725W;
+:ramp delta +125 <=150 -> B=725W;
+:Fast NEAR_LIMIT: reserve=100W; desired O=400W;
+:A400 * 1s -> O=400W;
+if (mode shadow?) then (ja)
+  :physical command = B = 725W;\ncombined 1125W only diagnostic;
+else (active semantics)
+  :physical command = B+O =1125W;
+endif
+:Cross-Charge no conflict in example;
+:Readback/effect evaluated separately;
+stop
+@enduml

@@ -1,0 +1,78 @@
+@startuml
+title ZEC V17.0.2 — run_once() Control Cycle
+start
+:Reset per-cycle diagnostics / limiter state;
+if (control_allowed?) then (no)
+  :Passive config recovery preflight;\ntelemetry/display only;\nNO command;
+  stop
+endif
+if (MQTT disconnected AND\nsafe-state configured?) then (yes)
+  :Harvest reset;\nSAFE_STATE -> active neutralization 0 W;
+  stop
+endif
+:Apply local API snapshot;\nupdate grid-meter status;\nupdate display metrics;
+:Detect night window;\nneutralize ended fixed night discharge if needed;
+:Prepare Fast mode off|shadow|active;
+if (MANUAL_MODE != AUTO?) then (yes)
+  :Fast O := 0; Harvest reset;\nrefresh grid best-effort;
+  :handle_manual_mode();
+  stop
+endif
+if (night active?) then (yes)
+  :Fast O := 0; Harvest reset;
+  if (SOC fresh?) then (no)
+    :SAFE_STATE 0 W;
+    stop
+  endif
+  if (night reserve SOC reached?) then (no)
+    :fixed NIGHT_DISCHARGE;
+    stop
+  else (yes)
+    :pause fixed night discharge;\nactive 0 W if it was running;
+    note right
+      AUTO may continue in the SAME night window
+      to cover load peaks down to global MIN_SOC.
+    end note
+  endif
+endif
+if (SOC fresh?) then (no)
+  :SAFE_STATE 0 W;
+  stop
+endif
+:Read fresh grid power for control;
+if (grid read valid?) then (no)
+  :fail-closed path / no normal AUTO decision;
+  stop
+endif
+:Refresh display + Cross-Charge metrics;
+:Update Harvest state\n(entry/stay/exit, reason, timers);
+if (existing target violates Cross-Charge?) then (yes)
+  :Correct/neutralize existing target;\nFast O := 0;
+  stop
+endif
+if (active Fast overlay or\nreturn-to-baseline pending?) then (yes)
+  if (grid import > abort threshold?) then (yes)
+    :Fast O := 0;\nhandle_charge() first;\n(no direct reversal);
+    stop
+  endif
+  if (grid near zero / insufficient export?) then (yes)
+    :handle_charge() to release O/B safely;
+    stop
+  endif
+endif
+if (|grid| <= DEADBAND?) then (yes)
+  if (Harvest active AND High-SOC enabled?) then (yes)
+    :handle_charge();
+  else (no)
+    :handle_deadband() -> HOLD;
+  endif
+  stop
+endif
+if (grid > 0 = import?) then (yes)
+  :handle_discharge();
+  stop
+else (no, export)
+  :handle_charge();
+  stop
+endif
+@enduml

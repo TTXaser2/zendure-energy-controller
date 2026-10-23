@@ -1,0 +1,66 @@
+digraph NonCharge {
+  graph [rankdir=TB, bgcolor="white", pad=0.25, nodesep=0.38, ranksep=0.45, labelloc=t,
+         label="10 — Entlade-, Nacht- und Manual-Pfade", fontsize=20, fontname="DejaVu Sans"];
+  node [shape=box, style="rounded,filled", fillcolor="white", fontname="DejaVu Sans", fontsize=10.5, margin="0.13,0.07"];
+  edge [fontname="DejaVu Sans", fontsize=8.7, color="#444444"];
+  s [shape=circle,width=.18,label="",fillcolor="#222222",style=filled];
+  manual [shape=diamond,label="Manual mode?"];
+  stopm [shape=diamond,label="STOP_HOLD?"];
+  stophold [label="Fast O=0\naktive 0-W-Neutralisierung\ncurrent_mode=STOP_HOLD"];
+  mf [label="FIXED_CHARGE / FIXED_DISCHARGE\nSOC frisch erforderlich"];
+  mts [shape=diamond,label="Target-SOC erreicht?"];
+  mexit [label="Neutralisieren\nFolgemodus AUTO oder STOP_HOLD\npersistieren, soweit Config gültig"];
+  mpub [label="Fixen signed Target publizieren\nmit Fixed-Mode-Powerlimit"];
+
+  night [shape=diamond,label="Night window active?"];
+  nsoc [shape=diamond,label="SOC frisch und > global MIN_SOC?"];
+  nhold [label="SOC stale -> SAFE_STATE\noder MIN_SOC -> aktive Neutralisierung + HOLD"];
+  nreserve [shape=diamond,label="Night reserve / effective stop erreicht?"];
+  npause [label="Fixe Night-Entladung aktiv auf 0 W setzen\nAUTO im selben Nachtfenster fortsetzen"];
+  nfixed [label="NIGHT_DISCHARGE\nfixe konfigurierte Entladeleistung"];
+
+  auto [label="AUTO Richtung aus Grid"];
+  imp [shape=diamond,label="Grid import > deadband?"];
+  dmin [shape=diamond,label="Zendure SOC > MIN_SOC?"];
+  dhold [label="MIN_SOC -> aktive Neutralisierung + HOLD"];
+  charging [shape=diamond,label="noch Ladeleistung aktiv?"];
+  down [label="Ladeleistung zuerst Richtung 0 rampen\nkeine direkte Richtungsumkehr"];
+  calc [label="AUTO_DISCHARGE\nraw = last_output + grid_import × CONTROL_GAIN\n→ clamp MAX_DISCHARGE_POWER\n→ smoothing → power-step ramp"];
+  cc [label="Symmetrischen Cross-Charge-Guard anwenden\nTarget darf nur Richtung 0 reduziert werden"];
+  pub [label="signed Target < 0 publizieren\nDISCHARGE; bei Cross-Charge 0 -> HOLD"];
+  other [label="Deadband/Charge-Pfad\n→ Diagramm 02/03"];
+  e [shape=doublecircle,width=.2,label=""];
+
+  s->manual;
+  manual->stopm[label="ja"];
+  stopm->stophold[label="ja"];
+  stopm->mf[label="nein"];
+  mf->mts;
+  mts->mexit[label="ja"];
+  mts->mpub[label="nein"];
+  stophold->e; mexit->e; mpub->e;
+  manual->night[label="nein"];
+  night->nsoc[label="ja"];
+  nsoc->nhold[label="nein"];
+  nsoc->nreserve[label="ja"];
+  nreserve->npause[label="ja"];
+  nreserve->nfixed[label="nein"];
+  nhold->e; nfixed->e;
+  npause->auto;
+  night->auto[label="nein"];
+  auto->imp;
+  imp->dmin[label="ja"];
+  imp->other[label="nein"];
+  dmin->dhold[label="nein"];
+  dmin->charging[label="ja"];
+  charging->down[label="ja"];
+  charging->calc[label="nein"];
+  down->e;
+  calc->cc->pub->e;
+  dhold->e; other->e;
+
+  note [shape=note, fillcolor="#f7f7f7", label="Night-Reserve ist nicht gleich globales MIN_SOC:\nReserve stoppt nur die fixe Night-Entladung.\nAUTO kann danach im Nachtfenster weiterregeln,\nbis harte globale Grenzen greifen."];
+  npause->note[style=dashed,arrowhead=none];
+
+  uml_update_note [shape=note, style="filled", fillcolor="#eef5ff", fontcolor="#162e4d", fontsize=9, label="NIGHT+MIN_SOC: feste Nachtentladung pausiert; zulässiger AUTO-Exportladepfad bleibt erreichbar.\nSourceabgleich: V17.1.3; keine Feldwirkungsbehauptung"];
+}

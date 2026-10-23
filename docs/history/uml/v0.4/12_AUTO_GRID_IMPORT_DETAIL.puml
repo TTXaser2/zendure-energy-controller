@@ -1,0 +1,26 @@
+@startuml
+skinparam shadowing false
+start
+if (AUTO + Grid-Import > DEADBAND?) then (ja)
+  :Fast O=0 (DISCHARGE_DIRECTION);
+  if (SOC frisch und > MIN_SOC?) then (nein)
+    :stale -> SAFE_STATE;\nMIN_SOC -> aktive 0-W-Neutralisierung + HOLD;
+    stop
+  endif
+  if (Ladeleistung noch aktiv?) then (ja)
+    :Ladung zuerst Richtung 0 rampen;\nkeine direkte Umkehr;
+    stop
+  endif
+  if (MODE_CHANGE_LOCK nach CHARGE?) then (ja)
+    :HOLD / Deadband;
+    stop
+  endif
+  :raw = last_output + int(grid_power * CONTROL_GAIN);\nINKREMENTELL;
+  :clamp 0..MAX_DISCHARGE_POWER_W;
+  :Smoothing + MAX_POWER_STEP;
+  :signed = -target_ramped;
+  :symmetrischen Cross-Charge-Guard anwenden;\nnur Richtung 0 reduzieren;
+  :signed_final publizieren;\nCommand Effect überwachen;
+endif
+stop
+@enduml

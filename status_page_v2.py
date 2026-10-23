@@ -347,7 +347,7 @@ def render_status_page_v2(
           </div>
         </div>
         <div class="zec-mini-chart-wrap"><canvas id="gridMiniChart" aria-label="Zeitlich korrekter Netzleistungsverlauf mit Messlücken"></canvas><div id="gridMiniTooltip" class="zec-chart-tooltip" hidden></div></div>
-        <div class="zec-mini-chart-caption" id="gridMiniCaption" aria-live="polite">Verlauf: 15 Minuten · Aktualisierung alle 3 s · Messpunkte aus dem Reglerzyklus</div>
+        <div class="zec-mini-chart-caption" id="gridMiniCaption" aria-live="polite">Minigraph-Update 3 s · Livewert 1 s</div>
         <footer class="zec-card-footer"><span class="zec-status-dot { _e(payload['grid'].get('tone','ok')) }"></span><span>Quelle: <b data-zec="grid.source">{_e(payload['grid'].get('source'))}</b> · <span data-zec="grid.freshness_text">{_e(payload['grid'].get('freshness_text'))}</span></span></footer>
       </article>
 

@@ -1,0 +1,25 @@
+digraph G {
+graph [bgcolor="white", pad=0.28, nodesep=0.42, ranksep=0.52, labelloc=t, fontsize=20, fontname="DejaVu Sans"];
+node [shape=box, style="rounded,filled", fillcolor="white", fontname="DejaVu Sans", fontsize=10.2, margin="0.14,0.08"];
+edge [fontname="DejaVu Sans", fontsize=8.5, color="#444444"];
+graph [rankdir=TB, label="18 — Reason / Limiter / Target-Provenienz: Wie liest man einen Zyklus korrekt?"];
+inputs [label="1. Rohbeobachtungen\ngrid_power + freshness\nZendure SOC + independent power\nPrimary power/SOC + freshness\nCommand readback"];
+state [label="2. Zustands-/Eligibility-Felder\nrest_surplus_harvest_active\nrest_surplus_harvest_eligible\nrest_surplus_harvest_reason\nrest_surplus_harvest_block_reason\nfast_capture_primary_state / block_reason"];
+calc [label="3. Rechen-Provenienz (Harvest)\nharvest_calculation_branch\nrest_surplus_harvest_profile + harvest_primary_target_share\nharvest_target_semantics\nharvest_reference_charge_valid/source/confidence\nharvest_candidate_raw_w / after_primary_w\nharvest_total_available_charge_w\nharvest_primary_share_target_w / harvest_zendure_share_target_w\nharvest_export_capture_target_w\nharvest_target_selected_by = STRATEGIC_SHARE | EXPORT_CAPTURE | BOTH_EQUAL | INCREMENTAL_FALLBACK"];
+stages [label="4. Zielwertstufen\ntarget_raw_w\ntarget_after_power_limit_w\ntarget_after_smoothing_w\ntarget_after_ramp_w\nFast: baseline B / desired O / O / combined\nCross-Charge → target_after_cross_charge_w\ntarget_final_w"];
+reason [label="5. Ergebnisbegründung / Pfad\ntarget_final_reason = control_reason\ntechnical_control_path\ncurrent_mode\nactive_limiters"];
+cmd [label="6. Command-Evidenz\nDesired intent / target\nSmartMode + AC mode + input/output readback\ncommand_lifecycle_state\ncommand_effect_category\nneutralization / late-effect / resync"];
+physical [label="7. Physische Wirkung\nunabhängige signed Leistung\nGrid-Reaktion\nSOC-Trend\n→ Direction / Tracking / Systemziel"];
+evidence [label="8. Persistierte Evidenz\nMeasurement V4 / Events / Graph / Fast Analyzer"];
+
+inputs->state->calc->stages->reason->cmd->physical->evidence;
+
+warn [shape=note,fillcolor="#fff7df",label="NICHT zulässig: target_final_reason oder rest_surplus_harvest_reason allein\nals Beweis des tatsächlich ausgeführten Rechenzweigs zu verwenden.\nSTRATEGIC_SHARE ist ebenfalls KEIN current_mode: es bezeichnet nur,\nwelcher High-SOC-Harvest-Kandidat das Rohziel bestimmt hat."];
+reason->warn[style=dashed,arrowhead=none];
+combo [shape=note,fillcolor="#eef7ff",label="Branch-Zuordnung deshalb als zusammengesetztes Prädikat:\nactive + eligible + reason + block_reason + limiter + calculation_branch +\nKandidatenwerte + technical path + relevante Primary-/Grid-/SOC-Daten."];
+state->combo[style=dashed,arrowhead=none]; calc->combo[style=dashed,arrowhead=none];
+proof [shape=note,fillcolor="#f7f7f7",label="Vier getrennte Nachweise je Funktion:\nZUSTAND → RECHNUNG → PHYSISCHE WIRKUNG → RECOVERY.\nEin Publish oder positiver Sollwert ist allein kein Funktionsnachweis."];
+physical->proof[style=dashed,arrowhead=none];
+
+  uml_update_note [shape=note, style="filled", fillcolor="#eef5ff", fontcolor="#162e4d", fontsize=9, label="S3: harvest_season_requested/effective, profile_confirm_s, s3_applicability und override_reason separat.\nSourceabgleich: V17.1.3; keine Feldwirkungsbehauptung"];
+}

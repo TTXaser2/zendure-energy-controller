@@ -1,0 +1,44 @@
+@startuml
+hide empty description
+[*] --> INACTIVE
+
+state INACTIVE
+state ENTRY_CONFIRM
+state ACTIVE
+state EXPORT_HOLD
+state BAND_LIMIT
+
+INACTIVE --> INACTIVE : prerequisite false\n/ reset(reason)
+INACTIVE --> ENTRY_CONFIRM : eligible_now\nnear_limit | high_soc | full_or_idle
+ENTRY_CONFIRM --> ENTRY_CONFIRM : new distinct observation\nentry_progress += elapsed
+ENTRY_CONFIRM --> ACTIVE : entry_progress >= confirm\n/ active=true; reason=classified branch
+ENTRY_CONFIRM --> INACTIVE : eligibility lost before confirm
+ACTIVE --> ACTIVE : eligible_now\n/ hold := configured hold
+ACTIVE --> EXPORT_HOLD : !eligible_now && SOC >= exit && hold > 0
+EXPORT_HOLD --> EXPORT_HOLD : distinct observation\n/ decrement hold only by fresh elapsed
+EXPORT_HOLD --> ACTIVE : eligible_now
+EXPORT_HOLD --> BAND_LIMIT : hold exhausted && SOC >= exit
+ACTIVE --> BAND_LIMIT : !eligible_now && SOC >= exit && no hold
+BAND_LIMIT --> ACTIVE : eligible_now
+ACTIVE --> INACTIVE : SOC < high-SOC exit\n/ HIGH_SMA_SOC_EXIT
+EXPORT_HOLD --> INACTIVE : SOC < high-SOC exit
+BAND_LIMIT --> INACTIVE : SOC < high-SOC exit
+
+note right of ENTRY_CONFIRM
+Eligibility branch precedence:
+1 FULL_OR_IDLE
+2 NEAR_LIMIT + HIGH_SOC
+3 HIGH_SOC
+4 NEAR_LIMIT
+
+Confirmation uses monotonic time AND
+fresh/distinct grid + primary observations.
+A host stall is not credited as many samples.
+end note
+
+note right of ACTIVE
+Harvest is not current_mode.
+It selects/changes the charge baseline
+inside AUTO charging.
+end note
+@enduml

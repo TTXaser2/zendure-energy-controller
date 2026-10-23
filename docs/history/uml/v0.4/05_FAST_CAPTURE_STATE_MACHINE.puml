@@ -1,0 +1,46 @@
+@startuml
+hide empty description
+[*] --> FAST_DISABLED
+FAST_DISABLED --> FAST_READY : mode=shadow|active AND prerequisites valid
+FAST_READY --> FULL_IDLE_CONFIRM : FULL_IDLE candidate
+FULL_IDLE_CONFIRM --> FULL_IDLE : confirm elapsed on distinct samples
+FULL_IDLE_CONFIRM --> RESERVE_UNKNOWN : candidate lost
+FAST_READY --> NEAR_LIMIT : NEAR_LIMIT candidate
+FAST_READY --> RESERVE_UNKNOWN : neither proven branch
+FULL_IDLE --> RESERVE_UNKNOWN : export/branch disappears
+NEAR_LIMIT --> RESERVE_UNKNOWN : reserve no longer proven
+RESERVE_UNKNOWN --> FULL_IDLE_CONFIRM : FULL_IDLE candidate
+RESERVE_UNKNOWN --> NEAR_LIMIT : NEAR_LIMIT candidate
+
+state FAST_DISABLED
+state FAST_READY
+state FULL_IDLE_CONFIRM
+state FULL_IDLE
+state NEAR_LIMIT
+state RESERVE_UNKNOWN
+
+note right of FULL_IDLE
+Desired overlay O = export
+O attacks toward target at A400 W/s
+end note
+note right of NEAR_LIMIT
+reserve = primary_max - primary_actual
+Desired O = max(0, export - reserve)
+A400 attack / R100 release
+end note
+note right of RESERVE_UNKNOWN
+O = 0 immediately for unproven reserve.
+Controlled release exists only for a
+previously proven FULL_IDLE/NEAR_LIMIT episode.
+end note
+note bottom of FAST_READY
+Global force-zero/block examples:
+mode=off, grid import, stale/invalid data,
+MAX_SOC, command path not ready,
+missing power limits, Cross-Charge correction,
+manual/night/discharge/safe-state.
+
+shadow: calculate diagnostics, command stays B
+active: physical target may become B+O
+end note
+@enduml

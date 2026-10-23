@@ -432,7 +432,9 @@
         const minutes=Number(this.payload.window_minutes||15);
         const note=this.payload.coverage_partial?' · Ältere Messwerte nicht vollständig verfügbar':'';
         const source=minutes===60?' · Kurve: 1-Min.-Werte (aktuelle Minute ggf. unvollständig)':' · Kurve: einzelne Regler-Messwerte';
-        caption.textContent=`Verlauf: ${minutes} Minuten · Aktualisierung alle 3 s · Letzter Verlaufspunkt ist nicht der Livewert · Livewert separat alle 1 s${source}${note}`;
+        caption.textContent='Minigraph-Update 3 s · Livewert 1 s'+(this.payload.coverage_partial?' · Datenlücke':'');
+        const detail=`Minigraph-Update alle 3 s; Livewert-Abfrage alle 1 s. Letzter Verlaufspunkt ist nicht der Livewert. ${minutes} Minuten. ${source}. ${this.payload.coverage_partial?'Unvollständige Datenabdeckung; Messlücken werden nicht überbrückt.':''}`;
+        caption.title=detail; caption.setAttribute('aria-label',detail);
       }
     }
     draw(){
@@ -462,7 +464,7 @@
       });ctx.stroke();
       ctx.fillStyle=css('--zec-muted');ctx.font='9px sans-serif';ctx.fillText(fmtPower(hi),0,12);ctx.fillText(fmtPower(lo),0,h-19);
       ctx.fillText(`vor ${Number(p.window_minutes||15)} Min.`,pad.l,h-4);
-      ctx.textAlign='right';ctx.fillText('Jetzt',w-pad.r,h-4);ctx.textAlign='left';
+      ctx.textAlign='right';ctx.fillText('Aktuellster Wert',w-pad.r,h-4);ctx.textAlign='left';
       if(this.hoverX!==null){
         const target=from+(Math.max(pad.l,Math.min(w-pad.r,this.hoverX))-pad.l)/pw*(to-from);
         let nearest=null,dist=Infinity;

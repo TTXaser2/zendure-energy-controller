@@ -1,0 +1,40 @@
+digraph CommandSeq {
+  graph [rankdir=TB, bgcolor="white", pad=0.3, nodesep=0.3, ranksep=0.38, labelloc=t,
+         label="07 — Command Lifecycle: Sollwert → Readback → physische Wirkung → Recovery", fontsize=20, fontname="DejaVu Sans"];
+  node [shape=box, style="rounded,filled", fillcolor="white", fontname="DejaVu Sans", fontsize=10.5, margin="0.13,0.07"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#444444"];
+
+  c1 [label="ControllerLogic\nsigned target + reason"];
+  l1 [label="Command Lifecycle\nIntent ableiten: CHARGE / DISCHARGE / NEUTRALIZE / IDLE"];
+  inv [label="Richtungsinvariante\nCHARGE: outputLimit=0\nDISCHARGE: inputLimit=0\nNEUTRALIZE: beide Limits=0"];
+  sm [shape=diamond, label="Aktiver dynamischer Command:\nsmartMode=1 frisch bestätigt?"];
+  wait [label="WAIT_SMART_MODE_READBACK\nSmartMode anfordern; aktive Limits noch nicht blind schreiben"];
+  batch [label="Batch-Entscheidung\nFull-State bei Intentwechsel / unvollständigem State /\nMismatch / Force-Resync; sonst Limitupdate oder Dedupe"];
+  mqtt [label="MQTT Publish\nsmartMode + acMode + input/output limit"];
+  rb [label="Zendure Readback\nsmartMode • acMode • inputLimit • outputLimit"];
+  phys [label="Unabhängige physische Leistungstelemetrie\nRichtung • Betrag • Confidence"];
+  eval [label="Effect Monitor\n1 Publish ist KEIN Nachweis\n2 Richtung reagiert\n3 Target-Tracking plausibel\n4 Systemziel erreicht"];
+  neutral [shape=diamond, label="Intent = NEUTRALIZE?"];
+  nwatch [label="Aktive 0-W-Wirkungskontrolle\nNeutralität innerhalb Toleranz/Timeout prüfen"];
+  mismatch [shape=diamond, label="Mismatch bestätigt?"];
+  resync [label="Full-State Resync / Force Resend\nSmartMode + AC-Mode + BEIDE Limits"];
+  ok [label="EFFECTIVE / PARTIAL / RECOVERED\nDiagnosezustand aktualisieren"];
+  note [shape=note, fillcolor="#f7f7f7", label="QoS-/Publish-Erfolg beweist nur den lokalen Versandversuch.\nRecovery-Versand und tatsächliche physische Wiederherstellung\nwerden getrennt bewertet."];
+
+  c1 -> l1 -> inv -> sm;
+  sm -> wait [label="nein"];
+  wait -> sm [label="Readback aktualisiert"];
+  sm -> batch [label="ja / Safety-Neutralisierung separat zulässig"];
+  batch -> mqtt -> rb;
+  mqtt -> phys [label="Gerätewirkung zeitlich später", style=dashed];
+  rb -> eval;
+  phys -> eval;
+  eval -> neutral;
+  neutral -> nwatch [label="ja"];
+  neutral -> mismatch [label="nein"];
+  nwatch -> mismatch;
+  mismatch -> resync [label="ja + Resync erlaubt"];
+  resync -> mqtt [label="erneut senden"];
+  mismatch -> ok [label="nein / Wirkung bestätigt"];
+  eval -> note [style=dashed, arrowhead=none];
+}

@@ -1,0 +1,16 @@
+@startuml
+skinparam shadowing false
+concise "Harvest" as H
+concise "Fast Capture" as F
+@0
+H is "distinct source observations"
+F is "own 4-source observation token"
+@15
+F is "FULL_IDLE can be confirmed after 15s"
+@30
+H is "typical base/midday entry confirm 30s"
+@60
+H is "morning profile may require 60s"
+@180
+H is "high-SOC hold default example 180s"
+@enduml

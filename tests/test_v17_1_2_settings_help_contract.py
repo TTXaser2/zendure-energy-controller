@@ -1,4 +1,4 @@
-"""V17.1.2: operational help coverage, safe control explanations, and no placeholders."""
+"""V17.1.3: operational help coverage, safe control explanations, and no placeholders."""
 import unittest
 from settings_registry import iter_operational_settings
 from settings_help import build_section_specs
@@ -42,7 +42,7 @@ class TestV1712OperationalHelp(unittest.TestCase):
         self.assertIn('100 Watt pro Sekunde',h.extended_help)
         self.assertIn('sofort',h.extended_help)
         self.assertIn('nicht garantiert',h.extended_help)
-        self.assertIn('Aus lässt die normale Automatik unverändert',h.short_help)
+        self.assertIn('„Aus“: keine zusätzliche Ladeanforderung',h.short_help)
         self.assertEqual(len(h.option_help),3)
 
     def test_normal_step_is_distinct_and_without_recommendation_to_increase(self):

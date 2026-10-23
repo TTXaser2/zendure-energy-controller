@@ -1,0 +1,19 @@
+@startuml
+skinparam shadowing false
+start
+:Raw observations + freshness;
+:State / Eligibility\n(active, eligible, reason, block reason, Fast state);
+:Calculation provenance\n(branch, time profile + target share, semantics, physical reference,\ncandidates, shares/capture, target_selected_by);
+:Target stages\nraw -> limit -> smoothing -> ramp -> B -> O -> cross-charge -> final;
+:Result fields\ntarget_final_reason/control_reason + technical path + mode + limiters;
+:Command evidence\nintent, readback, lifecycle, effect/resync;
+:Independent physical effect\nPower + Grid + SOC trend;
+:Persist Measurement/Events/Graph;
+stop
+note right
+Never infer the executed math from one Reason field alone.
+STRATEGIC_SHARE is target-selection provenance, not a current_mode.
+Use a composite predicate and the four proof layers:
+State -> Calculation -> Physical effect -> Recovery.
+end note
+@enduml

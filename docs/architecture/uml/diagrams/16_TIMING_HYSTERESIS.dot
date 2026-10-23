@@ -1,0 +1,35 @@
+digraph G {
+graph [bgcolor="white", pad=0.28, nodesep=0.42, ranksep=0.52, labelloc=t, fontsize=20, fontname="DejaVu Sans"];
+node [shape=box, style="rounded,filled", fillcolor="white", fontname="DejaVu Sans", fontsize=10.2, margin="0.14,0.08"];
+edge [fontname="DejaVu Sans", fontsize=8.5, color="#444444"];
+graph [rankdir=LR, label="16 — Timing, Hysterese & frische Beobachtungen"];
+subgraph cluster_h { label="Harvest / High-SOC"; color="#aeb8c2";
+h0 [label="Observation token\n(grid sample epoch, primary sample epoch)"];
+h1 [shape=diamond,label="distinct + complete?"];
+h2 [label="Entry progress zählt nur frische, unabhängige Beobachtungen\nHost-Stall wird nicht als viele Zyklen gutgeschrieben"];
+h3 [label="Basis-Entry-Confirm\nREST_SURPLUS_ENTRY_CONFIRM_SECONDS\nconfig.example: 30 s"];
+hp [label="High-SOC-Zeitprofil (konfigurierbare Zeitfenster; folgende Beispielwerte) Entry-Confirm\n09:30–11:30: 60 s\n11:30–14:30: 30 s\n14:30–18:00: 15 s\nsonst konfigurierbarer Default"];
+ha [label="ACTIVE"];
+hhold [label="Eligibility fällt weg, SOC bleibt ≥ Exit-Schwelle:\nHigh-SOC Hold (config.example 180 s)\nHold sinkt nur bei frischen Beobachtungen"];
+hexit [label="SOC < High-SOC Exit (config.example 70%)\n→ HIGH_SMA_SOC_EXIT"];
+h0->h1; h1->h2[label="ja"]; h2->h3; h2->hp; h3->ha; hp->ha; ha->hhold; hhold->hexit;
+}
+subgraph cluster_f { label="Fast Capture — eigene Zeitleiste"; color="#aeb8c2";
+f0 [label="Observation token\nGrid + Primary + SOC + unabhängige Zendure-Power"];
+f1 [shape=diamond,label="distinct + complete?"];
+gap [label="dt ≤ 0 oder dt > 10 s\n→ Kontinuität gebrochen, O=0 / Full-Confirm reset"];
+full [label="FULL_IDLE candidate:\nSOC ≥99%, |Pprimary|≤100W, Export≥100W"];
+confirm [label="FULL_IDLE Confirm = 15 s\nnur distinct/fresh"];
+attack [label="desired O steigt → Attack ≤ 400 W/s × dt"];
+release [label="desired O fällt → Release ≤ 100 W/s × dt"];
+rez [label="RESERVE_UNKNOWN während Export\n→ O sofort 0 (kein langsames Release)"];
+noexp [label="Export <100 W nach proven FULL_IDLE/NEAR_LIMIT\n→ kontrolliertes R100-Release möglich"];
+import [label="Grid Import >100 W / harte Guard-Verletzung\n→ O sofort 0"];
+f0->f1; f1->gap[label="gap"]; f1->full[label="frisch"]; full->confirm->attack->release; release->noexp; full->rez[label="nicht klassifizierbar",style=dashed]; attack->import[style=dashed];
+}
+
+note [shape=note,fillcolor="#fff7df",label="Harvest und Fast haben getrennte Persistenz-/Timingzustände.\nGleiche Regelzyklusfrequenz bedeutet nicht gleiche Bestätigungssemantik."];
+h0->note[style=dashed,arrowhead=none]; f0->note[style=dashed,arrowhead=none];
+
+  uml_update_note [shape=note, style="filled", fillcolor="#eef5ff", fontcolor="#162e4d", fontsize=9, label="Zeitgrenzen: vier HARVEST_HIGH_SMA_SOC_PROFILE_*-TIME-Settings; 09:30/11:30/14:30/18:00 nur Defaults.\nSourceabgleich: V17.1.3; keine Feldwirkungsbehauptung"];
+}

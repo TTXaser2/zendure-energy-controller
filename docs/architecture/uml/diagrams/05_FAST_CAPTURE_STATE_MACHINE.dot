@@ -1,0 +1,40 @@
+digraph FastCapture {
+  graph [rankdir=LR, bgcolor="white", pad=0.3, nodesep=0.48, ranksep=0.8, labelloc=t,
+         label="05 — Fast Capture A400/R100: Overlay-State-Machine", fontsize=20, fontname="DejaVu Sans"];
+  node [shape=box, style="rounded,filled", fillcolor="white", fontname="DejaVu Sans", fontsize=11, margin="0.13,0.08"];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#444444"];
+
+  start [shape=circle, width=.18, label="", fillcolor="#222222", style=filled];
+  disabled [label="FAST_DISABLED\nmode=off oder Guard blockiert"];
+  ready [label="FAST_READY\nBaseline B vorhanden\nFast-Prerequisites erfüllt"];
+  fic [label="FULL_IDLE_CONFIRM\nFULL_IDLE-Kandidat\nmuss mit distinct samples bestätigt werden"];
+  fi [label="FULL_IDLE\nO_desired = aktueller Export"];
+  nl [label="NEAR_LIMIT\nreserve = P_primary,max − P_primary,actual\nO_desired = max(0, Export − reserve)"];
+  unk [label="RESERVE_UNKNOWN\nkeine belastbare kurzfristige Reserve\nO = 0"];
+  ramp [shape=note, fillcolor="#f7f7f7", label="Overlay-Dynamik\nAttack A400 = +400 W/s\nRelease R100 = −100 W/s\nHeadroom: O <= ZendureLimit − B"];
+  modes [shape=note, fillcolor="#f7f7f7", label="Konfigurationsmodus\nOFF: O=0\nSHADOW: O berechnen/messen, physisch B\nACTIVE: physisch clamp(B+O)"];
+  guards [shape=note, fillcolor="#f7f7f7", label="Force-zero / Block (Auszug)\nGrid-Import • MAX_SOC • stale/invalid\nCommand path not ready • fehlende Limits\nManual • Night fixed discharge • Discharge\nSAFE_STATE • Cross-Charge-Korrektur"];
+  layer [shape=note, fillcolor="#f7f7f7", label="Wichtig: Fast Capture ist KEIN Hauptmodus.\nEs ist ein kurzfristiges Overlay O auf Baseline B\nund nur für FULL_IDLE / NEAR_LIMIT spezifiziert."];
+
+  start -> disabled;
+  disabled -> ready [label="mode shadow|active\n+ alle Prerequisites"];
+  ready -> fic [label="FULL_IDLE candidate"];
+  fic -> fi [label="Confirm erfüllt"];
+  fic -> unk [label="Kandidat verloren"];
+  ready -> nl [label="NEAR_LIMIT candidate"];
+  ready -> unk [label="kein bewiesener Branch"];
+  fi -> unk [label="Branch/Export weg"];
+  nl -> unk [label="Reserve nicht mehr bewiesen"];
+  unk -> fic [label="FULL_IDLE candidate"];
+  unk -> nl [label="NEAR_LIMIT candidate"];
+  ready -> disabled [label="Guard verletzt / force_zero"];
+  fi -> disabled [label="harter Guard"];
+  nl -> disabled [label="harter Guard"];
+  unk -> disabled [label="harter Guard"];
+
+  fi -> ramp [style=dashed, arrowhead=none];
+  nl -> ramp [style=dashed, arrowhead=none];
+  ready -> modes [style=dashed, arrowhead=none];
+  disabled -> guards [style=dashed, arrowhead=none];
+  unk -> layer [style=dashed, arrowhead=none];
+}

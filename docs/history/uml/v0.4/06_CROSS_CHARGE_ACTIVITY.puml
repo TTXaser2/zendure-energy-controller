@@ -1,0 +1,23 @@
+@startuml
+start
+:Input signed target T\n(+ charge / - discharge);
+:Read fresh primary-storage signed power Pp\n(+ charge / - discharge);
+if (Cross-Charge enabled\nand T != 0\nand primary data valid?) then (no)
+  :Return T unchanged;
+  stop
+endif
+if (T and Pp opposite directions?) then (no)
+  :Release latch according to hysteresis;
+  :Return T unchanged;
+  stop
+endif
+:Engage/keep latch if threshold met;
+:Corrected = T + round(Pp);
+:Clamp correction so target can only\nmove toward 0, never reverse direction;
+if (Correction active after Fast B+O?) then (yes)
+  :Force Fast overlay O=0;
+  :Re-evaluate Cross-Charge against baseline B only;
+endif
+:Publish corrected signed target;
+stop
+@enduml

@@ -131,8 +131,8 @@ WHEN = MappingProxyType({
 # Two especially easy-to-misread regulation controls need a direct comparison.
 FAST_CAPTURE_PLAIN = MappingProxyType({
  'HARVEST_FAST_CAPTURE_MODE': {
-  'short': ('Fast Capture nimmt zusätzlichen PV-Überschuss schneller auf, wenn der Primärspeicher nachweislich voll und kaum noch lädt oder fast seine Ladeleistungsgrenze erreicht. ' 
-            'Aus lässt die normale Automatik unverändert; Testbetrieb berechnet nur, Aktiv erlaubt eine zusätzliche Ladeanforderung innerhalb aller Schutzgrenzen.'),
+  'short': ('Fast Capture kann zusätzlichen Solarüberschuss schneller für die Zendure-Ladung nutzen, wenn der Primärspeicher nachweislich voll ist und praktisch nicht mehr lädt oder fast seine Ladeleistungsgrenze erreicht. ' 
+            '„Aus“: keine zusätzliche Ladeanforderung, die normale Automatik bleibt erhalten. „Shadow (nur Diagnose)“: berechnet Möglichkeiten, ohne die Ladeanforderung zu ändern. „Aktiv“: darf innerhalb aller Schutzgrenzen zusätzliches Laden anfordern.'),
   'purpose': ('Die normale AUTO-Regelung bildet zuerst ihre Ladeanforderung aus Netzabweichung, Glättung und begrenzter Änderung pro Regelzyklus. ' 
               'Erst danach darf Fast Capture bei bestätigtem Restexport einen zusätzlichen positiven Ladeanteil daraufsetzen. ' 
               'Dessen Anstieg ist auf 400 Watt pro Sekunde begrenzt; bei normalem Rückgang wird er mit höchstens 100 Watt pro Sekunde abgebaut. ' 

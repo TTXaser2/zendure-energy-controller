@@ -1,0 +1,50 @@
+@startuml
+start
+if (Manual mode?) then (yes)
+  if (STOP_HOLD?) then (yes)
+    :Fast O=0;
+    :Active neutralization 0 W;
+    :current_mode=STOP_HOLD;
+  else (fixed charge/discharge)
+    :Require fresh SOC;
+    if (Target SOC reached?) then (yes)
+      :Neutralize and persist follow-up AUTO or STOP_HOLD;
+    else (no)
+      :Publish fixed signed target\nsubject to fixed-mode power limit;
+    endif
+  endif
+  stop
+endif
+if (Night window active?) then (yes)
+  :Require fresh SOC;
+  if (SOC <= global MIN_SOC?) then (yes)
+    :Active neutralization;
+    :HOLD;
+    stop
+  endif
+  if (Night reserve/effective stop reached?) then (yes)
+    :Pause fixed night discharge with active 0 W;
+    :Continue AUTO in same night window;
+  else (no)
+    :Publish fixed NIGHT_DISCHARGE power;
+    stop
+  endif
+endif
+:Normal AUTO;
+if (Grid import > deadband?) then (yes)
+  :Require SOC > MIN_SOC;
+  if (Currently charging?) then (yes)
+    :Ramp charge toward 0 first;
+    stop
+  endif
+  :raw = last_output + grid_import * CONTROL_GAIN;
+  :Clamp to MAX_DISCHARGE_POWER;
+  :Smoothing -> power-step ramp;
+  :Apply symmetric Cross-Charge correction;
+  :Publish signed negative target;
+  :DISCHARGE or HOLD if Cross-Charge neutralizes to 0;
+else (no)
+  :Charge/deadband path (see diagrams 02/03);
+endif
+stop
+@enduml

@@ -252,3 +252,22 @@ html[data-theme="dark"] .zec-wordmark{color:#f4f7fb}
 .zec-grid-card .zec-mini-chart-wrap{flex-shrink:0}
 .zec-grid-card .zec-mini-chart-caption{flex-shrink:0}
 @media(max-width:760px){.zec-card.zec-grid-card{min-height:300px}}
+
+/* V17.1.3: preserve the full V17.1.2 diagram height; compact copy/spacing, not data visual. */
+.zec-grid-card .zec-mini-chart-wrap{height:103px;flex-shrink:0;margin-top:6px;margin-bottom:0}
+.zec-grid-card .zec-mini-chart-caption{line-height:1.25;padding-bottom:2px}
+.zec-grid-card .zec-card-footer{overflow-wrap:anywhere}
+
+/* V17.1.3 desktop density: protect the full 103px mini-chart and visible
+   source freshness while avoiding forced expansion of the shared card row. */
+.zec-card.zec-grid-card{padding:12px 12px 10px}
+.zec-grid-card .zec-card-center{padding-top:6px}
+.zec-grid-card .zec-grid-state{margin-top:4px}
+.zec-grid-card .zec-mini-chart-controls{margin-top:2px}
+.zec-grid-card .zec-mini-chart-wrap{height:103px;margin-top:2px}
+.zec-grid-card .zec-card-footer{padding-top:6px}
+@media(min-width:1121px) and (max-width:1450px){
+  /* The group already has its own accessible name; retain all three choices. */
+  .zec-grid-card .zec-mini-chart-controls>span:first-child{display:none}
+  .zec-grid-card .zec-mini-range-buttons{justify-content:center;width:100%}
+}

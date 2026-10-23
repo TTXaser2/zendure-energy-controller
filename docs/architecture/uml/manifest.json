@@ -1,0 +1,434 @@
+{
+  "schema": "ZEC_UML_ATLAS_V1",
+  "status": "AS_BUILT_RELEASE_APPROVED",
+  "review_gate": "MANUAL_SOURCE_REVIEW_PASS",
+  "release": "V17.1.3",
+  "build_id": "v17.1.3-20261022",
+  "source_baseline_controller_sha256": "8bf439456e773aa84097e54059b3da1065deac5200d9304c0dc5960a5e24b1d7",
+  "historical_origin": {
+    "atlas_version": "V0.4",
+    "release": "V17.0.2",
+    "sha256": "1b1229b8958bafbd69cd676a1986e77605dd09673847b6872ef54481a4a8a4c5",
+    "storage": "external library Checkpoints; historical secondary .puml retained"
+  },
+  "diagrams": [
+    {
+      "id": "01",
+      "name": "01_CONTROLLER_STATE_MACHINE",
+      "status": "UPDATED",
+      "reason": "S3 ist kein eigener current_mode; Grid-Stale ist Ereignis.",
+      "source_symbols": [
+        "controller_logic.py::run_once",
+        "state.py::ControllerState"
+      ],
+      "source": "diagrams/01_CONTROLLER_STATE_MACHINE.dot",
+      "secondary_plantuml": "../../history/uml/v0.4/01_CONTROLLER_STATE_MACHINE.puml",
+      "plantuml_validation": "SECONDARY_UNVERIFIED",
+      "rendered_svg": "rendered/01_CONTROLLER_STATE_MACHINE.svg",
+      "rendered_png": "rendered/01_CONTROLLER_STATE_MACHINE.png",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "d7acd1294af4c5a41c4db410efbef6b31de4ed03831b5df136ea211710b46bee",
+      "rendered_svg_sha256": "5682e896acee5f440aced254239e06e6d72c3ce674d2a3fcc8e2d19514ce6cc0",
+      "rendered_png_sha256": "bfae6e172ad109887ee144e2db97bf03e373122f3948ff5c17cab8b0f407aded"
+    },
+    {
+      "id": "02",
+      "name": "02_CONTROL_CYCLE_ACTIVITY",
+      "status": "UPDATED",
+      "reason": "NIGHT/MIN_SOC entkoppelt fixe Entladung von zulässiger Grid-Verarbeitung.",
+      "source_symbols": [
+        "controller_logic.py::run_once",
+        "controller_logic.py::handle_night_mode"
+      ],
+      "source": "diagrams/02_CONTROL_CYCLE_ACTIVITY.dot",
+      "secondary_plantuml": "../../history/uml/v0.4/02_CONTROL_CYCLE_ACTIVITY.puml",
+      "plantuml_validation": "SECONDARY_UNVERIFIED",
+      "rendered_svg": "rendered/02_CONTROL_CYCLE_ACTIVITY.svg",
+      "rendered_png": "rendered/02_CONTROL_CYCLE_ACTIVITY.png",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "846f845eac43427ba950b5253ea01ac7fdbc4a1f3f0f94efffae4fee88a6cf95",
+      "rendered_svg_sha256": "c955b194b20c7868acfedfea7c18f0d232d34a113f484a3bc90112b93e30a782",
+      "rendered_png_sha256": "5e3b34029340fb30917564959ab0e63ce1264d578861d43ee2ef217f62264705"
+    },
+    {
+      "id": "03",
+      "name": "03_CHARGE_TARGET_PIPELINE",
+      "status": "UPDATED",
+      "reason": "S3-Saisonwirkung gilt nur bei opt-in und ist nachrangig zum Export-Capture-Floor.",
+      "source_symbols": [
+        "controller_logic.py::_harvest_time_profile",
+        "controller_logic.py::_s3_season_policy",
+        "controller_logic.py::handle_charge"
+      ],
+      "source": "diagrams/03_CHARGE_TARGET_PIPELINE.dot",
+      "secondary_plantuml": "../../history/uml/v0.4/03_CHARGE_TARGET_PIPELINE.puml",
+      "plantuml_validation": "SECONDARY_UNVERIFIED",
+      "rendered_svg": "rendered/03_CHARGE_TARGET_PIPELINE.svg",
+      "rendered_png": "rendered/03_CHARGE_TARGET_PIPELINE.png",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "ae4f12850bcc79034f0fd2a9acce168f31a6bb554b383464fdace89beb8d210b",
+      "rendered_svg_sha256": "88db5aa083357daa1023594750a0cd22594ddd081078d495a425a6d37debd279",
+      "rendered_png_sha256": "651c6dcfa4de43c9dfaea37f93979531b4747275954eae9ab30dc7d456d29e5d"
+    },
+    {
+      "id": "04",
+      "name": "04_HARVEST_STATE_MACHINE",
+      "status": "UPDATED",
+      "reason": "Profil/Bestätigungsdauer sind konfigurierbare S3-Werte.",
+      "source_symbols": [
+        "controller_logic.py::_harvest_time_profile",
+        "controller_logic.py::update_rest_surplus_harvest_state"
+      ],
+      "source": "diagrams/04_HARVEST_STATE_MACHINE.dot",
+      "secondary_plantuml": "../../history/uml/v0.4/04_HARVEST_STATE_MACHINE.puml",
+      "plantuml_validation": "SECONDARY_UNVERIFIED",
+      "rendered_svg": "rendered/04_HARVEST_STATE_MACHINE.svg",
+      "rendered_png": "rendered/04_HARVEST_STATE_MACHINE.png",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "82ecbaf77d6ea0a375f5d4aec63034228f9118294be94a96d51537ce29d4670c",
+      "rendered_svg_sha256": "3f9df1b42768a6ddb3f03989fcc7d80d98f07ac443850bdea0d709ef9aaec624",
+      "rendered_png_sha256": "a39c6d67f2c4af265f7bed6f6ae873f0dfac2c568134247c11abeadf5dcbb823"
+    },
+    {
+      "id": "05",
+      "name": "05_FAST_CAPTURE_STATE_MACHINE",
+      "status": "REVIEWED_UNCHANGED",
+      "reason": "V17.1.2 Sourceconsumer weiterhin unter Schutzinvarianten; keine zusätzliche UML-Änderung abgeleitet.",
+      "source_symbols": [
+        "controller_logic.py::handle_charge",
+        "state.py::ControllerState"
+      ],
+      "source": "diagrams/05_FAST_CAPTURE_STATE_MACHINE.dot",
+      "secondary_plantuml": "../../history/uml/v0.4/05_FAST_CAPTURE_STATE_MACHINE.puml",
+      "plantuml_validation": "SECONDARY_UNVERIFIED",
+      "rendered_svg": "rendered/05_FAST_CAPTURE_STATE_MACHINE.svg",
+      "rendered_png": "rendered/05_FAST_CAPTURE_STATE_MACHINE.png",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "7915af462359d0b1c4fa5af63931a0eb119781250a0ffc4094ac4e35a92e4815",
+      "rendered_svg_sha256": "27fe634b3fe1bee8d26eae697cab583f4abb9efe7b16f004b6a10eea86f77f07",
+      "rendered_png_sha256": "952f184374ee198cc5493694d93a616e20468f56b7e3b5b02bb8dc16b62ec141"
+    },
+    {
+      "id": "06",
+      "name": "06_CROSS_CHARGE_ACTIVITY",
+      "status": "REVIEWED_UNCHANGED",
+      "reason": "V17.1.2 Sourceconsumer weiterhin unter Schutzinvarianten; keine zusätzliche UML-Änderung abgeleitet.",
+      "source_symbols": [
+        "controller_logic.py::handle_charge",
+        "controller_logic.py::_apply_symmetric_cross_charge_limit"
+      ],
+      "source": "diagrams/06_CROSS_CHARGE_ACTIVITY.dot",
+      "secondary_plantuml": "../../history/uml/v0.4/06_CROSS_CHARGE_ACTIVITY.puml",
+      "plantuml_validation": "SECONDARY_UNVERIFIED",
+      "rendered_svg": "rendered/06_CROSS_CHARGE_ACTIVITY.svg",
+      "rendered_png": "rendered/06_CROSS_CHARGE_ACTIVITY.png",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "3bfedf7ff66de2550d8eaa159124e8cb16d411f7cbd87cad4e550ce1661340b3",
+      "rendered_svg_sha256": "2bd7aa38a2cef161177a701db7555bb98b8df98e6b9c0376d144e771ab5a0cfb",
+      "rendered_png_sha256": "b57410ef7894a5182238d50f8123c1fcc25e509acba329d8dbbeaba6b20cd4c0"
+    },
+    {
+      "id": "07",
+      "name": "07_COMMAND_LIFECYCLE_SEQUENCE",
+      "status": "REVIEWED_UNCHANGED",
+      "reason": "V17.1.2 Sourceconsumer weiterhin unter Schutzinvarianten; keine zusätzliche UML-Änderung abgeleitet.",
+      "source_symbols": [
+        "command_lifecycle.py",
+        "controller_logic.py::_publish_signed_target"
+      ],
+      "source": "diagrams/07_COMMAND_LIFECYCLE_SEQUENCE.dot",
+      "secondary_plantuml": "../../history/uml/v0.4/07_COMMAND_LIFECYCLE_SEQUENCE.puml",
+      "plantuml_validation": "SECONDARY_UNVERIFIED",
+      "rendered_svg": "rendered/07_COMMAND_LIFECYCLE_SEQUENCE.svg",
+      "rendered_png": "rendered/07_COMMAND_LIFECYCLE_SEQUENCE.png",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "26df4bd752b482e9e880e9fcebb90ec61799d86f6853c9d07cec38f219a45cd7",
+      "rendered_svg_sha256": "21e9e33d3d72090f897ecb788d7ff3a74ee4573c0c4a9b25f2d82dc01af6f939",
+      "rendered_png_sha256": "83aee7f0097d58f694ca2963c1f83f901d64e9ed1e8ae9d0fa730bb39695eb04"
+    },
+    {
+      "id": "08",
+      "name": "08_COMMAND_EFFECT_RECOVERY_STATE",
+      "status": "REVIEWED_UNCHANGED",
+      "reason": "V17.1.2 Sourceconsumer weiterhin unter Schutzinvarianten; keine zusätzliche UML-Änderung abgeleitet.",
+      "source_symbols": [
+        "command_lifecycle.py",
+        "controller_logic.py::run_once"
+      ],
+      "source": "diagrams/08_COMMAND_EFFECT_RECOVERY_STATE.dot",
+      "secondary_plantuml": "../../history/uml/v0.4/08_COMMAND_EFFECT_RECOVERY_STATE.puml",
+      "plantuml_validation": "SECONDARY_UNVERIFIED",
+      "rendered_svg": "rendered/08_COMMAND_EFFECT_RECOVERY_STATE.svg",
+      "rendered_png": "rendered/08_COMMAND_EFFECT_RECOVERY_STATE.png",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "c4a3aae108bc978fa85c86ae0b49308235315c05bc5d55740cb45faa51ff4ca1",
+      "rendered_svg_sha256": "2fd7eb541efcf7c938f3c7474123dc575868a3ea5d89f272365da4ab65878a7e",
+      "rendered_png_sha256": "4d4c12558bc727cdde069eb3fc927f467dcd54f4bec5bea728f5baa3eff8d40b"
+    },
+    {
+      "id": "09",
+      "name": "09_COMPONENT_MAP",
+      "status": "UPDATED",
+      "reason": "Getrennte 1-s-Live- und 3-s-Minigraph-Polls; Stale-Diagnose.",
+      "source_symbols": [
+        "controller_logic.py",
+        "web_ui.py::build_grid_mini_payload",
+        "operational_events.py"
+      ],
+      "source": "diagrams/09_COMPONENT_MAP.dot",
+      "secondary_plantuml": "../../history/uml/v0.4/09_COMPONENT_MAP.puml",
+      "plantuml_validation": "SECONDARY_UNVERIFIED",
+      "rendered_svg": "rendered/09_COMPONENT_MAP.svg",
+      "rendered_png": "rendered/09_COMPONENT_MAP.png",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "83cb64e86afd1857fa77edc6b326e66d6e0d338609223df25bb0086e14fd7837",
+      "rendered_svg_sha256": "05e0f48475d2ae81a141972904df227063c2958df8c4aa54e79e0852e646c4f2",
+      "rendered_png_sha256": "fbce050518d6c3f4ec491402bf510bd00afd9e88d947aed45f1a68e078e66829"
+    },
+    {
+      "id": "10",
+      "name": "10_DISCHARGE_NIGHT_MANUAL_PATHS",
+      "status": "UPDATED",
+      "reason": "MIN_SOC blockiert Entladung, nicht die gesamte Netzverarbeitung.",
+      "source_symbols": [
+        "controller_logic.py::run_once",
+        "controller_logic.py::handle_discharge"
+      ],
+      "source": "diagrams/10_DISCHARGE_NIGHT_MANUAL_PATHS.dot",
+      "secondary_plantuml": "../../history/uml/v0.4/10_DISCHARGE_NIGHT_MANUAL_PATHS.puml",
+      "plantuml_validation": "SECONDARY_UNVERIFIED",
+      "rendered_svg": "rendered/10_DISCHARGE_NIGHT_MANUAL_PATHS.svg",
+      "rendered_png": "rendered/10_DISCHARGE_NIGHT_MANUAL_PATHS.png",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "ee4cce6de11dabd74eee57d5c4edae038aa7bbba824471cc5fbf592a136ef3ae",
+      "rendered_svg_sha256": "b99fc33dfb069e55d096783784dbb33e32916010694536cf5e419c36da975350",
+      "rendered_png_sha256": "7d17cf34cfd13212bc160b7523af589a5ec6d521a4de752dfd0162fff10f17e0"
+    },
+    {
+      "id": "11",
+      "name": "11_AUTO_GRID_EXPORT_DETAIL",
+      "status": "REVIEWED_UNCHANGED",
+      "reason": "V17.1.2 Sourceconsumer weiterhin unter Schutzinvarianten; keine zusätzliche UML-Änderung abgeleitet.",
+      "source_symbols": [
+        "controller_logic.py::handle_charge"
+      ],
+      "source": "diagrams/11_AUTO_GRID_EXPORT_DETAIL.dot",
+      "secondary_plantuml": "../../history/uml/v0.4/11_AUTO_GRID_EXPORT_DETAIL.puml",
+      "plantuml_validation": "SECONDARY_UNVERIFIED",
+      "rendered_svg": "rendered/11_AUTO_GRID_EXPORT_DETAIL.svg",
+      "rendered_png": "rendered/11_AUTO_GRID_EXPORT_DETAIL.png",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "982cd07b9ef6285cffc353a09c429d4d4d5a7e7ec2689577df81b5df229a3324",
+      "rendered_svg_sha256": "99e1b89f81032bd5ff9f240131900c5476be15a59cf3bf5fa2fe956acaf25037",
+      "rendered_png_sha256": "f0cd9137e23bd6e2b28488e961cc520400591e60b58317f4261cdbc0e3481cd3"
+    },
+    {
+      "id": "12",
+      "name": "12_AUTO_GRID_IMPORT_DETAIL",
+      "status": "REVIEWED_UNCHANGED",
+      "reason": "V17.1.2 Sourceconsumer weiterhin unter Schutzinvarianten; keine zusätzliche UML-Änderung abgeleitet.",
+      "source_symbols": [
+        "controller_logic.py::handle_discharge"
+      ],
+      "source": "diagrams/12_AUTO_GRID_IMPORT_DETAIL.dot",
+      "secondary_plantuml": "../../history/uml/v0.4/12_AUTO_GRID_IMPORT_DETAIL.puml",
+      "plantuml_validation": "SECONDARY_UNVERIFIED",
+      "rendered_svg": "rendered/12_AUTO_GRID_IMPORT_DETAIL.svg",
+      "rendered_png": "rendered/12_AUTO_GRID_IMPORT_DETAIL.png",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "4e1ce1cc42bc9dd93a19785d8ea20a4d0ecfc447638789aa40c58610bd7f6e5d",
+      "rendered_svg_sha256": "cae645b2b5951d3168b428f66e52e9f2a448cfc013ee742573fe92473aec771d",
+      "rendered_png_sha256": "fe85edff3d08c208d44df790f589056c492fe6375ba623d471ad4517f931e138"
+    },
+    {
+      "id": "13",
+      "name": "13_FULL_OR_IDLE_DEEP_DIVE",
+      "status": "UPDATED",
+      "reason": "Zeitprofil-Confirm ist konfigurierbar.",
+      "source_symbols": [
+        "controller_logic.py::_harvest_time_profile",
+        "controller_logic.py::handle_charge"
+      ],
+      "source": "diagrams/13_FULL_OR_IDLE_DEEP_DIVE.dot",
+      "secondary_plantuml": "../../history/uml/v0.4/13_FULL_OR_IDLE_DEEP_DIVE.puml",
+      "plantuml_validation": "SECONDARY_UNVERIFIED",
+      "rendered_svg": "rendered/13_FULL_OR_IDLE_DEEP_DIVE.svg",
+      "rendered_png": "rendered/13_FULL_OR_IDLE_DEEP_DIVE.png",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "3485557412ee7b804902ea9c84b59007abd704afc5cefb9f542391e332f91e8e",
+      "rendered_svg_sha256": "521a40aac39ada410c4ef3bb03ce092c39ff14c5f7f2de26f90bf828084637c9",
+      "rendered_png_sha256": "39718058fc7224c24548b8fef3792f438fd1861f25872e24382b1b847ba6e2da"
+    },
+    {
+      "id": "14",
+      "name": "14_NEAR_LIMIT_POWER_BALANCE",
+      "status": "UPDATED",
+      "reason": "Saisonpolicy kann strategischen Share unterdrücken.",
+      "source_symbols": [
+        "controller_logic.py::handle_charge",
+        "controller_logic.py::_s3_season_policy"
+      ],
+      "source": "diagrams/14_NEAR_LIMIT_POWER_BALANCE.dot",
+      "secondary_plantuml": "../../history/uml/v0.4/14_NEAR_LIMIT_POWER_BALANCE.puml",
+      "plantuml_validation": "SECONDARY_UNVERIFIED",
+      "rendered_svg": "rendered/14_NEAR_LIMIT_POWER_BALANCE.svg",
+      "rendered_png": "rendered/14_NEAR_LIMIT_POWER_BALANCE.png",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "de0e5e56bf8a0385a48f19132e4a995d825ef9d0c09e2c3fde2f221b06c07a82",
+      "rendered_svg_sha256": "983b3da464e06a1f11734442f5981782cf7d1d5edcf1f4e5fa09b451a019d7db",
+      "rendered_png_sha256": "7203b102afd53c894dd4a33a1876e3a50637d0087439fe54453fd5c40562fb87"
+    },
+    {
+      "id": "15",
+      "name": "15_PRIORITY_OVERRIDE_LAYERS",
+      "status": "UPDATED",
+      "reason": "S3 nur Strategieebene, kein Safety-/Command-Override.",
+      "source_symbols": [
+        "controller_logic.py::run_once",
+        "controller_logic.py::handle_charge"
+      ],
+      "source": "diagrams/15_PRIORITY_OVERRIDE_LAYERS.dot",
+      "secondary_plantuml": "../../history/uml/v0.4/15_PRIORITY_OVERRIDE_LAYERS.puml",
+      "plantuml_validation": "SECONDARY_UNVERIFIED",
+      "rendered_svg": "rendered/15_PRIORITY_OVERRIDE_LAYERS.svg",
+      "rendered_png": "rendered/15_PRIORITY_OVERRIDE_LAYERS.png",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "97955a95ec10f060a00e3fd528d5fc9d13552bc05795adc9d12d574b8d9474cb",
+      "rendered_svg_sha256": "6bea45bc1a602958cc60038ae186ea3d8c61eee1d39c8c4e6b94767a65ec1743",
+      "rendered_png_sha256": "4f32ae61c1119af8140dbe94f342a099635a3eab4eba0407275ebd70982f4055"
+    },
+    {
+      "id": "16",
+      "name": "16_TIMING_HYSTERESIS",
+      "status": "UPDATED",
+      "reason": "Runtimekonfigurierbare Zeitgrenzen anstelle der fixen Altuhrzeiten.",
+      "source_symbols": [
+        "controller_logic.py::_harvest_time_profile",
+        "controller_logic.py::_s3_season_policy"
+      ],
+      "source": "diagrams/16_TIMING_HYSTERESIS.dot",
+      "secondary_plantuml": "../../history/uml/v0.4/16_TIMING_HYSTERESIS.puml",
+      "plantuml_validation": "SECONDARY_UNVERIFIED",
+      "rendered_svg": "rendered/16_TIMING_HYSTERESIS.svg",
+      "rendered_png": "rendered/16_TIMING_HYSTERESIS.png",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "d3cd2982fbacb491a2006935087a56d8f80d2c8de363a2a11485c4c3bd032bce",
+      "rendered_svg_sha256": "3f1e30bfd43ffe6d3e911637281b270c80095f6916ff9c0f0e0bb9e736edb178",
+      "rendered_png_sha256": "ec6b8b4095f6b3a68f3b05cf935117605bef8fbf9ddd64b5a1f053a92c65bf55"
+    },
+    {
+      "id": "17",
+      "name": "17_RULE_CYCLE_MICROSCOPE",
+      "status": "UPDATED",
+      "reason": "V17.1.2 Sourceconsumer weiterhin unter Schutzinvarianten; keine zusätzliche UML-Änderung abgeleitet.",
+      "source_symbols": [
+        "controller_logic.py::handle_charge"
+      ],
+      "source": "diagrams/17_RULE_CYCLE_MICROSCOPE.dot",
+      "secondary_plantuml": "../../history/uml/v0.4/17_RULE_CYCLE_MICROSCOPE.puml",
+      "plantuml_validation": "SECONDARY_UNVERIFIED",
+      "rendered_svg": "rendered/17_RULE_CYCLE_MICROSCOPE.svg",
+      "rendered_png": "rendered/17_RULE_CYCLE_MICROSCOPE.png",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "e2725413f87698a74bd7d470e7744d3117ca0e3b1689db935a538fcd33ccf72e",
+      "rendered_svg_sha256": "996d9768a339a44d99d52494ae59934fd86f356b85edc74ef0f8e4ea2cd6e408",
+      "rendered_png_sha256": "66dfcb86e0b6d9cc65e27c1652ca1da8303f90c652b8ed57b5ae642376f74a34"
+    },
+    {
+      "id": "18",
+      "name": "18_REASON_LIMITER_PROVENANCE",
+      "status": "UPDATED",
+      "reason": "S3 requested/effective und applicability als eigene Diagnosedimension.",
+      "source_symbols": [
+        "state.py::ControllerState",
+        "controller_logic.py::_s3_season_policy"
+      ],
+      "source": "diagrams/18_REASON_LIMITER_PROVENANCE.dot",
+      "secondary_plantuml": "../../history/uml/v0.4/18_REASON_LIMITER_PROVENANCE.puml",
+      "plantuml_validation": "SECONDARY_UNVERIFIED",
+      "rendered_svg": "rendered/18_REASON_LIMITER_PROVENANCE.svg",
+      "rendered_png": "rendered/18_REASON_LIMITER_PROVENANCE.png",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "e7203b74b2199d103ac24e125f241ca29cd231b5feb1ec2d32dad74a7a999d4f",
+      "rendered_svg_sha256": "fbf507b8ca30f5796cda6e8ec13a485c608fecd45b745802a1d0e55fea6de201",
+      "rendered_png_sha256": "a17e41aa09aeb39a33f2305f3e7adb47c39788eaa182d8b839bdf9526304b52e"
+    },
+    {
+      "id": "19",
+      "name": "19_HIGH_SOC_STRATEGIC_SHARE_TIME_PROFILE",
+      "status": "UPDATED",
+      "reason": "S3 opt-in und konfigurierbare Tagesprofile ersetzen hardcoded-only-Altmodell.",
+      "source_symbols": [
+        "controller_logic.py::_harvest_time_profile",
+        "controller_logic.py::_s3_season_policy"
+      ],
+      "source": "diagrams/19_HIGH_SOC_STRATEGIC_SHARE_TIME_PROFILE.dot",
+      "secondary_plantuml": "../../history/uml/v0.4/19_HIGH_SOC_STRATEGIC_SHARE_TIME_PROFILE.puml",
+      "plantuml_validation": "SECONDARY_UNVERIFIED",
+      "rendered_svg": "rendered/19_HIGH_SOC_STRATEGIC_SHARE_TIME_PROFILE.svg",
+      "rendered_png": "rendered/19_HIGH_SOC_STRATEGIC_SHARE_TIME_PROFILE.png",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "24980e984b7f76bd69c354e55f3e220bd47516ae330704e8e456d40d911a571f",
+      "rendered_svg_sha256": "f20b8bfaf2010d71a33ff3969c6f6d01743301150b2f228a601eecbb7144b33f",
+      "rendered_png_sha256": "91e5c1e960caafd1371bc848a4dfdce8e901fe9f5c62a6109506611d2ff21d6b"
+    },
+    {
+      "id": "20",
+      "name": "20_S3_POLICY_OPT_IN",
+      "status": "NEW",
+      "reason": "Opt-in/Saisonpolicy gegenüber V0.4 erforderlich.",
+      "source_symbols": [
+        "controller_logic.py::_s3_season_policy",
+        "controller_logic.py::_s3_calendar_parallel"
+      ],
+      "source": "diagrams/20_S3_POLICY_OPT_IN.dot",
+      "secondary_plantuml": null,
+      "plantuml_validation": "NOT_PRESENT",
+      "rendered_svg": "rendered/20_S3_POLICY_OPT_IN.svg",
+      "rendered_png": "rendered/20_S3_POLICY_OPT_IN.png",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "845be4ea251c2a380b91a48da8770f109f79da7be8be7841de43072bb2b56329",
+      "rendered_svg_sha256": "3c6ead9f363ec4bdf5d1382ab798767a0fdb61d661017c6d8239fce01676e68f",
+      "rendered_png_sha256": "bf2839cbc152bc7fe38b2cc6028728676345237c004d87ac9ee8ef0a5695d071"
+    },
+    {
+      "id": "21",
+      "name": "21_LIVE_STATUS_VS_CONTROL",
+      "status": "NEW",
+      "reason": "Sourcepoll vs. Regler- und Minigraph-Takt unterscheidbar.",
+      "source_symbols": [
+        "static/status_v2.js",
+        "web_ui.py::build_grid_mini_payload",
+        "operational_events.py"
+      ],
+      "source": "diagrams/21_LIVE_STATUS_VS_CONTROL.dot",
+      "secondary_plantuml": null,
+      "plantuml_validation": "NOT_PRESENT",
+      "rendered_svg": "rendered/21_LIVE_STATUS_VS_CONTROL.svg",
+      "rendered_png": "rendered/21_LIVE_STATUS_VS_CONTROL.png",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "c67bf3f3f6f043a9ad0b6abb232ee61b63c7b9d8cfb743a713e637715501677b",
+      "rendered_svg_sha256": "82bee3bb977c555ee57ec40ad4313d93c6d242e9cc09024525c4eb82e82a2d7f",
+      "rendered_png_sha256": "8137de9428121ea9ddf57f5efb565ab7aefafc822716999b50384827c1db3946"
+    },
+    {
+      "id": "22",
+      "name": "22_GRID_STALE_EVENT",
+      "status": "NEW",
+      "reason": "Stale-Ereignis-Debounce und Controllerunabhängigkeit.",
+      "source_symbols": [
+        "operational_events.py",
+        "state.py"
+      ],
+      "source": "diagrams/22_GRID_STALE_EVENT.dot",
+      "secondary_plantuml": null,
+      "plantuml_validation": "NOT_PRESENT",
+      "rendered_svg": "rendered/22_GRID_STALE_EVENT.svg",
+      "rendered_png": "rendered/22_GRID_STALE_EVENT.png",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "7a1ff5e050201973d618e231c47a08fd282a474b51948f1f9619c9fd1616fa6c",
+      "rendered_svg_sha256": "a9342d817b4932b70e36a902fb140077b157cddb56040ce1bddd2fedddc9dc7d",
+      "rendered_png_sha256": "14ad323f7e075f6d8c866650bed0ee46a4e03a71795f9c6b17dc57290a7e8373"
+    }
+  ]
+}

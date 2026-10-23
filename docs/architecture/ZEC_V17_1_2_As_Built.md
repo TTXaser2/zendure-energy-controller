@@ -21,3 +21,8 @@ Der bestehende quellenbasierte Live-Status-Poll bleibt bei **1000-ms** unabhäng
 Source-Identität, Eingangsmanifest, Settings-Help-Vollständigkeit, Minigraph-/Zeitsemantik, responsive Screens 320/375/390/430 und Desktop, Accessibility, Fokustests, Vollregression + ResourceWarning, Build-Evidence, SHA/CRC/Source-Manifest, Fresh-extract, kontrollierte Installationssimulatoren, Datenblatt DOCX/PDF und `BACKLOG_NO_DROP_GATE` sind eigenständige Gates. Ein Paket-PASS ist kein Pi-Feld-PASS; natürliche Realwirkungen von S3/Stale/Fast FULL_IDLE und echter Clean Fresh Install bleiben jeweils evidenzabhängig.
 
 **Vorversion:** [V17.1.1 As-built](ZEC_V17_1_1_As_Built.md) belegt den eingefrorenen Produktvorläufer, nicht eine Freigabe für V17.1.2.
+
+
+## UML-Integrationsausblick (noch kein V17.1.2-Releasebestandteil)
+
+Die gesonderte technische Vorintegration unter [uml/INDEX.md](uml/INDEX.md) ordnet 19 historische und drei ergänzende Blätter der hier beschriebenen Sourcebasis zu. Fachreview und nächster gemeinsamer Releasefreeze sind getrennt noch ausstehend.

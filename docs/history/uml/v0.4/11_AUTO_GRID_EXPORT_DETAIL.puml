@@ -1,0 +1,30 @@
+@startuml
+skinparam shadowing false
+start
+if (AUTO + Grid-Export\n(grid_power < -DEADBAND)?) then (ja)
+  :Cross-Charge/Fast-Reversal-Vorprüfung;\nHarvest-State ist bereits aktualisiert;
+  if (Harvest aktiv?) then (ja)
+    :Harvest-Rechenzweig -> Diagramm 13/14;
+    stop
+  endif
+  :effective_export = max(0, -grid_power);\nkein doppelter Cross-Charge-Abzug;
+  if (low surplus und Fast kann nicht helfen?) then (ja)
+    :bestehende Ladeleistung schrittweise reduzieren;
+    stop
+  endif
+  :raw = last_input + int(effective_export * CONTROL_GAIN);\nINKREMENTELL;
+  :clamp 0..MAX_CHARGE_POWER_W;
+  :Smoothing;
+  :MAX_POWER_STEP ramp;
+  :Baseline B;
+  if (Fast active?) then (ja)
+    :B + O nach Fast-Guards / A400-R100;
+  else (off/shadow)
+    :physischer Sollwert = B;
+  endif
+  :Cross-Charge reduziert nur Richtung 0;\nCross-Charge outranks Fast;
+  :signed charge target publizieren;\nReadback + Effect Monitor;
+else (nein)
+endif
+stop
+@enduml

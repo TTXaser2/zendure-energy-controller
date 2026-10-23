@@ -1,0 +1,24 @@
+@startuml
+skinparam shadowing false
+start
+:CONFIG/Startup Gate;
+:Runtime Safety / required telemetry;
+if (MANUAL_MODE != AUTO?) then (ja)
+  :Manual path + local SOC limits;
+else (AUTO)
+  if (Night window?) then (ja)
+    :Night fixed discharge;\nReserve may hand control back to AUTO;
+  endif
+  :Hard SOC limits;
+  :Direction transition / no direct reversal;
+  :Correct existing target for Cross-Charge;
+  :AUTO Grid selection;
+  :Build slow Baseline B;
+  :Harvest HIGH_SMA_SOC: time-profile Share vs. Export-Capture;\nselected_by = STRATEGIC_SHARE / EXPORT_CAPTURE / BOTH_EQUAL;
+  :Fast Overlay O after B;
+  :Cross-Charge after B+O; O removed on conflict;
+endif
+:Command-State / Late-Effect safety may block or neutralize;
+:Readback + physical effect + recovery;
+stop
+@enduml

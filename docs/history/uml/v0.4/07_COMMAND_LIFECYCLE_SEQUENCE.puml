@@ -1,0 +1,38 @@
+@startuml
+participant "ControllerLogic" as C
+participant "Command Lifecycle" as L
+participant "MQTT Client" as M
+participant "Zendure" as Z
+participant "Readback State" as R
+participant "Power Telemetry" as P
+participant "Effect Monitor" as E
+
+C -> L : signed target + reason
+L -> L : derive intent CHARGE/DISCHARGE/NEUTRALIZE
+L -> L : enforce direction invariant\n(input vs output counter-limit = 0)
+alt active dynamic command
+  L -> R : require fresh smartMode=1
+  alt not confirmed
+    L -> M : request SmartMode / wait readback
+    M -> Z : command
+    Z --> R : readback
+  end
+end
+L -> L : full-state if intent changed/incomplete/mismatch/resync\nelse volatile-limit update; dedupe matching state
+L -> M : publish command batch
+M -> Z : smartMode/acMode/input/output limits
+Z --> R : device state/readback
+Z --> P : independent physical power observation
+R --> E : command-state evidence
+P --> E : signed direction/magnitude/confidence
+E -> E : direction -> tracking -> system-goal quality
+alt neutralization target 0 W
+  E -> E : actively observe physical neutrality
+end
+alt confirmed mismatch
+  E -> L : permit full-state resync / force resend
+  L -> M : resend smartMode + acMode + both limits
+else effective/recovered
+  E --> C : confirmed/recovered diagnostic state
+end
+@enduml
