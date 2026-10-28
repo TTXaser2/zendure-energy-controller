@@ -26,3 +26,37 @@ Der 22-Blatt-Review ist in [SOURCE_REVIEW_V17_1_3.md](SOURCE_REVIEW_V17_1_3.md) 
 | 20 | `845be4ea251c2a380b91a48da8770f109f79da7be8be7841de43072bb2b56329` | `3c6ead9f363ec4bdf5d1382ab798767a0fdb61d661017c6d8239fce01676e68f` | `controller_logic.py::_s3_season_policy`, `controller_logic.py::_s3_calendar_parallel` |
 | 21 | `c67bf3f3f6f043a9ad0b6abb232ee61b63c7b9d8cfb743a713e637715501677b` | `82bee3bb977c555ee57ec40ad4313d93c6d242e9cc09024525c4eb82e82a2d7f` | `static/status_v2.js`, `web_ui.py::build_grid_mini_payload`, `operational_events.py` |
 | 22 | `7a1ff5e050201973d618e231c47a08fd282a474b51948f1f9619c9fd1616fa6c` | `a9342d817b4932b70e36a902fb140077b157cddb56040ce1bddd2fedddc9dc7d` | `operational_events.py`, `state.py` |
+
+
+## CP19 – Entwicklungsdifferenz, nicht Bestandteil von V17.1.3
+
+- **08:** `controller_logic.py::_mark_mismatch`; `operational_events.py::persist_confirmed_emergency_failure`; `operational_events.py::_observe_battery_care_incident`; `state.py::ControllerState` – Event-ID und Zielreserve, WAL/FULL-Sofort-Commit, Retry nach DB-Fehler.
+- **09:** `controller_logic.py`; `operational_events.py` – Notladefehler synchron/Recovery asynchron, gemeinsamer Operational-Events-Store.
+- **01–07, 10–22:** in CP19 `REVIEWED_UNCHANGED`, unveränderte DOT/SVG/PNG-Basis V17.1.3. Alle CP19-Diagramme sind Entwicklungs-As-built; `MANUAL_RELEASE_GATE=PENDING`.
+
+## CP26 – tatsächliche Battery-Care-Quellenprovenienz (Entwicklung, nicht Release)
+
+Alle neuen Source-Symbole wurden gegen die aktuelle CP25-Python-AST geprüft; DOT/PNG/SVG-Hashes stehen zusätzlich im aktualisierten Manifest. `MANUAL_SOURCE_AND_VISUAL_REVIEW=PENDING`.
+
+- **01 UPDATED:** `battery_care_policy.py::decide_care`, `controller_logic.py::_battery_care_grid_dispatch`.
+- **02 UPDATED:** `battery_care_stage_events.py::observed_care_stage`, `controller_logic.py::run_once`.
+- **03 UPDATED:** `battery_care_pv_allocation.py::allocate_care_pv`, `battery_care_grid_observation.py::observe_grid_policy`.
+- **04 REVIEWED_UNCHANGED:** vorhandene Source-Verweise im Manifest; keine CP26-Syntax-/Hashänderung.
+- **05 UPDATED:** `battery_care_pv_allocation.py::allocate_care_pv`.
+- **06 UPDATED:** `controller_logic.py::_battery_care_grid_dispatch`.
+- **07 REVIEWED_UNCHANGED:** vorhandene Source-Verweise im Manifest; keine CP26-Syntax-/Hashänderung.
+- **08 UPDATED:** `operational_events.py::persist_confirmed_emergency_failure`, `operational_events.py::_observe_battery_care_incident`.
+- **09 UPDATED:** `battery_care_policy.py::decide_care`, `battery_care_episode_store.py::CareEpisodeStore`, `operational_events.py::_observe_battery_care_stage`, `battery_care_graph_history.py::care_day_lines`.
+- **10 UPDATED:** `controller_logic.py::_battery_care_reserve_soc`.
+- **11 REVIEWED_UNCHANGED:** vorhandene Source-Verweise im Manifest; keine CP26-Syntax-/Hashänderung.
+- **12 REVIEWED_UNCHANGED:** vorhandene Source-Verweise im Manifest; keine CP26-Syntax-/Hashänderung.
+- **13 REVIEWED_UNCHANGED:** vorhandene Source-Verweise im Manifest; keine CP26-Syntax-/Hashänderung.
+- **14 REVIEWED_UNCHANGED:** vorhandene Source-Verweise im Manifest; keine CP26-Syntax-/Hashänderung.
+- **15 UPDATED:** `battery_care_policy.py::decide_care`, `controller_logic.py::_battery_care_grid_dispatch`.
+- **16 UPDATED:** `battery_care_stage_events.py::observed_care_stage`, `operational_events.py::_observe_battery_care_stage`.
+- **17 REVIEWED_UNCHANGED:** vorhandene Source-Verweise im Manifest; keine CP26-Syntax-/Hashänderung.
+- **18 UPDATED:** `battery_care_stage_events.py::observed_care_stage`, `battery_care_graph_history.py::care_day_incidents`.
+- **19 REVIEWED_UNCHANGED:** vorhandene Source-Verweise im Manifest; keine CP26-Syntax-/Hashänderung.
+- **20 REVIEWED_UNCHANGED:** vorhandene Source-Verweise im Manifest; keine CP26-Syntax-/Hashänderung.
+- **21 UPDATED:** `state.py::ControllerState`, `operational_events.py::_observe_battery_care_stage`.
+- **22 REVIEWED_UNCHANGED:** vorhandene Source-Verweise im Manifest; keine CP26-Syntax-/Hashänderung.

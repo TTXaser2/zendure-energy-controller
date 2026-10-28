@@ -1,4 +1,71 @@
+## V18.0.0 – 27.10.2026: bereitgestelltes Installationspaket zur realen Feldabnahme
+
+**NEUE technische Installationskandidaten-Basis:** `zendure_controller_v18_0_0.zip`, Build `v18.0.0-20261027`; aus verifiziertem CP42 V18-Stagingbaum abgeleitet, mit echtem Preflight-Installer, Release-Datenblatt und gemessenem anwendbaren Regressionsergebnis. Die explizit inventarisierten historischen 56 Release-Hold-/Altversionsassertions bleiben unter CP42-Staging-QA belegt und sind in der installierbaren Quellkopie nicht als PASS gezählt. **Dies ist die Bereitstellung zur Nutzer-Feldinstallation, nicht die Behauptung einer bereits erfolgreichen Feldinstallation oder einer physisch bestätigten Battery-Care-Wirkung.** Manuelle UML-Fachabnahme bleibt PENDING. Alle bisherigen V17.1.3-Pi-Feldangaben bleiben unverändert. Das Master-Ledger `05` bleibt alleinige Backlogautorität.
+
+## CP42 – 27.10.2026: CP41-Auditfixture in V17/V18 getrennt, weiterhin kein Release
+
+CP41 bleibt extern unabhängig gesicherte Quellenprovenienz. Der CP41-V18-Gesamtlauf hat sieben reine Testfixturefehler nachgewiesen, weil ein temporärer V17-Root fälschlich den aktuellen gesperrten V18-Standardinstaller erhielt. CP42 korrigiert die Fixture rootkontextabhängig und erhält alle alten V17-Testverträge; weder Regler-/Command- noch Installer-Sources werden verändert. Realer Pi V17.1.3; V18-Staging weiter `DEVELOPMENT_NOT_INSTALLABLE`, `RELEASE_HOLD` Exit 78, Build-Evidence BLOCKED. QA-Ergebnisse werden erst nach tatsächlichem CP42-Readback/Regression als PASS gewertet.
+
+## CP41 – 27.10.2026: statischer V18-Installer-/Rollback-Audit, KEIN Produktrelease
+
+Technisch gesicherte CP40-Vorlage; CP41 ergänzt nur Read-only-Prüfwerkzeug, gezielte Negativtests, Releasenotiz und kanonische Nachträge. Keine Änderung von Controller-/Command-/Installer-Sources; V18-Staging bleibt nicht installierbar, Release-Installer Exit 78, Build-Evidence BLOCKED. Im CP41-Audit bedeutet PASS nur Quellenvertrag + Exit-78-Sperre, **nicht** durchgeführte Update-/Fresh-/Backup-/Rollback-Recovery. Pi real V17.1.3, keine Hardwarewirkungsnachweise und keine neue Produktfreigabe.
+
+## CP40 – 27.10.2026: CP39-Evidenzfixture für echten V18-Staging-Testroot korrigiert
+
+CP39 ist eigenständig in der Bibliothek gesichert; die neue CP39-Testsuite hatte im V18-Staging einen echten V17-Buildkontextfehler. CP40 korrigiert nur diesen Testkontext und erhält den ursprünglichen V17-Prüfpfad. V18 weiterhin `DEVELOPMENT_NOT_INSTALLABLE`, Build-Evidence `BLOCKED`, Standardinstaller Exit 78, manuelle UML-/Datenblattabnahmen und physische Care-Wirkung ausstehend. Produktiver Raspberry Pi V17.1.3 unverändert.
+
+## CP39 – Entwicklungsnachtrag 27.10.2026: V18-Staging-Dual-QA als nicht freigebende Rohlog-/Hash-Bindung
+
+Reale Produktivinstallation unverändert **V17.1.3**. CP39 basiert auf dem unabhängig extern gesicherten CP38 und ergänzt ausschließlich Quell-/Report-/Rohlog-/Worker-Konsistenzprüfungen. Ein nachträglicher Staging-Quellwechsel muss die alte Evidenz ungültig machen; eigene CP39-Regressionen und Bibliotheksgate werden getrennt nach Durchführung bewertet. Keine Endbaum-`ZEC_BUILD_EVIDENCE_V1`, keine manuelle UML-/Installer-/Rollback-/Feldfreigabe, keine physische Care-Wirksamkeit. V18-Installer bleibt `RELEASE_HOLD`/Exit 78 und nicht ausführbar.
+
+## CP38 – Entwicklungsnachtrag 27.10.2026: SMA-Testfixture-Import im V18-Staging
+
+Der isolierte CP37-V18-Testprozess konnte lokale SMA-Sibling-Fixtures nicht importieren. CP38 behebt nur dessen Python-Suchpfad. Erneute volle Regression und Externcheckpoint müssen separat bestanden sein, um einen CP38-QA-/Bibliotheks-PASS zu rechtfertigen. V18-Staging weiter `DEVELOPMENT_NOT_INSTALLABLE`, finale Build-Evidence `BLOCKED`, Pi produktiv V17.1.3 unverändert.
+
+## Entwicklungsnachtrag CP37 – 27.10.2026: Staging-Guard-AST-Verbesserung
+
+CP36 ist unabhängig extern gesichert. Der CP37-AST-Guard unterscheidet die ausdrücklich geschützte mehrzeilige V18-Quellkopie von unsicherem V17-Prepare im V18-Zweig. Gesamtregressions- und Bibliotheks-PASS gelten nur nach separater echter Evidenz. Pi produktiv weiterhin V17.1.3, `V18_BUILD_EVIDENCE=BLOCKED`, Installer Exit 78, keine Release-/Feldfreigabe.
+
+## Engineering-Nachtrag CP36 – 27.10.2026: getrennte Release-Testkontexte
+
+Die V18-Staging-Regression ist nach expliziter Historien-/Testkontextanpassung ausführbar; der originale V17.1.3-Prüfvertrag wird im Entwicklungsbaum weiterhin separat ausgeführt. Ergebnisse gelten nur mit eigenen vollständigen Logs und extern gesicherten CP36-Quellen. `V18_0_0_BUILD_EVIDENCE=BLOCKED`, Standardinstaller Exit 78/nicht ausführbar, UML-Manualreview und reale Batterie-Wirksamkeit weiter offen. Produktiver Pi unverändert V17.1.3.
+
+## CP35 Entwicklungsnachtrag – 27.10.2026: echter V18-Testkontext-Blocker
+
+Quelle: CP34-V18-Staging. Die Staging-/Manifest-/Datenblatt-Provenienz ist korrekt, jedoch ist die finale V18-Gesamtregression **nicht erfolgreich nachgewiesen**; historisch V17.1.3-gebundene Entwicklungstests müssen erst versionsneutral werden. CP35 führt hierzu ausschließlich einen fail-closed readiness/test-isolation guard ein. **Keine V18-Installationsfreigabe, `BUILD_EVIDENCE=BLOCKED`, Pi produktiv V17.1.3.** `05` ist Master-Ledger.
+
+## Engineering-Status CP34 – 27.10.2026: V18-Staging mit Datenblattentwurf, nicht installierbar
+
+Verifizierte Entwicklungs-Vorgängerbasis CP33 (SHA256 `9ff49012643ffb1683aa0915e5f8ca057cf025283fa04050f612f24ecd5b011b`). CP34 baut einen separaten, source-/dokumenthashgebundenen V18-Stagingbaum; der ursprüngliche V17.1.3-Laufzeitstand und seine veröffentlichte Datenblattidentität bleiben Produktionsautorität. Jede V18-Staging-Installationshandlung bleibt **hart gesperrt (Exit 78)**; Build-Evidence `BLOCKED`, manuelle UML-Abnahme `PENDING`, physische Battery-Care-Wirksamkeit `NOT_VERIFIED`. Kein Pi-Eingriff. Ein gesicherter Source-Checkpoint oder Staging-ZIP ist keine technische Produkt- oder Feldfreigabe.
+
+## CP33-Entwicklungsstatus 27.10.2026 – kein neuer Produktrelease
+
+- Letzte reale produktive Runtime bleibt **V17.1.3** (Build `v17.1.3-20261022`, allgemeine Pi-Feldabnahme vom 23.10.2026).
+- CP33 ist ein **neues, nicht installierbares V18-Datenblatt-Entwurfsartefakt** auf CP32-Basis. Es überschreibt weder freigegebene V17.1.3-Build-/Datenblattdateien noch den produktiven Installer; Render-/Source-Provenienz ist kein Produkt- oder Hardwarewirkungsnachweis.
+- `RELEASE_HOLD`, `MANUAL_UML_REVIEW=PENDING`, `PHYSICAL_EFFECT=NOT_VERIFIED`, finales V18-Build/Installer-/Rollback-Gate offen. Vollregressions- und externes Checkpoint-Gate werden ausschließlich nach eigenem erfolgreichem Nachweis als PASS geführt.
+
+## CP32 – 27.10.2026: V18-Build-Evidence-Gate gesichert
+
+Reale Produktivinstallation weiterhin V17.1.3. Das CP31-Stagingartefakt bleibt unveränderliche Provenienz und ist nicht installierbar. CP32 ergänzt ausschließlich die Prüfung, dass die releasebezogene Build-Evidence tatsächlich den verlangten `PASS`- und ResourceWarning-/Regressionsvertrag erfüllt. V18-Installer-Exit 78, Buildstatus `BLOCKED`, manuelle UML-Abnahme und physische Wirksamkeit offen; kein Produktiv-Pi-Eingriff.
+
+## CP31-Nachtrag – 27.10.2026: V18-Staging-Kopierhygiene
+
+Aktueller produktiver Raspberry Pi unverändert V17.1.3. In CP31 wird ausschließlich der im CP30-Gesamttest belegte Hygiene-FAIL durch flüchtige SQLite-/Logdateien korrigiert. Installer-Sperre Exit 78, V18-Build-Evidence BLOCKED, Battery-Care-Hardwarewirkung ausstehend, keine Produktivinstallation oder neue Releasefreigabe.
+
+## Entwicklungsnachtrag CP30 – 27.10.2026, V18 technisch gesperrtes Identitäts-Staging
+
+Produktiv unverändert **V17.1.3 / `v17.1.3-20261022`**; echte V18-Pi-Wirksamkeit, Deployment- und Rollback-Abnahme **nicht durchgeführt**. CP30 bereitet ein separates Source-Staging mit konsistenter V18-Runtime-/Installer-Identität und Source-Manifest vor, belässt aber den V18-Standardinstaller unconditionally `RELEASE_HOLD / exit 78`, Build-Evidence `BLOCKED`, reale Freigabe `NOT_EVALUABLE`. Kein regulärer V18-Release, kein Installationstool für den Pi. V18-Feldtool weiterhin gesperrt; CP29-Checkpoint ist die Basis, CP30-Sicherung wird separat geprüft.
+
+## Aktueller Engineering-Nachtrag CP29 – 27.10.2026 (keine Feldänderung)
+
+**Produktiv weiterhin:** V17.1.3 / `v17.1.3-20261022`, real allgemein feldgeprüft 23.10.2026. CP29 ist ausschließlich sourcebasierte V18.0.0-Dokumentationsvorbereitung; `version.py`, V17.1.3-Installer, Command-/Safety-Sources und der produktive Pi sind unverändert. **Kein V18-Release, kein V18-Build-/Feld-PASS, kein physischer Battery-Care-Wirkungsnachweis.** `DEVELOPMENT_NOT_INSTALLABLE / RELEASE_IDENTITY_FAIL / MANUAL_UML_REVIEW_PENDING`. Historische Feldquellen unten bleiben ihre zeitgebundene Evidenz.
+
 # ZEC – Current Release & Field Status
+
+## Aktueller Vorrangstatus – 27.10.2026
+
+**Produktiv/real:** V17.1.3 / `v17.1.3-20261022`, am 23.10.2026 allgemein feldgeprüft (`FULL_READY`, `RELEASE_BACKUP_EXACT` PASS). **Battery Care:** bis einschließlich CP25 ausschließlich isolierte Development-Checkpoints; CP26 aktualisiert technische UML-Dokumentation, keine Produktivinstallation/physische Care-Abnahme, kein neues Release. Alter eigener Sourceinhalt darunter dokumentiert jeweils seinen damaligen Wissensstand und darf nicht als aktueller Pi-Status gelesen werden.
+
 
 ## V17.1.3 – technischer Buildkandidat (Nachtrag 22.10.2026)
 

@@ -5,10 +5,17 @@
 # See LICENSE, NOTICE and DISCLAIMER.md for license, attribution and warranty information.
 
 import time
+import uuid
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
 from config_manager import ConfigManager
+from battery_care_policy import (CareConfig, CareEpisode, CareDecision, CareStage,
+                                 decide_care, in_care_season)
+from battery_care_grid_observation import GridInputs, observe_grid_policy
+from battery_care_episode_store import CareEpisodeStore, CareEpisodePersistenceError
+from operational_events import OperationalEventJournal
+from battery_care_pv_allocation import PvSnapshot, PvMemory, allocate_care_pv
 from csv_logger import CsvRotatingLogger
 from app_logger import RotatingAppLogger
 from mqtt_bridge import MqttBridge
@@ -158,6 +165,41 @@ class ZendureController:
         self._fast_capture_last_observation_monotonic: Optional[float] = None
         self._fast_capture_last_mode: str = "off"
         self._fast_capture_return_to_baseline_pending: bool = False
+        # PV observation stays diagnostic. Only handle_charge may promote its
+        # bounded absolute candidate via the EXISTING safety/command owner.
+        self._care_pv_shadow_memory = PvMemory()
+        self._care_pv_live_active: bool = False
+        self._care_pv_return_to_baseline_pending: bool = False
+        self._care_pv_baseline_target_w: int = 0
+        # Read-only source-validated grid policy shadow. No grid charging
+        # commands are issued by this state until the full command/episode
+        # and persistent restart gates have been implemented and tested.
+        self._care_grid_episode = CareEpisode()
+        self._care_grid_shadow_decision: Optional[CareDecision] = None
+        self._care_grid_live_active: bool = False
+        # Read-only incident correlation with the EXISTING command-effect owner.
+        # Failure evidence stays latched until the operational event observer
+        # persists it; a new episode only creates a new identity on an actual
+        # newly confirmed effect failure, never on a repeated MQTT publish.
+        self._care_failure_episode_token: Optional[Tuple[int, int]] = None
+        self._care_emergency_episode_generation: int = 0
+        self._care_emergency_episode_live: bool = False
+        # Lazily opened only on independently confirmed emergency failure.
+        # No event-database work is performed during normal control cycles.
+        self._care_incident_write_through_journal = None
+        # SQLite episode latch in the EXISTING operational-events DB. No
+        # additional command owner; no SOC timer/source confirmation is saved.
+        # Some historical, control-only test doubles intentionally pass no
+        # ConfigManager at construction. Battery Care remains inert there;
+        # only a real configured Care cycle may read or write the latch.
+        self._care_grid_episode_store = CareEpisodeStore(
+            self.config_manager.get if self.config_manager is not None else (lambda: {})
+        )
+        self._care_grid_episode_loaded = False
+        self._care_grid_episode_signature = None
+        self._care_grid_persistence_ready = False
+        self._care_grid_disabled_checked = False
+        self._care_grid_clear_failed = False
 
     def log(self, message: str) -> None:
         cfg = self.config_manager.get()
@@ -850,6 +892,37 @@ class ZendureController:
             self.state.zendure_local_api_new_success_applied = False
             self.state.zendure_local_api_request_duration_ms = None
             self.state.zendure_local_api_snapshot_apply_ms = None
+            # Clear before any early return (config, MQTT, safety, STOP).
+            self.state.care_policy_valid = False
+            self.state.care_in_season = False
+            self.state.care_effective_discharge_floor_soc = None
+            self.state.care_dispatched_stage = ""
+            self.state.care_dispatched_target_w = 0
+            # Read-only PV proposals are never retained as effective status
+            # across early returns, SAFE_STATE, STOP, or stale-grid branches.
+            self.state.care_pv_shadow_candidate_w = 0
+            self.state.care_pv_shadow_extra_w = 0
+            self.state.care_pv_shadow_reason = "NOT_EVALUATED"
+            self.state.care_pv_shadow_balance_w = None
+        if (cfg.get("MANUAL_MODE", "AUTO") != "AUTO"
+                or self._battery_care_reserve_soc(cfg) is None):
+            self._care_pv_shadow_memory = PvMemory()
+            # With care disabled there is no new Care command. A previous
+            # positive Care request must not be used as AUTO baseline later.
+            if self._care_pv_live_active:
+                self._care_pv_return_to_baseline_pending = True
+            self._care_pv_live_active = False
+        # Manual STOP/explicit Care-Off must never leave the old in-RAM
+        # episode authoritative. The persistent latch is cleared by the grid
+        # shadow step once the source/safety path reaches it; until then NO
+        # new Care grid request is eligible.
+        if (cfg.get("BATTERY_CARE_ENABLED") is not True
+                or cfg.get("MANUAL_MODE", "AUTO") != "AUTO"):
+            self._battery_care_clear_latch_for_explicit_stop()
+            self._care_grid_shadow_decision = None
+            self._care_grid_persistence_ready = False
+        else:
+            self._care_grid_disabled_checked = False
 
         if not self._config_control_allowed():
             self._run_config_recovery_preflight(cfg)
@@ -882,11 +955,24 @@ class ZendureController:
 
         fast_mode = self._fast_capture_prepare_mode(cfg)
         manual_mode = str(cfg.get("MANUAL_MODE", "AUTO"))
+        # The settings UI displays an effective SOC limit ONLY after the real
+        # controller confirms a valid, in-season AUTO/NIGHT policy with fresh
+        # SOC. Manual STOP/fixed modes must never advertise Care protection.
+        care_reserve = self._battery_care_reserve_soc(cfg)
+        care_floor_eligible = bool(manual_mode == "AUTO" and care_reserve is not None
+                                   and self.soc_is_fresh(cfg))
+        with self.state.lock:
+            self.state.care_policy_valid = care_floor_eligible
+            self.state.care_in_season = care_floor_eligible
+            self.state.care_effective_discharge_floor_soc = (
+                max(int(cfg["MIN_SOC_PERCENT"]), care_reserve) if care_floor_eligible else None
+            )
         if manual_mode != "AUTO":
             self._fast_capture_force_zero("NON_AUTO_MODE")
             self._reset_rest_surplus_harvest("MODE_CHANGED")
             self._timed_phase("grid_display_read_ms", self.refresh_grid_power_for_display, cfg)
             self._timed_control_phase(self.handle_manual_mode, cfg, manual_mode)
+            self._care_grid_live_active = False
             return
 
         if night_active:
@@ -919,6 +1005,12 @@ class ZendureController:
         self._timed_phase("cross_charge_metrics_ms", self.update_cross_charge_control_metrics, cfg)
 
         grid_power = self.state.grid_power
+        # Experimental stage-1 candidate: independent evidence and bounded
+        # arithmetic only. Live command authority is NOT connected.
+        self._battery_care_pv_shadow_step(cfg)
+        self._battery_care_grid_shadow_step(cfg)
+        if self._battery_care_grid_dispatch(cfg):
+            return
         if night_active:
             with self.state.lock:
                 night_soc = self.state.battery_soc
@@ -930,6 +1022,32 @@ class ZendureController:
                     # A fresh import/deadband reading must never reopen output
                     # or emit a second redundant neutralization in this cycle.
                     return
+        # The SOC floor is checked BEFORE any branch that may retain an older
+        # discharge command (cross-charge, Fast Capture, or deadband HOLD).
+        # Clearing an already active discharge is a safety neutralization, not
+        # a new independent Battery Care command owner. Charging may resume
+        # through the normal AUTO path on the next fresh grid observation.
+        with self.state.lock:
+            care_soc = self.state.battery_soc
+            existing_output = int(self.state.last_output_power or 0)
+        care_floor = self._battery_care_reserve_soc(cfg)
+        if care_floor is not None and care_soc is not None and care_soc <= care_floor and existing_output > 0:
+            self.state.add_limiter("BATTERY_CARE_RESERVE")
+            self.soc_limit_hold(
+                "Battery Care: geschützte saisonale Reserve erreicht",
+                "BATTERY_CARE_RESERVE",
+                technical_path="AUTO -> BATTERY_CARE_RESERVE -> HOLD",
+            )
+            return
+        # Unlike the legacy NIGHT reserve, the activated Care reserve must
+        # NOT reopen AUTO household discharge for grid import.  At this point
+        # any previous NIGHT output has already been neutralized above (or by
+        # the active-output guard).  Preserve the distinct export path so a
+        # real PV surplus can still charge through the original command owner.
+        if (night_active and care_floor is not None and care_soc is not None
+                and care_soc <= care_floor and grid_power >= -float(cfg["DEADBAND_W"])):
+            self.state.add_limiter("BATTERY_CARE_RESERVE")
+            return
         self.update_rest_surplus_harvest_state(cfg, grid_power)
 
         if self.cross_charge_guard_corrects_existing_target(cfg):
@@ -954,6 +1072,16 @@ class ZendureController:
                 return
 
         if abs(grid_power) <= cfg["DEADBAND_W"]:
+            # Battery Care can reclaim actually observed primary PV charging
+            # even at zero export. Never invent a PV opportunity from intent.
+            # A previous Care target MUST also return to the isolated ordinary
+            # AUTO baseline, otherwise deadband HOLD could latch that target.
+            if (self.state.care_pv_shadow_extra_w > 0
+                    or self._care_pv_live_active
+                    or self._care_pv_return_to_baseline_pending
+                    or self._care_grid_live_active):
+                self._timed_control_phase(self.handle_charge, cfg, grid_power)
+                return
             # High-SOC/Parallel-Harvest darf im Deadband weiter allokieren:
             # Wenn der Primärspeicher stark lädt, aber am Netzanschlusspunkt schon
             # nahe 0 W erreicht ist, soll Zendure kontrolliert Ladeleistung
@@ -965,10 +1093,339 @@ class ZendureController:
             return
 
         if grid_power > 0:
+            if self._care_pv_live_active or self._care_pv_return_to_baseline_pending:
+                # The PV-only import guard has already vetoed additional Care
+                # power. Use the standard charge/command path to withdraw it;
+                # do not accidentally preserve the old Care target in HOLD or
+                # switch directly to opposite discharge intent.
+                self._timed_control_phase(self.handle_charge, cfg, grid_power)
+                return
             self._timed_control_phase(self.handle_discharge, cfg, grid_power)
             return
 
         self._timed_control_phase(self.handle_charge, cfg, grid_power)
+
+    def _battery_care_pv_shadow_step(self, cfg: Dict[str, Any]) -> None:
+        """Observe an absolute PV candidate without changing control or commands.
+
+        Disabled/out-of-season requests cost no extra source/network reads. All
+        timestamps come from existing collectors, never from our command intent.
+        A proposal is NOT proof that the hardware charged or that PV was saved.
+        """
+        floor = self._battery_care_reserve_soc(cfg)
+        with self.state.lock:
+            soc = self.state.battery_soc
+        eligible = bool(floor is not None and soc is not None and soc < floor
+                        and cfg.get("MANUAL_MODE", "AUTO") == "AUTO")
+        if not eligible:
+            self._care_pv_shadow_memory = PvMemory()
+            with self.state.lock:
+                self.state.care_pv_shadow_candidate_w = 0
+                self.state.care_pv_shadow_extra_w = 0
+                self.state.care_pv_shadow_reason = "CARE_NOT_ELIGIBLE"
+                self.state.care_pv_shadow_balance_w = None
+            return
+        from primary_storage_source import primary_storage_integration_enabled
+        integrated = bool(primary_storage_integration_enabled(cfg))
+        command_ready, _ = self._fast_capture_command_ready()
+        now = time.time()
+        with self.state.lock:
+            grid_epoch = self.state.grid_power_sample_epoch
+            zendure_epoch = self.state.zendure_power_observation_updated_epoch
+            primary_epoch = (self.state.last_sma_battery_update_epoch
+                             if integrated else None)
+            direction = str(self.state.zendure_power_observation_direction or "UNKNOWN").upper()
+            signed = self.state.zendure_power_observation_signed_w
+            # AC-grid physical neutrality/charge; never infer from sent target.
+            independent = bool(self.state.actual_zendure_power_valid
+                               and direction in {"CHARGE", "NEUTRAL"} and signed is not None)
+            observation = PvSnapshot(
+                monotonic_s=time.monotonic(),
+                grid_w=self.state.raw_grid_power, grid_sample=str(grid_epoch) if grid_epoch is not None else None,
+                zendure_signed_w=signed, zendure_sample=str(zendure_epoch) if zendure_epoch is not None else None,
+                primary_integrated=integrated,
+                primary_signed_w=self.state.sma_battery_display_power if integrated else None,
+                primary_sample=str(primary_epoch) if primary_epoch is not None else None,
+                grid_fresh=bool(self.state.grid_power_valid and grid_epoch is not None
+                                and 0 <= now - float(grid_epoch) <= 15),
+                zendure_fresh=bool(independent and zendure_epoch is not None
+                                   and 0 <= now - float(zendure_epoch) <= 15),
+                primary_fresh=bool(not integrated or
+                                   (self.state.second_battery_data_valid and primary_epoch is not None
+                                    and 0 <= now - float(primary_epoch) <= 15)),
+                direction_independent=independent,
+                command_ready=command_ready,
+            )
+            # Isolation: published B+Care (or B+Fast) is NEVER the next B.
+            baseline = (self._care_pv_baseline_target_w
+                        if (self._care_pv_live_active or self._care_pv_return_to_baseline_pending or self._care_grid_live_active)
+                        else max(0, int(self.state.last_input_power or 0)
+                                 - (int(self.state.fast_capture_overlay_w or 0)
+                                    if self._fast_capture_last_mode == "active" else 0)))
+        proposal = allocate_care_pv(
+            observation, self._care_pv_shadow_memory,
+            care_eligible=True, normal_baseline_w=baseline,
+            max_charge_w=self._fast_capture_effective_zendure_limit_w(cfg),
+        )
+        self._care_pv_shadow_memory = proposal.memory
+        with self.state.lock:
+            self.state.care_pv_shadow_candidate_w = proposal.absolute_target_w
+            self.state.care_pv_shadow_extra_w = proposal.care_extra_w
+            self.state.care_pv_shadow_reason = proposal.reason
+            self.state.care_pv_shadow_balance_w = proposal.pv_balance_estimate_w
+
+    def _battery_care_clear_latch_for_explicit_stop(self) -> None:
+        """Clear an old grid latch even if STOP returns before sensor reads.
+
+        A disabled fresh install with no events DB never creates one. On an
+        actual clearing I/O failure, keep refusing a new grid request until
+        the original DB becomes writable again.
+        """
+        if self._care_grid_disabled_checked and not self._care_grid_clear_failed:
+            return
+        try:
+            if (self._care_grid_episode_loaded and self._care_grid_episode_signature is not None
+                    or self._care_grid_episode_store.exists()):
+                self._care_grid_episode_store.save(CareEpisode())
+            self._care_grid_episode = CareEpisode()
+            self._care_emergency_episode_live = False
+            self._care_grid_episode_signature = None
+            self._care_grid_episode_loaded = False
+            self._care_grid_disabled_checked = True
+            self._care_grid_clear_failed = False
+        except (CareEpisodePersistenceError, OSError):
+            self._care_grid_disabled_checked = False
+            self._care_grid_clear_failed = True
+
+    def _battery_care_persist_episode(self, episode: CareEpisode) -> None:
+        """Persist a changed grid latch BEFORE promoting its command intent."""
+        new_signature = CareEpisodeStore.signature(episode)
+        if new_signature != self._care_grid_episode_signature:
+            self._care_grid_episode_store.save(episode)
+            self._care_grid_episode_signature = new_signature
+        if episode.active_level == 3:
+            if not self._care_emergency_episode_live:
+                self._care_emergency_episode_generation += 1
+                self._care_emergency_episode_live = True
+        else:
+            self._care_emergency_episode_live = False
+        self._care_grid_episode = episode
+        self._care_grid_persistence_ready = True
+
+    def _battery_care_grid_shadow_step(self, cfg: Dict[str, Any]) -> None:
+        """Evaluate source-backed grid/urgent-care intent, WITHOUT issuing it.
+
+        The existing command pipeline remains the ONLY command owner. This
+        deliberately never publishes MQTT; no grid authority or real charging
+        effectiveness can be inferred from the shadow decision.
+        """
+        # Restore the stored reserve before considering new grid authority.
+        # DB/readback errors must never silently reset the episode to today's
+        # possibly lower R or allow a new emergency command.
+        self._care_grid_persistence_ready = False
+        if cfg.get("BATTERY_CARE_ENABLED") is not True:
+            self._battery_care_clear_latch_for_explicit_stop()
+            self._care_grid_shadow_decision = None
+            return
+        if self._care_grid_clear_failed:
+            self._care_grid_shadow_decision = None
+            return
+        try:
+            if not self._care_grid_episode_loaded:
+                self._care_grid_episode = self._care_grid_episode_store.load()
+                self._care_grid_episode_signature = CareEpisodeStore.signature(self._care_grid_episode)
+                self._care_grid_episode_loaded = True
+        except CareEpisodePersistenceError:
+            self._care_grid_shadow_decision = None
+            return
+        try:
+            care = CareConfig(
+                enabled=True,
+                season_start=cfg.get("BATTERY_CARE_SEASON_START_MM_DD"),
+                season_end=cfg.get("BATTERY_CARE_SEASON_END_MM_DD"),
+                reserve_soc=cfg.get("BATTERY_CARE_RESERVE_SOC_PERCENT"),
+                grid_trigger_soc=cfg.get("BATTERY_CARE_GRID_TRIGGER_SOC_PERCENT"),
+                emergency_soc=cfg.get("BATTERY_CARE_EMERGENCY_SOC_PERCENT"),
+                grid_charge_cap_w=cfg.get("BATTERY_CARE_GRID_CHARGE_MAX_POWER_W"),
+            )
+            if care.validate(int(cfg["MAX_SOC_PERCENT"]), int(cfg["MAX_CHARGE_POWER_W"])):
+                self._care_grid_shadow_decision = None
+                self._battery_care_persist_episode(CareEpisode())
+                return
+            command_ready, _ = self._harvest_command_path_diagnostics()
+            with self.state.lock:
+                command_ready = bool(command_ready
+                    and not self.state.command_uncertain_mqtt_active
+                    and not self.state.command_neutralization_active
+                    and not self.state.command_late_effect_guard_active)
+            # Deliberately not checking cross_charge_guard_latched above:
+            # it is an ECONOMIC guard bypassed only by later fully-authorized
+            # emergency dispatch; device/SmartMode/safety gates still apply.
+            integrated = bool(primary_storage_integration_enabled(cfg))
+            now = time.time()
+            with self.state.lock:
+                readings = GridInputs(
+                    today=datetime.now().date(), now_epoch=now,
+                    monotonic_s=time.monotonic(),
+                    manual_mode=str(cfg.get("MANUAL_MODE", "AUTO")),
+                    soc=self.state.battery_soc,
+                    soc_epoch=self.state.last_soc_update_epoch,
+                    soc_timeout_s=float(cfg.get("SOC_STALE_TIMEOUT_SECONDS", 90)),
+                    grid_w=self.state.raw_grid_power,
+                    grid_epoch=self.state.grid_power_sample_epoch,
+                    grid_valid=bool(self.state.grid_power_valid),
+                    device_power_w=self.state.zendure_power_observation_signed_w,
+                    device_power_epoch=self.state.zendure_power_observation_updated_epoch,
+                    device_power_valid=bool(self.state.actual_zendure_power_valid),
+                    device_power_direction=str(self.state.zendure_power_observation_direction or "UNKNOWN"),
+                    command_ready=command_ready,
+                    primary_integrated=integrated,
+                    primary_power_w=self.state.sma_battery_display_power if integrated else None,
+                    primary_soc=self.state.sma_battery_soc if integrated else None,
+                    primary_epoch=self.state.last_sma_battery_update_epoch if integrated else None,
+                    primary_valid=bool(self.state.second_battery_data_valid and
+                                       self.state.second_battery_data_fresh),
+                    primary_floor_supported=bool(self.state.primary_storage_current_discharge_floor_supported),
+                    primary_floor_soc=self.state.primary_storage_current_discharge_floor_soc_percent,
+                    primary_floor_epoch=self.state.primary_storage_current_discharge_floor_last_update_epoch,
+                    primary_floor_valid=bool(self.state.primary_storage_current_discharge_floor_valid and
+                                             self.state.primary_storage_current_discharge_floor_fresh),
+                )
+            obs = observe_grid_policy(readings)
+            decision = decide_care(
+                care, obs, self._care_grid_episode,
+                normal_min_soc=int(cfg["MIN_SOC_PERCENT"]),
+                max_charge_w=int(cfg["MAX_CHARGE_POWER_W"]),
+                maximum_soc=int(cfg["MAX_SOC_PERCENT"]),
+            )
+            self._battery_care_persist_episode(decision.episode)
+            self._care_grid_shadow_decision = decision
+        except (ValueError, TypeError, OverflowError, KeyError, CareEpisodePersistenceError):
+            # No shadow error can create or retain an active charge command.
+            self._care_grid_shadow_decision = None
+
+    def _battery_care_grid_dispatch(self, cfg: Dict[str, Any]) -> bool:
+        """One-owner grid-care command arbitration (never a second publisher).
+
+        PV redistribution remains preferable when independently available;
+        stage-3's cross-charge bypass is economic ONLY. This development
+        branch is not release-qualified without restart/incident/physical QA.
+        """
+        decision = (self._care_grid_shadow_decision
+                    if self._care_grid_persistence_ready else None)
+        grid_intent = bool(decision is not None and
+                           decision.stage in (CareStage.GRID_REQUESTED,
+                                              CareStage.EMERGENCY_REQUESTED) and
+                           decision.requested_charge_w > 0)
+        # Stage 1 uses the standard absolute-target charge handler. An active
+        # grid request must not commandeer PV power already known to be useful.
+        with self.state.lock:
+            pv_extra = int(self.state.care_pv_shadow_extra_w or 0)
+            existing_output = int(self.state.last_output_power or 0)
+        if grid_intent and pv_extra > 0:
+            return False
+
+        if not grid_intent:
+            if not self._care_grid_live_active:
+                return False
+            # A grid-care episode ended or lost eligibility. Its last command
+            # cannot leak into ordinary AUTO/HOLD; neutralize via the same
+            # effect/readback/late-guard owner before normal AUTO can resume.
+            signed = self._publish_signed_target(0, force_zero=True,
+                                                  reason="BATTERY_CARE_GRID_EXIT")
+            with self.state.lock:
+                self.state.last_input_power = max(0, int(signed))
+                self.state.last_output_power = max(0, -int(signed))
+                self.state.current_target_power = abs(int(signed))
+                self.state.last_target_after_ramp = abs(int(signed))
+                self.state.control_reason = "Battery Care: Netzladeepisode beendet oder pausiert"
+                self.state.technical_control_path = "BATTERY_CARE -> GRID_EXIT -> NEUTRAL"
+                self.state.last_control_action = "GRID_CARE_EXIT -> 0 W angefordert"
+            self.state.set_mode("HOLD")
+            self._care_grid_live_active = False
+            return True
+
+        if existing_output > 0:
+            # Never directly reverse from discharge to grid charge. Existing
+            # neutralization/late-effect guards remain authoritative.
+            self._publish_signed_target(0, force_zero=True,
+                                        reason="BATTERY_CARE_GRID_DIRECTION_NEUTRALIZE")
+            with self.state.lock:
+                self.state.last_output_power = 0
+                self.state.last_input_power = 0
+                self.state.current_target_power = 0
+                self.state.control_reason = "Battery Care: Richtungswechsel wird neutralisiert"
+                self.state.technical_control_path = "BATTERY_CARE -> NEUTRALIZE_BEFORE_GRID_CHARGE"
+            self.state.set_mode("HOLD")
+            return True
+
+        target = min(int(decision.requested_charge_w),
+                     self._fast_capture_effective_zendure_limit_w(cfg))
+        if target <= 0:
+            # A changed device/BMS limit must not leave yesterday's Care
+            # input command active. The publisher retains its own guards.
+            if self._care_grid_live_active:
+                self._publish_signed_target(0, force_zero=True,
+                                            reason="BATTERY_CARE_GRID_DEVICE_CAP_STOP")
+                with self.state.lock:
+                    self.state.last_input_power = 0
+                    self.state.current_target_power = 0
+                self._care_grid_live_active = False
+            return True
+        if not decision.allow_emergency_cross_charge_exception:
+            corrected = self._apply_symmetric_cross_charge_limit(cfg, target)
+            target = int(corrected.get("target", 0))
+            if target <= 0:
+                # Economic veto applies without exception to regular care.
+                with self.state.lock:
+                    previously_charging = bool(self.state.last_input_power > 0)
+                if self._care_grid_live_active or previously_charging:
+                    self._publish_signed_target(0, force_zero=True,
+                                                reason="BATTERY_CARE_GRID_CROSS_CHARGE_STOP")
+                    with self.state.lock:
+                        self.state.last_input_power = 0
+                        self.state.last_output_power = 0
+                        self.state.current_target_power = 0
+                    self.state.set_mode("HOLD")
+                    self._care_grid_live_active = False
+                return True
+        self._fast_capture_force_zero("BATTERY_CARE_GRID_CHARGE")
+        # No active PV or Fast target can be inherited as next AUTO baseline.
+        self._care_pv_live_active = False
+        self._care_pv_baseline_target_w = 0
+        self._care_pv_return_to_baseline_pending = True
+        sent = self._publish_signed_target(
+            target,
+            reason=("BATTERY_CARE_EMERGENCY" if decision.allow_emergency_cross_charge_exception
+                    else "BATTERY_CARE_GRID_MAINTENANCE"),
+        )
+        self._care_grid_live_active = bool(sent > 0)
+        with self.state.lock:
+            self.state.last_input_power = max(0, int(sent))
+            self.state.last_output_power = max(0, -int(sent))
+            self.state.current_target_power = abs(int(sent))
+            self.state.last_target_before_smoothing = target
+            self.state.last_target_after_power_limit = target
+            self.state.last_target_after_smoothing = target
+            self.state.last_target_after_ramp = abs(int(sent))
+            self.state.control_reason = (
+                "Battery Care: Notladung angefordert" if decision.allow_emergency_cross_charge_exception
+                else "Battery Care: geregelte Netzpflege angefordert"
+            )
+            self.state.technical_control_path = (
+                "BATTERY_CARE -> EMERGENCY -> COMMAND_OWNER" if decision.allow_emergency_cross_charge_exception
+                else "BATTERY_CARE -> GRID_MAINTENANCE -> CROSS_CHARGE -> COMMAND_OWNER"
+            )
+            self.state.last_control_action = f"CARE_GRID_REQUEST -> {sent} W"
+            # Distinguish an issued command from an effect/readback observation.
+            if sent > 0:
+                self.state.care_dispatched_stage = (
+                    "EMERGENCY_REQUESTED" if decision.allow_emergency_cross_charge_exception
+                    else "GRID_REQUESTED"
+                )
+                self.state.care_dispatched_target_w = int(sent)
+        self.state.set_mode("CHARGE" if sent > 0 else "HOLD")
+        return True
 
     def update_sma_energy_meter_status(self, cfg: Dict[str, Any]) -> None:
         """Keep the passive SMA direct source listener and status snapshot current."""
@@ -2422,6 +2879,56 @@ class ZendureController:
             self.state.command_lifecycle_state = "MISMATCH_CONFIRMED"
             self.state.command_effect_confirmed = False
             self.state.add_limiter("COMMAND_NOT_EFFECTIVE")
+
+        # The physical command-effect watchdog (not the dispatcher or ACK)
+        # confirms failure. Correlate ONLY a positive emergency command with
+        # its immutable episode reserve, while the emergency grid path is
+        # still the current command owner. Neutralisation/normal-grid/PV and
+        # stale/uncertain observations never open this safety incident.
+        if not neutral and target > 0:
+            batch = self._desired_command_batch
+            episode = self._care_grid_episode
+            if (batch is not None and batch.intent == INTENT_CHARGE
+                    and batch.reason == "BATTERY_CARE_EMERGENCY"
+                    and batch.signed_target_w == target
+                    and self._care_grid_live_active
+                    and episode.active_level == 3
+                    and type(episode.target_reserve_soc) is int):
+                with self.state.lock:
+                    # A different (later) failure episode gets a new event
+                    # identity; repeated command mismatch ticks do not.
+                    token = (self._care_emergency_episode_generation,
+                             episode.target_reserve_soc)
+                    if token != self._care_failure_episode_token:
+                        self._care_failure_episode_token = token
+                        self.state.care_emergency_failure_event_id = uuid.uuid4().hex
+                        self.state.care_emergency_incident_reserve_soc = episode.target_reserve_soc
+                        self.state.care_emergency_failure_reason = str(self.state.command_effect_reason)
+                        self.state.care_emergency_episode_id = f"emergency-{batch.sequence_id}"
+                        self.state.care_emergency_failure_confirmed = True
+                        self.state.care_emergency_incident_persisted = False
+                        self.state.care_emergency_incident_persistence_error = "PENDING"
+                # Do not hold ControllerState.lock during disk I/O. A failed
+                # commit is retried on subsequent *confirmed* mismatch ticks,
+                # retaining the same event ID and immutable episode reserve.
+                with self.state.lock:
+                    retry = (self.state.care_emergency_failure_confirmed
+                             and not self.state.care_emergency_incident_persisted)
+                if retry:
+                    snapshot = self.state.snapshot()
+                    try:
+                        if self._care_incident_write_through_journal is None:
+                            self._care_incident_write_through_journal = OperationalEventJournal(
+                                self.config_manager.get, self.state)
+                        persisted = self._care_incident_write_through_journal.persist_confirmed_emergency_failure(snapshot)
+                        error = "" if persisted else "EVENT_NOT_COMMITTED"
+                    except Exception as exc:
+                        persisted = False
+                        error = "EVENT_WRITE_FAILED:" + type(exc).__name__
+                    with self.state.lock:
+                        if self.state.care_emergency_failure_event_id == snapshot.get("care_emergency_failure_event_id"):
+                            self.state.care_emergency_incident_persisted = persisted
+                            self.state.care_emergency_incident_persistence_error = error
 
     def update_command_effect_monitor(self, cfg: Dict[str, Any]) -> None:
         """Intent-based, neutralisation-aware, non-blocking command monitor."""
@@ -3977,6 +4484,12 @@ class ZendureController:
             self.state.last_target_after_smoothing = 0
             self.state.last_target_after_ramp = 0
             self.state.safe_state_counter += 1
+            # SAFE_STATE is never evidence of an actively applied Care policy.
+            self.state.care_policy_valid = False
+            self.state.care_in_season = False
+            self.state.care_effective_discharge_floor_soc = None
+            self.state.care_dispatched_stage = ""
+            self.state.care_dispatched_target_w = 0
             self.state.control_reason = reason
             self.state.technical_control_path = "SAFE_STATE"
             self.state.last_control_action = "SAFE_STATE -> 0 W"
@@ -4180,6 +4693,22 @@ class ZendureController:
 
     def handle_deadband(self, cfg: Optional[Dict[str, Any]] = None) -> None:
         self.state.add_limiter("DEADBAND")
+        care_floor = self._battery_care_reserve_soc(cfg) if cfg is not None else None
+        if care_floor is not None:
+            # HOLD is not a free pass to preserve an existing discharge at R.
+            # Only neutralize an actual old output, never publish a new 0-W
+            # batch on every unchanged deadband observation.
+            with self.state.lock:
+                soc = self.state.battery_soc
+                output = int(self.state.last_output_power or 0)
+            if self.soc_is_fresh(cfg) and soc is not None and soc <= care_floor and output > 0:
+                self.state.add_limiter("BATTERY_CARE_RESERVE")
+                self.soc_limit_hold(
+                    "Battery Care: Entladung im Netz-Totband beendet",
+                    "BATTERY_CARE_RESERVE",
+                    technical_path="GRID -> DEADBAND -> BATTERY_CARE_RESERVE -> HOLD",
+                )
+                return
         if cfg is not None and self._rest_surplus_should_reduce_in_hold(cfg):
             self.ramp_down_charge(cfg, "Restüberschuss-Ernte: Primärspeicher-Ladung unter kritischem Bereich, Ladeziel wird reduziert")
             return
@@ -4230,10 +4759,46 @@ class ZendureController:
         except Exception:
             return None
 
+    def _battery_care_reserve_soc(self, cfg: Dict[str, Any]) -> Optional[int]:
+        """Return the opt-in, valid, in-season Care reserve; otherwise no change.
+
+        This method has no command effects and never invents missing settings.
+        Calendar evaluation uses the controller's existing local wall-clock day;
+        only explicit, validated Care settings can raise the discharge floor.
+        """
+        if cfg.get("BATTERY_CARE_ENABLED") is not True:
+            return None
+        care = CareConfig(
+            enabled=True,
+            season_start=cfg.get("BATTERY_CARE_SEASON_START_MM_DD"),
+            season_end=cfg.get("BATTERY_CARE_SEASON_END_MM_DD"),
+            reserve_soc=cfg.get("BATTERY_CARE_RESERVE_SOC_PERCENT"),
+            grid_trigger_soc=cfg.get("BATTERY_CARE_GRID_TRIGGER_SOC_PERCENT"),
+            emergency_soc=cfg.get("BATTERY_CARE_EMERGENCY_SOC_PERCENT"),
+            grid_charge_cap_w=cfg.get("BATTERY_CARE_GRID_CHARGE_MAX_POWER_W"),
+        )
+        try:
+            if care.validate(int(cfg["MAX_SOC_PERCENT"]), int(cfg["MAX_CHARGE_POWER_W"])):
+                return None
+            return (int(care.reserve_soc) if in_care_season(
+                datetime.now().date(), care.season_start, care.season_end
+            ) else None)
+        except (KeyError, TypeError, ValueError, OverflowError):
+            return None
+
+    def _effective_auto_min_soc(self, cfg: Dict[str, Any]) -> int:
+        configured_min_soc = int(cfg["MIN_SOC_PERCENT"])
+        care_reserve = self._battery_care_reserve_soc(cfg)
+        return max(configured_min_soc, care_reserve) if care_reserve is not None else configured_min_soc
+
     def _effective_night_stop_soc(self, cfg: Dict[str, Any]) -> Optional[int]:
         min_soc = int(cfg["MIN_SOC_PERCENT"])
         configured_stop_soc = self._optional_int(cfg.get("NIGHT_DISCHARGE_STOP_SOC_PERCENT"))
-        return max(min_soc, configured_stop_soc) if configured_stop_soc is not None else None
+        care_reserve = self._battery_care_reserve_soc(cfg)
+        candidates = (configured_stop_soc, care_reserve)
+        return max(min_soc, *(x for x in candidates if x is not None)) if any(
+            x is not None for x in candidates
+        ) else None
 
     def night_reserve_soc_reached(self, cfg: Dict[str, Any]) -> bool:
         with self.state.lock:
@@ -4343,12 +4908,16 @@ class ZendureController:
             self.state.add_limiter("SOC_STALE")
             self.safe_state("Nachtmodus blockiert: Zendure SOC fehlt")
             return
-        if soc <= min_soc:
-            self.state.add_limiter("MIN_SOC")
+        effective_auto_floor = self._effective_auto_min_soc(cfg)
+        if soc <= effective_auto_floor:
+            care_limit = effective_auto_floor > min_soc and soc > min_soc
+            limiter = "BATTERY_CARE_RESERVE" if care_limit else "MIN_SOC"
+            self.state.add_limiter(limiter)
             self.soc_limit_hold(
-                "Nachtmodus pausiert: globaler Mindest-SOC erreicht",
-                "MIN_SOC",
-                technical_path="NIGHT_MODE -> MIN_SOC -> HOLD",
+                "Nachtmodus pausiert: geschützte Battery-Care-Reserve erreicht" if care_limit
+                else "Nachtmodus pausiert: globaler Mindest-SOC erreicht",
+                limiter,
+                technical_path=f"NIGHT_MODE -> {limiter} -> HOLD",
             )
             return
 
@@ -4383,12 +4952,16 @@ class ZendureController:
             self.state.add_limiter("SOC_STALE")
             self.safe_state("Entladung blockiert: Zendure SOC fehlt")
             return
-        if soc <= cfg["MIN_SOC_PERCENT"]:
-            self.state.add_limiter("MIN_SOC")
+        effective_floor = self._effective_auto_min_soc(cfg)
+        if soc <= effective_floor:
+            care_limit = effective_floor > int(cfg["MIN_SOC_PERCENT"]) and soc > int(cfg["MIN_SOC_PERCENT"])
+            limiter = "BATTERY_CARE_RESERVE" if care_limit else "MIN_SOC"
+            self.state.add_limiter(limiter)
             self.soc_limit_hold(
-                "Entladung beendet: Mindest-SOC erreicht",
-                "MIN_SOC",
-                technical_path="AUTO -> MIN_SOC -> HOLD",
+                "Entladung beendet: geschützte Battery-Care-Reserve erreicht" if care_limit
+                else "Entladung beendet: Mindest-SOC erreicht",
+                limiter,
+                technical_path=f"AUTO -> {limiter} -> HOLD",
             )
             return
 
@@ -4452,6 +5025,8 @@ class ZendureController:
             or self._fast_capture_return_to_baseline_pending
         )
         last_input = stored_baseline if use_isolated_baseline else physical_last_input
+        if self._care_pv_live_active or self._care_pv_return_to_baseline_pending:
+            last_input = self._care_pv_baseline_target_w
 
         if soc is None:
             self._fast_capture_force_zero("ZENDURE_SOC_STALE")
@@ -4504,6 +5079,9 @@ class ZendureController:
             and not fast_candidate_range
             and not fast_release_needed
             and not self._fast_capture_return_to_baseline_pending
+            and not self._care_pv_live_active
+            and not self._care_pv_return_to_baseline_pending
+            and self.state.care_pv_shadow_extra_w <= 0
         ):
             if mode == "shadow":
                 step = int(
@@ -4610,11 +5188,29 @@ class ZendureController:
             target_ramped = self.limit_power_step(last_input, target_smoothed, cfg)
 
         baseline_target = max(0, int(target_ramped))
-        combined_target = self._fast_capture_step(
-            cfg,
-            grid_power,
-            baseline_target,
+        # Stage 1 is an ABSOLUTE PV candidate, not B + another energy claim.
+        # Shadow is already gated by independently fresh AC observations,
+        # command readiness, distinct samples, SOC/season, and import backoff.
+        # The normal baseline is built above, without the prior Care output.
+        care_absolute = max(0, int(self.state.care_pv_shadow_candidate_w or 0))
+        care_requested = bool(
+            self._battery_care_reserve_soc(cfg) is not None
+            and soc is not None
+            and soc < self._battery_care_reserve_soc(cfg)
+            and self.state.care_pv_shadow_extra_w > 0
         )
+        care_target = min(int(self._fast_capture_effective_zendure_limit_w(cfg)),
+                          max(baseline_target, care_absolute)) if care_requested else baseline_target
+        if care_target > baseline_target:
+            # Care has already allocated the absolute available power: Fast
+            # Capture must not reallocate the same export as B+O.
+            self._fast_capture_force_zero("BATTERY_CARE_PV_PRIORITY")
+            combined_target = care_target
+            self.state.add_limiter("BATTERY_CARE_PV_PRIORITY")
+        else:
+            combined_target = self._fast_capture_step(
+                cfg, grid_power, baseline_target,
+            )
 
         correction = self._apply_symmetric_cross_charge_limit(
             cfg,
@@ -4629,6 +5225,9 @@ class ZendureController:
                 int(baseline_target),
             )
         signed_final = int(correction.get("target", baseline_target))
+        if correction.get("active"):
+            # No hidden Care contribution survives Cross-Charge veto.
+            care_target = baseline_target
 
         signed_final = self._publish_signed_target(
             signed_final,
@@ -4641,6 +5240,19 @@ class ZendureController:
         )
         final_input = max(0, signed_final)
         self._fast_capture_return_to_baseline_pending = False
+        self._care_pv_baseline_target_w = baseline_target
+        self._care_pv_live_active = bool(
+            not correction.get("active") and care_target > baseline_target
+            and final_input > baseline_target
+        )
+        if self._care_pv_live_active:
+            with self.state.lock:
+                self.state.care_dispatched_stage = "PV_PRIORITY_REQUESTED"
+                self.state.care_dispatched_target_w = int(final_input)
+        self._care_pv_return_to_baseline_pending = False
+        # Standard PV/Harvest/Fast arbitration has now replaced a former
+        # grid-care input; never leave stale grid ownership latched.
+        self._care_grid_live_active = False
 
         with self.state.lock:
             self.state.last_output_power = max(0, -signed_final)
@@ -4662,6 +5274,10 @@ class ZendureController:
             if correction.get("active"):
                 self.state.technical_control_path = (
                     "GRID -> CROSS_CHARGE -> CHARGE_CONTROL -> INPUT"
+                )
+            elif self._care_pv_live_active:
+                self.state.technical_control_path = (
+                    "GRID -> BATTERY_CARE_PV -> CHARGE_CONTROL -> INPUT"
                 )
             elif mode == "active" and self.state.fast_capture_overlay_w > 0:
                 self.state.technical_control_path = (

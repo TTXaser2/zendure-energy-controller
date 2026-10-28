@@ -1,0 +1,13 @@
+# ZEC – Termius/iPhone-Ferninstallation, Vorbereitung (KEINE Installationsanweisung)
+
+**Status:** `DRAFT / NOT_FOR_PRODUCTION_INSTALLATION`, CP27. Die folgenden Schritte sind **Prüfpunkte**, keine bereits freigegebenen Shellbefehle. Die endgültigen Befehle müssen erst mit dem realen, vollständig geprüften Installer und dem verifizierten ZIP-Namen erstellt werden.
+
+1. Bestehendes Termius-SSH-Profil am iPhone verwenden, Verbindung vorab prüfen, Zugang über Mobilfunk/WLAN außerhalb des Heimnetzes verifizieren. Die tatsächliche SSH-Adresse, Authentifizierung, VPN-Verbindung und SSH-Port sind nur dem Nutzer bekannt und werden nicht geraten. SSH-Zugang muss während des Updates bestehen bleiben; an Firewall, SSH-Dienst, Netzwerk, VPN, Router, Hostname und Betriebssystem wird für das ZEC-Update **nichts** geändert.
+2. Das freigegebene, eindeutig benannte Paket unter `/home/pi/Downloads/` bereitstellen (Dateiübertragung via vom Nutzer tatsächlich eingesetzter und überprüfter Termius-/SFTP-Methode oder andere ausdrücklich verfügbare sichere Transferstrecke). Keine hypothetischen Download-URLs verwenden.
+3. In einer **separaten sicheren Shell-Sitzung** SHA256 exakt gegen den freigegebenen Releasewert und ZIP-Integrität prüfen. ZIP frisch nach dokumentiertem Rootnamen entpacken; niemals CP27 oder ein Entwicklungscheckpoint installieren.
+4. Vor Installation stabilen Fernzugriff und lokale Recovery sicherstellen; `tmux`/`screen` nur verwenden, **falls auf dem Pi tatsächlich vorhanden**. Eine einzelne iPhone-SSH-Sitzung ohne Wiederaufnahmefähigkeit ist für risikoreiche Installationsschritte kein ausreichendes Recoverykonzept.
+5. Erst nach gesonderter Nutzerfreigabe den fertigen kombinierten Installer ausführen. Sein eingebauter Preflight muss `PREFLIGHT_RESULT=PASS` und `SAFE_TO_INSTALL=yes` **vor** Mutation liefern. Ohne diese Freigabe keine Dienste stoppen, kein Update und keine Konfigurationsänderung.
+6. Nach Installationsreport und tatsächlicher Feldprüfung neue Version/Build, `/health`, `/ready`, Web-/Settingszugang, Command-Safety, Status-/SOC-Graph und Rollback-Backup inklusive SHA256 prüfen. Bei unerwartetem Fehlschlag die im Paket enthaltene und vorher geprüfte Rollback-Prozedur verwenden; alte V17.1.3-Source nicht durch einen ungetesteten manuellen Rückkopierbefehl ersetzen.
+7. Battery-Care-PV-/Netz-/Notladewirkung erfordert separate real beobachtete physische Leistungs-/SOC-Messungen unter sicheren Betriebsbedingungen. Ein erfolgreicher Update-Installer ist kein Nachweis dafür.
+
+**Open Gate:** Remote-Termius-Update **nicht freigegeben**. Ein konkreter Installationsbefehl wird ausschließlich zusammen mit dem fertigen und technisch freigegebenen Versionpaket ausgegeben.

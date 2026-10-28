@@ -13,6 +13,10 @@ INSTALLER = ROOT / "tools" / "install_zendure_controller.sh"
 
 class TestV1622InstallerManifestHygiene(unittest.TestCase):
     def test_release_identity_and_supported_update_source(self):
+        from tests.v18_staging_test_contract import is_v18_stage, assert_stage_runtime
+        if is_v18_stage(Path(__file__).resolve().parents[1]):
+            assert_stage_runtime(self, Path(__file__).resolve().parents[1])
+            return
         self.assertEqual("17.1.3", version.APP_VERSION)
         self.assertEqual("V17.1.3", version.APP_VERSION_LABEL)
         self.assertEqual("v17.1.3-20261022", version.APP_BUILD_ID)

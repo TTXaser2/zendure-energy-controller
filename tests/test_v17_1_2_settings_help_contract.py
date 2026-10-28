@@ -11,8 +11,8 @@ class TestV1712OperationalHelp(unittest.TestCase):
         cls.by_key={x.key:x for x in cls.settings}
 
     def test_complete_unique_operational_inventory(self):
-        self.assertEqual(len(self.settings),190)
-        self.assertEqual(len(self.by_key),190)
+        self.assertEqual(len(self.settings),197)
+        self.assertEqual(len(self.by_key),197)
         self.assertEqual(len(WHEN),113)
         self.assertEqual(set(WHEN),{x.key for x in self.settings if x.key in WHEN})
 
@@ -54,9 +54,9 @@ class TestV1712OperationalHelp(unittest.TestCase):
 
     def test_all_74_section_purposes_remain_present(self):
         sections={(item.category,item.section) for item in self.settings}
-        self.assertEqual(len(sections),74)
+        self.assertEqual(len(sections),75)
         rendered=build_section_specs(sorted(sections))
-        self.assertEqual(len(rendered),74)
+        self.assertEqual(len(rendered),75)
         for pair, spec in rendered.items():
             with self.subTest(section=pair):
                 self.assertGreater(len(spec.help_text.strip()),40)

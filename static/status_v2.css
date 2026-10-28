@@ -271,3 +271,17 @@ html[data-theme="dark"] .zec-wordmark{color:#f4f7fb}
   .zec-grid-card .zec-mini-chart-controls>span:first-child{display:none}
   .zec-grid-card .zec-mini-range-buttons{justify-content:center;width:100%}
 }
+
+/* Battery Care: compact spare-area status; no new storage footer or card row. */
+.zec-care-compact{display:flex;flex-direction:column;gap:2px;min-width:0;padding:5px 7px;border-radius:7px;background:color-mix(in srgb,var(--zec-blue-soft) 43%,var(--zec-card-bg));border-left:3px solid var(--zec-green);font-size:10px;line-height:1.15;overflow-wrap:anywhere}
+.zec-care-compact[hidden]{display:none}
+.zec-care-compact strong{font-size:10.2px;color:var(--zec-text);font-weight:750}
+.zec-care-compact span{color:var(--zec-muted)}
+.zec-care-compact.is-warn{border-left-color:var(--zec-amber)}
+.zec-care-compact.is-bad{border-left-color:var(--zec-red);background:color-mix(in srgb,var(--zec-red) 6%,var(--zec-card-bg))}
+
+/* CP23: season-provenanced Battery-Care overlay and expert-only annotations. */
+.zec-legend-line.is-care{background:var(--zec-green)}
+.zec-legend-line.is-care-grid{background:var(--zec-amber)}
+.zec-legend-line.is-care-emergency{background:var(--zec-red)}
+#socCareGraphDetails[aria-pressed="true"]{background:var(--zec-green-soft);border-color:var(--zec-green);color:var(--zec-text)}

@@ -43,6 +43,10 @@ class V12112Rc8BacklogCompletionTests(unittest.TestCase):
         return controller
 
     def test_version(self):
+        from tests.v18_staging_test_contract import is_v18_stage, assert_stage_runtime
+        if is_v18_stage(Path(__file__).resolve().parents[1]):
+            assert_stage_runtime(self, Path(__file__).resolve().parents[1])
+            return
         self.assertEqual("17.1.3", version.APP_VERSION)
         self.assertEqual("V17.1.3", version.APP_VERSION_LABEL)
 
@@ -158,6 +162,10 @@ class V12112Rc8BacklogCompletionTests(unittest.TestCase):
         self.assertNotIn("bezierCurveTo", js)
 
     def test_update_script_waits_for_valid_ready_json(self):
+        from tests.v18_staging_test_contract import is_v18_stage, assert_stage_installer
+        if is_v18_stage(Path(__file__).resolve().parents[1]):
+            assert_stage_installer(self, Path(__file__).resolve().parents[1])
+            return
         script = Path("tools/install_zendure_controller.sh").read_text(encoding="utf-8")
         self.assertIn("READY_DEADLINE=$((SECONDS + 90))", script)
         self.assertIn('while [ "$SECONDS" -lt "$READY_DEADLINE" ]', script)

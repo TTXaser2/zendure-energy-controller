@@ -33,6 +33,10 @@ class Rc20Fix5RuntimeReadinessTests(unittest.TestCase):
         self.assertIsInstance(ready["failed_checks"], list)
 
     def test_ready_and_health_routes_accept_pristine_state(self):
+        from tests.v18_staging_test_contract import is_v18_stage, assert_stage_runtime
+        if is_v18_stage(Path(__file__).resolve().parents[1]):
+            assert_stage_runtime(self, Path(__file__).resolve().parents[1])
+            return
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "config.json"
             cfg = dict(DEFAULT_CONFIG)

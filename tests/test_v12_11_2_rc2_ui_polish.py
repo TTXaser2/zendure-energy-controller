@@ -7,6 +7,10 @@ VER = (ROOT / 'version.py').read_text(encoding='utf-8')
 
 class TestV12112RC2UiPolish(unittest.TestCase):
     def test_version(self):
+        from tests.v18_staging_test_contract import is_v18_stage, assert_stage_runtime
+        if is_v18_stage(Path(__file__).resolve().parents[1]):
+            assert_stage_runtime(self, Path(__file__).resolve().parents[1])
+            return
         self.assertIn('17.1.3', VER)
         self.assertIn('V17.1.3', VER)
 

@@ -31,4 +31,6 @@ digraph CrossCharge {
   unchanged -> end;
   pub -> end;
   clamp -> note [style=dashed, arrowhead=none];
+
+  cp26_care_06 [shape=note, style="filled", fillcolor="#eaf4ec", fontcolor="#193b2d", fontsize=9, label="BATTERY CARE · CP26 (Entwicklungs-As-built)\nEinzige begrenzte Ausnahme: bestaetigte Care-NOTLADUNG umgeht wirtschaftliches Cross-Charge-Veto, nie Hardware-, BMS-, STOP-, SmartMode- oder Command-Safety.\nKeine physische Wirksamkeits- oder Releasefreigabe"];
 }

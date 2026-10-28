@@ -1,0 +1,73 @@
+{
+  "candidate_build": "v18.0.0-20261027",
+  "candidate_build_status": "PROVISIONAL_NOT_FROZEN",
+  "candidate_version": "18.0.0",
+  "controller_effect": "UNVERIFIED_REAL_HARDWARE",
+  "document_status": "DEVELOPMENT_NOT_INSTALLABLE",
+  "files": {
+    "battery_care_episode_store.py": {
+      "scope": "Dauerhafte Episode, ursprünglicher Reserve-Latch, Restart",
+      "sha256": "c823b605b4b2a3b3cd732a1b6a3af13cd1758c22ac14b931e7d04676f473208b"
+    },
+    "battery_care_graph_history.py": {
+      "scope": "Historische Care-Grenzlinien und Ereignismarker",
+      "sha256": "5b4e0b833710e275c31b989c51bcc6e0a569fa475ef6a67758f856118a54791a"
+    },
+    "battery_care_grid_observation.py": {
+      "scope": "Frische-/Messpfad für Netzpflege-/Notladeentscheidung",
+      "sha256": "2a4d02c3f1078fda73c05444245cf0dd1391b63389317b836bfdf8f9c2a3bbd7"
+    },
+    "battery_care_policy.py": {
+      "scope": "Nebenwirkungsfreie Care-Stufenentscheidung und Grenzwerte",
+      "sha256": "b21139941df7257175732b849e715c1843d3eff4ffe1428111884b594680bfc7"
+    },
+    "battery_care_pv_allocation.py": {
+      "scope": "PV-Zuteilung (Mess-Snapshot, keine Schattenlast als Wirkung)",
+      "sha256": "492279e12504fa7cc9a749a34d8f24985f4cc04d2fcfc6d0b5b217aa2cfafe9c"
+    },
+    "battery_care_stage_events.py": {
+      "scope": "Bestätigte Stufenwechsel aus abgeschlossenen Regelzyklen",
+      "sha256": "aacc519d14a7648a93c96ca5a492183065b40ef8fe973a675af12d7a0b5fb2ae"
+    },
+    "controller_logic.py": {
+      "scope": "Care-Dispatch/Single-Owner-Regelpfad, bestehende Safety-Gates",
+      "sha256": "ba1a909d8247336bf248ecd5432f3bb96c4be10f679be4c0590c6eab6b0da31b"
+    },
+    "operational_events.py": {
+      "scope": "SQLite-Ereignisjournal, Notladefehler und Recovery",
+      "sha256": "0c508437fc9c289c4ac15c2982416b217982cf3407faaac67394e1d4adb2ccb5"
+    },
+    "static/status_v2.js": {
+      "scope": "Care-Karte und Tagesgraph-Detailschalter",
+      "sha256": "2c240bea9c90c62a60b779f4dcb283ecdac57ec17b6f2241f82c1f0aee23683d"
+    },
+    "status_page_v2.py": {
+      "scope": "Status-Provenienz, kein physikalischer Wirksamkeits-PASS",
+      "sha256": "3424188722f9c0e5e47c39b045b670cf5c52286ead4fb3420829dad07c47e981"
+    },
+    "tools/install_zendure_controller.sh": {
+      "scope": "Bestehender freigegebener V17-Installer, unverändert",
+      "sha256": "6b544b26cd177b16aa867c2a072ef98a2dd6817f54ab65d7a5b3044790f8f6be"
+    },
+    "tools/install_zendure_controller_v18_candidate.sh": {
+      "scope": "V18-Kandidat mit unbedingtem Exit 78",
+      "sha256": "9fd3f8197274964049449b40c59f6a8c74e9ee03f609f0fb860d879629c8871e"
+    },
+    "tools/v18_field_acceptance.py": {
+      "scope": "V18-Feldtool mit RELEASE_HOLD und fehlender Realwirkung",
+      "sha256": "490084523ca43e99107eefe9f6a73a3a8f218243767994b965c7efee101c91b2"
+    },
+    "version.py": {
+      "scope": "Aktuell V17.1.3 – Release V18 NICHT eingefroren",
+      "sha256": "6fd315d065da2a8265db76aa22343bf2e1bcb582edc9bab52f9a7a51a58bea99"
+    },
+    "web_ui.py": {
+      "scope": "Readonly SOC-Historien-/Event-API",
+      "sha256": "9460bbae2ac6b3574224aa92528733e86cca5237ada0da1843a1b3442d392219"
+    }
+  },
+  "manual_uml_review": "PENDING",
+  "productive_build": "v17.1.3-20261022",
+  "productive_version": "17.1.3",
+  "schema": "ZEC_V18_DRAFT_SOURCE_TRACEABILITY_V1"
+}

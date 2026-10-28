@@ -13,6 +13,10 @@ from web_ui import build_status_page
 
 class TestRC17SqliteGraphStore(unittest.TestCase):
     def test_version_label_rc17(self):
+        from tests.v18_staging_test_contract import is_v18_stage, assert_stage_runtime
+        if is_v18_stage(Path(__file__).resolve().parents[1]):
+            assert_stage_runtime(self, Path(__file__).resolve().parents[1])
+            return
         self.assertEqual(version.APP_VERSION_LABEL, "V17.1.3")
 
     def test_db_writes_even_when_csv_logging_off(self):

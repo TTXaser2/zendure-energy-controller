@@ -13,7 +13,7 @@ from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple
 
 from settings_help import SettingHelpSpec, build_setting_help
 
-SCHEMA_VERSION = "1.25-v13.0"
+SCHEMA_VERSION = "1.26-v13.0"
 SOURCE_TARGET_SCHEMA_SHA256 = "f67b8d09ae9a433c4cb0d3a720a0961d5b2a824b120251a63f2b19885356274a"
 
 
@@ -6614,6 +6614,43 @@ _ROWS.insert(next(i for i, row in enumerate(_ROWS) if row['key'] == 'HARVEST_SEA
     'secret_policy': 'NONE', 'decision_status': 'Bestätigt',
 })
 
+# Battery Care: explicit opt-in; unset thresholds are NOT product defaults.
+_CARE_ROWS = (
+    ('BATTERY_CARE_ENABLED', 'Battery Care aktivieren', 'BOOL', 'bool', False, None, None, None,
+     'Nur nach ausdrücklicher Bestätigung; Aus bedeutet keine Battery-Care-Steuerung.'),
+    ('BATTERY_CARE_SEASON_START_MM_DD', 'Saisonbeginn', 'OPTIONAL_MM_DD', 'optional_mm_dd', None, None, None, None,
+     'Erster Tag des jährlichen Schutzzeitraums einschließlich, z. B. 11-01; kein vorgegebener Winterzeitraum.'),
+    ('BATTERY_CARE_SEASON_END_MM_DD', 'Saisonende', 'OPTIONAL_MM_DD', 'optional_mm_dd', None, None, None, None,
+     'Letzter Tag des jährlichen Schutzzeitraums einschließlich; über den Jahreswechsel möglich.'),
+    ('BATTERY_CARE_RESERVE_SOC_PERCENT', 'Geschützte Reserve', 'OPTIONAL_INT', 'optional_int', None, 0, 100, '%',
+     'Untergrenze für die normale Zendure-Entladung im Saisonfenster sowie Nachladeziel bis R.'),
+    ('BATTERY_CARE_GRID_TRIGGER_SOC_PERCENT', 'Netzpflege ab', 'OPTIONAL_INT', 'optional_int', None, 0, 100, '%',
+     'Ab dieser SOC-Schwelle darf unter passenden Anlagenbedingungen Netzladung bis zur Reserve beginnen.'),
+    ('BATTERY_CARE_EMERGENCY_SOC_PERCENT', 'Notladung ab', 'OPTIONAL_INT', 'optional_int', None, 0, 100, '%',
+     'Notladeanforderung bis zur Reserve, auch wenn dabei Energie aus einem Primärspeicher kommen kann.'),
+    ('BATTERY_CARE_GRID_CHARGE_MAX_POWER_W', 'Maximale Netzladeleistung', 'OPTIONAL_INT', 'optional_int', None, 1, 2400, 'W',
+     'Gemeinsame maximale Leistungsanforderung für Netzpflege und Notladung; Hardwaregrenzen bleiben verbindlich.'),
+)
+for _key, _label, _type, _codec, _default, _min, _max, _unit, _desc in _CARE_ROWS:
+    _ROWS.insert(next(i for i, row in enumerate(_ROWS) if row['key'] == 'MIN_SOC_PERCENT'), {
+        'key': _key, 'origin': 'BatteryCare20261026',
+        'category': 'Leistungsgrenzen & SOC-Schutz', 'section': 'Battery Care – saisonaler Batterieschutz',
+        'visibility': 'STANDARD', 'label': _label, 'value_type': _type, 'codec_id': _codec,
+        'default_new_install': _default, 'default_rc19': _default,
+        'minimum': _min, 'maximum': _max, 'unit': _unit, 'options': (),
+        'apply_class': 'LIVE_NEXT_CYCLE', 'editability': 'EDITABLE',
+        'apply_text': 'Nach gültiger Vorschau, ausdrücklicher Bestätigung und Commit im nächsten Regelzyklus',
+        'dependency_keys': ('BATTERY_CARE_ENABLED', 'BATTERY_CARE_RESERVE_SOC_PERCENT',
+                            'BATTERY_CARE_GRID_TRIGGER_SOC_PERCENT', 'BATTERY_CARE_EMERGENCY_SOC_PERCENT',
+                            'BATTERY_CARE_GRID_CHARGE_MAX_POWER_W', 'MAX_SOC_PERCENT', 'MAX_CHARGE_POWER_W'),
+        'dependency_text': 'Schutzreserve, Nachlade-/Notladeschwellen, elektrische Obergrenze, Saison',
+        'validator_ids': ('VAL-BC-001', 'VAL-BC-002'), 'validation_text': _desc,
+        'migration_text': 'Keine Aktivierung aus historischen Werten; fehlende Schwellen bleiben leer und wirkungslos',
+        'risk': 'Sehr hoch', 'release_stage': 'BatteryCare20261026',
+        'release_text': 'Battery Care – freigegebener Entwicklungsblock',
+        'lifecycle': 'active', 'secret_policy': 'NONE', 'decision_status': 'Freigegeben',
+    })
+
 # Registry order is a public UI/serialization contract. V15 inserts four native
 # Modbus settings into the primary-storage section, so normalize the effective
 # row order once after assembling the static source table.
@@ -6650,6 +6687,9 @@ AUTO_OR_UNSET_DEFAULT_KEYS = frozenset({
     "MEASUREMENT_LOG_MOUNTPOINT", "SMA_ENERGY_METER_INTERFACE", "SMA_ENERGY_METER_SERIAL",
     "SMA_ENERGY_METER_SUSY_ID", "MQTT_PASSWORD", "HARVEST_SEASON_PARALLEL_START_MM_DD",
     "HARVEST_SEASON_PARALLEL_END_MM_DD",
+    "BATTERY_CARE_SEASON_START_MM_DD", "BATTERY_CARE_SEASON_END_MM_DD",
+    "BATTERY_CARE_RESERVE_SOC_PERCENT", "BATTERY_CARE_GRID_TRIGGER_SOC_PERCENT",
+    "BATTERY_CARE_EMERGENCY_SOC_PERCENT", "BATTERY_CARE_GRID_CHARGE_MAX_POWER_W",
 })
 
 PROFILE_PRESET_DEFAULT_KEYS = frozenset({
@@ -6681,7 +6721,7 @@ PROFILE_PRESET_DEFAULT_KEYS = frozenset({
 SAFE_SENTINEL_DEFAULT_KEYS = frozenset({
     "MANUAL_MODE", "MANUAL_FIXED_DISCHARGE_POWER_W", "MANUAL_FIXED_CHARGE_POWER_W",
     "NIGHT_DISCHARGE_ENABLED", "NIGHT_DISCHARGE_POWER_W", "SECOND_BATTERY_INTEGRATION_ENABLED",
-    "REST_SURPLUS_HARVEST_ENABLED", "HARVEST_FAST_CAPTURE_MODE", "HARVEST_SEASON_POLICY_ENABLED", "CROSS_CHARGE_ENABLED", "MEASUREMENT_LOG_MODE",
+    "REST_SURPLUS_HARVEST_ENABLED", "HARVEST_FAST_CAPTURE_MODE", "HARVEST_SEASON_POLICY_ENABLED", "BATTERY_CARE_ENABLED", "CROSS_CHARGE_ENABLED", "MEASUREMENT_LOG_MODE",
     "MEASUREMENT_DB_MAINTENANCE_MODE", "MEASUREMENT_DB_RAW_RETENTION_MODE",
     "MEASUREMENT_DB_1MIN_RETENTION_MODE", "MEASUREMENT_LOG_MAINTENANCE_MODE",
     "MEASUREMENT_LOG_RETENTION_MODE", "MQTT_TOPIC_DIAGNOSTIC_ENABLED",
@@ -6824,6 +6864,13 @@ PORTABILITY_BY_KEY: Mapping[str, PortabilityClass] = MappingProxyType({
     'COMMAND_RESYNC_STALE_MIN_SECONDS': PortabilityClass.PORTABLE_PROFILE,
     'CONTROL_GAIN': PortabilityClass.PORTABLE_PROFILE,
     'CROSS_CHARGE_ENABLED': PortabilityClass.PORTABLE_PROFILE,
+    'BATTERY_CARE_ENABLED': PortabilityClass.PORTABLE_PROFILE,
+    'BATTERY_CARE_SEASON_START_MM_DD': PortabilityClass.PORTABLE_PROFILE,
+    'BATTERY_CARE_SEASON_END_MM_DD': PortabilityClass.PORTABLE_PROFILE,
+    'BATTERY_CARE_RESERVE_SOC_PERCENT': PortabilityClass.PORTABLE_PROFILE,
+    'BATTERY_CARE_GRID_TRIGGER_SOC_PERCENT': PortabilityClass.PORTABLE_PROFILE,
+    'BATTERY_CARE_EMERGENCY_SOC_PERCENT': PortabilityClass.PORTABLE_PROFILE,
+    'BATTERY_CARE_GRID_CHARGE_MAX_POWER_W': PortabilityClass.PORTABLE_PROFILE,
     'CROSS_CHARGE_SIGNIFICANT_W': PortabilityClass.SITE_SPECIFIC,
     'DEADBAND_W': PortabilityClass.PORTABLE_PROFILE,
     'DEBUG': PortabilityClass.LOCAL_RUNTIME,
@@ -7016,6 +7063,13 @@ _NONLEGACY_SURFACE_STATE_BY_KEY: Mapping[str, SurfaceState] = MappingProxyType({
     "HARVEST_FAST_CAPTURE_MODE": SurfaceState.OPERATIONAL,
     "HARVEST_SEASON_MODE": SurfaceState.OPERATIONAL,
     "HARVEST_SEASON_POLICY_ENABLED": SurfaceState.OPERATIONAL,
+    "BATTERY_CARE_ENABLED": SurfaceState.OPERATIONAL,
+    "BATTERY_CARE_SEASON_START_MM_DD": SurfaceState.OPERATIONAL,
+    "BATTERY_CARE_SEASON_END_MM_DD": SurfaceState.OPERATIONAL,
+    "BATTERY_CARE_RESERVE_SOC_PERCENT": SurfaceState.OPERATIONAL,
+    "BATTERY_CARE_GRID_TRIGGER_SOC_PERCENT": SurfaceState.OPERATIONAL,
+    "BATTERY_CARE_EMERGENCY_SOC_PERCENT": SurfaceState.OPERATIONAL,
+    "BATTERY_CARE_GRID_CHARGE_MAX_POWER_W": SurfaceState.OPERATIONAL,
     "HARVEST_SEASON_PARALLEL_END_MM_DD": SurfaceState.OPERATIONAL,
     "HARVEST_SEASON_PARALLEL_START_MM_DD": SurfaceState.OPERATIONAL,
     "HARVEST_HIGH_SMA_SOC_ENTRY_CONFIRM_AFTERNOON_SECONDS": SurfaceState.OPERATIONAL,

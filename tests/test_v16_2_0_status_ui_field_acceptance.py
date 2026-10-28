@@ -64,13 +64,13 @@ def test_directional_remaining_energy_and_power_bars_charge():
     assert z["remaining_label"] == "Noch ladbar"
     assert z["remaining"] == pytest.approx(2.45)
     assert z["remaining_text"] == "49 % · 2,45 kWh"
-    assert z["soc_limit_label"] == "Ladegrenze"
-    assert z["soc_limit_text"] == "99 %"
+    assert z["soc_limit_label"] == "Lade-/Entladegrenze"
+    assert z["soc_limit_text"] == "99 % / 10 %"
     assert z["power_meter_direction"] == "charge"
     assert z["power_meter_percent"] == pytest.approx(50.0)
     assert z["power_meter_text"] == "1,20 kW / 2,40 kW max"
     assert p["remaining_label"] == "Noch ladbar"
-    assert p["remaining_text"] == "40 % · 5,20 kWh"
+    assert p["remaining_text"] == "—"
     assert p["power_meter_direction"] == "charge"
     assert p["power_meter_percent"] == pytest.approx(50.0)
     assert p["power_meter_text"] == "2,30 kW / 4,60 kW max"
@@ -82,15 +82,15 @@ def test_directional_remaining_energy_and_power_bars_discharge():
     p = payload["primary"]
     assert z["remaining_label"] == "Noch entladbar"
     assert z["remaining_text"] == "40 % · 2,00 kWh"
-    assert z["soc_limit_label"] == "Entladegrenze"
-    assert z["soc_limit_text"] == "10 %"
+    assert z["soc_limit_label"] == "Lade-/Entladegrenze"
+    assert z["soc_limit_text"] == "99 % / 10 %"
     assert z["power_meter_direction"] == "discharge"
     assert z["power_meter_percent"] == pytest.approx(50.0)
     assert z["power_meter_text"] == "1,05 kW / 2,10 kW max"
     assert p["remaining_label"] == "Noch entladbar"
     assert p["remaining_text"] == "40 % · 5,20 kWh"
-    assert p["soc_limit_label"] == "Entladegrenze"
-    assert p["soc_limit_text"] == "20 %"
+    assert p["soc_limit_label"] == "Lade-/Entladegrenze"
+    assert p["soc_limit_text"] == "— / 20 %"
     assert p["power_meter_direction"] == "discharge"
     assert p["power_meter_percent"] == pytest.approx(50.0)
     assert p["power_meter_text"] == "2,30 kW / 4,60 kW max"
@@ -115,7 +115,7 @@ def test_primary_runtime_capacity_precedes_manual_fallback():
     snap["second_battery_capacity_kwh"] = 10.0
     payload = build_status_view_payload(_cfg(SECOND_BATTERY_CAPACITY_WH=13000), snap)["primary"]
     assert payload["capacity_kwh"] == 10.0
-    assert payload["remaining_text"] == "40 % · 4,00 kWh"
+    assert payload["remaining_text"] == "—"
 
 
 def test_new_primary_technical_settings_are_optional_and_diagnostic():
@@ -133,8 +133,8 @@ def test_storage_cards_share_common_standard_information_contract():
     payload = build_status_view_payload(cfg, _snap(zendure_power=-1050, primary_power=-2300))
     html = render_status_page_v2(cfg, payload, analysis_available=False, analysis_port=8081)
     assert html.count('class="zec-detail-row zec-actual-row"') == 2
-    assert 'data-zec="zendure.soc_limit_label">Entladegrenze<' in html
-    assert 'data-zec="primary.soc_limit_label">Entladegrenze<' in html
+    assert 'data-zec="zendure.soc_limit_label">Lade-/Entladegrenze<' in html
+    assert 'data-zec="primary.soc_limit_label">Lade-/Entladegrenze<' in html
     assert 'data-zec-row="primary.usable_soc"' not in html
     assert 'SMA Entlade-Untergrenze</span>' not in html
     assert 'data-storage-expert="primary"' not in html

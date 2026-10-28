@@ -71,6 +71,10 @@ class V12130MeasurementV4OnlyTests(unittest.TestCase):
 
 
     def test_installer_accepts_v14_0_0_r2_and_targets_v14_1_3_preserving_v3(self):
+        from tests.v18_staging_test_contract import is_v18_stage, assert_stage_installer
+        if is_v18_stage(Path(__file__).resolve().parents[1]):
+            assert_stage_installer(self, Path(__file__).resolve().parents[1])
+            return
         script = (ROOT / "tools/install_zendure_controller.sh").read_text(encoding="utf-8")
         for marker in (
             'EXPECTED_VERSION_ARG="v17_1_3"',

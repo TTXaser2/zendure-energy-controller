@@ -1,3 +1,5 @@
+**V18.0.0 / v18.0.0-20261027 – Installation zur kontrollierten Feldabnahme**
+
 # ZEC – Releasebezogener Architektur- und Historienindex
 
 **Aktueller Source-Release:** V17.1.3 / `v17.1.3-20261022`. **Architekturstatus:** As-built bezogen auf diese Sourcebasis. **Nachweis:** technischer Build-/Feldstatus ausschließlich nach dokumentierten tatsächlichen Gates.

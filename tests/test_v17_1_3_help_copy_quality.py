@@ -5,7 +5,7 @@ from settings_registry import iter_operational_settings
 class HelpCopyQuality(unittest.TestCase):
     def test_all_31_toggle_inactive_behaviours_present(self):
         rows = [r for r in iter_operational_settings() if r.value_type.value == "bool"]
-        self.assertEqual(len(rows),31)
+        self.assertEqual(len(rows),32)
         for row in rows:
             with self.subTest(key=row.key):
                 self.assertGreater(len(row.help.effect_disable or ""),65)

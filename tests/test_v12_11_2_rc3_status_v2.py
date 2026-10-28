@@ -73,7 +73,7 @@ class V12112Rc3StatusV2Tests(unittest.TestCase):
         html = web_ui.build_status_page(cfg, s)
         self.assertIn('zec-storage-layout-single', html)
         self.assertIn('Noch ladbar', html)
-        self.assertIn('Ladegrenze', html)
+        self.assertIn('Lade-/Entladegrenze', html)
         s["zendure_units_json"] = [
             {"unit_id":"u1", "name":"Unit 1", "soc_percent":56, "actual_power_w":2400, "target_w":2400, "capacity_kwh":5.28},
             {"unit_id":"u2", "name":"Unit 2", "soc_percent":100, "actual_power_w":0, "target_w":0, "capacity_kwh":2.44, "execution_state":"STOP_HOLD"},

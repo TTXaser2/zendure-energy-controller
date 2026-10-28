@@ -44,4 +44,17 @@ digraph Effect {
   idle -> neutral [style=dashed, arrowhead=none];
   pending -> intent [style=dashed, arrowhead=none];
   mismatch -> late [style=dashed, arrowhead=none];
+  careEdge [shape=diamond, fillcolor="#fff4dc", label="Battery Care Stufe 3?\nCHARGE + bestätigter Mismatch\n+ unveränderte Reserve R"];
+  careWrite [fillcolor="#fff4dc", label="Notladevorfall Write-through\nkurzer SQLite-Commit, WAL + FULL\nEvent-ID + ursprüngliche Reserve R"];
+  careWarn [fillcolor="#fff4dc", label="Persistenter Vorfall OPEN\nauch nach Prozessneustart / STOP / Care-Off"];
+  careRetry [shape=note, fillcolor="#fff4dc", label="DB gesperrt/Fehler: persisted=false\nStatus meldet Fehler; gleiche ID erneut\nbei nächster bestätigter Nichtwirkung"];
+  careRecover [shape=note, fillcolor="#f7f7f7", label="Auflösung nur bei >= R:\n2 unterschiedliche frische SOC-Proben\n>=3 s monotonic; normaler Eventthread"];
+  mismatch -> careEdge [style=dashed, label="nur reales Notlade-Intent"];
+  careEdge -> careWrite [label="ja"];
+  careWrite -> careWarn [label="Commit verifiziert"];
+  careWrite -> careRetry [label="DB-Fehler / unbestätigt"];
+  careRetry -> careWrite [style=dashed, label="retry gleiche Event-ID"];
+  careWarn -> careRecover [style=dashed, label="unabhängige SOC-Recovery"];
+
+  cp26_care_08 [shape=note, style="filled", fillcolor="#eaf4ec", fontcolor="#193b2d", fontsize=9, label="BATTERY CARE · CP26 (Entwicklungs-As-built)\nCare-Notlade-Command-Mismatch: synchroner SQLite-Commit pro eindeutiger Failure-ID und ursprünglicher Reserve R; parallele offene Vorfälle unabhängig recoverbar.\nKeine physische Wirksamkeits- oder Releasefreigabe"];
 }

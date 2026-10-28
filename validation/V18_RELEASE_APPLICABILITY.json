@@ -1,0 +1,231 @@
+{
+  "schema": "ZEC_V18_RELEASE_TEST_APPLICABILITY_V1",
+  "reason": "Historical version-specific / non-installable staging-contract assertions remain preserved and proven under CP42; not applicable to installable V18 root. New installer-specific smoke added.",
+  "excluded": [
+    {
+      "source": "test_batcare_cp36_test_context.CP36TestContextSafety.test_actual_context_is_exactly_known_v17_or_blocked_v18",
+      "test": "test_actual_context_is_exactly_known_v17_or_blocked_v18"
+    },
+    {
+      "source": "test_batcare_release_identity_readiness.ReleaseIdentityReadiness.test_current_cp_is_fail_closed",
+      "test": "test_current_cp_is_fail_closed"
+    },
+    {
+      "source": "test_batcare_v18_candidate_contract.TestCandidateV18.test_candidate_identity_exact_but_canonical_v17_remains_unchanged",
+      "test": "test_candidate_identity_exact_but_canonical_v17_remains_unchanged"
+    },
+    {
+      "source": "test_batcare_v18_datasheet_draft.V18DatasheetDraftTests.test_original_draft_verifies_but_never_approves_release",
+      "test": "test_original_draft_verifies_but_never_approves_release"
+    },
+    {
+      "source": "test_batcare_v18_installer_recovery_readonly.TestV18InstallerRecoveryReadonly.test_current_development_or_staging_sources_pass_structural_not_release_gate",
+      "test": "test_current_development_or_staging_sources_pass_structural_not_release_gate"
+    },
+    {
+      "source": "test_batcare_v18_staging_evidence_binding.V18StagingEvidenceBinding.test_absent_worker",
+      "test": "test_absent_worker"
+    },
+    {
+      "source": "test_batcare_v18_staging_evidence_binding.V18StagingEvidenceBinding.test_blocked_or_faked_release_report",
+      "test": "test_blocked_or_faked_release_report"
+    },
+    {
+      "source": "test_batcare_v18_staging_evidence_binding.V18StagingEvidenceBinding.test_dual_count_divergence",
+      "test": "test_dual_count_divergence"
+    },
+    {
+      "source": "test_batcare_v18_staging_evidence_binding.V18StagingEvidenceBinding.test_dual_root_contract_has_correct_runtime_and_hold",
+      "test": "test_dual_root_contract_has_correct_runtime_and_hold"
+    },
+    {
+      "source": "test_batcare_v18_staging_evidence_binding.V18StagingEvidenceBinding.test_failed_or_truncated_log",
+      "test": "test_failed_or_truncated_log"
+    },
+    {
+      "source": "test_batcare_v18_staging_evidence_binding.V18StagingEvidenceBinding.test_missing_second_result",
+      "test": "test_missing_second_result"
+    },
+    {
+      "source": "test_batcare_v18_staging_evidence_binding.V18StagingEvidenceBinding.test_positive_is_only_pre_freeze_and_does_not_mutate_evidence",
+      "test": "test_positive_is_only_pre_freeze_and_does_not_mutate_evidence"
+    },
+    {
+      "source": "test_batcare_v18_staging_evidence_binding.V18StagingEvidenceBinding.test_replay_report_wrong_manifest",
+      "test": "test_replay_report_wrong_manifest"
+    },
+    {
+      "source": "test_batcare_v18_staging_evidence_binding.V18StagingEvidenceBinding.test_strict_warning_flag_was_not_actually_used",
+      "test": "test_strict_warning_flag_was_not_actually_used"
+    },
+    {
+      "source": "test_batcare_v18_staging_evidence_binding.V18StagingEvidenceBinding.test_symlinked_logs_are_not_followed",
+      "test": "test_symlinked_logs_are_not_followed"
+    },
+    {
+      "source": "test_batcare_v18_staging_evidence_binding.V18StagingEvidenceBinding.test_tampered_worker_subtests",
+      "test": "test_tampered_worker_subtests"
+    },
+    {
+      "source": "test_batcare_v18_staging_freeze.V18StagingFreezeTests.test_review_remains_manual_and_pending",
+      "test": "test_review_remains_manual_and_pending"
+    },
+    {
+      "source": "test_batcare_v18_staging_freeze.V18StagingFreezeTests.test_stage_manifest_verifies",
+      "test": "test_stage_manifest_verifies"
+    },
+    {
+      "source": "test_batcare_v18_staging_freeze.V18StagingFreezeTests.test_staging_is_explicitly_noninstallable",
+      "test": "test_staging_is_explicitly_noninstallable"
+    },
+    {
+      "source": "test_batcare_v18_staging_freeze.V18StagingFreezeTests.test_standard_installer_has_non_bypassable_hold",
+      "test": "test_standard_installer_has_non_bypassable_hold"
+    },
+    {
+      "source": "test_v12_11_2_rc10_status_preview.V12112Rc10TopologyTests.test_version",
+      "test": "test_version"
+    },
+    {
+      "source": "test_v12_11_2_rc19_status_diagnostics_stabilization.Rc19StatusTextTests.test_version",
+      "test": "test_version"
+    },
+    {
+      "source": "test_v12_11_2_rc20_fix5_runtime_readiness.Rc20Fix5RuntimeReadinessTests.test_ready_and_health_routes_accept_pristine_state",
+      "test": "test_ready_and_health_routes_accept_pristine_state"
+    },
+    {
+      "source": "test_v12_11_2_rc20_release_integration.Rc20ReleaseIntegrationTests.test_updater_is_exact_sequential_atomic_and_rollback_capable",
+      "test": "test_updater_is_exact_sequential_atomic_and_rollback_capable"
+    },
+    {
+      "source": "test_v12_11_2_rc20_release_integration.Rc20ReleaseIntegrationTests.test_version_is_rc20_without_measurement_schema_change",
+      "test": "test_version_is_rc20_without_measurement_schema_change"
+    },
+    {
+      "source": "test_v12_11_2_rc2_ui_polish.TestV12112RC2UiPolish.test_version",
+      "test": "test_version"
+    },
+    {
+      "source": "test_v12_11_2_rc4_ui_polish.V12112Rc4UiPolishTests.test_version",
+      "test": "test_version"
+    },
+    {
+      "source": "test_v12_11_2_rc5_operations_dashboard.V12112Rc5OperationsDashboardTests.test_version",
+      "test": "test_version"
+    },
+    {
+      "source": "test_v12_11_2_rc6_ui_diagnostics_hotfix.V12112Rc6UiDiagnosticsHotfixTests.test_version",
+      "test": "test_version"
+    },
+    {
+      "source": "test_v12_11_2_rc7_backlog_release.V12112Rc7BacklogReleaseTests.test_version",
+      "test": "test_version"
+    },
+    {
+      "source": "test_v12_11_2_rc8_backlog_completion.V12112Rc8BacklogCompletionTests.test_update_script_waits_for_valid_ready_json",
+      "test": "test_update_script_waits_for_valid_ready_json"
+    },
+    {
+      "source": "test_v12_11_2_rc8_backlog_completion.V12112Rc8BacklogCompletionTests.test_version",
+      "test": "test_version"
+    },
+    {
+      "source": "test_v12_11_2_rc9_ui_semantics.V12112Rc9UiSemanticsTests.test_version",
+      "test": "test_version"
+    },
+    {
+      "source": "test_v12_11_5_settings_bugfix.V12115SettingsBugfixTests.test_release_identity_is_v12_12_1_without_measurement_schema_change",
+      "test": "test_release_identity_is_v12_12_1_without_measurement_schema_change"
+    },
+    {
+      "source": "test_v12_11_5_settings_bugfix.V12115SettingsBugfixTests.test_updater_accepts_only_v13_0_3_and_keeps_transitional_readback_gate",
+      "test": "test_updater_accepts_only_v13_0_3_and_keeps_transitional_readback_gate"
+    },
+    {
+      "source": "test_v12_11_rc13_support_tools.TestRC13SupportTools.test_version_label_rc13",
+      "test": "test_version_label_rc13"
+    },
+    {
+      "source": "test_v12_11_rc14_ui_polish.TestRC14UiPolish.test_version_label_rc14",
+      "test": "test_version_label_rc14"
+    },
+    {
+      "source": "test_v12_11_rc15_ui_graph.TestRC15UiGraphPolish.test_version_label_rc15",
+      "test": "test_version_label_rc15"
+    },
+    {
+      "source": "test_v12_11_rc16_performance.TestRC16PerformanceEndpoints.test_version_label_rc16",
+      "test": "test_version_label_rc16"
+    },
+    {
+      "source": "test_v12_11_rc17_sqlite_store.TestRC17SqliteGraphStore.test_version_label_rc17",
+      "test": "test_version_label_rc17"
+    },
+    {
+      "source": "test_v12_11_rc18_import_tool.TestRC18MeasurementDbImportTool.test_version_label_rc18",
+      "test": "test_version_label_rc18"
+    },
+    {
+      "source": "test_v12_12_1_help_mobile_quality.V12121HelpMobileQualityTests.test_updater_requires_v13_0_3_as_primary_source",
+      "test": "test_updater_requires_v13_0_3_as_primary_source"
+    },
+    {
+      "source": "test_v12_13_0_measurement_v4_only.V12130MeasurementV4OnlyTests.test_installer_accepts_v14_0_0_r2_and_targets_v14_1_3_preserving_v3",
+      "test": "test_installer_accepts_v14_0_0_r2_and_targets_v14_1_3_preserving_v3"
+    },
+    {
+      "source": "test_v13_0_1_installer_identity_hotfix.V1302InstallerIdentityHotfixTests.test_evaluator_identity_is_single_sourced_from_release_version",
+      "test": "test_evaluator_identity_is_single_sourced_from_release_version"
+    },
+    {
+      "source": "test_v13_0_1_installer_identity_hotfix.V1302InstallerIdentityHotfixTests.test_installer_targets_v14_1_and_keeps_v14_0_0_r2_as_only_source",
+      "test": "test_installer_targets_v14_1_and_keeps_v14_0_0_r2_as_only_source"
+    },
+    {
+      "source": "test_v13_0_2_hotfix.V1302BackfillAndUiContractTests.test_installer_is_strict_v13_0_1_to_v13_0_2",
+      "test": "test_installer_is_strict_v13_0_1_to_v13_0_2"
+    },
+    {
+      "source": "test_v13_0_2_hotfix.V1302ConfigArtifactHotfixTests.test_release_and_registry_contract_are_v13_0_2",
+      "test": "test_release_and_registry_contract_are_v13_0_2"
+    },
+    {
+      "source": "test_v13_0_3_preview_ux_hotfix.V1303PreviewUxHotfixTests.test_installer_is_strict_v13_0_2_to_v14_1_3",
+      "test": "test_installer_is_strict_v13_0_2_to_v14_1_3"
+    },
+    {
+      "source": "test_v13_0_3_preview_ux_hotfix.V1303PreviewUxHotfixTests.test_release_identity_is_v14_1_3",
+      "test": "test_release_identity_is_v14_1_3"
+    },
+    {
+      "source": "test_v16_0_1_installer_hotfix.TestV1601InstallerHotfix.test_current_release_identity_is_v17_1_3",
+      "test": "test_current_release_identity_is_v17_1_3"
+    },
+    {
+      "source": "test_v16_0_1_installer_hotfix.TestV1601InstallerHotfix.test_identity_cli_executes_the_same_parser_used_by_installer",
+      "test": "test_identity_cli_executes_the_same_parser_used_by_installer"
+    },
+    {
+      "source": "test_v16_0_1_installer_hotfix.TestV1601InstallerHotfix.test_installer_uses_shared_identity_gate_without_embedded_regex",
+      "test": "test_installer_uses_shared_identity_gate_without_embedded_regex"
+    },
+    {
+      "source": "test_v16_2_2_installer_manifest_hygiene.TestV1622InstallerManifestHygiene.test_release_identity_and_supported_update_source",
+      "test": "test_release_identity_and_supported_update_source"
+    },
+    {
+      "source": "test_v17_0_0_build_evidence_contract.TestV1700BuildEvidenceContract.test_release_identity_and_update_source",
+      "test": "test_release_identity_and_update_source"
+    },
+    {
+      "source": "test_v18_draft_provenance.V18DraftProvenanceTests.test_actual_worktree_still_pending_release_identity",
+      "test": "test_actual_worktree_still_pending_release_identity"
+    },
+    {
+      "source": "test_v18_draft_provenance.V18DraftProvenanceTests.test_intact_draft_passes_without_becoming_installable",
+      "test": "test_intact_draft_passes_without_becoming_installable"
+    }
+  ],
+  "excluded_count": 56
+}

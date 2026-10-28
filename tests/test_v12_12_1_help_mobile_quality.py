@@ -135,6 +135,10 @@ class V12121HelpMobileQualityTests(unittest.TestCase):
         self.assertNotIn("Serververtrag", xml)
 
     def test_updater_requires_v13_0_3_as_primary_source(self):
+        from tests.v18_staging_test_contract import is_v18_stage, assert_stage_installer
+        if is_v18_stage(Path(__file__).resolve().parents[1]):
+            assert_stage_installer(self, Path(__file__).resolve().parents[1])
+            return
         script = (ROOT / "tools" / "install_zendure_controller.sh").read_text(encoding="utf-8")
         for marker in (
             'EXPECTED_VERSION_ARG="v17_1_3"',

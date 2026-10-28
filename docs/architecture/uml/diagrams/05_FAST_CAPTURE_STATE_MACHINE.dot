@@ -37,4 +37,6 @@ digraph FastCapture {
   ready -> modes [style=dashed, arrowhead=none];
   disabled -> guards [style=dashed, arrowhead=none];
   unk -> layer [style=dashed, arrowhead=none];
+
+  cp26_care_05 [shape=note, style="filled", fillcolor="#eaf4ec", fontcolor="#193b2d", fontsize=9, label="BATTERY CARE · CP26 (Entwicklungs-As-built)\nBattery-Care-PV-Absolutziel und Fast-Capture-Overlay dürfen denselben Export NICHT doppelt allokieren. Normaler Baselinepfad nach Care-Exit erhalten.\nKeine physische Wirksamkeits- oder Releasefreigabe"];
 }

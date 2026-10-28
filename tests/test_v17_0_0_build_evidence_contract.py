@@ -31,6 +31,10 @@ def good_payload():
 
 class TestV1700BuildEvidenceContract(unittest.TestCase):
     def test_release_identity_and_update_source(self):
+        from tests.v18_staging_test_contract import is_v18_stage, assert_stage_runtime
+        if is_v18_stage(Path(__file__).resolve().parents[1]):
+            assert_stage_runtime(self, Path(__file__).resolve().parents[1])
+            return
         self.assertEqual(("17.1.3", "V17.1.3", "v17.1.3-20261022"),
                          (version.APP_VERSION, version.APP_VERSION_LABEL, version.APP_BUILD_ID))
         text = INSTALLER.read_text(encoding="utf-8")

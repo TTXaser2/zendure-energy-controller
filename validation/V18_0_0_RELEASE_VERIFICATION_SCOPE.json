@@ -1,0 +1,13 @@
+{
+  "schema": "ZEC_V18_FIELD_INSTALL_CANDIDATE_SCOPE_V1",
+  "status": "READY_FOR_USER_PRE_FLIGHT_AND_FIELD_INSTALLATION",
+  "build_id": "v18.0.0-20261027",
+  "applicable_release_tests": 1148,
+  "subtests": 1211,
+  "excluded_historical_assertions": 56,
+  "cp42_stage_tests": 1199,
+  "manual_uml": "PENDING",
+  "battery_effect": "NOT_VERIFIED",
+  "real_install": "PENDING",
+  "installation_rollback": "UNVERIFIED_IN_FIELD"
+}

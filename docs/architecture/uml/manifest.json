@@ -1,10 +1,10 @@
 {
   "schema": "ZEC_UML_ATLAS_V1",
-  "status": "AS_BUILT_RELEASE_APPROVED",
-  "review_gate": "MANUAL_SOURCE_REVIEW_PASS",
-  "release": "V17.1.3",
-  "build_id": "v17.1.3-20261022",
-  "source_baseline_controller_sha256": "8bf439456e773aa84097e54059b3da1065deac5200d9304c0dc5960a5e24b1d7",
+  "status": "DEVELOPMENT_AS_BUILT_NOT_RELEASE_APPROVED",
+  "review_gate": "DEVELOPMENT_REVIEW_PENDING",
+  "release": "V18.0.0",
+  "build_id": "v18.0.0-20261027",
+  "source_baseline_controller_sha256": "ba1a909d8247336bf248ecd5432f3bb96c4be10f679be4c0590c6eab6b0da31b",
   "historical_origin": {
     "atlas_version": "V0.4",
     "release": "V17.0.2",
@@ -16,65 +16,70 @@
       "id": "01",
       "name": "01_CONTROLLER_STATE_MACHINE",
       "status": "UPDATED",
-      "reason": "S3 ist kein eigener current_mode; Grid-Stale ist Ereignis.",
+      "reason": "CP26 Battery Care: Policy: Care R schützt AUTO/NIGHT vor Entladung; STOP bleibt absolut. Stufe 1 PV, Stufe 2 Netzpflege, Stufe 3 Notladung bis Episode-R. Kein neuer current_mode.",
       "source_symbols": [
         "controller_logic.py::run_once",
-        "state.py::ControllerState"
+        "state.py::ControllerState",
+        "battery_care_policy.py::decide_care",
+        "controller_logic.py::_battery_care_grid_dispatch"
       ],
       "source": "diagrams/01_CONTROLLER_STATE_MACHINE.dot",
       "secondary_plantuml": "../../history/uml/v0.4/01_CONTROLLER_STATE_MACHINE.puml",
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/01_CONTROLLER_STATE_MACHINE.svg",
       "rendered_png": "rendered/01_CONTROLLER_STATE_MACHINE.png",
-      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
-      "source_sha256": "d7acd1294af4c5a41c4db410efbef6b31de4ed03831b5df136ea211710b46bee",
-      "rendered_svg_sha256": "5682e896acee5f440aced254239e06e6d72c3ce674d2a3fcc8e2d19514ce6cc0",
-      "rendered_png_sha256": "bfae6e172ad109887ee144e2db97bf03e373122f3948ff5c17cab8b0f407aded"
+      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
+      "source_sha256": "8906d03849da367165f16e8221b0f66816188a082e4f99a1efa8dd1ca849ba96",
+      "rendered_svg_sha256": "642311fbe8a4bd28b3261131df0ca0a5b4b2d3bca173b67655786c99ae180695",
+      "rendered_png_sha256": "c38914670d8213490a7c095f6bcfede1d59db13ab385e0802b2393053bfad858"
     },
     {
       "id": "02",
       "name": "02_CONTROL_CYCLE_ACTIVITY",
       "status": "UPDATED",
-      "reason": "NIGHT/MIN_SOC entkoppelt fixe Entladung von zulässiger Grid-Verarbeitung.",
+      "reason": "CP26 Battery Care: Care-Anforderung nur nach Safety-/Messfreigaben durch bestehenden Command-Owner. Abgeschlossener Zyklus markiert Stage-Provenienz; keine Beobachtungsabkürzung.",
       "source_symbols": [
         "controller_logic.py::run_once",
-        "controller_logic.py::handle_night_mode"
+        "controller_logic.py::handle_night_mode",
+        "battery_care_stage_events.py::observed_care_stage"
       ],
       "source": "diagrams/02_CONTROL_CYCLE_ACTIVITY.dot",
       "secondary_plantuml": "../../history/uml/v0.4/02_CONTROL_CYCLE_ACTIVITY.puml",
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/02_CONTROL_CYCLE_ACTIVITY.svg",
       "rendered_png": "rendered/02_CONTROL_CYCLE_ACTIVITY.png",
-      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
-      "source_sha256": "846f845eac43427ba950b5253ea01ac7fdbc4a1f3f0f94efffae4fee88a6cf95",
-      "rendered_svg_sha256": "c955b194b20c7868acfedfea7c18f0d232d34a113f484a3bc90112b93e30a782",
-      "rendered_png_sha256": "5e3b34029340fb30917564959ab0e63ce1264d578861d43ee2ef217f62264705"
+      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
+      "source_sha256": "9f2b4b3340352fab957392b90f24916aa2b71507a4b7b74aa88358cfc6396c0e",
+      "rendered_svg_sha256": "e338bcd40d643378eb46df9e14d98eebd598cad7dae0233193965c5cd367b557",
+      "rendered_png_sha256": "62538befe9faf01972a0e638d4d900f281dfa4b77a04b5f81212840af19b09d7"
     },
     {
       "id": "03",
       "name": "03_CHARGE_TARGET_PIPELINE",
       "status": "UPDATED",
-      "reason": "S3-Saisonwirkung gilt nur bei opt-in und ist nachrangig zum Export-Capture-Floor.",
+      "reason": "CP26 Battery Care: Care-PV ist ABSOLUTES Ziel inklusive bereits physischer Zendure-Ladung, nicht B+Fast-Overlay. Care-Import-Backoff; Netzpflege/Notladung mit separatem Powercap.",
       "source_symbols": [
         "controller_logic.py::_harvest_time_profile",
         "controller_logic.py::_s3_season_policy",
-        "controller_logic.py::handle_charge"
+        "controller_logic.py::handle_charge",
+        "battery_care_pv_allocation.py::allocate_care_pv",
+        "battery_care_grid_observation.py::observe_grid_policy"
       ],
       "source": "diagrams/03_CHARGE_TARGET_PIPELINE.dot",
       "secondary_plantuml": "../../history/uml/v0.4/03_CHARGE_TARGET_PIPELINE.puml",
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/03_CHARGE_TARGET_PIPELINE.svg",
       "rendered_png": "rendered/03_CHARGE_TARGET_PIPELINE.png",
-      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
-      "source_sha256": "ae4f12850bcc79034f0fd2a9acce168f31a6bb554b383464fdace89beb8d210b",
-      "rendered_svg_sha256": "88db5aa083357daa1023594750a0cd22594ddd081078d495a425a6d37debd279",
-      "rendered_png_sha256": "651c6dcfa4de43c9dfaea37f93979531b4747275954eae9ab30dc7d456d29e5d"
+      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
+      "source_sha256": "04b641ecddadaac82e39601a07d019e6c259fa0df28cdb805087bad9deafb630",
+      "rendered_svg_sha256": "d7d7a3bd252e667ef1f5fe94fa8c683d0afc3c681eb9745a149819b3a9573695",
+      "rendered_png_sha256": "32188887130b93fba82ded6e3cbab55681158b762f7c3f5785b44311b89690e5"
     },
     {
       "id": "04",
       "name": "04_HARVEST_STATE_MACHINE",
-      "status": "UPDATED",
-      "reason": "Profil/Bestätigungsdauer sind konfigurierbare S3-Werte.",
+      "status": "REVIEWED_UNCHANGED",
+      "reason": "CP26: Diagrammzweig außerhalb direkter Battery-Care-Policy-/Event-/Statusänderungen. Ursprüngliches V17.1.3-Review bleibt nur historische Basis; CP26-Releasefreigabe ausstehend.",
       "source_symbols": [
         "controller_logic.py::_harvest_time_profile",
         "controller_logic.py::update_rest_surplus_harvest_state"
@@ -84,7 +89,7 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/04_HARVEST_STATE_MACHINE.svg",
       "rendered_png": "rendered/04_HARVEST_STATE_MACHINE.png",
-      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
       "source_sha256": "82ecbaf77d6ea0a375f5d4aec63034228f9118294be94a96d51537ce29d4670c",
       "rendered_svg_sha256": "3f9df1b42768a6ddb3f03989fcc7d80d98f07ac443850bdea0d709ef9aaec624",
       "rendered_png_sha256": "a39c6d67f2c4af265f7bed6f6ae873f0dfac2c568134247c11abeadf5dcbb823"
@@ -92,46 +97,48 @@
     {
       "id": "05",
       "name": "05_FAST_CAPTURE_STATE_MACHINE",
-      "status": "REVIEWED_UNCHANGED",
-      "reason": "V17.1.2 Sourceconsumer weiterhin unter Schutzinvarianten; keine zusätzliche UML-Änderung abgeleitet.",
+      "status": "UPDATED",
+      "reason": "CP26 Battery Care: Battery-Care-PV-Absolutziel und Fast-Capture-Overlay dürfen denselben Export NICHT doppelt allokieren. Normaler Baselinepfad nach Care-Exit erhalten.",
       "source_symbols": [
         "controller_logic.py::handle_charge",
-        "state.py::ControllerState"
+        "state.py::ControllerState",
+        "battery_care_pv_allocation.py::allocate_care_pv"
       ],
       "source": "diagrams/05_FAST_CAPTURE_STATE_MACHINE.dot",
       "secondary_plantuml": "../../history/uml/v0.4/05_FAST_CAPTURE_STATE_MACHINE.puml",
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/05_FAST_CAPTURE_STATE_MACHINE.svg",
       "rendered_png": "rendered/05_FAST_CAPTURE_STATE_MACHINE.png",
-      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
-      "source_sha256": "7915af462359d0b1c4fa5af63931a0eb119781250a0ffc4094ac4e35a92e4815",
-      "rendered_svg_sha256": "27fe634b3fe1bee8d26eae697cab583f4abb9efe7b16f004b6a10eea86f77f07",
-      "rendered_png_sha256": "952f184374ee198cc5493694d93a616e20468f56b7e3b5b02bb8dc16b62ec141"
+      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
+      "source_sha256": "4fa04ebcf7974a97207cfbca7e4860c3016119a3e8b4072db654f6fbbfa9d344",
+      "rendered_svg_sha256": "b8a935ecee8957581d4aa6e1a35eff8ada944da76cac9052240ebaad7ad94dd6",
+      "rendered_png_sha256": "b5834981a9543bcaeac03f6f90614df8795f213a9612c9138619d02f834c4ead"
     },
     {
       "id": "06",
       "name": "06_CROSS_CHARGE_ACTIVITY",
-      "status": "REVIEWED_UNCHANGED",
-      "reason": "V17.1.2 Sourceconsumer weiterhin unter Schutzinvarianten; keine zusätzliche UML-Änderung abgeleitet.",
+      "status": "UPDATED",
+      "reason": "CP26 Battery Care: Einzige begrenzte Ausnahme: bestaetigte Care-NOTLADUNG umgeht wirtschaftliches Cross-Charge-Veto, nie Hardware-, BMS-, STOP-, SmartMode- oder Command-Safety.",
       "source_symbols": [
         "controller_logic.py::handle_charge",
-        "controller_logic.py::_apply_symmetric_cross_charge_limit"
+        "controller_logic.py::_apply_symmetric_cross_charge_limit",
+        "controller_logic.py::_battery_care_grid_dispatch"
       ],
       "source": "diagrams/06_CROSS_CHARGE_ACTIVITY.dot",
       "secondary_plantuml": "../../history/uml/v0.4/06_CROSS_CHARGE_ACTIVITY.puml",
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/06_CROSS_CHARGE_ACTIVITY.svg",
       "rendered_png": "rendered/06_CROSS_CHARGE_ACTIVITY.png",
-      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
-      "source_sha256": "3bfedf7ff66de2550d8eaa159124e8cb16d411f7cbd87cad4e550ce1661340b3",
-      "rendered_svg_sha256": "2bd7aa38a2cef161177a701db7555bb98b8df98e6b9c0376d144e771ab5a0cfb",
-      "rendered_png_sha256": "b57410ef7894a5182238d50f8123c1fcc25e509acba329d8dbbeaba6b20cd4c0"
+      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
+      "source_sha256": "ecbcf70c70ae0f33b386203f2edbd1362efddf0800f743ddd56ef6795c6e8dca",
+      "rendered_svg_sha256": "625cf499550075fa0696cf87dea5dc232a8cf2745c873be57da844d73c7e083b",
+      "rendered_png_sha256": "b7d221d38c81042d0a8e7fd0fb54214fff56a2ae257b1f59d81f82dfac46e59c"
     },
     {
       "id": "07",
       "name": "07_COMMAND_LIFECYCLE_SEQUENCE",
       "status": "REVIEWED_UNCHANGED",
-      "reason": "V17.1.2 Sourceconsumer weiterhin unter Schutzinvarianten; keine zusätzliche UML-Änderung abgeleitet.",
+      "reason": "CP26: Diagrammzweig außerhalb direkter Battery-Care-Policy-/Event-/Statusänderungen. Ursprüngliches V17.1.3-Review bleibt nur historische Basis; CP26-Releasefreigabe ausstehend.",
       "source_symbols": [
         "command_lifecycle.py",
         "controller_logic.py::_publish_signed_target"
@@ -141,7 +148,7 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/07_COMMAND_LIFECYCLE_SEQUENCE.svg",
       "rendered_png": "rendered/07_COMMAND_LIFECYCLE_SEQUENCE.png",
-      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
       "source_sha256": "26df4bd752b482e9e880e9fcebb90ec61799d86f6853c9d07cec38f219a45cd7",
       "rendered_svg_sha256": "21e9e33d3d72090f897ecb788d7ff3a74ee4573c0c4a9b25f2d82dc01af6f939",
       "rendered_png_sha256": "83aee7f0097d58f694ca2963c1f83f901d64e9ed1e8ae9d0fa730bb39695eb04"
@@ -149,66 +156,77 @@
     {
       "id": "08",
       "name": "08_COMMAND_EFFECT_RECOVERY_STATE",
-      "status": "REVIEWED_UNCHANGED",
-      "reason": "V17.1.2 Sourceconsumer weiterhin unter Schutzinvarianten; keine zusätzliche UML-Änderung abgeleitet.",
+      "status": "UPDATED",
+      "reason": "CP26 Battery Care: Care-Notlade-Command-Mismatch: synchroner SQLite-Commit pro eindeutiger Failure-ID und ursprünglicher Reserve R; parallele offene Vorfälle unabhängig recoverbar.",
       "source_symbols": [
         "command_lifecycle.py",
-        "controller_logic.py::run_once"
+        "controller_logic.py::run_once",
+        "controller_logic.py::_mark_mismatch",
+        "operational_events.py::persist_confirmed_emergency_failure",
+        "operational_events.py::_observe_battery_care_incident"
       ],
       "source": "diagrams/08_COMMAND_EFFECT_RECOVERY_STATE.dot",
       "secondary_plantuml": "../../history/uml/v0.4/08_COMMAND_EFFECT_RECOVERY_STATE.puml",
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/08_COMMAND_EFFECT_RECOVERY_STATE.svg",
       "rendered_png": "rendered/08_COMMAND_EFFECT_RECOVERY_STATE.png",
-      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
-      "source_sha256": "c4a3aae108bc978fa85c86ae0b49308235315c05bc5d55740cb45faa51ff4ca1",
-      "rendered_svg_sha256": "2fd7eb541efcf7c938f3c7474123dc575868a3ea5d89f272365da4ab65878a7e",
-      "rendered_png_sha256": "4d4c12558bc727cdde069eb3fc927f467dcd54f4bec5bea728f5baa3eff8d40b"
+      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
+      "source_sha256": "d77b979eb9142efcb79c978413d9967a9e7d3cf99ff4c6c921588bd40aab5cdb",
+      "rendered_svg_sha256": "58fbb8a1e04033ca27a435dceb55be46e26fe4822afd2ea752fc6f54267aadbb",
+      "rendered_png_sha256": "211840baa6e63afcbefb645119cfa53b17f5ed22f22a68d5aefec5fdfc2a0aef"
     },
     {
       "id": "09",
       "name": "09_COMPONENT_MAP",
       "status": "UPDATED",
-      "reason": "Getrennte 1-s-Live- und 3-s-Minigraph-Polls; Stale-Diagnose.",
+      "reason": "CP26 Battery Care: Care Module: pure Policy, PV-Arbiter, Grid-Beobachtung, persistente Episoden. OperationalEventJournal: mehrere Notladevorfälle und bestätigte Stage-Transition nach 2 abgeschlossenen Zyklen; SOC-Graph read-only.",
       "source_symbols": [
         "controller_logic.py",
         "web_ui.py::build_grid_mini_payload",
-        "operational_events.py"
+        "operational_events.py",
+        "controller_logic.py::_mark_mismatch",
+        "operational_events.py::persist_confirmed_emergency_failure",
+        "operational_events.py::_observe_battery_care_incident",
+        "battery_care_policy.py::decide_care",
+        "battery_care_episode_store.py::CareEpisodeStore",
+        "operational_events.py::_observe_battery_care_stage",
+        "battery_care_graph_history.py::care_day_lines"
       ],
       "source": "diagrams/09_COMPONENT_MAP.dot",
       "secondary_plantuml": "../../history/uml/v0.4/09_COMPONENT_MAP.puml",
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/09_COMPONENT_MAP.svg",
       "rendered_png": "rendered/09_COMPONENT_MAP.png",
-      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
-      "source_sha256": "83cb64e86afd1857fa77edc6b326e66d6e0d338609223df25bb0086e14fd7837",
-      "rendered_svg_sha256": "05e0f48475d2ae81a141972904df227063c2958df8c4aa54e79e0852e646c4f2",
-      "rendered_png_sha256": "fbce050518d6c3f4ec491402bf510bd00afd9e88d947aed45f1a68e078e66829"
+      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
+      "source_sha256": "fa4f4b465e1ec44ee74b0257d405045f897ffc766a1acbf152a01e2814ffbca4",
+      "rendered_svg_sha256": "5eeb5befbf09deb80f7eeaeb88084f0cfc5354adace4ec1560d652cf7e6c01e4",
+      "rendered_png_sha256": "890163cd08fbc84b4e31ddbe114def60f4d9bd2932d40c3953274dc18fc52a1d"
     },
     {
       "id": "10",
       "name": "10_DISCHARGE_NIGHT_MANUAL_PATHS",
       "status": "UPDATED",
-      "reason": "MIN_SOC blockiert Entladung, nicht die gesamte Netzverarbeitung.",
+      "reason": "CP26 Battery Care: Care NIGHT-Untergrenze = max(MIN_SOC,R,ggf. höhere Nachtreserve). STOP hat Vorrang. Export-Laden bleibt bei Reservestop erlaubt.",
       "source_symbols": [
         "controller_logic.py::run_once",
-        "controller_logic.py::handle_discharge"
+        "controller_logic.py::handle_discharge",
+        "controller_logic.py::_battery_care_reserve_soc"
       ],
       "source": "diagrams/10_DISCHARGE_NIGHT_MANUAL_PATHS.dot",
       "secondary_plantuml": "../../history/uml/v0.4/10_DISCHARGE_NIGHT_MANUAL_PATHS.puml",
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/10_DISCHARGE_NIGHT_MANUAL_PATHS.svg",
       "rendered_png": "rendered/10_DISCHARGE_NIGHT_MANUAL_PATHS.png",
-      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
-      "source_sha256": "ee4cce6de11dabd74eee57d5c4edae038aa7bbba824471cc5fbf592a136ef3ae",
-      "rendered_svg_sha256": "b99fc33dfb069e55d096783784dbb33e32916010694536cf5e419c36da975350",
-      "rendered_png_sha256": "7d17cf34cfd13212bc160b7523af589a5ec6d521a4de752dfd0162fff10f17e0"
+      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
+      "source_sha256": "7ee2bbd0e613b299f8375a6b660087b9781583169187d25c46d0dc249d9cd161",
+      "rendered_svg_sha256": "52973bfb24809b543393befcbb477d2ea9f795383d6ff5559a9341e3bab0d8b2",
+      "rendered_png_sha256": "b8c0cf6e5d0a94c1db02c94ecfb172683224c16706bb9c76170c4f0e9e439013"
     },
     {
       "id": "11",
       "name": "11_AUTO_GRID_EXPORT_DETAIL",
       "status": "REVIEWED_UNCHANGED",
-      "reason": "V17.1.2 Sourceconsumer weiterhin unter Schutzinvarianten; keine zusätzliche UML-Änderung abgeleitet.",
+      "reason": "CP26: Diagrammzweig außerhalb direkter Battery-Care-Policy-/Event-/Statusänderungen. Ursprüngliches V17.1.3-Review bleibt nur historische Basis; CP26-Releasefreigabe ausstehend.",
       "source_symbols": [
         "controller_logic.py::handle_charge"
       ],
@@ -217,7 +235,7 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/11_AUTO_GRID_EXPORT_DETAIL.svg",
       "rendered_png": "rendered/11_AUTO_GRID_EXPORT_DETAIL.png",
-      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
       "source_sha256": "982cd07b9ef6285cffc353a09c429d4d4d5a7e7ec2689577df81b5df229a3324",
       "rendered_svg_sha256": "99e1b89f81032bd5ff9f240131900c5476be15a59cf3bf5fa2fe956acaf25037",
       "rendered_png_sha256": "f0cd9137e23bd6e2b28488e961cc520400591e60b58317f4261cdbc0e3481cd3"
@@ -226,7 +244,7 @@
       "id": "12",
       "name": "12_AUTO_GRID_IMPORT_DETAIL",
       "status": "REVIEWED_UNCHANGED",
-      "reason": "V17.1.2 Sourceconsumer weiterhin unter Schutzinvarianten; keine zusätzliche UML-Änderung abgeleitet.",
+      "reason": "CP26: Diagrammzweig außerhalb direkter Battery-Care-Policy-/Event-/Statusänderungen. Ursprüngliches V17.1.3-Review bleibt nur historische Basis; CP26-Releasefreigabe ausstehend.",
       "source_symbols": [
         "controller_logic.py::handle_discharge"
       ],
@@ -235,7 +253,7 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/12_AUTO_GRID_IMPORT_DETAIL.svg",
       "rendered_png": "rendered/12_AUTO_GRID_IMPORT_DETAIL.png",
-      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
       "source_sha256": "4e1ce1cc42bc9dd93a19785d8ea20a4d0ecfc447638789aa40c58610bd7f6e5d",
       "rendered_svg_sha256": "cae645b2b5951d3168b428f66e52e9f2a448cfc013ee742573fe92473aec771d",
       "rendered_png_sha256": "fe85edff3d08c208d44df790f589056c492fe6375ba623d471ad4517f931e138"
@@ -243,8 +261,8 @@
     {
       "id": "13",
       "name": "13_FULL_OR_IDLE_DEEP_DIVE",
-      "status": "UPDATED",
-      "reason": "Zeitprofil-Confirm ist konfigurierbar.",
+      "status": "REVIEWED_UNCHANGED",
+      "reason": "CP26: Diagrammzweig außerhalb direkter Battery-Care-Policy-/Event-/Statusänderungen. Ursprüngliches V17.1.3-Review bleibt nur historische Basis; CP26-Releasefreigabe ausstehend.",
       "source_symbols": [
         "controller_logic.py::_harvest_time_profile",
         "controller_logic.py::handle_charge"
@@ -254,7 +272,7 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/13_FULL_OR_IDLE_DEEP_DIVE.svg",
       "rendered_png": "rendered/13_FULL_OR_IDLE_DEEP_DIVE.png",
-      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
       "source_sha256": "3485557412ee7b804902ea9c84b59007abd704afc5cefb9f542391e332f91e8e",
       "rendered_svg_sha256": "521a40aac39ada410c4ef3bb03ce092c39ff14c5f7f2de26f90bf828084637c9",
       "rendered_png_sha256": "39718058fc7224c24548b8fef3792f438fd1861f25872e24382b1b847ba6e2da"
@@ -262,8 +280,8 @@
     {
       "id": "14",
       "name": "14_NEAR_LIMIT_POWER_BALANCE",
-      "status": "UPDATED",
-      "reason": "Saisonpolicy kann strategischen Share unterdrücken.",
+      "status": "REVIEWED_UNCHANGED",
+      "reason": "CP26: Diagrammzweig außerhalb direkter Battery-Care-Policy-/Event-/Statusänderungen. Ursprüngliches V17.1.3-Review bleibt nur historische Basis; CP26-Releasefreigabe ausstehend.",
       "source_symbols": [
         "controller_logic.py::handle_charge",
         "controller_logic.py::_s3_season_policy"
@@ -273,7 +291,7 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/14_NEAR_LIMIT_POWER_BALANCE.svg",
       "rendered_png": "rendered/14_NEAR_LIMIT_POWER_BALANCE.png",
-      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
       "source_sha256": "de0e5e56bf8a0385a48f19132e4a995d825ef9d0c09e2c3fde2f221b06c07a82",
       "rendered_svg_sha256": "983b3da464e06a1f11734442f5981782cf7d1d5edcf1f4e5fa09b451a019d7db",
       "rendered_png_sha256": "7203b102afd53c894dd4a33a1876e3a50637d0087439fe54453fd5c40562fb87"
@@ -282,45 +300,49 @@
       "id": "15",
       "name": "15_PRIORITY_OVERRIDE_LAYERS",
       "status": "UPDATED",
-      "reason": "S3 nur Strategieebene, kein Safety-/Command-Override.",
+      "reason": "CP26 Battery Care: Priorität: STOP/Safety vor Care. PV-Umlenkung vor moderater Netzpflege; Notladung mit eng begrenzter wirtschaftlicher Cross-Charge-Ausnahme. Einheitlicher Publisher.",
       "source_symbols": [
         "controller_logic.py::run_once",
-        "controller_logic.py::handle_charge"
+        "controller_logic.py::handle_charge",
+        "battery_care_policy.py::decide_care",
+        "controller_logic.py::_battery_care_grid_dispatch"
       ],
       "source": "diagrams/15_PRIORITY_OVERRIDE_LAYERS.dot",
       "secondary_plantuml": "../../history/uml/v0.4/15_PRIORITY_OVERRIDE_LAYERS.puml",
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/15_PRIORITY_OVERRIDE_LAYERS.svg",
       "rendered_png": "rendered/15_PRIORITY_OVERRIDE_LAYERS.png",
-      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
-      "source_sha256": "97955a95ec10f060a00e3fd528d5fc9d13552bc05795adc9d12d574b8d9474cb",
-      "rendered_svg_sha256": "6bea45bc1a602958cc60038ae186ea3d8c61eee1d39c8c4e6b94767a65ec1743",
-      "rendered_png_sha256": "4f32ae61c1119af8140dbe94f342a099635a3eab4eba0407275ebd70982f4055"
+      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
+      "source_sha256": "d9f09660e55d3971fef7b35f73e55e79aab5efb7bc8dd5ee5de3d7ee5bdb1eb2",
+      "rendered_svg_sha256": "bc08941ae2e432b181664237b88caadf9bb3b9a1da89cec4990d79163b6fc98d",
+      "rendered_png_sha256": "dd7a758ae72f16b92b0761b72194a1c7e769336d3c52e5c2b0f713723415b9d8"
     },
     {
       "id": "16",
       "name": "16_TIMING_HYSTERESIS",
       "status": "UPDATED",
-      "reason": "Runtimekonfigurierbare Zeitgrenzen anstelle der fixen Altuhrzeiten.",
+      "reason": "CP26 Battery Care: Persistierte Care-Stufenmarker erst nach ZWEI unterschiedlichen abgeschlossenen Controllerzyklen. Ein einzelnes Statuspoll/SOC-Rauschen erzeugt kein Ereignis.",
       "source_symbols": [
         "controller_logic.py::_harvest_time_profile",
-        "controller_logic.py::_s3_season_policy"
+        "controller_logic.py::_s3_season_policy",
+        "battery_care_stage_events.py::observed_care_stage",
+        "operational_events.py::_observe_battery_care_stage"
       ],
       "source": "diagrams/16_TIMING_HYSTERESIS.dot",
       "secondary_plantuml": "../../history/uml/v0.4/16_TIMING_HYSTERESIS.puml",
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/16_TIMING_HYSTERESIS.svg",
       "rendered_png": "rendered/16_TIMING_HYSTERESIS.png",
-      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
-      "source_sha256": "d3cd2982fbacb491a2006935087a56d8f80d2c8de363a2a11485c4c3bd032bce",
-      "rendered_svg_sha256": "3f1e30bfd43ffe6d3e911637281b270c80095f6916ff9c0f0e0bb9e736edb178",
-      "rendered_png_sha256": "ec6b8b4095f6b3a68f3b05cf935117605bef8fbf9ddd64b5a1f053a92c65bf55"
+      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
+      "source_sha256": "cea50618170230e2e49d4c16e3b1ea4bfca3a741a06556bc8e9dd954da66e8a0",
+      "rendered_svg_sha256": "d50d136eef32ce6aa0353be506b68f6c58dad3bcc33f41919194655769c086da",
+      "rendered_png_sha256": "5133ca02feec0f9b6ecc9e9aee93d43f83fc3739e9917be02d57ff8a00443db9"
     },
     {
       "id": "17",
       "name": "17_RULE_CYCLE_MICROSCOPE",
-      "status": "UPDATED",
-      "reason": "V17.1.2 Sourceconsumer weiterhin unter Schutzinvarianten; keine zusätzliche UML-Änderung abgeleitet.",
+      "status": "REVIEWED_UNCHANGED",
+      "reason": "CP26: Diagrammzweig außerhalb direkter Battery-Care-Policy-/Event-/Statusänderungen. Ursprüngliches V17.1.3-Review bleibt nur historische Basis; CP26-Releasefreigabe ausstehend.",
       "source_symbols": [
         "controller_logic.py::handle_charge"
       ],
@@ -329,7 +351,7 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/17_RULE_CYCLE_MICROSCOPE.svg",
       "rendered_png": "rendered/17_RULE_CYCLE_MICROSCOPE.png",
-      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
       "source_sha256": "e2725413f87698a74bd7d470e7744d3117ca0e3b1689db935a538fcd33ccf72e",
       "rendered_svg_sha256": "996d9768a339a44d99d52494ae59934fd86f356b85edc74ef0f8e4ea2cd6e408",
       "rendered_png_sha256": "66dfcb86e0b6d9cc65e27c1652ca1da8303f90c652b8ed57b5ae642376f74a34"
@@ -338,26 +360,28 @@
       "id": "18",
       "name": "18_REASON_LIMITER_PROVENANCE",
       "status": "UPDATED",
-      "reason": "S3 requested/effective und applicability als eigene Diagnosedimension.",
+      "reason": "CP26 Battery Care: Evidenztrennung: Care-Policy/Shadow != gewähltes Commandziel != readback != physische AC-Wirkung. Stage-Marker belegen Zyklen, Notladefehler separate bestätigte Mismatches.",
       "source_symbols": [
         "state.py::ControllerState",
-        "controller_logic.py::_s3_season_policy"
+        "controller_logic.py::_s3_season_policy",
+        "battery_care_stage_events.py::observed_care_stage",
+        "battery_care_graph_history.py::care_day_incidents"
       ],
       "source": "diagrams/18_REASON_LIMITER_PROVENANCE.dot",
       "secondary_plantuml": "../../history/uml/v0.4/18_REASON_LIMITER_PROVENANCE.puml",
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/18_REASON_LIMITER_PROVENANCE.svg",
       "rendered_png": "rendered/18_REASON_LIMITER_PROVENANCE.png",
-      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
-      "source_sha256": "e7203b74b2199d103ac24e125f241ca29cd231b5feb1ec2d32dad74a7a999d4f",
-      "rendered_svg_sha256": "fbf507b8ca30f5796cda6e8ec13a485c608fecd45b745802a1d0e55fea6de201",
-      "rendered_png_sha256": "a17e41aa09aeb39a33f2305f3e7adb47c39788eaa182d8b839bdf9526304b52e"
+      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
+      "source_sha256": "c22512e5781a0702d0a89220f85d3c678b5a36724911c5f1472c4cc89c6fd7f5",
+      "rendered_svg_sha256": "f663a956058a9e07f8309e48af280826416f6f2bbabe213107fe5f7ba9bf0651",
+      "rendered_png_sha256": "7ab718b9d56f59de91731f13b7f9ef129aecc04f298bebfc52c1d5a383f1c595"
     },
     {
       "id": "19",
       "name": "19_HIGH_SOC_STRATEGIC_SHARE_TIME_PROFILE",
-      "status": "UPDATED",
-      "reason": "S3 opt-in und konfigurierbare Tagesprofile ersetzen hardcoded-only-Altmodell.",
+      "status": "REVIEWED_UNCHANGED",
+      "reason": "CP26: Diagrammzweig außerhalb direkter Battery-Care-Policy-/Event-/Statusänderungen. Ursprüngliches V17.1.3-Review bleibt nur historische Basis; CP26-Releasefreigabe ausstehend.",
       "source_symbols": [
         "controller_logic.py::_harvest_time_profile",
         "controller_logic.py::_s3_season_policy"
@@ -367,7 +391,7 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/19_HIGH_SOC_STRATEGIC_SHARE_TIME_PROFILE.svg",
       "rendered_png": "rendered/19_HIGH_SOC_STRATEGIC_SHARE_TIME_PROFILE.png",
-      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
       "source_sha256": "24980e984b7f76bd69c354e55f3e220bd47516ae330704e8e456d40d911a571f",
       "rendered_svg_sha256": "f20b8bfaf2010d71a33ff3969c6f6d01743301150b2f228a601eecbb7144b33f",
       "rendered_png_sha256": "91e5c1e960caafd1371bc848a4dfdce8e901fe9f5c62a6109506611d2ff21d6b"
@@ -375,8 +399,8 @@
     {
       "id": "20",
       "name": "20_S3_POLICY_OPT_IN",
-      "status": "NEW",
-      "reason": "Opt-in/Saisonpolicy gegenüber V0.4 erforderlich.",
+      "status": "REVIEWED_UNCHANGED",
+      "reason": "CP26: Diagrammzweig außerhalb direkter Battery-Care-Policy-/Event-/Statusänderungen. Ursprüngliches V17.1.3-Review bleibt nur historische Basis; CP26-Releasefreigabe ausstehend.",
       "source_symbols": [
         "controller_logic.py::_s3_season_policy",
         "controller_logic.py::_s3_calendar_parallel"
@@ -386,7 +410,7 @@
       "plantuml_validation": "NOT_PRESENT",
       "rendered_svg": "rendered/20_S3_POLICY_OPT_IN.svg",
       "rendered_png": "rendered/20_S3_POLICY_OPT_IN.png",
-      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
       "source_sha256": "845be4ea251c2a380b91a48da8770f109f79da7be8be7841de43072bb2b56329",
       "rendered_svg_sha256": "3c6ead9f363ec4bdf5d1382ab798767a0fdb61d661017c6d8239fce01676e68f",
       "rendered_png_sha256": "bf2839cbc152bc7fe38b2cc6028728676345237c004d87ac9ee8ef0a5695d071"
@@ -394,28 +418,30 @@
     {
       "id": "21",
       "name": "21_LIVE_STATUS_VS_CONTROL",
-      "status": "NEW",
-      "reason": "Sourcepoll vs. Regler- und Minigraph-Takt unterscheidbar.",
+      "status": "UPDATED",
+      "reason": "CP26 Battery Care: Care-Status und historische Graph-Marker verwenden belegte abgeschlossene Reglerzyklen und persistierte Events; 1-s-Browserpoll ist KEIN 1-s-Physiksample.",
       "source_symbols": [
         "static/status_v2.js",
         "web_ui.py::build_grid_mini_payload",
-        "operational_events.py"
+        "operational_events.py",
+        "state.py::ControllerState",
+        "operational_events.py::_observe_battery_care_stage"
       ],
       "source": "diagrams/21_LIVE_STATUS_VS_CONTROL.dot",
       "secondary_plantuml": null,
       "plantuml_validation": "NOT_PRESENT",
       "rendered_svg": "rendered/21_LIVE_STATUS_VS_CONTROL.svg",
       "rendered_png": "rendered/21_LIVE_STATUS_VS_CONTROL.png",
-      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
-      "source_sha256": "c67bf3f3f6f043a9ad0b6abb232ee61b63c7b9d8cfb743a713e637715501677b",
-      "rendered_svg_sha256": "82bee3bb977c555ee57ec40ad4313d93c6d242e9cc09024525c4eb82e82a2d7f",
-      "rendered_png_sha256": "8137de9428121ea9ddf57f5efb565ab7aefafc822716999b50384827c1db3946"
+      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
+      "source_sha256": "6514cc949b864482ca02d1db8393ee30f7b65697a0bd8bf79a252b15b66ec41c",
+      "rendered_svg_sha256": "c37966ad49ef206d87a491aa72a2a6c383ac205cbb3d84ff5a5ea399b7a7fea4",
+      "rendered_png_sha256": "9ed573e50e1ea37188253a3a6ce49d052d23dae9565183d9be955c229d1db3cc"
     },
     {
       "id": "22",
       "name": "22_GRID_STALE_EVENT",
-      "status": "NEW",
-      "reason": "Stale-Ereignis-Debounce und Controllerunabhängigkeit.",
+      "status": "REVIEWED_UNCHANGED",
+      "reason": "CP26: Diagrammzweig außerhalb direkter Battery-Care-Policy-/Event-/Statusänderungen. Ursprüngliches V17.1.3-Review bleibt nur historische Basis; CP26-Releasefreigabe ausstehend.",
       "source_symbols": [
         "operational_events.py",
         "state.py"
@@ -425,10 +451,12 @@
       "plantuml_validation": "NOT_PRESENT",
       "rendered_svg": "rendered/22_GRID_STALE_EVENT.svg",
       "rendered_png": "rendered/22_GRID_STALE_EVENT.png",
-      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
       "source_sha256": "7a1ff5e050201973d618e231c47a08fd282a474b51948f1f9619c9fd1616fa6c",
       "rendered_svg_sha256": "a9342d817b4932b70e36a902fb140077b157cddb56040ce1bddd2fedddc9dc7d",
       "rendered_png_sha256": "14ad323f7e075f6d8c866650bed0ee46a4e03a71795f9c6b17dc57290a7e8373"
     }
-  ]
+  ],
+  "dev_checkpoint": "CP26_DOC_UML_RECONCILIATION_20261027",
+  "source_binding_note": "CP25 controller source, V17.1.3 tag not a new release; manual approval PENDING."
 }

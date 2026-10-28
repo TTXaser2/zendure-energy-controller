@@ -123,6 +123,30 @@ class ControllerState:
     zendure_power_observation_reason: str = "Noch keine unabhängige Leistungsbeobachtung."
     zendure_power_observation_updated_epoch: Optional[float] = None
     current_target_power: int = 0
+    # CP10: truthful per-controller-cycle Battery Care discharge boundary.
+    # These are NOT inferred from a settings switch or browser polling.
+    care_policy_valid: bool = False
+    care_in_season: bool = False
+    care_effective_discharge_floor_soc: Optional[int] = None
+    # Only the central command owner may set this per-cycle dispatched intent.
+    # It is not evidence that the battery physically accepted a charge.
+    care_dispatched_stage: str = ""
+    care_dispatched_target_w: int = 0
+    # An unresolved Care failure remains flagged for the asynchronous,
+    # persistent OperationalEventJournal. No command authority is derived
+    # from these diagnostic fields.
+    care_emergency_failure_confirmed: bool = False
+    care_emergency_failure_event_id: str = ""
+    care_emergency_failure_reason: str = ""
+    care_emergency_incident_reserve_soc: Optional[int] = None
+    care_emergency_episode_id: str = ""
+    care_emergency_incident_persisted: bool = False
+    care_emergency_incident_persistence_error: str = ""
+    # Read-only CP12 PV candidate, not a published Care command/effect.
+    care_pv_shadow_candidate_w: int = 0
+    care_pv_shadow_extra_w: int = 0
+    care_pv_shadow_reason: str = "CARE_NOT_ELIGIBLE"
+    care_pv_shadow_balance_w: Optional[int] = None
     zendure_target_signed_power: int = 0
     last_target_before_smoothing: int = 0
     last_target_after_power_limit: int = 0
@@ -338,6 +362,7 @@ class ControllerState:
     last_cycle_timing_stats_json: str = "{}"
     cycle_timing_history: Deque[Dict[str, float]] = field(default_factory=lambda: deque(maxlen=60), repr=False)
     loop_counter: int = 0
+    care_completed_cycle_id: int = 0
     last_record_epoch: Optional[float] = None
     last_record_mqtt_commands_sent: int = 0
 
@@ -823,6 +848,7 @@ class ControllerState:
             self.last_cycle_slowest_step = str(slowest_step or "none")
             self.last_cycle_slowest_step_ms = round(float(slowest_step_ms or 0), 3)
             self.last_cycle_completed_epoch = time.time()
+            self.care_completed_cycle_id = self.loop_counter
             self.last_cycle_timing_json = json.dumps(clean, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
             self.cycle_timing_history.append(dict(clean))
             stats: Dict[str, Dict[str, float]] = {}
@@ -2262,6 +2288,43 @@ class ControllerState:
                 "actual_zendure_power_age_s": self.actual_zendure_power_age_s,
                 "actual_zendure_power_validity_reason": self.actual_zendure_power_validity_reason,
                 "current_target_power": self.current_target_power,
+                "care_policy_valid": self.care_policy_valid,
+                "care_in_season": self.care_in_season,
+                "care_effective_discharge_floor_soc": self.care_effective_discharge_floor_soc,
+                "care_completed_cycle_id": self.care_completed_cycle_id,
+                "loop_counter": self.loop_counter,
+                "care_dispatched_stage": self.care_dispatched_stage,
+                "care_dispatched_target_w": self.care_dispatched_target_w,
+                "care_emergency_failure_confirmed": self.care_emergency_failure_confirmed,
+                "care_emergency_failure_event_id": self.care_emergency_failure_event_id,
+                "care_emergency_failure_reason": self.care_emergency_failure_reason,
+                "care_emergency_incident_reserve_soc": self.care_emergency_incident_reserve_soc,
+                "care_episode_id": self.care_emergency_episode_id,
+                "care_emergency_incident_persisted": self.care_emergency_incident_persisted,
+                "care_emergency_incident_persistence_error": self.care_emergency_incident_persistence_error,
+                # Only actual source-ingestion epoch distinguishes SOC samples;
+                # snapshots of the same stored sample reuse exactly this ID.
+                "care_soc_percent": self.battery_soc,
+                "care_soc_fresh": bool(self.soc_fresh and self.soc_valid and
+                                         self.last_soc_update_epoch is not None and
+                                         0 <= now_epoch - self.last_soc_update_epoch <= 90),
+                "care_soc_sample_id": (f"soc:{self.last_soc_update_epoch:.6f}"
+                                       if self.last_soc_update_epoch is not None else ""),
+                "care_physical_charge_confirmed": bool(
+                    self.zendure_power_observation_direction == "CHARGE"
+                    and self.zendure_power_observation_confidence == "HIGH"
+                    and self.zendure_power_observation_signed_w is not None
+                    and self.zendure_power_observation_signed_w >= 20
+                    and self.zendure_power_observation_updated_epoch is not None
+                    and 0 <= now_epoch - self.zendure_power_observation_updated_epoch <= 30
+                    and self.zendure_battery_charge_power_w >= 20
+                    and self.actual_zendure_output_pack_update_epoch is not None
+                    and 0 <= now_epoch - self.actual_zendure_output_pack_update_epoch <= 30
+                ),
+                "care_pv_shadow_candidate_w": self.care_pv_shadow_candidate_w,
+                "care_pv_shadow_extra_w": self.care_pv_shadow_extra_w,
+                "care_pv_shadow_reason": self.care_pv_shadow_reason,
+                "care_pv_shadow_balance_w": self.care_pv_shadow_balance_w,
                 "fast_capture_mode": self.fast_capture_mode,
                 "fast_capture_active": self.fast_capture_active,
                 "fast_capture_primary_state": self.fast_capture_primary_state,

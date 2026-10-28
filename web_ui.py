@@ -50,6 +50,7 @@ from version import APP_BUILD_ID, APP_VERSION, APP_VERSION_LABEL
 from status_page_v2 import render_global_topbar, render_status_page_v2
 from system_metrics import get_system_metrics
 from operational_events import OperationalEventJournal, read_recent_events
+from battery_care_policy import CareConfig, in_care_season
 from live_status import build_live_status
 from live_shelly_sampler import LiveShellySampler
 from primary_storage_modbus import probe_primary_storage_modbus
@@ -4627,6 +4628,13 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
     if zendure_capacity_kwh is None:
         capacity_wh = _safe_float(cfg.get("ZENDURE_BATTERY_CAPACITY_WH"))
         zendure_capacity_kwh = (capacity_wh / 1000.0) if capacity_wh is not None and capacity_wh > 0 else None
+    # Care reserve is only described as *effective* once the real controller
+    # reports its current policy decision. A mere enabled settings switch is
+    # never proof of an applied discharge guard.
+    effective_care_floor = _safe_float(s.get("care_effective_discharge_floor_soc"))
+    if (s.get("care_in_season") is True and s.get("care_policy_valid") is True
+            and effective_care_floor is not None and 0 <= effective_care_floor <= 100):
+        min_soc = max(min_soc if min_soc is not None else 0, effective_care_floor)
     zendure_remaining = _remaining_energy_view(
         soc_percent=system_soc,
         capacity_kwh=zendure_capacity_kwh,
@@ -4634,6 +4642,9 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
         min_soc_percent=min_soc,
         max_soc_percent=max_soc,
     )
+    # Explicitly show *both* known ZEC limits, independent of direction.
+    # These are ZEC limits, not unverified Zendure-app/BMS boundaries.
+    zendure_limit_pair = f"{_zec_num(max_soc, '%')} / {_zec_num(min_soc, '%')}"
     zendure_power_meter = _power_meter_view(
         signed_power_w=actual,
         max_charge_w=cfg.get("MAX_CHARGE_POWER_W"),
@@ -4723,13 +4734,25 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
         primary_capacity_wh = _safe_float(cfg.get("SECOND_BATTERY_CAPACITY_WH"))
         primary_capacity_kwh = (primary_capacity_wh / 1000.0) if primary_capacity_wh is not None and primary_capacity_wh > 0 else None
     primary_lower_soc = discharge_floor if (discharge_floor_supported and discharge_floor_valid and discharge_floor_fresh and discharge_floor is not None) else None
+    # No vendor-agnostic charge SOC ceiling is known from a raw SOC reading.
+    # Only an explicit, fresh, valid device capability may fill the first slot.
+    primary_upper_soc = _safe_float(s.get("primary_storage_charge_upper_soc_percent"))
+    if not (s.get("primary_storage_charge_upper_soc_valid") is True
+            and s.get("primary_storage_charge_upper_soc_fresh") is True
+            and primary_upper_soc is not None and 0 <= primary_upper_soc <= 100):
+        primary_upper_soc = None
+    primary_limit_pair = f"{_zec_num(primary_upper_soc, '%')} / {_zec_num(primary_lower_soc, '%')}"
     primary_remaining = _remaining_energy_view(
         soc_percent=primary_soc,
         capacity_kwh=primary_capacity_kwh,
         signed_power_w=primary_power,
         min_soc_percent=primary_lower_soc,
-        max_soc_percent=100.0,
+        max_soc_percent=primary_upper_soc,
     )
+    if primary_soc is not None and not primary_remaining.get("visible"):
+        # The directional remaining value is unknown, not 0 and not 100-SOC.
+        primary_remaining["visible"] = True
+        primary_remaining["text"] = "—"
     primary_power_meter = _power_meter_view(
         signed_power_w=primary_power,
         max_charge_w=cfg.get("SECOND_BATTERY_MAX_CHARGE_POWER_W"),
@@ -4937,6 +4960,13 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
         e for e in open_events
         if str(e.get("severity") or "").lower() in {"warning", "error"}
     ]
+    # Multiple independent Battery-Care failures share the same public title.
+    # Retain one compact warning line, but expose the actual incident count;
+    # their distinct records remain present in events.items/popover.
+    care_failure_count = sum(
+        1 for event in active_event_rows
+        if str(event.get("event_type") or "") == "battery_care_emergency_failure"
+    )
     seen_event_titles = set()
     for event in active_event_rows:
         title = str(event.get("title") or event.get("event_type") or "Betriebsereignis").strip()
@@ -4944,12 +4974,63 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
         if not title or marker in seen_event_titles:
             continue
         seen_event_titles.add(marker)
+        if str(event.get("event_type") or "") == "battery_care_emergency_failure" and care_failure_count > 1:
+            title += f" ({care_failure_count} offene Vorfälle)"
         warnings.append(f"Offenes Betriebsereignis: {title}")
         if len(seen_event_titles) >= 5:
             break
     open_error_count = sum(1 for e in active_event_rows if str(e.get("severity") or "").lower() == "error")
     open_warning_count = sum(1 for e in active_event_rows if str(e.get("severity") or "").lower() == "warning")
     active_warning_group_count = base_warning_count + open_warning_count
+    # Distinguish a dispatched Care request from actual physical charging.
+    # Shadow candidates, a settings switch, and browser polling never prove effect.
+    care_dispatched = str(s.get("care_dispatched_stage") or "")
+    if care_dispatched not in {"EMERGENCY_REQUESTED", "GRID_REQUESTED", "PV_PRIORITY_REQUESTED"}:
+        care_dispatched = ""
+    care_active = bool(s.get("care_in_season") is True and s.get("care_policy_valid") is True)
+    # The calendar explains visibility even when manual STOP or stale evidence
+    # prevents real protection. It must never be labelled as effective policy.
+    try:
+        care_cfg = CareConfig(
+            enabled=cfg.get("BATTERY_CARE_ENABLED") is True,
+            season_start=cfg.get("BATTERY_CARE_SEASON_START_MM_DD"),
+            season_end=cfg.get("BATTERY_CARE_SEASON_END_MM_DD"),
+            reserve_soc=cfg.get("BATTERY_CARE_RESERVE_SOC_PERCENT"),
+            grid_trigger_soc=cfg.get("BATTERY_CARE_GRID_TRIGGER_SOC_PERCENT"),
+            emergency_soc=cfg.get("BATTERY_CARE_EMERGENCY_SOC_PERCENT"),
+            grid_charge_cap_w=cfg.get("BATTERY_CARE_GRID_CHARGE_MAX_POWER_W"),
+        )
+        care_calendar_active = bool(
+            care_cfg.enabled and not care_cfg.validate(
+                int(cfg["MAX_SOC_PERCENT"]), int(cfg["MAX_CHARGE_POWER_W"])
+            ) and in_care_season(
+                datetime.now().date(), care_cfg.season_start, care_cfg.season_end
+            )
+        )
+    except (KeyError, TypeError, ValueError, OverflowError):
+        care_calendar_active = False
+    care_show = bool(care_failure_count or care_calendar_active or care_active or care_dispatched)
+    if care_failure_count:
+        care_title = "Ladung nicht wirksam"
+        care_tone = "bad"
+        care_detail = (f"{care_failure_count} offene Notladevorfälle" if care_failure_count > 1
+                       else "Notlade-Warnvorfall offen")
+    elif care_dispatched == "EMERGENCY_REQUESTED":
+        care_title, care_tone, care_detail = "Notladung angefordert", "warn", "Wirkung noch nicht bestätigt"
+    elif care_dispatched == "GRID_REQUESTED":
+        care_title, care_tone, care_detail = "Netzpflege angefordert", "ok", "Wirkung noch nicht bestätigt"
+    elif care_dispatched == "PV_PRIORITY_REQUESTED":
+        care_title, care_tone, care_detail = "PV-Vorrang angefordert", "ok", "Wirkung noch nicht bestätigt"
+    elif care_active:
+        care_title, care_tone = "Reserve geschützt", "ok"
+        care_detail = "ZEC-Entladegrenze aktiv"
+    elif care_calendar_active:
+        care_title, care_tone = "Derzeit ausgesetzt", "warn"
+        manual = str(cfg.get("MANUAL_MODE") or "AUTO").upper()
+        care_detail = ("Manueller Modus hat Vorrang" if manual != "AUTO"
+                       else "Schutzstatus nicht bestätigt")
+    else:
+        care_title, care_tone, care_detail = "", "unknown", ""
     if mode == "SAFE_STATE":
         status_kind = "bad"
         system_status = "Safe-State"
@@ -5015,8 +5096,8 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "remaining_visible": zendure_remaining.get("visible"),
             "remaining_label": zendure_remaining.get("label"),
             "remaining_text": zendure_remaining.get("text"),
-            "soc_limit_label": zendure_remaining.get("limit_label"),
-            "soc_limit_text": zendure_remaining.get("limit_text"),
+            "soc_limit_label": "Lade-/Entladegrenze",
+            "soc_limit_text": zendure_limit_pair,
             "max_soc_text": _zec_num(max_soc, "%"),
             "power_meter_visible": zendure_power_meter.get("visible"),
             "power_meter_direction": zendure_power_meter.get("direction"),
@@ -5028,6 +5109,10 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "units": units,
             "command_warning": command_warning,
             "command_warning_title": command_warning_title,
+            "care": {"visible": care_show, "title": care_title,
+                     "detail": care_detail, "tone": care_tone,
+                     "dispatch_w": (int(s.get("care_dispatched_target_w") or 0)
+                                    if care_dispatched else 0)},
             "tone": zendure_tone,
         },
         "primary": {
@@ -5070,8 +5155,8 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             "remaining_label": primary_remaining.get("label") if primary_present else "",
             "remaining_text": primary_remaining.get("text") if primary_present else "",
             "remaining_percent_points": primary_remaining.get("percent_points") if primary_present else None,
-            "soc_limit_label": primary_remaining.get("limit_label") if primary_present else "",
-            "soc_limit_text": primary_remaining.get("limit_text") if primary_present else "",
+            "soc_limit_label": "Lade-/Entladegrenze" if primary_present else "",
+            "soc_limit_text": primary_limit_pair if primary_present else "",
             "power_meter_visible": bool(primary_present and primary_power_meter.get("visible")),
             "power_meter_direction": primary_power_meter.get("direction") if primary_present else "neutral",
             "power_meter_percent": primary_power_meter.get("percent") if primary_present else 0.0,
@@ -5278,6 +5363,11 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
                 "reserve_soc": None, "night_start": "", "night_end": "", "source": "timeline_error",
             }]
             timeline_meta = {"timeline_status": "error", "timeline_error": str(exc), "unknown_segments": 1}
+        # Historical Care overlays are derived solely from those persisted
+        # config rows. Incident markers require *persisted* actual events.
+        from battery_care_graph_history import care_day_lines, care_day_incidents
+        decorated["care_graph_lines"] = care_day_lines(segments, day_start.date().isoformat(), decorated.get("points") or [])
+        decorated["care_graph_events"] = care_day_incidents(cfg, day_start.date().isoformat())
         decorated["config_segments"] = segments
         decorated["config_timeline"] = timeline_meta
         decorated["config_legend"] = overlay_legend_transitions(segments)
@@ -5299,7 +5389,7 @@ def build_storage_soc_day_payload(cfg: Dict[str, Any], snap: Dict[str, Any], dat
     status_units = _status_units(cfg, snap, snap.get("zendure_target_signed_power"), snap.get("zendure_system_signed_power"))
     snapshot_unit_count = min(2, max(1, len(status_units)))
     day_role = "today" if is_today else "history"
-    cache_key = f"{day_start.date().isoformat()}|storage-wp6|{history_mode}|p{int(snapshot_primary_present)}|u{snapshot_unit_count}|{day_role}"
+    cache_key = f"{day_start.date().isoformat()}|storage-wp6-care24|{history_mode}|p{int(snapshot_primary_present)}|u{snapshot_unit_count}|{day_role}"
     now_epoch = time.time()
     ttl = _STORAGE_DAY_TODAY_TTL_S if is_today else _STORAGE_DAY_HISTORY_TTL_S
     with _storage_day_lock:

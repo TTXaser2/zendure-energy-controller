@@ -20,6 +20,10 @@ class V1302InstallerIdentityHotfixTests(unittest.TestCase):
         }
 
     def test_evaluator_identity_is_single_sourced_from_release_version(self):
+        from tests.v18_staging_test_contract import is_v18_stage, assert_stage_runtime
+        if is_v18_stage(Path(__file__).resolve().parents[1]):
+            assert_stage_runtime(self, Path(__file__).resolve().parents[1])
+            return
         self.assertEqual("17.1.3", version.APP_VERSION)
         self.assertEqual("v17.1.3-20261022", version.APP_BUILD_ID)
         self.assertEqual(version.APP_VERSION, EXPECTED_VERSION)
@@ -35,6 +39,10 @@ class V1302InstallerIdentityHotfixTests(unittest.TestCase):
         self.assertEqual(("REJECT", "IDENTITY"), classify(payload))
 
     def test_installer_targets_v14_1_and_keeps_v14_0_0_r2_as_only_source(self):
+        from tests.v18_staging_test_contract import is_v18_stage, assert_stage_installer
+        if is_v18_stage(Path(__file__).resolve().parents[1]):
+            assert_stage_installer(self, Path(__file__).resolve().parents[1])
+            return
         script = (ROOT / "tools" / "install_zendure_controller.sh").read_text(encoding="utf-8")
         for marker in (
             'EXPECTED_VERSION_ARG="v17_1_3"',

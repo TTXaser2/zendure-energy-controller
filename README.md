@@ -1,3 +1,5 @@
+**V18.0.0 / v18.0.0-20261027 – Installation zur kontrollierten Feldabnahme**
+
 # Zendure Energy Controller V17.1.3
 
 **Release:** `V17.1.3` · **Build-ID:** `v17.1.3-20261022`

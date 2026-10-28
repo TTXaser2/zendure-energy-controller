@@ -100,6 +100,21 @@ def _storage_remaining_row(key: str, payload: Dict[str, Any]) -> str:
     )
 
 
+def _care_compact(zendure: Dict[str, Any]) -> str:
+    care = dict(zendure.get("care") or {})
+    visible = bool(care.get("visible"))
+    tone = str(care.get("tone") or "unknown")
+    if tone not in {"ok", "warn", "bad", "unknown"}:
+        tone = "unknown"
+    return (
+        f'<div class="zec-care-compact is-{tone}" data-zec-care="status" '
+        f'role="group" aria-label="Battery-Care-Status"{ "" if visible else " hidden" }>'
+        f'<strong data-zec="zendure.care.title">Battery Care · {_e(care.get("title"))}</strong>'
+        f'<span data-zec="zendure.care.detail">{_e(care.get("detail"))}</span>'
+        f'</div>'
+    )
+
+
 def _unit_rows(units: Iterable[Dict[str, Any]]) -> str:
     rows = []
     for idx, unit in enumerate(units, start=1):
@@ -224,8 +239,9 @@ def render_status_page_v2(
             <div class="zec-storage-details">
               <div class="zec-detail-row zec-actual-row"><span>Istleistung</span><strong data-zec="zendure.actual">{_e(payload['zendure'].get('actual'))}</strong></div>
               <div class="zec-detail-row"><span>Zustand</span><strong data-zec="zendure.state">{_e(unit.get('state_text') or '—')}</strong></div>
-              <div class="zec-detail-row" data-zec-row="zendure.soc_limit"{' ' if payload['zendure'].get('remaining_visible') else ' hidden'}><span data-zec="zendure.soc_limit_label">{_e(payload['zendure'].get('soc_limit_label'))}</span><strong data-zec="zendure.soc_limit_text">{_e(payload['zendure'].get('soc_limit_text'))}</strong></div>
+              <div class="zec-detail-row" data-zec-row="zendure.soc_limit"><span data-zec="zendure.soc_limit_label">{_e(payload['zendure'].get('soc_limit_label'))}</span><strong data-zec="zendure.soc_limit_text">{_e(payload['zendure'].get('soc_limit_text'))}</strong></div>
               {_storage_remaining_row('zendure', payload['zendure'])}
+              {_care_compact(payload['zendure'])}
             </div>
           </div>
         '''
@@ -240,6 +256,7 @@ def render_status_page_v2(
             <span>Ist gesamt</span><strong data-zec="zendure.actual">{_e(payload['zendure'].get('actual'))}</strong>
           </div>
           <div class="zec-unit-list">{_unit_rows(units)}</div>
+          {_care_compact(payload['zendure'])}
         '''
 
     primary_card = ""
@@ -282,7 +299,7 @@ def render_status_page_v2(
           <div class="zec-storage-details">
             <div class="zec-detail-row zec-actual-row"><span>Istleistung</span><strong data-zec="primary.actual">{_e(payload['primary'].get('actual'))}</strong></div>
             <div class="zec-detail-row"><span>Zustand</span><strong data-zec="primary.status">{_e(payload['primary'].get('status'))}</strong></div>
-            <div class="zec-detail-row" data-zec-row="primary.soc_limit"{' ' if payload['primary'].get('remaining_visible') else ' hidden'}><span data-zec="primary.soc_limit_label">{_e(payload['primary'].get('soc_limit_label'))}</span><strong data-zec="primary.soc_limit_text">{_e(payload['primary'].get('soc_limit_text'))}</strong></div>
+            <div class="zec-detail-row" data-zec-row="primary.soc_limit"><span data-zec="primary.soc_limit_label">{_e(payload['primary'].get('soc_limit_label'))}</span><strong data-zec="primary.soc_limit_text">{_e(payload['primary'].get('soc_limit_text'))}</strong></div>
             {_storage_remaining_row('primary', payload['primary'])}
           </div>
         </div>
@@ -393,7 +410,7 @@ def render_status_page_v2(
     <section class="zec-wide-card zec-soc-day-card">
       <header class="zec-wide-header">
         <div><div class="zec-card-title">{_icon('graph')}<h2>Speicher-SOC Tagesgraph</h2></div></div>
-        <div class="zec-day-nav"><button id="dayPrev" type="button">‹ Zurück</button><button id="dayToday" type="button">Heute</button><button id="dayNext" type="button">Vor ›</button><span class="zec-day-picker-wrap"><button id="socDayPickerButton" class="zec-day-picker-button" type="button" aria-label="Datum direkt auswählen"><strong id="socDayLabel"></strong></button><input id="socDayPicker" class="zec-day-picker-input" type="date" aria-label="Datum des Speicher-SOC-Tagesgraphen auswählen"></span></div>
+        <div class="zec-day-nav"><button id="socCareGraphDetails" type="button" aria-pressed="false" aria-label="Battery-Care-Expertenlinien und Ereignismarker einblenden">Care-Details</button><button id="dayPrev" type="button">‹ Zurück</button><button id="dayToday" type="button">Heute</button><button id="dayNext" type="button">Vor ›</button><span class="zec-day-picker-wrap"><button id="socDayPickerButton" class="zec-day-picker-button" type="button" aria-label="Datum direkt auswählen"><strong id="socDayLabel"></strong></button><input id="socDayPicker" class="zec-day-picker-input" type="date" aria-label="Datum des Speicher-SOC-Tagesgraphen auswählen"></span></div>
       </header>
       <div class="zec-day-chart-wrap"><canvas id="storageSocChart" aria-label="Speicher-SOC im Tagesverlauf"></canvas><div id="storageSocTooltip" class="zec-chart-tooltip" hidden></div></div>
       <div id="storageSocMobileDetails" class="zec-chart-mobile-details" hidden aria-live="polite"></div>

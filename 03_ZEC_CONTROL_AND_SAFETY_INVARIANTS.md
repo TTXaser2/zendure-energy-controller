@@ -26,6 +26,13 @@ ZEC minimiert vermeidbare Netzeinspeisung bzw. Netzbezug innerhalb der verfügba
 - Gegenfluss wird proportional neutralisiert bzw. reduziert; keine unnötigen zyklusweisen Vollneutralisierungen.
 - Mehrdeutige Telemetrie darf nicht durch die Sollrichtung zirkulär als korrekt bestätigt werden.
 
+### 3a. Freigegebene begrenzte Battery-Care-Notladeausnahme – 26.10.2026
+
+- Ausschließlich bei ausdrücklich aktiviertem `ZEC-BL-BATCARE-001`, wirksamer und frisch nachgewiesener Notladeepisode `SOC <= E` darf **die wirtschaftliche Cross-Charge-Vetoentscheidung** für die Zendure-Netzladung ausnahmsweise entfallen. Ein möglicher physischer Primärspeicher→Zendure-Energiefluss ist dabei bewusst akzeptiert, bis die beim Episodenstart gültige Schutzreserve R wieder erreicht ist.
+- Die Ausnahme hebt **keine** Geräte-/BMS-/Temperatur-, SmartMode-, AC-/Limit-, SOC-/Freshness-, Command-Readback-/Wirkungs-/Recovery- und SAFE_STATE-Schutzpflicht auf; insbesondere `STOP_HOLD` bleibt absolut. Es gibt keinen zweiten Kommandopublisher, keine direkte SMA-Schreibsteuerung und kein Zeit-/Energie-Sonderbudget für die Notladung.
+- Außerhalb dieser eng begrenzten Episode gilt der unveränderte symmetrische Cross-Charge-Vertrag aus §3. Eine rein gewünschte Laderichtung ist kein Nachweis physischer Wirkung. Auswirkung und Sicherheitsgrenzen sind durch Differentialtests und getrennte Zustands-/Rechen-/Wirkungs-/Recoverybelege nachzuweisen.
+- Dieser Kontrollvertrag ist im isolierten Entwicklungszweig fachlich autorisiert; **kein** Produktiv- oder Feldfreigabenachweis entsteht dadurch.
+
 ## 4. Nachtmodus
 
 - Nachtmodus besitzt definierte Start-/Endzeit, Entladeleistung und Reserve-SOC.

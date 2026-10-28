@@ -1096,6 +1096,30 @@ BOOLEAN_DISABLED_EXPLAINED = MappingProxyType({
 })
 
 
+# Battery Care: product-specific help; no invented SOC defaults or BMS readback.
+_BATCARE_INFO = {
+    'BATTERY_CARE_ENABLED': ('Schaltet einen zeitlich begrenzten zusätzlichen Batterieschutz ein. Bei Aus ändert Battery Care weder normale Entladung noch Ladeanforderungen.',
+        'Bei Ein schützt ZEC die eingestellte Reserve vor normaler AUTO-/NIGHT-Entladung, priorisiert geeignete Solarenergie und darf bei niedrigem Ladestand unter Bedingungen aus dem Netz nachladen. Im Notfall kann Energie aus einem Primärspeicher zur Zendure fließen. Die Zendure-App und die Geräteelektronik können eigene minimale und maximale Ladezustandsgrenzen festlegen; diese können Anforderungen begrenzen. ZEC verändert oder übersteuert diese Grenzen nicht verlässlich.'),
+    'BATTERY_CARE_SEASON_START_MM_DD': ('Beginn der jährlich wiederkehrenden Battery-Care-Saison; leer verhindert die Aktivierung.', 'Der Tag ist eingeschlossen. Zusammen mit dem Ende kann ein Winterfenster über den Jahreswechsel reichen. Bei ausgeschaltetem Battery Care bleiben gespeicherte Daten ohne Wirkung.'),
+    'BATTERY_CARE_SEASON_END_MM_DD': ('Letzter eingeschlossener Kalendertag der Battery-Care-Saison.', 'Das Fenster darf über Silvester reichen oder genau einen Kalendertag umfassen. Der 29. Februar ist keine zulässige Datumsgrenze; außerhalb der Saison ändert die Funktion normalerweise keine Geräteleistung.'),
+    'BATTERY_CARE_RESERVE_SOC_PERCENT': ('Unter diese geschützte Reserve R soll die Zendure nicht normal in AUTO oder NIGHT entladen.', 'Bei freigegebener Care-Saison gilt der höhere Wert aus bisherigem minimalem Ladezustand und der Reserve. Solarenergie hat Vorrang; eine gestartete Netzpflege oder Notladung versucht bis zur Reserve nachzuladen. Eine höhere bestehende Untergrenze wird nicht abgesenkt.'),
+    'BATTERY_CARE_GRID_TRIGGER_SOC_PERCENT': ('Ab diesem niedrigen Zendure-Ladezustand N kann Battery Care eine begrenzte Netzpflege einleiten.', 'Eine reguläre Ladung bis zur Reserve beginnt nur nach Bestätigung mit frischen Daten und bei geeigneten Primärspeicherbedingungen. Ausgeschalteter Care-Betrieb löst nie Netzpflege aus.'),
+    'BATTERY_CARE_EMERGENCY_SOC_PERCENT': ('Ab diesem besonders niedrigen SOC E fordert ZEC dringlich Nachladung an.', 'Im Notfall entfällt nur die normale wirtschaftliche Sperre gegen Energieübertragung zwischen Speichern; Hardware-, BMS- und Command-Schutz bleiben aktiv. Stop/Hold verhindert auch diesen Versuch. Das Erreichen der Reserve beendet ihn; eine gesendete Anforderung ist noch kein physischer Ladungsnachweis.'),
+    'BATTERY_CARE_GRID_CHARGE_MAX_POWER_W': ('Obergrenze der zusätzlichen Netzladeanforderung in Watt.', 'Begrenzt sowohl normale Netzpflege als auch Notladung. Die Anforderung bleibt zusätzlich durch die normale Zendure-Hardware-Ladegrenze und gegebenenfalls Geräte-/App-Grenzen begrenzt. Leer verhindert die Aktivierung; dieser Wert ändert keine Geräte-App-Einstellungen.'),
+}
+EFFECT_DISABLE['BATTERY_CARE_ENABLED'] = (
+    'Bei „Aus“ lässt Battery Care sämtliche bisherigen AUTO-, NIGHT-, Lade- und Entladeentscheidungen unverändert. '
+    'Es wird weder ein saisonaler Reserveboden noch eine zusätzliche Solar-, Netzpflege- oder Notladeanforderung aktiviert. '
+    'Ein bereits bestehender ungelöster Sicherheitswarnvorfall bleibt dennoch sichtbar.')
+
+for _k, (_short, _purpose) in _BATCARE_INFO.items():
+    SHORT_HELP[_k] = _short
+    RICH_EXTENDED[_k] = _purpose
+RICH_WHEN.update({k: 'Nur bei ausdrücklich aktivierter und vollständig validierter Battery-Care-Konfiguration relevant.' for k in _BATCARE_INFO})
+SECTION_ORDER_OVERRIDES['Leistungsgrenzen & SOC-Schutz'] = tuple(
+    list(SECTION_ORDER_OVERRIDES.get('Leistungsgrenzen & SOC-Schutz', ())) +
+    ['Battery Care – saisonaler Batterieschutz'])
+
 def build_setting_help(row: Mapping[str, Any]) -> SettingHelpSpec:
     key = str(row["key"])
     category = str(row["category"])
@@ -1277,6 +1301,7 @@ PRIMARY_HELP_VNEXT: Mapping[str, Mapping[str, str]] = MappingProxyType({
 def build_section_specs(category_sections: Sequence[Tuple[str, str]]) -> Mapping[Tuple[str, str], SectionSpec]:
     out: Dict[Tuple[str, str], SectionSpec] = {}
     overrides = {
+        ("Leistungsgrenzen & SOC-Schutz", "Battery Care – saisonaler Batterieschutz"): "Battery Care begrenzt die normale Entladung im gewählten Jahresfenster auf eine geschützte Reserve und gibt vorhandener Solarenergie bis zum Nachladeziel Vorrang. Erst bei sehr niedrigem SOC darf eine begrenzte Netzpflege beginnen; bei noch niedrigerem SOC wird eine Notladung angefordert, auch wenn dabei Energie aus einem anderen Speicher stammen kann. Aus bedeutet: keine dieser zusätzlichen Lade- oder Entladeentscheidungen. Ein manueller Stop bleibt absolut; BMS-/Zendure-App-Grenzen und die Gerätesicherheit werden nicht übersteuert.",
         ("Betriebsart & manuelle Steuerung", "Betriebsart"): "Wählt die aktive Steuerungspriorität. Schutzbedingungen bleiben über jedem manuellen oder automatischen Modus.",
         ("Nachtbetrieb", "Zeitfenster"): "Start und Ende bilden ein logisches HH:MM-Zeitfenster; ein Verlauf über Mitternacht ist zulässig.",
         ("Harvest / Restüberschuss", "Fast Capture"): "Dieser Bereich beschreibt eine Ergänzung der normalen Ladeautomatik zur schnelleren Nutzung eines bereits gemessenen Solarüberschusses. ZEC prüft dafür den Ladezustand und die aktuelle Ladeleistung des Primärspeichers sowie die verfügbare Zendure-Ladeleistung. Ohne geeignete Bedingungen bleibt die normale Ladeautomatik allein zuständig. Die Betriebsart der Zusatzfunktion wird in der darunterstehenden Einstellung ausgewählt.",

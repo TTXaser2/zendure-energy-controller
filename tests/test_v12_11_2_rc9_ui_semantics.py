@@ -17,6 +17,10 @@ class V12112Rc9UiSemanticsTests(unittest.TestCase):
         web_ui._replay_health_cache.update({"port": None, "available": False, "checked_epoch": 0.0, "refreshing": False})
 
     def test_version(self):
+        from tests.v18_staging_test_contract import is_v18_stage, assert_stage_runtime
+        if is_v18_stage(Path(__file__).resolve().parents[1]):
+            assert_stage_runtime(self, Path(__file__).resolve().parents[1])
+            return
         self.assertEqual("17.1.3", version.APP_VERSION)
         self.assertEqual("V17.1.3", version.APP_VERSION_LABEL)
 

@@ -205,6 +205,35 @@ def validate_candidate(values: Mapping[str, Any], context: Optional[ValidationCo
         if not (_valid_season_boundary(start) and _valid_season_boundary(end)):
             issues.append(_issue("VAL-014", ValidationSeverity.ERROR, ("HARVEST_SEASON_POLICY_ENABLED", "HARVEST_SEASON_MODE", "HARVEST_SEASON_PARALLEL_START_MM_DD", "HARVEST_SEASON_PARALLEL_END_MM_DD")))
 
+    # Battery Care is default-off and has no synthetic SOC/season/power defaults.
+    if get("BATTERY_CARE_ENABLED") is True:
+        care_keys = ("BATTERY_CARE_ENABLED", "BATTERY_CARE_SEASON_START_MM_DD",
+                     "BATTERY_CARE_SEASON_END_MM_DD", "BATTERY_CARE_RESERVE_SOC_PERCENT",
+                     "BATTERY_CARE_GRID_TRIGGER_SOC_PERCENT", "BATTERY_CARE_EMERGENCY_SOC_PERCENT",
+                     "BATTERY_CARE_GRID_CHARGE_MAX_POWER_W")
+        from battery_care_policy import CareConfig
+        care_cfg = CareConfig(enabled=True,
+            season_start=get("BATTERY_CARE_SEASON_START_MM_DD"),
+            season_end=get("BATTERY_CARE_SEASON_END_MM_DD"),
+            reserve_soc=get("BATTERY_CARE_RESERVE_SOC_PERCENT"),
+            grid_trigger_soc=get("BATTERY_CARE_GRID_TRIGGER_SOC_PERCENT"),
+            emergency_soc=get("BATTERY_CARE_EMERGENCY_SOC_PERCENT"),
+            grid_charge_cap_w=get("BATTERY_CARE_GRID_CHARGE_MAX_POWER_W"))
+        if (not isinstance(max_soc, int) or isinstance(max_soc, bool)
+                or not isinstance(get("MAX_CHARGE_POWER_W"), int)
+                or isinstance(get("MAX_CHARGE_POWER_W"), bool)):
+            issues.append(_issue("VAL-BC-001", ValidationSeverity.ERROR, care_keys,
+                                 reason="missing_max_soc_or_charge_power"))
+        else:
+            for reason in care_cfg.validate(max_soc, get("MAX_CHARGE_POWER_W")):
+                issues.append(_issue("VAL-BC-001", ValidationSeverity.ERROR, care_keys, reason=reason))
+        # Applies on preview/commit/import when feature is explicitly switched on.
+        # The existing commit machinery requires this confirmation token.
+        if context.previous is None or context.previous.get("BATTERY_CARE_ENABLED") is not True:
+            issues.append(_issue("VAL-BC-002", ValidationSeverity.CONFIRM,
+                                 ("BATTERY_CARE_ENABLED",), blocking=False,
+                                 reason="emergency_may_transfer_primary_storage_energy"))
+
     if _changed("GRID_METER_SOURCE", values, context.previous) and context.grid_source_candidate_ready is not True:
         issues.append(_issue("VAL-015", ValidationSeverity.ERROR, ("GRID_METER_SOURCE",)))
     if context.sma_multiple_devices_detected is True and get("GRID_METER_SOURCE") == "sma_energy_meter_udp" and not get("SMA_ENERGY_METER_SERIAL"):

@@ -15,6 +15,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class Rc20ReleaseIntegrationTests(unittest.TestCase):
     def test_version_is_rc20_without_measurement_schema_change(self):
+        from tests.v18_staging_test_contract import is_v18_stage, assert_stage_runtime
+        if is_v18_stage(Path(__file__).resolve().parents[1]):
+            assert_stage_runtime(self, Path(__file__).resolve().parents[1])
+            return
         self.assertEqual("17.1.3", version.APP_VERSION)
         self.assertEqual("V17.1.3", version.APP_VERSION_LABEL)
         self.assertFalse(hasattr(version, "CSV_SCHEMA"))
@@ -99,6 +103,10 @@ class Rc20ReleaseIntegrationTests(unittest.TestCase):
                     migrate_rc19_to_rc20({"ZENDURE_BATTERY_CAPACITY_KWH": legacy})
 
     def test_updater_is_exact_sequential_atomic_and_rollback_capable(self):
+        from tests.v18_staging_test_contract import is_v18_stage, assert_stage_installer
+        if is_v18_stage(Path(__file__).resolve().parents[1]):
+            assert_stage_installer(self, Path(__file__).resolve().parents[1])
+            return
         script = (ROOT / "tools/install_zendure_controller.sh").read_text(encoding="utf-8")
         for marker in (
             'EXPECTED_VERSION_ARG="v17_1_3"',

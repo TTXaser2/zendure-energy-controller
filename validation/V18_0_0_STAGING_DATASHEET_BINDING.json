@@ -1,0 +1,22 @@
+{
+  "schema": "ZEC_V18_STAGING_DATASHEET_BINDING_V1",
+  "status": "DEVELOPMENT_NOT_INSTALLABLE",
+  "release_gate": "FAIL",
+  "datasheet_status": "DRAFT_ONLY",
+  "hardware_effect": "NOT_VERIFIED",
+  "source_metadata_sha256": "ce9f8ede8ad01d2f5ae5b3bd175b2942183a16b203d5e88cd291e93e76fe0fd5",
+  "assets_sha256": {
+    "docx": "422ae5b3552336d973087cc04adda3457316bd349b3068d402d82dbe3333e92c",
+    "pdf": "fe343ec6fd15cd552ef7aa0adc670525f3b2388cfb6f39eef3d6a2aabd34f59f"
+  },
+  "intentional_source_replacements": {
+    "version.py": {
+      "cp33_source_sha256": "6fd315d065da2a8265db76aa22343bf2e1bcb582edc9bab52f9a7a51a58bea99",
+      "staged_sha256": "61e9ac5045c29238aab7eb7cd4dcab9f795ae7998bccc024a4aa3dffae02b5e1"
+    },
+    "tools/install_zendure_controller.sh": {
+      "cp33_source_sha256": "6b544b26cd177b16aa867c2a072ef98a2dd6817f54ab65d7a5b3044790f8f6be",
+      "staged_sha256": "9fd3f8197274964049449b40c59f6a8c74e9ee03f609f0fb860d879629c8871e"
+    }
+  }
+}

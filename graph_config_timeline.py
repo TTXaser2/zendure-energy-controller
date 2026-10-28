@@ -31,6 +31,14 @@ def overlay_from_parameters(params: Mapping[str, Any]) -> Dict[str, Any]:
         "reserve_soc": params.get("NIGHT_DISCHARGE_STOP_SOC_PERCENT"),
         "night_start": _hhmm(params, "NIGHT_START", "NIGHT_DISCHARGE_START", ""),
         "night_end": _hhmm(params, "NIGHT_END", "NIGHT_DISCHARGE_END", ""),
+        # NULL means no historical Care provenance, NOT historically disabled.
+        "care_enabled": (int(params["BATTERY_CARE_ENABLED"])
+                         if isinstance(params.get("BATTERY_CARE_ENABLED"), bool) else None),
+        "care_start": params.get("BATTERY_CARE_SEASON_START_MM_DD"),
+        "care_end": params.get("BATTERY_CARE_SEASON_END_MM_DD"),
+        "care_r": params.get("BATTERY_CARE_RESERVE_SOC_PERCENT"),
+        "care_n": params.get("BATTERY_CARE_GRID_TRIGGER_SOC_PERCENT"),
+        "care_e": params.get("BATTERY_CARE_EMERGENCY_SOC_PERCENT"),
     }
 
 
@@ -50,10 +58,25 @@ def ensure_graph_config_schema(conn: sqlite3.Connection) -> None:
             reserve_soc REAL,
             night_start TEXT,
             night_end TEXT,
-            source TEXT NOT NULL
+            source TEXT NOT NULL,
+            care_enabled INTEGER,
+            care_start TEXT,
+            care_end TEXT,
+            care_r REAL,
+            care_n REAL,
+            care_e REAL
         )
         """
     )
+    # Upgrade the pre-Care timeline additively; old rows remain NULL/unknown.
+    column_types = {
+        "care_enabled": "INTEGER", "care_start": "TEXT", "care_end": "TEXT",
+        "care_r": "REAL", "care_n": "REAL", "care_e": "REAL",
+    }
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(graph_config_timeline)")}
+    for column, sql_type in column_types.items():
+        if column not in existing:
+            conn.execute(f"ALTER TABLE graph_config_timeline ADD COLUMN {column} {sql_type}")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_graph_config_timeline_hash ON graph_config_timeline(config_control_hash)")
     conn.execute("CREATE TABLE IF NOT EXISTS measurement_meta (key TEXT PRIMARY KEY, value TEXT)")
     conn.execute("INSERT OR REPLACE INTO measurement_meta(key,value) VALUES('graph_config_timeline_version',?)", (TIMELINE_VERSION,))
@@ -63,6 +86,9 @@ def _semantic_tuple(config_hash: str, known: bool, overlay: Mapping[str, Any]) -
     return (
         str(config_hash), int(bool(known)), overlay.get("min_soc"), overlay.get("max_soc"),
         overlay.get("reserve_soc"), str(overlay.get("night_start") or ""), str(overlay.get("night_end") or ""),
+        overlay.get("care_enabled"), str(overlay.get("care_start") or ""),
+        str(overlay.get("care_end") or ""), overlay.get("care_r"),
+        overlay.get("care_n"), overlay.get("care_e"),
     )
 
 
@@ -83,42 +109,44 @@ def upsert_timeline_entry(
     digest = str(config_hash or "").strip()
     if not digest:
         return False
-    ov = dict(overlay or {}) if known else {"min_soc": None, "max_soc": None, "reserve_soc": None, "night_start": "", "night_end": ""}
+    ov = dict(overlay or {}) if known else {"min_soc": None, "max_soc": None, "reserve_soc": None, "night_start": "", "night_end": "", "care_enabled": None, "care_start": None, "care_end": None, "care_r": None, "care_n": None, "care_e": None}
     desired = _semantic_tuple(digest, known, ov)
+    extra = ",care_enabled,care_start,care_end,care_r,care_n,care_e"
+    columns = "config_control_hash,known,min_soc,max_soc,reserve_soc,night_start,night_end" + extra
     exact = conn.execute(
-        """SELECT config_control_hash,known,min_soc,max_soc,reserve_soc,night_start,night_end
-           FROM graph_config_timeline WHERE effective_from_ms=?""", (ts,)
+        f"SELECT {columns} FROM graph_config_timeline WHERE effective_from_ms=?", (ts,)
     ).fetchone()
     if exact is not None:
-        exact_tuple = (str(exact[0]), int(exact[1]), exact[2], exact[3], exact[4], str(exact[5] or ""), str(exact[6] or ""))
+        exact_tuple = (str(exact[0]), int(exact[1]), exact[2], exact[3], exact[4], str(exact[5] or ""), str(exact[6] or ""), exact[7], str(exact[8] or ""), str(exact[9] or ""), exact[10], exact[11], exact[12])
         if exact_tuple == desired:
             return False
     previous = conn.execute(
-        """SELECT config_control_hash,known,min_soc,max_soc,reserve_soc,night_start,night_end
-           FROM graph_config_timeline WHERE effective_from_ms < ? ORDER BY effective_from_ms DESC LIMIT 1""",
+        f"SELECT {columns} FROM graph_config_timeline WHERE effective_from_ms < ? ORDER BY effective_from_ms DESC LIMIT 1",
         (ts,),
     ).fetchone()
     if previous is not None:
-        prev_tuple = (str(previous[0]), int(previous[1]), previous[2], previous[3], previous[4], str(previous[5] or ""), str(previous[6] or ""))
+        prev_tuple = (str(previous[0]), int(previous[1]), previous[2], previous[3], previous[4], str(previous[5] or ""), str(previous[6] or ""), previous[7], str(previous[8] or ""), str(previous[9] or ""), previous[10], previous[11], previous[12])
         existing_same_ts = conn.execute("SELECT 1 FROM graph_config_timeline WHERE effective_from_ms=?", (ts,)).fetchone()
         if prev_tuple == desired and existing_same_ts is None:
             return False
     conn.execute(
         """INSERT OR REPLACE INTO graph_config_timeline(
-            effective_from_ms,config_control_hash,known,min_soc,max_soc,reserve_soc,night_start,night_end,source
-        ) VALUES(?,?,?,?,?,?,?,?,?)""",
+            effective_from_ms,config_control_hash,known,min_soc,max_soc,reserve_soc,night_start,night_end,source,
+            care_enabled,care_start,care_end,care_r,care_n,care_e
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (ts, digest, 1 if known else 0, ov.get("min_soc"), ov.get("max_soc"), ov.get("reserve_soc"),
-         str(ov.get("night_start") or ""), str(ov.get("night_end") or ""), str(source or "runtime")),
+         str(ov.get("night_start") or ""), str(ov.get("night_end") or ""), str(source or "runtime"),
+         ov.get("care_enabled"), ov.get("care_start"), ov.get("care_end"),
+         ov.get("care_r"), ov.get("care_n"), ov.get("care_e")),
     )
     # If the following entry is semantically identical, the newly inserted boundary
     # already represents it and the duplicate can be removed.
     following = conn.execute(
-        """SELECT effective_from_ms,config_control_hash,known,min_soc,max_soc,reserve_soc,night_start,night_end
-           FROM graph_config_timeline WHERE effective_from_ms > ? ORDER BY effective_from_ms ASC LIMIT 1""",
+        f"SELECT effective_from_ms,{columns} FROM graph_config_timeline WHERE effective_from_ms > ? ORDER BY effective_from_ms ASC LIMIT 1",
         (ts,),
     ).fetchone()
     if following is not None:
-        foll_tuple = (str(following[1]), int(following[2]), following[3], following[4], following[5], str(following[6] or ""), str(following[7] or ""))
+        foll_tuple = (str(following[1]), int(following[2]), following[3], following[4], following[5], str(following[6] or ""), str(following[7] or ""), following[8], str(following[9] or ""), str(following[10] or ""), following[11], following[12], following[13])
         if foll_tuple == desired:
             conn.execute("DELETE FROM graph_config_timeline WHERE effective_from_ms=?", (int(following[0]),))
     if commit:
@@ -198,6 +226,8 @@ def _row_to_dict(row: sqlite3.Row) -> Dict[str, Any]:
         "night_start": row["night_start"] or "",
         "night_end": row["night_end"] or "",
         "source": row["source"] or "",
+        **{key: row[key] if key in row.keys() else None for key in
+           ("care_enabled", "care_start", "care_end", "care_r", "care_n", "care_e")},
     }
 
 
@@ -256,6 +286,8 @@ def build_segments_from_rows(
             "effective_from_ms": start_ms, "config_control_hash": "", "known": False,
             "min_soc": None, "max_soc": None, "reserve_soc": None,
             "night_start": "", "night_end": "", "source": "unknown",
+            "care_enabled": None, "care_start": None, "care_end": None,
+            "care_r": None, "care_n": None, "care_e": None,
         })
     elif int(normalized[0].get("effective_from_ms") or 0) < start_ms:
         normalized[0] = dict(normalized[0], effective_from_ms=start_ms)
@@ -286,12 +318,16 @@ def build_segments_from_rows(
         display_tuple = (
             bool(row.get("known")), row.get("min_soc"), row.get("max_soc"),
             row.get("reserve_soc"), row.get("night_start"), row.get("night_end"),
+            row.get("care_enabled"), row.get("care_start"), row.get("care_end"),
+            row.get("care_r"), row.get("care_n"), row.get("care_e"),
         )
         if compact:
             prev = compact[-1]
             prev_tuple = (
                 bool(prev.get("known")), prev.get("min_soc"), prev.get("max_soc"),
                 prev.get("reserve_soc"), prev.get("night_start"), prev.get("night_end"),
+                prev.get("care_enabled"), prev.get("care_start"), prev.get("care_end"),
+                prev.get("care_r"), prev.get("care_n"), prev.get("care_e"),
             )
             if display_tuple == prev_tuple:
                 continue

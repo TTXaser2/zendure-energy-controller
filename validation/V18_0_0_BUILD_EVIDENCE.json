@@ -1,0 +1,33 @@
+{
+  "format": "ZEC_BUILD_EVIDENCE_V1",
+  "release": {
+    "version": "18.0.0",
+    "label": "V18.0.0",
+    "build_id": "v18.0.0-20261027"
+  },
+  "status": "PASS",
+  "scope": "INSTALLABLE_V18_FIELD_CANDIDATE_APPLICABLE_SUITE",
+  "test_file_count": 201,
+  "full_regression": {
+    "status": "PASS",
+    "tests": 1148,
+    "subtests": 1211,
+    "errors": 0,
+    "failures": 0
+  },
+  "resourcewarning_regression": {
+    "status": "PASS",
+    "tests": 1148,
+    "subtests": 1211,
+    "errors": 0,
+    "failures": 0,
+    "warnings_mode": "error::ResourceWarning"
+  },
+  "excluded_historical_assertions": 56,
+  "exclusions": "validation/V18_RELEASE_APPLICABILITY.json",
+  "historical_staging_qa": "CP42 regular+strict 1199 tests, 1211 subtests (separate stage, NOT current installable root)",
+  "real_installation": "PENDING_USER_FIELD_TEST",
+  "physical_battery_care_effect": "NOT_VERIFIED",
+  "manual_uml_review": "PENDING",
+  "notes": "PASS only for the explicitly scoped installable V18 test suite. Excluded 56 historical version/held-staging assertions remain inventoried and preserved, NOT counted as PASS. The original unfiltered unittest discovery FAILS on obsolete context assumptions. Does not authorize claims of field efficacy."
+}

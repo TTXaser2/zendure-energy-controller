@@ -1,4 +1,73 @@
+## V18.0.0 – 27.10.2026: bereitgestelltes Installationspaket zur realen Feldabnahme
+
+**NEUE technische Installationskandidaten-Basis:** `zendure_controller_v18_0_0.zip`, Build `v18.0.0-20261027`; aus verifiziertem CP42 V18-Stagingbaum abgeleitet, mit echtem Preflight-Installer, Release-Datenblatt und gemessenem anwendbaren Regressionsergebnis. Die explizit inventarisierten historischen 56 Release-Hold-/Altversionsassertions bleiben unter CP42-Staging-QA belegt und sind in der installierbaren Quellkopie nicht als PASS gezählt. **Dies ist die Bereitstellung zur Nutzer-Feldinstallation, nicht die Behauptung einer bereits erfolgreichen Feldinstallation oder einer physisch bestätigten Battery-Care-Wirkung.** Manuelle UML-Fachabnahme bleibt PENDING. Alle bisherigen V17.1.3-Pi-Feldangaben bleiben unverändert. Das Master-Ledger `05` bleibt alleinige Backlogautorität.
+
+## CP42 – 27.10.2026: V17-/V18-duale Testfixture für CP41-Read-only-Installer-Audit
+
+Ausgangsbasis ist der unabhängig extern gesicherte CP41-Checkpoint, SHA256 `7de277b76386a9bf489a655bb2124884184039086cb5bc2dfbbd9e4580a42c16`. Der komplette V18-Gesamttest des CP41 ermittelte sieben Fixturefehler: Die neue Testfixture forderte einen historischen V17-Standardinstaller, obwohl der reale Testroot V18-STAGING ist. CP42 erhält beide Rootidentitäten in getrennten temporären Testkopien, ohne den Installer/Controller zu ändern; Details `docs/releases/v18.0.0/CP42_DUAL_ROOT_INSTALLER_AUDIT_FIXTURE_20261027.md`. Produktiver Pi unverändert V17.1.3; V18-Installer `RELEASE_HOLD` Exit 78 und Build-Evidence BLOCKED. Das Master-Ledger bleibt ausschließlich `05`.
+
+## CP41 – 27.10.2026: mutationsfreier V18-Installer-/Recovery-Vertragsaudit (kein Release)
+
+Basis ist der unabhängig archivierte CP40-Sourcestand (`9ce4a3f9269fcb9f8a14a2811bf1a55c2d76e2f7073a6d7d84af517c756bb38d`). Neues Read-only-Tool `tools/verify_v18_installer_recovery_readonly.py` mit Negativtests und `docs/releases/v18.0.0/CP41_READONLY_INSTALLER_RECOVERY_CONTRACT_20261027.md` prüft statisch den Upgrade-/Fresh-/Backup-/Rollback-/Diagnosevertrag und führt ausschließlich den vorzeitigen Exit 78 aus. **Kein** realer Installations-/Rollback-PASS, keine finale Build-Evidence, keine physische Care-Wirksamkeit. Master-Ledger `05`, produktiver Pi weiterhin V17.1.3. Keine bestehenden Sources entfernt oder Installer entsperrt.
+
+## CP40 – 27.10.2026: V17-/V18-duales QA-Evidenztestmodul (kein Release)
+
+Vorgänger ist der unabhängig byteidentisch gesicherte CP39-Source-Checkpoint (SHA256 `3b2cf54f38304c2250de5942b7f25e73439ed64ea2486571f5139bc5e080ebaf`). Die CP39-Evidenztestfixture startete auf dem bereits umgestellten V18-Staging fälschlich erneut den V17-only-Stagingbuilder. CP40 trennt ihre tatsächlichen Quellroots, erhält den V17-Prepare-Test und prüft den V18-Stagingbaum in einer hygienisch geklonten Kopie. Die Produktsources, das CP39-Evidenzgate und der Exit-78-Installer bleiben unverändert. Details `docs/releases/v18.0.0/CP40_DUAL_ROOT_EVIDENCE_TEST_FIXTURE_20261027.md`; Master-Ledger allein `05`; produktiver Pi V17.1.3.
+
+## CP39 – 27.10.2026: sourcegebundene V18-Staging-QA-Rohlog-Evidenz (kein Release)
+
+Ausgangspunkt ist der unabhängig byteidentisch geprüfte CP38-Source-Checkpoint (SHA256 `afc8e2daa79f471d803f096cff848ba9f77689ce90d1a630653c3a1f164f9374`). CP39 ergänzt ausschließlich das schreibgeschützte V18-Staging-QA-Evidenzbindungswerkzeug und gezielte Negativtests; tatsächliche CP38-Dual-Rohlogs werden gegen dasselbe Staging-Manifest und ihre Worker-Sidecars konsistenzgeprüft. Die Bindung legitimiert **keinen** geänderten/finalen Releasebaum, keine `ZEC_BUILD_EVIDENCE_V1=PASS` und keine Installation. Details: `docs/releases/v18.0.0/CP39_STAGING_QA_EVIDENCE_BINDING_20261027.md`. Master-Ledger bleibt `05`, produktiver Pi V17.1.3; `RELEASE_HOLD` Exit 78 unverändert.
+
+## CP38 – 27.10.2026: isolierte V18-Testfixture-Importe, unveränderte Installationssperre
+
+Extern gesicherte Grundlage CP37 (SHA256 `5ce85c8b2e5c8f8b0b16e10ab22e57bbb8a21f400b7a2ca18adf5743899bde82`). Beim ersten getrennt isolierten V18-Gesamtlauf aus CP37 fehlte dem Testworker der lokale `tests/`-Importpfad für `sma_packet_fixtures`; drei Testdateien scheiterten bereits im Import. CP38 korrigiert exakt diesen Worker-/Subprocess-Pfad und fügt eine Prozessfixture-Testprüfung hinzu. Kein Source-/Runtime-/Installer-/Command-Freeze, keine Produktfreigabe. `05` bleibt Master-Ledger, Pi V17.1.3.
+
+## CP37 – 27.10.2026: AST-stabiler V18-Staging-Testkontext-Guard (keine Freigabe)
+
+Extern byteidentisch gesicherte Ausgangsbasis ist CP36 (`24d63ada268711ebf5c7f214bdca3c646b9e64190d3c4f84675767459a17b08b`). CP37 behebt ausschließlich den nach Fresh-Extract belegten falschen CP35-V17-Fixture-Alarm bei mehrzeiliger, nachweislich geschützter V18-Testfixture. AST-Quellprüfung verlangt explizit Stagingkopie mit Hygiene-Ignore, `verify_staging` und getrennten V17-`prepare(ROOT)`-Zweig. Die bisherigen historischen Testkörper bleiben vorhanden, kein Release, Pi V17.1.3 unverändert. Einzelheiten in `docs/releases/v18.0.0/CP37_AST_STAGING_CONTEXT_GATE_20261027.md`; `05` bleibt Master-Ledger.
+
+## CP36 – 27.10.2026: Duale V17-/V18-Testverträge für echtes Staging (keine Freigabe)
+
+Ausgangspunkt: unabhängig gesicherter CP35, SHA256 `df26176ca7de2248ba916e9abd2e64c43fe7148919d3c533d93fe12c91237fcd`. Drei bereits erkannte Testkonflikte und 37 in einer echten V18-Staging-Gesamtregression zusätzlich nachgewiesene historische V17-Identitäts-/Installer-Provenienz-Fälle wurden quellenkontextabhängig angepasst. Die ursprünglichen V17.1.3-Assertions bleiben in denselben Tests erhalten; das V18-Staging prüft statt des V17-Installers die tatsächliche V18-Release-Hold-Identität. Der in CP35 eingeführte Regressionsguard erkennt bekannte alte Fixturewidersprüche weiter, akzeptiert aber die belegte, ausschließlich auf V17 ausgeführte `prepare()`-Verzweigung. Keine Runtime-/Controller-/MQTT-/Command-Semantikänderung, keine Freigabe. `05` bleibt einziges persistentes Master-Ledger, realer Pi V17.1.3. Technische Evidenz erst nach konkreten CP36-Gates behaupten.
+
+## CP35 – 27.10.2026: V18-Staging-Testkontext und regressionsgebundene Build-Evidence (keine Freigabe)
+
+Extern gesicherter Vorgänger ist CP34 (`e286fe5111e9db93f9374d88f8777d756339cdc27f6fed5310bebb55f3ef30ac`). Ein realer Volltestversuch auf dem originalen V18-Staging ist nicht erfolgreich abgeschlossen; drei V17.1.3-spezifische Entwicklungs-Testfixtures sind auf dem V18-Staging nachweislich widersprüchlich. CP35 ergänzt nur einen mutationsfreien, bounded Isolationsprüfer `tools/v18_staging_regression_gate.py`, dessen Negativtests und `docs/releases/v18.0.0/CP35_STAGING_TEST_CONTEXT_GATE_20261027.md`. Keine Tests gelöscht, kein PASS der finalen Build-Evidence vorgetäuscht, kein Installer freigegeben, Pi produktiv V17.1.3. `05` ist Master-Ledger.
+
+## Entwicklungsautorität CP34 – 27.10.2026: V18-Datenblattbindung im hart gesperrten Staging
+
+Vorgänger ist CP33, SHA256 `9ff49012643ffb1683aa0915e5f8ca057cf025283fa04050f612f24ecd5b011b`, unabhängig in der Bibliothek verifiziert. CP34 verschärft das bestehende nicht installierbare V18-Staging durch einen Prüfnachweis der unveränderten DOCX/PDF-Entwürfe und die exakte Dokumentation zweier zulässiger V18-Identitätsänderungen (`version.py` und Standardinstaller). Manifest-, Datenblatt-, Installer-Exit-78- und Build-Evidence-`BLOCKED`-Sperren bleiben verbindlich. Nur `05` ist Master-Ledger. Pi real weiterhin V17.1.3. **Kein V18-Release und keine Installation.**
+
+## Entwicklungsautorität CP33 – 27.10.2026: V18-Datenblatt-Entwurf mit Quellenbindung (kein Release)
+
+Ausgangsbasis ist der extern unabhängig verifizierte CP32, SHA256 `b9fbdf264b2578e49f302d0dfbf793907ef5d8a3a502bcb7c2b8c9d73633a5c0`. CP33 erstellt einen **gesonderten V18-Datenblattentwurf** als DOCX und aus ihm gerendertes PDF samt exakten Source-/Dokument-SHA256 und einem fail-closed Prüfgate (`tools/verify_v18_datasheet_draft.py`). Der veröffentlichte V17.1.3-Datenblattbestand (`docs/ZEC_Technisches_Datenblatt.*`) bleibt byteidentisch; kein V18-Release-Datenblatt wird als kanonisch ausgegeben. Produktiver Pi: V17.1.3. V18-Staging/Installer: `RELEASE_HOLD` / `DEVELOPMENT_NOT_INSTALLABLE`, finale Build-Evidence, manuelle UML-Abnahme und reale physische Battery-Care-Wirksamkeit weiterhin offen. Master-Ledger einzig `05`.
+
+## Entwicklungsautorität CP32 – 27.10.2026: V18-Build-Evidence-Releasegate
+
+Extern byteidentisch gesicherter Vorgänger CP31: SHA256 `33056408fcb9d12095a0f1cadb3a0cf7bf9188e2a88c5ebf1dcbfc72d5b7d385`. CP32 erweitert ausschließlich die mutationsfreie V18-Releaseidentitätsprüfung um den strengen kanonischen `ZEC_BUILD_EVIDENCE_V1`-Vertrag. Gesperrte `BLOCKED`-Evidence und uneinheitliche Testergebnisse können nicht mehr durch die Identitätsprüfung schlüpfen. `05` bleibt Master-Ledger, reale Pi-Version V17.1.3, V18 weiter `DEVELOPMENT_NOT_INSTALLABLE`.
+
+## Entwicklungsautorität CP31 – 27.10.2026: Staging-Laufzeithygiene (kein Release)
+
+Extern gesicherter Vorgänger ist CP30, SHA256 `7c71f917b4055eb3895a06dde8b6322c3c85be3eb9e132199c69305dfaecff9c`. CP31 korrigiert ausschließlich die durch die vollständige Regression belegte Aufnahme temporärer SQLite-/Log-Dateien in das gesonderte V18-Staging; `05` führt den Nichtverlust-Nachtrag. Pi weiterhin produktiv V17.1.3, V18 `RELEASE_HOLD / DEVELOPMENT_NOT_INSTALLABLE`.
+
+## Entwicklungsautorität CP30 – V18-Staging, 27.10.2026 (kein Produktrelease)
+
+Die aktuelle reale Source-/Feldautorität bleibt V17.1.3. Die neueste verifizierte Battery-Care-Entwicklungsquelle ist der CP29-Checkpoint, SHA256 `73d85c2d39567b913667698eafe96637ae7838e04d31d3825031bdd556d54cdf`, bis CP30 eigenständig inklusive Bibliotheks-Readback abgeschlossen ist. CP30 ergänzt ausschließlich ein *nicht installierbares* V18-Freeze-Stagingwerkzeug, Sicherheitstests und die zugehörigen kanonischen Nachträge. Jede erzeugte V18-Stagingkopie besitzt einen zwingenden Installer-Exit-78-Guard; eine `BLOCKED`-Build-Evidence und ein technisches Manifest sind keine Freigabe. Master-Ledger-Autorität verbleibt allein in `05`. Kein Pi-Eingriff.
+
+## Engineering-Quellennachtrag CP29 – 27.10.2026 (KEIN Produktrelease)
+
+Ausgangspunkt ist der extern byteidentisch rückleseverifizierte CP28 (SHA256 `c53397ecc6493544a63cc360586a06849353acafc639914ba18bf792ba0acc5d`). CP29 ergänzt eine **sourcegebundene V18-Dokumentationsvorbereitung**, kein Runtime-/Installer-Freeze: neues `docs/architecture/ZEC_V18_0_0_As_Built.md` ausdrücklich nur Entwicklungs-As-built, versionierte Release-/Build-/Datenblattentwürfe, gesperrte README und `CP29_SOURCE_TRACEABILITY_20261027.json` mit 15 realen SHA256. Das mutationfreie `tools/verify_v18_draft_provenance.py` validiert diese Source-/Dokumentbindung ohne Installationsfreigabe. V17.1.3-Runtime, freigegebener V17-Installer und alle Hardwarecommand-Sources sind unverändert. `V18_RELEASE_IDENTITY_GATE=FAIL`, `MANUAL_UML_REVIEW=PENDING`, `PHYSICAL_EFFECT=NOT_VERIFIED`, `DEVELOPMENT_NOT_INSTALLABLE`. `05` bleibt einzige Master-Ledger-Autorität; realer Pi V17.1.3. Kein V18-DOCX/PDF, Build-Evidence oder Installer-PASS wird vorgetäuscht.
+
+## Engineering-Quellennachtrag CP28 – 27.10.2026 (KEIN Produktrelease)
+
+Basis: CP27 (`a47dd86dcbef460d30fc343bfebba68827d088c35cd05629dfa844df19356ae2`), extern unabhängig gesichert. CP28 führt **ausschließlich** den hart gesperrten V18-Upgrade-Installerkandidaten und das hart gesperrte V18-Feldtool sowie neue Tests/Dokumentation ein. `version.py`, der produktive V17-Installer und Hardwaresteuerung bleiben unverändert. Vollständige, noch nicht erfüllte V18-Gates bleiben in `05`, alleiniger Master-Ledger-Autorität, und `06`. Produktiver Pi weiterhin V17.1.3. Diese Aussage ersetzt die CP27-Statusangabe nur hinsichtlich des Engineering-Checkpoints, nicht hinsichtlich Release- oder Feldstatus. `DEVELOPMENT_NOT_INSTALLABLE`.
+
 # ZEC – Projektquellen-Index
+
+## Engineering-Status 27.10.2026 – CP26 Battery Care (kein Produktrelease)
+
+Der produktive Raspberry Pi läuft weiterhin mit der **real am 23.10.2026 allgemein abgenommenen V17.1.3** (Original-SHA256 `54b3aa6ee6063bdbf91f428258baca38f6bbdd4a6c5a4c0741159fb7dd5a6d8e`). Der Battery-Care-Entwicklungszweig basiert auf dem unabhängig extern gesicherten CP25 (SHA256 `31edcd62a998505703dd9a864309c05d1c6d910aba73433f2ad56b3cc4e42222`). CP26 dokumentiert den gegen diesen konkreten Code revidierten UML-Quellenvertrag. **`DEVELOPMENT_NOT_INSTALLABLE`; `TECHNICAL_RELEASE_GATE=PENDING`; `MANUAL_UML_REVIEW=PENDING`; keine Pi-Änderung.** `05` bleibt alleinige aktuelle Backlogautorität. Alle historisch folgenden Aussagen bleiben Provenienz ihres Datums.
+
 
 ## Quellen-/Release-Nachtrag 22.10.2026 – V17.1.3 technischer Stand
 

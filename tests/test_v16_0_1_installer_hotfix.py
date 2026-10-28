@@ -14,6 +14,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class TestV1601InstallerHotfix(unittest.TestCase):
     def test_current_release_identity_is_v17_1_3(self):
+        from tests.v18_staging_test_contract import is_v18_stage, assert_stage_runtime
+        if is_v18_stage(Path(__file__).resolve().parents[1]):
+            assert_stage_runtime(self, Path(__file__).resolve().parents[1])
+            return
         self.assertEqual("17.1.3", version.APP_VERSION)
         self.assertEqual("V17.1.3", version.APP_VERSION_LABEL)
         self.assertEqual("v17.1.3-20261022", version.APP_BUILD_ID)
@@ -41,6 +45,10 @@ class TestV1601InstallerHotfix(unittest.TestCase):
             self.assertFalse(mismatch["ok"], mismatch)
 
     def test_identity_cli_executes_the_same_parser_used_by_installer(self):
+        from tests.v18_staging_test_contract import is_v18_stage, assert_stage_installer
+        if is_v18_stage(Path(__file__).resolve().parents[1]):
+            assert_stage_installer(self, Path(__file__).resolve().parents[1])
+            return
         command = [
             sys.executable,
             str(ROOT / "tools" / "deployment_contract.py"),
@@ -65,6 +73,10 @@ class TestV1601InstallerHotfix(unittest.TestCase):
         self.assertFalse(json.loads(rejected.stdout)["ok"])
 
     def test_installer_uses_shared_identity_gate_without_embedded_regex(self):
+        from tests.v18_staging_test_contract import is_v18_stage, assert_stage_installer
+        if is_v18_stage(Path(__file__).resolve().parents[1]):
+            assert_stage_installer(self, Path(__file__).resolve().parents[1])
+            return
         installer = (ROOT / "tools" / "install_zendure_controller.sh").read_text(encoding="utf-8")
         self.assertIn('EXPECTED_VERSION_ARG="v17_1_3"', installer)
         self.assertIn('EXPECTED_TARGET_VERSION="17.1.3"', installer)

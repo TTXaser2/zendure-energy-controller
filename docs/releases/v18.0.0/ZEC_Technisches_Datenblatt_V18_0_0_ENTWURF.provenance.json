@@ -1,0 +1,64 @@
+{
+  "build_identity_status": "PROVISIONAL_NOT_FROZEN",
+  "canonical_previous_datasheet_sha256": {
+    "docs/ZEC_Technisches_Datenblatt.docx": "4b18434bc2747c0f97a1fff38d2a87f5d94ceabdb078d6632f8889ecd707253f",
+    "docs/ZEC_Technisches_Datenblatt.pdf": "07f64683500703c6f4a36a8f85fb28f112bd56f9978469bba9686b266f9d1529",
+    "docs/ZEC_Technisches_Datenblatt.release.json": "ca1c217adef36773d9386323a0a4e5846fde3980d013c23d3e3f9f25046a3e4d"
+  },
+  "canonical_previous_release": "V17.1.3",
+  "evidence_gaps": [
+    "FINAL_RUNTIME_IDENTITY",
+    "FINAL_BUILD_EVIDENCE",
+    "FINAL_DOCUMENT_GATE",
+    "MANUAL_UML_REVIEW",
+    "FRESH_EXTRACT_INSTALL_ROLLBACK",
+    "HARDWARE_EFFECT"
+  ],
+  "files": {
+    "docx": {
+      "path": "docs/releases/v18.0.0/ZEC_Technisches_Datenblatt_V18_0_0_ENTWURF.docx",
+      "sha256": "422ae5b3552336d973087cc04adda3457316bd349b3068d402d82dbe3333e92c"
+    },
+    "pdf": {
+      "path": "docs/releases/v18.0.0/ZEC_Technisches_Datenblatt_V18_0_0_ENTWURF.pdf",
+      "sha256": "fe343ec6fd15cd552ef7aa0adc670525f3b2388cfb6f39eef3d6a2aabd34f59f"
+    }
+  },
+  "hardware_effect": "NOT_VERIFIED",
+  "manual_uml": "PENDING",
+  "release_gate": "FAIL",
+  "required_phrases": [
+    "Technische Voraussetzungen und Anlagenkonstellationen",
+    "Hardware und Infrastruktur",
+    "Software und Dienste",
+    "SMA Energy Meter",
+    "Speedwire/UDP",
+    "Shelly Pro 3EM",
+    "Shelly-kompatible",
+    "Stufe 1",
+    "Stufe 2",
+    "Stufe 3",
+    "ENTWURF",
+    "NICHT INSTALLIERBAR"
+  ],
+  "schema": "ZEC_V18_DATASHEET_DRAFT_PROVENANCE_V1",
+  "source_sha256": {
+    "README_INSTALLATION_V17_1_3.md": "59547eb31f5d32c639287af25af6902732414ed9af027bff035c2a2689ed0ff2",
+    "battery_care_episode_store.py": "c823b605b4b2a3b3cd732a1b6a3af13cd1758c22ac14b931e7d04676f473208b",
+    "battery_care_graph_history.py": "5b4e0b833710e275c31b989c51bcc6e0a569fa475ef6a67758f856118a54791a",
+    "battery_care_grid_observation.py": "2a4d02c3f1078fda73c05444245cf0dd1391b63389317b836bfdf8f9c2a3bbd7",
+    "battery_care_policy.py": "b21139941df7257175732b849e715c1843d3eff4ffe1428111884b594680bfc7",
+    "battery_care_pv_allocation.py": "492279e12504fa7cc9a749a34d8f24985f4cc04d2fcfc6d0b5b217aa2cfafe9c",
+    "battery_care_stage_events.py": "aacc519d14a7648a93c96ca5a492183065b40ef8fe973a675af12d7a0b5fb2ae",
+    "controller_logic.py": "ba1a909d8247336bf248ecd5432f3bb96c4be10f679be4c0590c6eab6b0da31b",
+    "operational_events.py": "0c508437fc9c289c4ac15c2982416b217982cf3407faaac67394e1d4adb2ccb5",
+    "static/status_v2.js": "2c240bea9c90c62a60b779f4dcb283ecdac57ec17b6f2241f82c1f0aee23683d",
+    "status_page_v2.py": "3424188722f9c0e5e47c39b045b670cf5c52286ead4fb3420829dad07c47e981",
+    "tools/install_zendure_controller.sh": "6b544b26cd177b16aa867c2a072ef98a2dd6817f54ab65d7a5b3044790f8f6be",
+    "tools/install_zendure_controller_v18_candidate.sh": "9fd3f8197274964049449b40c59f6a8c74e9ee03f609f0fb860d879629c8871e",
+    "version.py": "6fd315d065da2a8265db76aa22343bf2e1bcb582edc9bab52f9a7a51a58bea99"
+  },
+  "status": "DEVELOPMENT_NOT_INSTALLABLE",
+  "target_build_id": "v18.0.0-20261027",
+  "target_version": "18.0.0"
+}

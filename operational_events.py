@@ -1,14 +1,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Persistent, bounded operational event journal for the status UI.
 
-The observer runs in a daemon thread outside the controller loop. It only reads
-state snapshots and writes through its own SQLite connection. Event state is
-strictly diagnostic and never participates in controller decisions or command
-suppression.
+Routine observation runs asynchronously outside the controller loop. Only
+a confirmed Battery-Care emergency command-effect failure is written through
+immediately using a short-timeout SQLite connection. Event state is diagnostic
+and never participates in command authorization or suppression.
 """
 from __future__ import annotations
 
 import json
+import math
 import os
 import sqlite3
 import threading
@@ -17,6 +18,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from measurement_db import resolve_measurement_db_path
+from battery_care_stage_events import observed_care_stage, stage_label
 
 
 _SENTINEL = object()
@@ -34,6 +36,11 @@ class OperationalEventJournal:
         self._thread: Optional[threading.Thread] = None
         self._previous: Dict[str, Any] = {}
         self._stable_candidates: Dict[str, Dict[str, Any]] = {}
+        # Deliberately process-local: restart must re-confirm fresh distinct SOC
+        # samples, while the incident itself remains persistent in SQLite.
+        self._care_recovery_candidates: Dict[int, Dict[str, Any]] = {}
+        self._care_stage_candidate: Optional[Dict[str, Any]] = None
+        self._care_stage_schema_ready = False
 
     def path(self) -> str:
         cfg = self.config_getter()
@@ -48,13 +55,15 @@ class OperationalEventJournal:
         base = resolve_measurement_db_path(cfg)
         return os.path.join(os.path.dirname(base), "zec_operational_events.sqlite3")
 
-    def _connect(self) -> sqlite3.Connection:
+    def _connect(self, *, urgent: bool = False) -> sqlite3.Connection:
         path = self.path()
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        conn = sqlite3.connect(path, timeout=1.0)
+        conn = sqlite3.connect(path, timeout=0.2 if urgent else 1.0)
         try:
             conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA synchronous=NORMAL")
+            # The rare confirmed emergency failure is written through with
+            # FULL durability; routine polling remains NORMAL and asynchronous.
+            conn.execute("PRAGMA synchronous=FULL" if urgent else "PRAGMA synchronous=NORMAL")
             conn.execute(
                 """
               CREATE TABLE IF NOT EXISTS operational_events(
@@ -384,7 +393,275 @@ class OperationalEventJournal:
             return "nach bestätigter Abweichung zwischen Sollwert und Gerätewirkung"
         return labels.get(value, str(reason or "Kommunikationsunsicherheit"))
 
+    @staticmethod
+    def _care_failure_key(failure_id: str) -> str:
+        # New events use an identity-specific key. Older CP18/19 rows used
+        # only the event type; they remain discoverable below.
+        return "battery_care_emergency_failure:" + failure_id
+
+    @classmethod
+    def _care_find_failure(cls, conn: sqlite3.Connection, failure_id: str):
+        """Return the durable event for *this* ID, including legacy CP18/19.
+
+        JSON is parsed only for historical rows without an identity-specific
+        key, avoiding a runtime dependency on SQLite's optional JSON1 module.
+        """
+        row = conn.execute(
+            "SELECT id,status,detail_json FROM operational_events "
+            "WHERE event_type='battery_care_emergency_failure' AND dedupe_key=? "
+            "ORDER BY id DESC LIMIT 1", (cls._care_failure_key(failure_id),),
+        ).fetchone()
+        if row is not None:
+            return row
+        for historical in conn.execute(
+            "SELECT id,status,detail_json FROM operational_events "
+            "WHERE event_type='battery_care_emergency_failure' "
+            "AND (dedupe_key='battery_care_emergency_failure' OR dedupe_key IS NULL OR dedupe_key='')"
+        ):
+            try:
+                values = json.loads(historical[2] or '{}')
+                if isinstance(values, dict) and values.get('failure_event_id') == failure_id:
+                    return historical
+            except (ValueError, TypeError, AttributeError):
+                continue
+        return None
+
+    def persist_confirmed_emergency_failure(self, snapshot: Dict[str, Any]) -> bool:
+        """Durably write one independently confirmed emergency failure ID.
+
+        A second emergency episode remains independent of any older open
+        incident; neither ACK nor a mere publish authorizes writing. The
+        routine event observer still owns SOC-based recovery for every ID.
+        """
+        if snapshot.get("care_emergency_failure_confirmed") is not True:
+            return False
+        failure_id = str(snapshot.get("care_emergency_failure_event_id") or "").strip()
+        reserve = snapshot.get("care_emergency_incident_reserve_soc")
+        if (not failure_id or len(failure_id) > 160 or type(reserve) is not int
+                or not 0 <= reserve <= 100):
+            return False
+        conn = self._connect(urgent=True)
+        try:
+            self._observe_battery_care_incident(conn, snapshot)
+            row = self._care_find_failure(conn, failure_id)
+            if row is None:
+                return False
+            try:
+                values = json.loads(row[2] or '{}')
+                # A reused failure ID with a different reserve is a conflict,
+                # never evidence that this new episode was persisted.
+                return (isinstance(values, dict)
+                        and values.get('failure_event_id') == failure_id
+                        and type(values.get('incident_reserve_soc')) is int
+                        and values['incident_reserve_soc'] == reserve)
+            except (ValueError, TypeError, AttributeError):
+                return False
+        finally:
+            conn.close()
+
+    def _observe_battery_care_incident(self, conn: sqlite3.Connection, snapshot: Dict[str, Any]) -> None:
+        """Serialize confirmed-failure insertion across urgent/background writers."""
+        if snapshot.get("care_emergency_failure_confirmed") is True:
+            with conn:
+                conn.execute("BEGIN IMMEDIATE")
+                self._observe_battery_care_incident_inner(conn, snapshot)
+        else:
+            self._observe_battery_care_incident_inner(conn, snapshot)
+
+    def _observe_battery_care_incident_inner(self, conn: sqlite3.Connection, snapshot: Dict[str, Any]) -> None:
+        """Independently persist and recover *each* open emergency incident.
+
+        Every row retains its own immutable incident reserve, event ID and
+        separate process-local distinct-SOC candidate. One incident can close
+        while another remains open at a higher reserve. Restart never carries
+        tentative candidate samples to the new observer process.
+        """
+        event_type = "battery_care_emergency_failure"
+        failed = snapshot.get("care_emergency_failure_confirmed") is True
+        soc = snapshot.get("care_soc_percent")
+        valid_soc = (isinstance(soc, (int, float)) and not isinstance(soc, bool)
+                     and math.isfinite(float(soc)) and 0 <= soc <= 100)
+        soc_fresh = snapshot.get("care_soc_fresh") is True
+        sample_id = str(snapshot.get("care_soc_sample_id") or "").strip()
+
+        if failed:
+            failure_id = str(snapshot.get("care_emergency_failure_event_id") or "").strip()
+            reserve = snapshot.get("care_emergency_incident_reserve_soc")
+            if (failure_id and len(failure_id) <= 160 and type(reserve) is int
+                    and 0 <= reserve <= 100 and self._care_find_failure(conn, failure_id) is None):
+                reason = str(snapshot.get("care_emergency_failure_reason") or "Ladeanforderung ohne bestätigte Wirkung")[:400]
+                values = {
+                    "episode_id": str(snapshot.get("care_episode_id") or "")[:100],
+                    "failure_event_id": failure_id,
+                    "incident_reserve_soc": reserve,
+                    "initial_failure_reason": reason,
+                    "first_failure_epoch": time.time(),
+                    "min_observed_soc": float(soc) if valid_soc and soc_fresh else None,
+                    "charging_restored": False,
+                    "recovery_observation_count": 0,
+                }
+                # Identity-based dedupe key, not the shared event family. Do
+                # not coalesce/reopen another episode, resolved or still open.
+                self._add(
+                    conn, event_type, "error", "Battery Care: Notladung nicht erfolgreich",
+                    f"Notladeanforderung nicht wirksam; Schutzreserve {reserve} % noch nicht wiederhergestellt. " + reason,
+                    dedupe_key=self._care_failure_key(failure_id), open_event=True,
+                    values=values, dedupe_window_s=0.0,
+                )
+
+        rows = conn.execute(
+            "SELECT id,detail_json FROM operational_events "
+            "WHERE event_type=? AND status='open' ORDER BY id", (event_type,),
+        ).fetchall()
+        active_ids = {int(row[0]) for row in rows}
+        for row_id in list(self._care_recovery_candidates):
+            if row_id not in active_ids:
+                self._care_recovery_candidates.pop(row_id, None)
+
+        for raw_id, encoded in rows:
+            row_id = int(raw_id)
+            try:
+                values = json.loads(encoded or "{}")
+                if not isinstance(values, dict):
+                    values = {}
+            except (ValueError, TypeError):
+                values = {}
+            reserve = values.get("incident_reserve_soc")
+            if type(reserve) is not int or not 0 <= reserve <= 100:
+                self._care_recovery_candidates.pop(row_id, None)
+                continue
+            modified = False
+            if valid_soc and soc_fresh:
+                minimum = values.get("min_observed_soc")
+                if minimum is None or float(soc) < float(minimum):
+                    values["min_observed_soc"] = float(soc)
+                    modified = True
+            if snapshot.get("care_physical_charge_confirmed") is True and not values.get("charging_restored"):
+                values["charging_restored"] = True
+                values["charging_restored_epoch"] = time.time()
+                modified = True
+
+            if not (valid_soc and soc_fresh and sample_id and float(soc) >= reserve):
+                self._care_recovery_candidates.pop(row_id, None)
+                if modified:
+                    label = (f"Ladung wiederhergestellt – Schutzreserve {reserve} % noch nicht erreicht."
+                             if values.get("charging_restored") else
+                             f"Schutzreserve {reserve} % noch nicht wiederhergestellt.")
+                    conn.execute(
+                        "UPDATE operational_events SET detail=?,detail_json=? WHERE id=? AND status='open'",
+                        (label, json.dumps(values, ensure_ascii=False), row_id),
+                    )
+                    conn.commit()
+                continue
+
+            now = time.monotonic()
+            c = self._care_recovery_candidates.get(row_id)
+            if c is None or now < c.get("started_mono", now):
+                c = {"started_mono": now, "count": 0, "last_id": None}
+                self._care_recovery_candidates[row_id] = c
+            if sample_id != c.get("last_id"):
+                c["count"] += 1
+                c["last_id"] = sample_id
+            if c["count"] >= 2 and now - c["started_mono"] >= 3.0:
+                values["recovery_observation_count"] = c["count"]
+                values["recovery_reserve_soc"] = reserve
+                values["recovery_soc"] = float(soc)
+                values["resolved_epoch"] = time.time()
+                conn.execute(
+                    """UPDATE operational_events SET ended_at=?,status='resolved',
+                           title=?,detail=?,detail_json=? WHERE id=? AND status='open'""",
+                    (time.time(), "Battery Care: Schutzreserve wiederhergestellt",
+                     f"Schutzreserve {reserve} % mit unabhängigen frischen SOC-Proben bestätigt.",
+                     json.dumps(values, ensure_ascii=False), row_id),
+                )
+                conn.commit()
+                self._care_recovery_candidates.pop(row_id, None)
+            elif modified:
+                conn.execute(
+                    "UPDATE operational_events SET detail_json=? WHERE id=? AND status='open'",
+                    (json.dumps(values, ensure_ascii=False), row_id),
+                )
+                conn.commit()
+
+    def _observe_battery_care_stage(self, conn: sqlite3.Connection, snapshot: Dict[str, Any]) -> None:
+        """Persist confirmed *dispatch/policy* transitions, never inferred effect.
+
+        Two different completed controller cycles must agree. SQLite's stable
+        cursor suppresses duplicate entry markers after journal/process restart.
+        The transition row and cursor advance in one short transaction; a DB
+        failure does not advance the process-local confirmation candidate.
+        """
+        stage = observed_care_stage(snapshot)
+        if stage is None:
+            return
+        cycle = int(snapshot["loop_counter"])
+        floor_raw = snapshot.get("care_effective_discharge_floor_soc") if snapshot.get("care_policy_valid") is True else None
+        floor = (float(floor_raw) if isinstance(floor_raw, (int, float))
+                 and not isinstance(floor_raw, bool) and math.isfinite(float(floor_raw))
+                 and 0 <= float(floor_raw) <= 100 else None)
+        candidate = self._care_stage_candidate
+        if candidate is None or candidate["stage"] != stage or candidate["floor"] != floor:
+            self._care_stage_candidate = {"stage": stage, "floor": floor, "cycle": cycle, "count": 1}
+            return
+        if cycle == candidate["cycle"]:
+            return  # polling same control cycle is NOT independent evidence
+        if cycle < candidate["cycle"]:
+            self._care_stage_candidate = {"stage": stage, "floor": floor, "cycle": cycle, "count": 1}
+            return
+        candidate["cycle"] = cycle
+        candidate["count"] += 1
+        if candidate["count"] < 2:
+            return
+        if not self._care_stage_schema_ready:
+            conn.execute("""CREATE TABLE IF NOT EXISTS battery_care_stage_cursor (
+                            id INTEGER PRIMARY KEY CHECK(id=1), stage TEXT NOT NULL,
+                            last_event_id INTEGER, changed_at REAL NOT NULL,
+                            floor_soc REAL)""")
+            conn.commit()
+            self._care_stage_schema_ready = True
+        with conn:
+            conn.execute("BEGIN IMMEDIATE")
+            stored = conn.execute("SELECT stage,floor_soc FROM battery_care_stage_cursor WHERE id=1").fetchone()
+            before = str(stored[0]) if stored else "NONE"
+            previous_floor = float(stored[1]) if stored and stored[1] is not None else None
+            if (before == stage and previous_floor == floor) or (stored is None and stage in ("NONE", "STOP_HOLD")):
+                return
+            # Only record real policy/dispatch changes, not a generic STOP
+            # that occurred before Battery Care had ever been active.
+            values = {
+                "stage_from": before, "stage_to": stage,
+                "floor_from_soc": previous_floor, "floor_to_soc": floor,
+                "controller_cycle_id": cycle,
+                "observed_mode": str(snapshot.get("current_mode") or "")[:50],
+                "requested_power_w": (int(snapshot["care_dispatched_target_w"])
+                                      if stage.endswith("REQUESTED") else 0),
+                "policy_floor_soc": (float(snapshot["care_effective_discharge_floor_soc"])
+                                     if snapshot.get("care_policy_valid") is True and
+                                     isinstance(snapshot.get("care_effective_discharge_floor_soc"), (int, float))
+                                     and not isinstance(snapshot.get("care_effective_discharge_floor_soc"), bool)
+                                     else None),
+                "source": "distinct_completed_controller_cycles",
+                "physical_effect_confirmed": False,
+            }
+            now = time.time()
+            title = "Battery Care: Stufenwechsel"
+            detail = (f"Wirksame Policy-Untergrenze {previous_floor:g} → {floor:g} % (keine Hardwarebestätigung)"
+                      if before == stage and floor is not None and previous_floor is not None else
+                      f"{stage_label(before)} → {stage_label(stage)} (Regleranforderung, nicht Gerätewirkung)")
+            cur = conn.execute("""INSERT INTO operational_events (
+                              event_type,severity,title,detail,started_at,ended_at,status,dedupe_key,detail_json)
+                              VALUES (?,?,?,?,?,?,?,?,?)""",
+                              ("battery_care_stage_transition", "info", title, detail,
+                               now, now, "resolved", "", json.dumps(values, ensure_ascii=False)))
+            conn.execute("""INSERT INTO battery_care_stage_cursor(id,stage,last_event_id,changed_at,floor_soc)
+                            VALUES(1,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
+                            stage=excluded.stage,last_event_id=excluded.last_event_id,
+                            changed_at=excluded.changed_at,floor_soc=excluded.floor_soc""",
+                         (stage, int(cur.lastrowid), now, floor))
+
     def _observe(self, conn: sqlite3.Connection, s: Dict[str, Any]) -> None:
+        self._observe_battery_care_incident(conn, s)
+        self._observe_battery_care_stage(conn, s)
         mode = str(s.get("current_mode") or "")
         old_mode = self._previous.get("mode")
         self._previous["mode"] = mode
