@@ -884,6 +884,7 @@ S3_OPTION_HELP = (
 # Previously cryptic one-line UI descriptions: explain observable purpose,
 # relationship to the controlling mode and absence of any implicit commands.
 GENERAL_SHORT_HELP_VNEXT = MappingProxyType({
+    "SECOND_BATTERY_DISPLAY_MAX_SOC_PERCENT": "Legt die obere SOC-Grenze ausschließlich für die Primärspeicher-Anzeige und die theoretisch verbleibende Energie fest. Sie verändert weder BMS-Schutzschwellen noch Lade-/Entladebefehle oder die Regelstrategie.",
     "DEVICE_ID": "Kennung der Zendure-Headunit, für die ZEC MQTT-Telemetrie empfängt und Leistungsbefehle erstellt. Sie muss zu den Topics des tatsächlich gesteuerten Geräts passen und schaltet keine zusätzliche Headunit frei.",
     "MAX_CHARGE_POWER_W": "Globale Obergrenze für Zendure-Ladung aus allen zulässigen Regelpfaden. AUTO, Harvest und feste Ladeanforderungen dürfen sie nicht überschreiten; sie erzwingt keine Ladung und ersetzt keine Gerätelimits.",
     "MAX_DISCHARGE_POWER_W": "Globale Obergrenze für die Entladeleistung von Zendure. Sie begrenzt AUTO, Nacht- und manuelle Entladung, unabhängig von der gewünschten Netzleistung; der tatsächliche Akku- und SOC-Schutz hat weiterhin Vorrang.",

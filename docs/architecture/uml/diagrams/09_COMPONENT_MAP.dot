@@ -40,16 +40,19 @@ digraph Components {
   state -> status;
   cmd -> careEvents [style=dashed, label="Notlade-Mismatch: synchroner Commit\nkurzer Timeout, Fehlerstatus + Retry"];
   state -> careEvents [style=dashed, label="asynchrone Recovery: frische SOC-Proben"];
+  reserveJournal [label="Schutzreserve-Journal (SQLite)\nepisoden-entprelltes Ereignis\nAnforderung ≠ gemessene 0-W-Wirkung"];
+  state -> reserveJournal [style=dashed, label="abgeschlossene Care-Zyklen + Readback + Istleistung"];
+  reserveJournal -> status [label="Anforderung / Bestätigung / Ende"];
   careEvents -> status [label="persistierte OPEN-Events"];
   meas -> graphui;
   meas -> fasta;
 
-  diag [shape=note, fillcolor="#f7f7f7", label="Diagnostik ≠ Reglerinput:\nprimary_usable_soc_percent bleibt in V17\nfür FULL/IDLE, High-SOC, Fast und Safety ohne Reglerwirkung."];
+  diag [shape=note, fillcolor="#f7f7f7", label="Diagnostik ≠ Reglerinput:\nprimary_usable_soc_percent bleibt in V18.0.1\nfür FULL/IDLE, High-SOC, Fast und Safety ohne Reglerwirkung."];
   rt [shape=note, fillcolor="#f7f7f7", label="Regelzyklus-Prinzip:\nkeine externen Netzwerk-/Geräte-I/O im Regelpfad;\nausnahmsweise bounded SQLite-Commit\nnur bei bestätigter Notlade-Nichtwirkung."];
   state -> diag [style=dashed, arrowhead=none];
   core -> rt [style=dashed, arrowhead=none];
 
-  uml_update_note [shape=note, style="filled", fillcolor="#eef5ff", fontcolor="#162e4d", fontsize=9, label="Live-Status-Poll 1000 ms; Minigraph-Poll 3000 ms; Reglerzyklus unverändert. Quelle/Alter unabhängig.\nSourceabgleich: V17.1.3; keine Feldwirkungsbehauptung"];
+  uml_update_note [shape=note, style="filled", fillcolor="#eef5ff", fontcolor="#162e4d", fontsize=9, label="Live-Status-Poll 1000 ms; Minigraph-Poll 3000 ms; Reglerzyklus unverändert. Quelle/Alter unabhängig.\nQuellbezug: V18.0.1 Kandidat; physische Wirkung nur episodenspezifisch"];
 
-  cp26_care_09 [shape=note, style="filled", fillcolor="#eaf4ec", fontcolor="#193b2d", fontsize=9, label="BATTERY CARE · CP26 (Entwicklungs-As-built)\nCare Module: pure Policy, PV-Arbiter, Grid-Beobachtung, persistente Episoden. OperationalEventJournal: mehrere Notladevorfälle und bestätigte Stage-Transition nach 2 abgeschlossenen Zyklen; SOC-Graph read-only.\nKeine physische Wirksamkeits- oder Releasefreigabe"];
+  cp26_care_09 [shape=note, style="filled", fillcolor="#eaf4ec", fontcolor="#193b2d", fontsize=9, label="BATTERY CARE · V18.0.1 (Korrekturkandidat)\nCare Module: pure Policy, PV-Arbiter, Grid-Beobachtung, persistente Episoden. OperationalEventJournal: mehrere Notladevorfälle und bestätigte Stage-Transition nach 2 abgeschlossenen Zyklen; SOC-Graph read-only.\nReserve-Nullneutralisierung 2x real beobachtet; PV teilbelegt; Netzpflege/Notladung noch nicht evaluiert; kein Release-PASS"];
 }

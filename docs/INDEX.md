@@ -1,4 +1,17 @@
-**V18.0.0 / v18.0.0-20261027 – Installation zur kontrollierten Feldabnahme**
+# ZEC – Aktueller Architektur-/Historienindex V18.0.1
+
+**Aktueller Source-Release:** V18.0.1 / `v18.0.1-20261102`. Versionsgebundenes As-built und aktuelle Diagramme wurden gegen denselben Kandidaten-Sourcebaum geprüft. Technisches Paket und reale Pi-Feldabnahme sind getrennte Gates.
+
+- [Sourcegebundenes As-built V18.0.1](architecture/ZEC_V18_0_1_As_Built.md)
+- [V18.0.1 Release-Informationen](releases/v18.0.1/RELEASE_INFO_V18_0_1.md)
+- [V18.0.1 technische Hinweise](releases/v18.0.1/TECHNICAL_NOTES_V18_0_1.md)
+- [V18.0.1 UML-Atlas 22 Blätter](architecture/uml/INDEX.md) und [per-Diagramm-Review](architecture/uml/SOURCE_REVIEW_V18_0_1_20261102.md)
+- [Master-Backlog als Release-Snapshot](ZEC_Master_Backlog.md) – die Projektquelle 05 bleibt alleinige laufende Autorität.
+- [Entscheidungen](decisions/README.md) / [Historische Originale](history/README.md) / [Spezifikationen](specifications/README.md)
+
+---
+
+## Historischer Architektur-/Releaseindex V17.1.3 und ältere Provenienz
 
 # ZEC – Releasebezogener Architektur- und Historienindex
 

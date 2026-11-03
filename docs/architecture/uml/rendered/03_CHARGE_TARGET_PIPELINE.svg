@@ -9,7 +9,7 @@
 <g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 2006)">
 <title>G</title>
 <polygon fill="white" stroke="transparent" points="-4,4 -4,-2006 1401.81,-2006 1401.81,4 -4,4"/>
-<text text-anchor="middle" x="698.91" y="-1983.6" font-family="Times,serif" font-size="18.00">ZEC V17.1.3 — AUTO Charge Target Pipeline</text>
+<text text-anchor="middle" x="698.91" y="-1983.6" font-family="Times,serif" font-size="18.00">ZEC V18.0.1 — AUTO Charge Target Pipeline</text>
 <!-- start -->
 <g id="node1" class="node">
 <title>start</title>
@@ -508,7 +508,7 @@
 <polyline fill="none" stroke="black" points="577.81,-1973 577.81,-1967 "/>
 <polyline fill="none" stroke="black" points="583.81,-1967 577.81,-1967 "/>
 <text text-anchor="middle" x="354.81" y="-1957.8" font-family="Times,serif" font-size="9.00" fill="#162e4d">S3: nur opt&#45;in; saisonale strategische Anteile bleiben dem Export&#45;Capture&#45;Floor nachgeordnet.</text>
-<text text-anchor="middle" x="354.81" y="-1947.8" font-family="Times,serif" font-size="9.00" fill="#162e4d">Sourceabgleich: V17.1.3; keine Feldwirkungsbehauptung</text>
+<text text-anchor="middle" x="354.81" y="-1947.8" font-family="Times,serif" font-size="9.00" fill="#162e4d">Quellbezug: V18.0.1 Kandidat; physische Wirkung nur episodenspezifisch</text>
 </g>
 <!-- cp26_care_03 -->
 <g id="node34" class="node">
@@ -516,9 +516,9 @@
 <polygon fill="#eaf4ec" stroke="black" points="1391.81,-1974 601.81,-1974 601.81,-1936 1397.81,-1936 1397.81,-1968 1391.81,-1974"/>
 <polyline fill="none" stroke="black" points="1391.81,-1974 1391.81,-1968 "/>
 <polyline fill="none" stroke="black" points="1397.81,-1968 1391.81,-1968 "/>
-<text text-anchor="middle" x="999.81" y="-1962.8" font-family="Times,serif" font-size="9.00" fill="#193b2d">BATTERY CARE · CP26 (Entwicklungs&#45;As&#45;built)</text>
+<text text-anchor="middle" x="999.81" y="-1962.8" font-family="Times,serif" font-size="9.00" fill="#193b2d">BATTERY CARE · V18.0.1 (Korrekturkandidat)</text>
 <text text-anchor="middle" x="999.81" y="-1952.8" font-family="Times,serif" font-size="9.00" fill="#193b2d">Care&#45;PV ist ABSOLUTES Ziel inklusive bereits physischer Zendure&#45;Ladung, nicht B+Fast&#45;Overlay. Care&#45;Import&#45;Backoff; Netzpflege/Notladung mit separatem Powercap.</text>
-<text text-anchor="middle" x="999.81" y="-1942.8" font-family="Times,serif" font-size="9.00" fill="#193b2d">Keine physische Wirksamkeits&#45; oder Releasefreigabe</text>
+<text text-anchor="middle" x="999.81" y="-1942.8" font-family="Times,serif" font-size="9.00" fill="#193b2d">Reserve&#45;Nullneutralisierung 2x real beobachtet; PV teilbelegt; Netzpflege/Notladung noch nicht evaluiert; kein Release&#45;PASS</text>
 </g>
 </g>
 </svg>

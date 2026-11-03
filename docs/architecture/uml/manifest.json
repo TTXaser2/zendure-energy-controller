@@ -1,10 +1,10 @@
 {
   "schema": "ZEC_UML_ATLAS_V1",
-  "status": "DEVELOPMENT_AS_BUILT_NOT_RELEASE_APPROVED",
-  "review_gate": "DEVELOPMENT_REVIEW_PENDING",
-  "release": "V18.0.0",
-  "build_id": "v18.0.0-20261027",
-  "source_baseline_controller_sha256": "ba1a909d8247336bf248ecd5432f3bb96c4be10f679be4c0590c6eab6b0da31b",
+  "status": "AS_BUILT_RELEASE_APPROVED",
+  "review_gate": "MANUAL_SOURCE_REVIEW_PASS",
+  "release": "V18.0.1",
+  "build_id": "v18.0.1-20261102",
+  "source_baseline_controller_sha256": "6813d7e865c4604408b1a0a7a4c965f9e45575cac3e3cfe307bf32ca7ec3b930",
   "historical_origin": {
     "atlas_version": "V0.4",
     "release": "V17.0.2",
@@ -16,7 +16,7 @@
       "id": "01",
       "name": "01_CONTROLLER_STATE_MACHINE",
       "status": "UPDATED",
-      "reason": "CP26 Battery Care: Policy: Care R schützt AUTO/NIGHT vor Entladung; STOP bleibt absolut. Stufe 1 PV, Stufe 2 Netzpflege, Stufe 3 Notladung bis Episode-R. Kein neuer current_mode.",
+      "reason": "CP26 Battery Care: Policy: Care R schützt AUTO/NIGHT vor Entladung; STOP bleibt absolut. Stufe 1 PV, Stufe 2 Netzpflege, Stufe 3 Notladung bis Episode-R. Kein neuer current_mode.; V18.0.1: labels/notes reconciled with current release candidate and field-evidence limits.",
       "source_symbols": [
         "controller_logic.py::run_once",
         "state.py::ControllerState",
@@ -28,16 +28,16 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/01_CONTROLLER_STATE_MACHINE.svg",
       "rendered_png": "rendered/01_CONTROLLER_STATE_MACHINE.png",
-      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
-      "source_sha256": "8906d03849da367165f16e8221b0f66816188a082e4f99a1efa8dd1ca849ba96",
-      "rendered_svg_sha256": "642311fbe8a4bd28b3261131df0ca0a5b4b2d3bca173b67655786c99ae180695",
-      "rendered_png_sha256": "c38914670d8213490a7c095f6bcfede1d59db13ab385e0802b2393053bfad858"
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "27f365a982139f258e7f88ffc2a7c4a59143be9f4b10884080360657fc04181f",
+      "rendered_svg_sha256": "58b89c46322354f6eaa729fb009473b3f4934041dd3483a3c619bb29d7db3a54",
+      "rendered_png_sha256": "fcc6a46c666cd4708158b1c4f6c88ef078e19cdc101bc44f6db0a9349c2d775a"
     },
     {
       "id": "02",
       "name": "02_CONTROL_CYCLE_ACTIVITY",
       "status": "UPDATED",
-      "reason": "CP26 Battery Care: Care-Anforderung nur nach Safety-/Messfreigaben durch bestehenden Command-Owner. Abgeschlossener Zyklus markiert Stage-Provenienz; keine Beobachtungsabkürzung.",
+      "reason": "CP26 Battery Care: Care-Anforderung nur nach Safety-/Messfreigaben durch bestehenden Command-Owner. Abgeschlossener Zyklus markiert Stage-Provenienz; keine Beobachtungsabkürzung.; V18.0.1: labels/notes reconciled with current release candidate and field-evidence limits.",
       "source_symbols": [
         "controller_logic.py::run_once",
         "controller_logic.py::handle_night_mode",
@@ -48,16 +48,16 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/02_CONTROL_CYCLE_ACTIVITY.svg",
       "rendered_png": "rendered/02_CONTROL_CYCLE_ACTIVITY.png",
-      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
-      "source_sha256": "9f2b4b3340352fab957392b90f24916aa2b71507a4b7b74aa88358cfc6396c0e",
-      "rendered_svg_sha256": "e338bcd40d643378eb46df9e14d98eebd598cad7dae0233193965c5cd367b557",
-      "rendered_png_sha256": "62538befe9faf01972a0e638d4d900f281dfa4b77a04b5f81212840af19b09d7"
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "4e0d4f8360bad129d61ac51d2e9d21824a05c6ec04cba714a0c4d736ec80d925",
+      "rendered_svg_sha256": "cebc2e6e268c0b20132e661880055cd6998deef323ccb841a007eecb58ef4a00",
+      "rendered_png_sha256": "87f8f0f9f466703e0e6deec9b1758c0f20b1c6ad2a0f9224a066a697f22da04c"
     },
     {
       "id": "03",
       "name": "03_CHARGE_TARGET_PIPELINE",
       "status": "UPDATED",
-      "reason": "CP26 Battery Care: Care-PV ist ABSOLUTES Ziel inklusive bereits physischer Zendure-Ladung, nicht B+Fast-Overlay. Care-Import-Backoff; Netzpflege/Notladung mit separatem Powercap.",
+      "reason": "CP26 Battery Care: Care-PV ist ABSOLUTES Ziel inklusive bereits physischer Zendure-Ladung, nicht B+Fast-Overlay. Care-Import-Backoff; Netzpflege/Notladung mit separatem Powercap.; V18.0.1: labels/notes reconciled with current release candidate and field-evidence limits.",
       "source_symbols": [
         "controller_logic.py::_harvest_time_profile",
         "controller_logic.py::_s3_season_policy",
@@ -70,16 +70,16 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/03_CHARGE_TARGET_PIPELINE.svg",
       "rendered_png": "rendered/03_CHARGE_TARGET_PIPELINE.png",
-      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
-      "source_sha256": "04b641ecddadaac82e39601a07d019e6c259fa0df28cdb805087bad9deafb630",
-      "rendered_svg_sha256": "d7d7a3bd252e667ef1f5fe94fa8c683d0afc3c681eb9745a149819b3a9573695",
-      "rendered_png_sha256": "32188887130b93fba82ded6e3cbab55681158b762f7c3f5785b44311b89690e5"
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "26028c948d433b743b18484d356f1e9013b103dd923d9006ed1a98ccf97d98b6",
+      "rendered_svg_sha256": "ae65358f84bf1a9d46349875090702ed05a47c282a040903896085a0dcba6069",
+      "rendered_png_sha256": "3e6447a363a50b90552024978d6f995eb9ababede91ffea6f6d26932a7b170aa"
     },
     {
       "id": "04",
       "name": "04_HARVEST_STATE_MACHINE",
-      "status": "REVIEWED_UNCHANGED",
-      "reason": "CP26: Diagrammzweig außerhalb direkter Battery-Care-Policy-/Event-/Statusänderungen. Ursprüngliches V17.1.3-Review bleibt nur historische Basis; CP26-Releasefreigabe ausstehend.",
+      "status": "UPDATED",
+      "reason": "CP26: Diagrammzweig außerhalb direkter Battery-Care-Policy-/Event-/Statusänderungen. Ursprüngliches V17.1.3-Review bleibt nur historische Basis; CP26-Releasefreigabe ausstehend.; V18.0.1: labels/notes reconciled with current release candidate and field-evidence limits.",
       "source_symbols": [
         "controller_logic.py::_harvest_time_profile",
         "controller_logic.py::update_rest_surplus_harvest_state"
@@ -89,16 +89,16 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/04_HARVEST_STATE_MACHINE.svg",
       "rendered_png": "rendered/04_HARVEST_STATE_MACHINE.png",
-      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
-      "source_sha256": "82ecbaf77d6ea0a375f5d4aec63034228f9118294be94a96d51537ce29d4670c",
-      "rendered_svg_sha256": "3f9df1b42768a6ddb3f03989fcc7d80d98f07ac443850bdea0d709ef9aaec624",
-      "rendered_png_sha256": "a39c6d67f2c4af265f7bed6f6ae873f0dfac2c568134247c11abeadf5dcbb823"
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "39a0e93b4bbafc7da9e6e37c1d8e4951bf7e70323eedaf36314c4df62b4a03a8",
+      "rendered_svg_sha256": "4111841c9daa618a9f19484f61396a878c8c6ff8ed6d2e11205cdb1c41eaa9b1",
+      "rendered_png_sha256": "52dea7cea5d50f88e44b1c8d2d8287a2d8a62cb3985d27771a8376415681121f"
     },
     {
       "id": "05",
       "name": "05_FAST_CAPTURE_STATE_MACHINE",
       "status": "UPDATED",
-      "reason": "CP26 Battery Care: Battery-Care-PV-Absolutziel und Fast-Capture-Overlay dürfen denselben Export NICHT doppelt allokieren. Normaler Baselinepfad nach Care-Exit erhalten.",
+      "reason": "CP26 Battery Care: Battery-Care-PV-Absolutziel und Fast-Capture-Overlay dürfen denselben Export NICHT doppelt allokieren. Normaler Baselinepfad nach Care-Exit erhalten.; V18.0.1: labels/notes reconciled with current release candidate and field-evidence limits.",
       "source_symbols": [
         "controller_logic.py::handle_charge",
         "state.py::ControllerState",
@@ -109,16 +109,16 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/05_FAST_CAPTURE_STATE_MACHINE.svg",
       "rendered_png": "rendered/05_FAST_CAPTURE_STATE_MACHINE.png",
-      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
-      "source_sha256": "4fa04ebcf7974a97207cfbca7e4860c3016119a3e8b4072db654f6fbbfa9d344",
-      "rendered_svg_sha256": "b8a935ecee8957581d4aa6e1a35eff8ada944da76cac9052240ebaad7ad94dd6",
-      "rendered_png_sha256": "b5834981a9543bcaeac03f6f90614df8795f213a9612c9138619d02f834c4ead"
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "2a5aef1e664dbe7148f4ff38202b98e7f55ec6d6b21f0b1ab220ec3e398ab6c8",
+      "rendered_svg_sha256": "a066109a010bea45629ad6d65d15efdf1a4eac5e83f0a5330a490e42b40ad8e4",
+      "rendered_png_sha256": "0301a4508cf18f0dba404bf66c1c8f992e17fd581dcb8ef852cee4d5c1a8590d"
     },
     {
       "id": "06",
       "name": "06_CROSS_CHARGE_ACTIVITY",
       "status": "UPDATED",
-      "reason": "CP26 Battery Care: Einzige begrenzte Ausnahme: bestaetigte Care-NOTLADUNG umgeht wirtschaftliches Cross-Charge-Veto, nie Hardware-, BMS-, STOP-, SmartMode- oder Command-Safety.",
+      "reason": "CP26 Battery Care: Einzige begrenzte Ausnahme: bestaetigte Care-NOTLADUNG umgeht wirtschaftliches Cross-Charge-Veto, nie Hardware-, BMS-, STOP-, SmartMode- oder Command-Safety.; V18.0.1: labels/notes reconciled with current release candidate and field-evidence limits.",
       "source_symbols": [
         "controller_logic.py::handle_charge",
         "controller_logic.py::_apply_symmetric_cross_charge_limit",
@@ -129,10 +129,10 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/06_CROSS_CHARGE_ACTIVITY.svg",
       "rendered_png": "rendered/06_CROSS_CHARGE_ACTIVITY.png",
-      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
-      "source_sha256": "ecbcf70c70ae0f33b386203f2edbd1362efddf0800f743ddd56ef6795c6e8dca",
-      "rendered_svg_sha256": "625cf499550075fa0696cf87dea5dc232a8cf2745c873be57da844d73c7e083b",
-      "rendered_png_sha256": "b7d221d38c81042d0a8e7fd0fb54214fff56a2ae257b1f59d81f82dfac46e59c"
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "d8a0e735044940b00246d7461c0898a22912b4ce8e01cf830a0b550f3f9ca40b",
+      "rendered_svg_sha256": "07281668c359fc2a96d6b439898b791802a22665f25ab0657b7b1d8052101353",
+      "rendered_png_sha256": "28096b7f2882a5e62b5a04e82a5a2afbbb1e6cd6bc9cfd8cfdc615d23c012861"
     },
     {
       "id": "07",
@@ -148,7 +148,7 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/07_COMMAND_LIFECYCLE_SEQUENCE.svg",
       "rendered_png": "rendered/07_COMMAND_LIFECYCLE_SEQUENCE.png",
-      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
       "source_sha256": "26df4bd752b482e9e880e9fcebb90ec61799d86f6853c9d07cec38f219a45cd7",
       "rendered_svg_sha256": "21e9e33d3d72090f897ecb788d7ff3a74ee4573c0c4a9b25f2d82dc01af6f939",
       "rendered_png_sha256": "83aee7f0097d58f694ca2963c1f83f901d64e9ed1e8ae9d0fa730bb39695eb04"
@@ -157,7 +157,7 @@
       "id": "08",
       "name": "08_COMMAND_EFFECT_RECOVERY_STATE",
       "status": "UPDATED",
-      "reason": "CP26 Battery Care: Care-Notlade-Command-Mismatch: synchroner SQLite-Commit pro eindeutiger Failure-ID und ursprünglicher Reserve R; parallele offene Vorfälle unabhängig recoverbar.",
+      "reason": "CP26 Battery Care: Care-Notlade-Command-Mismatch: synchroner SQLite-Commit pro eindeutiger Failure-ID und ursprünglicher Reserve R; parallele offene Vorfälle unabhängig recoverbar.; V18.0.1: labels/notes reconciled with current release candidate and field-evidence limits.",
       "source_symbols": [
         "command_lifecycle.py",
         "controller_logic.py::run_once",
@@ -170,16 +170,16 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/08_COMMAND_EFFECT_RECOVERY_STATE.svg",
       "rendered_png": "rendered/08_COMMAND_EFFECT_RECOVERY_STATE.png",
-      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
-      "source_sha256": "d77b979eb9142efcb79c978413d9967a9e7d3cf99ff4c6c921588bd40aab5cdb",
-      "rendered_svg_sha256": "58fbb8a1e04033ca27a435dceb55be46e26fe4822afd2ea752fc6f54267aadbb",
-      "rendered_png_sha256": "211840baa6e63afcbefb645119cfa53b17f5ed22f22a68d5aefec5fdfc2a0aef"
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "fd9a87f15b3b2bca27e7bf0a7288e17b490c8586541ca3d9f9adb02523ac6451",
+      "rendered_svg_sha256": "dc28e6ac9c2ebcef12f19835fadae8b7c344cd7d9695abefea7f69fec397c39b",
+      "rendered_png_sha256": "1713df677e1e95d5f5b854603eca179fe01076fca36c7086e4e3bfa8343ed79e"
     },
     {
       "id": "09",
       "name": "09_COMPONENT_MAP",
       "status": "UPDATED",
-      "reason": "CP26 Battery Care: Care Module: pure Policy, PV-Arbiter, Grid-Beobachtung, persistente Episoden. OperationalEventJournal: mehrere Notladevorfälle und bestätigte Stage-Transition nach 2 abgeschlossenen Zyklen; SOC-Graph read-only.",
+      "reason": "CP26 Battery Care: Care Module: pure Policy, PV-Arbiter, Grid-Beobachtung, persistente Episoden. OperationalEventJournal: mehrere Notladevorfälle und bestätigte Stage-Transition nach 2 abgeschlossenen Zyklen; SOC-Graph read-only.; V18.0.1: labels/notes reconciled with current release candidate and field-evidence limits.",
       "source_symbols": [
         "controller_logic.py",
         "web_ui.py::build_grid_mini_payload",
@@ -190,23 +190,24 @@
         "battery_care_policy.py::decide_care",
         "battery_care_episode_store.py::CareEpisodeStore",
         "operational_events.py::_observe_battery_care_stage",
-        "battery_care_graph_history.py::care_day_lines"
+        "battery_care_graph_history.py::care_day_lines",
+        "operational_events.py::_observe_care_reserve_reached"
       ],
       "source": "diagrams/09_COMPONENT_MAP.dot",
       "secondary_plantuml": "../../history/uml/v0.4/09_COMPONENT_MAP.puml",
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/09_COMPONENT_MAP.svg",
       "rendered_png": "rendered/09_COMPONENT_MAP.png",
-      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
-      "source_sha256": "fa4f4b465e1ec44ee74b0257d405045f897ffc766a1acbf152a01e2814ffbca4",
-      "rendered_svg_sha256": "5eeb5befbf09deb80f7eeaeb88084f0cfc5354adace4ec1560d652cf7e6c01e4",
-      "rendered_png_sha256": "890163cd08fbc84b4e31ddbe114def60f4d9bd2932d40c3953274dc18fc52a1d"
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "274e96770d536c6b7d968888b7714f0c2f06f79e3be781929f999cb9a96965ac",
+      "rendered_svg_sha256": "75a66a30589f3e72f0e8dffbbc6425507e7af059d2008ac2c50d354748b9dcc0",
+      "rendered_png_sha256": "0f1ef5476165018791e7943ee6f279522a4dfc99ad5df4cb4d2eae1a64400cd5"
     },
     {
       "id": "10",
       "name": "10_DISCHARGE_NIGHT_MANUAL_PATHS",
       "status": "UPDATED",
-      "reason": "CP26 Battery Care: Care NIGHT-Untergrenze = max(MIN_SOC,R,ggf. höhere Nachtreserve). STOP hat Vorrang. Export-Laden bleibt bei Reservestop erlaubt.",
+      "reason": "CP26 Battery Care: Care NIGHT-Untergrenze = max(MIN_SOC,R,ggf. höhere Nachtreserve). STOP hat Vorrang. Export-Laden bleibt bei Reservestop erlaubt.; V18.0.1: labels/notes reconciled with current release candidate and field-evidence limits.",
       "source_symbols": [
         "controller_logic.py::run_once",
         "controller_logic.py::handle_discharge",
@@ -217,10 +218,10 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/10_DISCHARGE_NIGHT_MANUAL_PATHS.svg",
       "rendered_png": "rendered/10_DISCHARGE_NIGHT_MANUAL_PATHS.png",
-      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
-      "source_sha256": "7ee2bbd0e613b299f8375a6b660087b9781583169187d25c46d0dc249d9cd161",
-      "rendered_svg_sha256": "52973bfb24809b543393befcbb477d2ea9f795383d6ff5559a9341e3bab0d8b2",
-      "rendered_png_sha256": "b8c0cf6e5d0a94c1db02c94ecfb172683224c16706bb9c76170c4f0e9e439013"
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "c229936813bc08a7867046d52ef11834e6d73a7ab7865b85fc68d1f70567cae1",
+      "rendered_svg_sha256": "a24ba4b1e3f4ddf3e499bc9b6b83aa6f717eba7a865026742ca45edaf4d35225",
+      "rendered_png_sha256": "d5c86b70766bc74ea5b609dbef8b147b9948239f78fd5d4780a8f3449e3b2a36"
     },
     {
       "id": "11",
@@ -235,7 +236,7 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/11_AUTO_GRID_EXPORT_DETAIL.svg",
       "rendered_png": "rendered/11_AUTO_GRID_EXPORT_DETAIL.png",
-      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
       "source_sha256": "982cd07b9ef6285cffc353a09c429d4d4d5a7e7ec2689577df81b5df229a3324",
       "rendered_svg_sha256": "99e1b89f81032bd5ff9f240131900c5476be15a59cf3bf5fa2fe956acaf25037",
       "rendered_png_sha256": "f0cd9137e23bd6e2b28488e961cc520400591e60b58317f4261cdbc0e3481cd3"
@@ -253,7 +254,7 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/12_AUTO_GRID_IMPORT_DETAIL.svg",
       "rendered_png": "rendered/12_AUTO_GRID_IMPORT_DETAIL.png",
-      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
       "source_sha256": "4e1ce1cc42bc9dd93a19785d8ea20a4d0ecfc447638789aa40c58610bd7f6e5d",
       "rendered_svg_sha256": "cae645b2b5951d3168b428f66e52e9f2a448cfc013ee742573fe92473aec771d",
       "rendered_png_sha256": "fe85edff3d08c208d44df790f589056c492fe6375ba623d471ad4517f931e138"
@@ -261,8 +262,8 @@
     {
       "id": "13",
       "name": "13_FULL_OR_IDLE_DEEP_DIVE",
-      "status": "REVIEWED_UNCHANGED",
-      "reason": "CP26: Diagrammzweig außerhalb direkter Battery-Care-Policy-/Event-/Statusänderungen. Ursprüngliches V17.1.3-Review bleibt nur historische Basis; CP26-Releasefreigabe ausstehend.",
+      "status": "UPDATED",
+      "reason": "CP26: Diagrammzweig außerhalb direkter Battery-Care-Policy-/Event-/Statusänderungen. Ursprüngliches V17.1.3-Review bleibt nur historische Basis; CP26-Releasefreigabe ausstehend.; V18.0.1: labels/notes reconciled with current release candidate and field-evidence limits.",
       "source_symbols": [
         "controller_logic.py::_harvest_time_profile",
         "controller_logic.py::handle_charge"
@@ -272,16 +273,16 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/13_FULL_OR_IDLE_DEEP_DIVE.svg",
       "rendered_png": "rendered/13_FULL_OR_IDLE_DEEP_DIVE.png",
-      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
-      "source_sha256": "3485557412ee7b804902ea9c84b59007abd704afc5cefb9f542391e332f91e8e",
-      "rendered_svg_sha256": "521a40aac39ada410c4ef3bb03ce092c39ff14c5f7f2de26f90bf828084637c9",
-      "rendered_png_sha256": "39718058fc7224c24548b8fef3792f438fd1861f25872e24382b1b847ba6e2da"
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "7adf2f15a71773a099f9158865c4d2b534c5cad1c0aafeba4708d08a7b239d7f",
+      "rendered_svg_sha256": "4d1ee593015390b9bddbfe1912731891e3c0078b2e0ba07a85925f870d1d9b63",
+      "rendered_png_sha256": "ac22b4556ab3a76d05990094c21985b13758eef6974d890dae105bc1d5b876e2"
     },
     {
       "id": "14",
       "name": "14_NEAR_LIMIT_POWER_BALANCE",
-      "status": "REVIEWED_UNCHANGED",
-      "reason": "CP26: Diagrammzweig außerhalb direkter Battery-Care-Policy-/Event-/Statusänderungen. Ursprüngliches V17.1.3-Review bleibt nur historische Basis; CP26-Releasefreigabe ausstehend.",
+      "status": "UPDATED",
+      "reason": "CP26: Diagrammzweig außerhalb direkter Battery-Care-Policy-/Event-/Statusänderungen. Ursprüngliches V17.1.3-Review bleibt nur historische Basis; CP26-Releasefreigabe ausstehend.; V18.0.1: labels/notes reconciled with current release candidate and field-evidence limits.",
       "source_symbols": [
         "controller_logic.py::handle_charge",
         "controller_logic.py::_s3_season_policy"
@@ -291,16 +292,16 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/14_NEAR_LIMIT_POWER_BALANCE.svg",
       "rendered_png": "rendered/14_NEAR_LIMIT_POWER_BALANCE.png",
-      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
-      "source_sha256": "de0e5e56bf8a0385a48f19132e4a995d825ef9d0c09e2c3fde2f221b06c07a82",
-      "rendered_svg_sha256": "983b3da464e06a1f11734442f5981782cf7d1d5edcf1f4e5fa09b451a019d7db",
-      "rendered_png_sha256": "7203b102afd53c894dd4a33a1876e3a50637d0087439fe54453fd5c40562fb87"
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "a9704b26c7454eab9c4050caf318f56ba29ed28338df30ab87515ee128e3dc77",
+      "rendered_svg_sha256": "828d7e0be5ea901eb1bab63415171e35279cc4eb48e3b87667c1563f5c708ac3",
+      "rendered_png_sha256": "8ace5fdc3c17615e747ca3f6444ee54bf20dc25110707230bd83828a6566bd2c"
     },
     {
       "id": "15",
       "name": "15_PRIORITY_OVERRIDE_LAYERS",
       "status": "UPDATED",
-      "reason": "CP26 Battery Care: Priorität: STOP/Safety vor Care. PV-Umlenkung vor moderater Netzpflege; Notladung mit eng begrenzter wirtschaftlicher Cross-Charge-Ausnahme. Einheitlicher Publisher.",
+      "reason": "CP26 Battery Care: Priorität: STOP/Safety vor Care. PV-Umlenkung vor moderater Netzpflege; Notladung mit eng begrenzter wirtschaftlicher Cross-Charge-Ausnahme. Einheitlicher Publisher.; V18.0.1: labels/notes reconciled with current release candidate and field-evidence limits.",
       "source_symbols": [
         "controller_logic.py::run_once",
         "controller_logic.py::handle_charge",
@@ -312,16 +313,16 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/15_PRIORITY_OVERRIDE_LAYERS.svg",
       "rendered_png": "rendered/15_PRIORITY_OVERRIDE_LAYERS.png",
-      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
-      "source_sha256": "d9f09660e55d3971fef7b35f73e55e79aab5efb7bc8dd5ee5de3d7ee5bdb1eb2",
-      "rendered_svg_sha256": "bc08941ae2e432b181664237b88caadf9bb3b9a1da89cec4990d79163b6fc98d",
-      "rendered_png_sha256": "dd7a758ae72f16b92b0761b72194a1c7e769336d3c52e5c2b0f713723415b9d8"
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "00b2f82079ac8be3f6626602610c3c374d5b5abab86e702bfa769ab5cd0bc145",
+      "rendered_svg_sha256": "49e167619ff27f5724463c698b3d4ac3f0472b9e5c7bcfb7056ac9216bb9d1a9",
+      "rendered_png_sha256": "eb7b3c7f3fe7c11f45c69dad7fe3596493ae5b85728b3ee497a622226159af1d"
     },
     {
       "id": "16",
       "name": "16_TIMING_HYSTERESIS",
       "status": "UPDATED",
-      "reason": "CP26 Battery Care: Persistierte Care-Stufenmarker erst nach ZWEI unterschiedlichen abgeschlossenen Controllerzyklen. Ein einzelnes Statuspoll/SOC-Rauschen erzeugt kein Ereignis.",
+      "reason": "CP26 Battery Care: Persistierte Care-Stufenmarker erst nach ZWEI unterschiedlichen abgeschlossenen Controllerzyklen. Ein einzelnes Statuspoll/SOC-Rauschen erzeugt kein Ereignis.; V18.0.1: labels/notes reconciled with current release candidate and field-evidence limits.",
       "source_symbols": [
         "controller_logic.py::_harvest_time_profile",
         "controller_logic.py::_s3_season_policy",
@@ -333,10 +334,10 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/16_TIMING_HYSTERESIS.svg",
       "rendered_png": "rendered/16_TIMING_HYSTERESIS.png",
-      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
-      "source_sha256": "cea50618170230e2e49d4c16e3b1ea4bfca3a741a06556bc8e9dd954da66e8a0",
-      "rendered_svg_sha256": "d50d136eef32ce6aa0353be506b68f6c58dad3bcc33f41919194655769c086da",
-      "rendered_png_sha256": "5133ca02feec0f9b6ecc9e9aee93d43f83fc3739e9917be02d57ff8a00443db9"
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "8f495fa39576f6a7bf49ea54c5fee6100b919e0afede00fe284efe10277bc4fc",
+      "rendered_svg_sha256": "ff625ac70b00c27fc5fff1656dbf2767e2e1dd92bd57ef9ffb6bfb30d0719196",
+      "rendered_png_sha256": "1ff4e7944a933c2f171bf65fa0f8dbd524d02e8b0d449e16e465a731c82718b3"
     },
     {
       "id": "17",
@@ -351,7 +352,7 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/17_RULE_CYCLE_MICROSCOPE.svg",
       "rendered_png": "rendered/17_RULE_CYCLE_MICROSCOPE.png",
-      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
       "source_sha256": "e2725413f87698a74bd7d470e7744d3117ca0e3b1689db935a538fcd33ccf72e",
       "rendered_svg_sha256": "996d9768a339a44d99d52494ae59934fd86f356b85edc74ef0f8e4ea2cd6e408",
       "rendered_png_sha256": "66dfcb86e0b6d9cc65e27c1652ca1da8303f90c652b8ed57b5ae642376f74a34"
@@ -360,7 +361,7 @@
       "id": "18",
       "name": "18_REASON_LIMITER_PROVENANCE",
       "status": "UPDATED",
-      "reason": "CP26 Battery Care: Evidenztrennung: Care-Policy/Shadow != gewähltes Commandziel != readback != physische AC-Wirkung. Stage-Marker belegen Zyklen, Notladefehler separate bestätigte Mismatches.",
+      "reason": "CP26 Battery Care: Evidenztrennung: Care-Policy/Shadow != gewähltes Commandziel != readback != physische AC-Wirkung. Stage-Marker belegen Zyklen, Notladefehler separate bestätigte Mismatches.; V18.0.1: labels/notes reconciled with current release candidate and field-evidence limits.",
       "source_symbols": [
         "state.py::ControllerState",
         "controller_logic.py::_s3_season_policy",
@@ -372,16 +373,16 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/18_REASON_LIMITER_PROVENANCE.svg",
       "rendered_png": "rendered/18_REASON_LIMITER_PROVENANCE.png",
-      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
-      "source_sha256": "c22512e5781a0702d0a89220f85d3c678b5a36724911c5f1472c4cc89c6fd7f5",
-      "rendered_svg_sha256": "f663a956058a9e07f8309e48af280826416f6f2bbabe213107fe5f7ba9bf0651",
-      "rendered_png_sha256": "7ab718b9d56f59de91731f13b7f9ef129aecc04f298bebfc52c1d5a383f1c595"
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "99dca905d18fd96c9a8e3ec33d6ee118e4cc2c768445cc17eeb3bb2ff088f2ca",
+      "rendered_svg_sha256": "2b2f6d04847c96ecc0d8d699a5a80acea86ec9bdcaa2312b16bd814648149e7b",
+      "rendered_png_sha256": "496eb652333cea792894877020a32d89e7ef763a18a63da2014d25eff47e843c"
     },
     {
       "id": "19",
       "name": "19_HIGH_SOC_STRATEGIC_SHARE_TIME_PROFILE",
-      "status": "REVIEWED_UNCHANGED",
-      "reason": "CP26: Diagrammzweig außerhalb direkter Battery-Care-Policy-/Event-/Statusänderungen. Ursprüngliches V17.1.3-Review bleibt nur historische Basis; CP26-Releasefreigabe ausstehend.",
+      "status": "UPDATED",
+      "reason": "CP26: Diagrammzweig außerhalb direkter Battery-Care-Policy-/Event-/Statusänderungen. Ursprüngliches V17.1.3-Review bleibt nur historische Basis; CP26-Releasefreigabe ausstehend.; V18.0.1: labels/notes reconciled with current release candidate and field-evidence limits.",
       "source_symbols": [
         "controller_logic.py::_harvest_time_profile",
         "controller_logic.py::_s3_season_policy"
@@ -391,16 +392,16 @@
       "plantuml_validation": "SECONDARY_UNVERIFIED",
       "rendered_svg": "rendered/19_HIGH_SOC_STRATEGIC_SHARE_TIME_PROFILE.svg",
       "rendered_png": "rendered/19_HIGH_SOC_STRATEGIC_SHARE_TIME_PROFILE.png",
-      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
-      "source_sha256": "24980e984b7f76bd69c354e55f3e220bd47516ae330704e8e456d40d911a571f",
-      "rendered_svg_sha256": "f20b8bfaf2010d71a33ff3969c6f6d01743301150b2f228a601eecbb7144b33f",
-      "rendered_png_sha256": "91e5c1e960caafd1371bc848a4dfdce8e901fe9f5c62a6109506611d2ff21d6b"
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "7c361dd038b0a79babe5907ee3a572748d47626ed47d492b8c4c681383c9e0df",
+      "rendered_svg_sha256": "8d00b100526da3ac956ac61b5289d7bdfab5476184bd443673791e1a929a45c6",
+      "rendered_png_sha256": "f56c4352613881f260dd448238dcffdc61552517a1fac9b9d0201be134aaaa7d"
     },
     {
       "id": "20",
       "name": "20_S3_POLICY_OPT_IN",
-      "status": "REVIEWED_UNCHANGED",
-      "reason": "CP26: Diagrammzweig außerhalb direkter Battery-Care-Policy-/Event-/Statusänderungen. Ursprüngliches V17.1.3-Review bleibt nur historische Basis; CP26-Releasefreigabe ausstehend.",
+      "status": "UPDATED",
+      "reason": "CP26: Diagrammzweig außerhalb direkter Battery-Care-Policy-/Event-/Statusänderungen. Ursprüngliches V17.1.3-Review bleibt nur historische Basis; CP26-Releasefreigabe ausstehend.; V18.0.1: labels/notes reconciled with current release candidate and field-evidence limits.",
       "source_symbols": [
         "controller_logic.py::_s3_season_policy",
         "controller_logic.py::_s3_calendar_parallel"
@@ -410,16 +411,16 @@
       "plantuml_validation": "NOT_PRESENT",
       "rendered_svg": "rendered/20_S3_POLICY_OPT_IN.svg",
       "rendered_png": "rendered/20_S3_POLICY_OPT_IN.png",
-      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
-      "source_sha256": "845be4ea251c2a380b91a48da8770f109f79da7be8be7841de43072bb2b56329",
-      "rendered_svg_sha256": "3c6ead9f363ec4bdf5d1382ab798767a0fdb61d661017c6d8239fce01676e68f",
-      "rendered_png_sha256": "bf2839cbc152bc7fe38b2cc6028728676345237c004d87ac9ee8ef0a5695d071"
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "03962f2e3296dfcb4d2d3dfca7990532116ef824afc0e13908b22cca6ccce9e4",
+      "rendered_svg_sha256": "65bbacb3bc88956f34507103d7026d9731046cb5015291f411c726253a87c889",
+      "rendered_png_sha256": "ff648751c7ca6a2a149cc0a38c1c905aa485e923b5e3731fefe4b0beffd0b010"
     },
     {
       "id": "21",
       "name": "21_LIVE_STATUS_VS_CONTROL",
       "status": "UPDATED",
-      "reason": "CP26 Battery Care: Care-Status und historische Graph-Marker verwenden belegte abgeschlossene Reglerzyklen und persistierte Events; 1-s-Browserpoll ist KEIN 1-s-Physiksample.",
+      "reason": "CP26 Battery Care: Care-Status und historische Graph-Marker verwenden belegte abgeschlossene Reglerzyklen und persistierte Events; 1-s-Browserpoll ist KEIN 1-s-Physiksample.; V18.0.1: labels/notes reconciled with current release candidate and field-evidence limits.",
       "source_symbols": [
         "static/status_v2.js",
         "web_ui.py::build_grid_mini_payload",
@@ -432,16 +433,16 @@
       "plantuml_validation": "NOT_PRESENT",
       "rendered_svg": "rendered/21_LIVE_STATUS_VS_CONTROL.svg",
       "rendered_png": "rendered/21_LIVE_STATUS_VS_CONTROL.png",
-      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
-      "source_sha256": "6514cc949b864482ca02d1db8393ee30f7b65697a0bd8bf79a252b15b66ec41c",
-      "rendered_svg_sha256": "c37966ad49ef206d87a491aa72a2a6c383ac205cbb3d84ff5a5ea399b7a7fea4",
-      "rendered_png_sha256": "9ed573e50e1ea37188253a3a6ce49d052d23dae9565183d9be955c229d1db3cc"
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "1435ee37987552f0051d4838007702fe84db610f89944620f3100e2afbc97eff",
+      "rendered_svg_sha256": "81c9ea9e679dbd9b17ee9be81628bff0f94464604d69c12fb1c880ba7804f23c",
+      "rendered_png_sha256": "43608cf03afa9d4b7d2d59b874ea12967063e4b3d2385ec6aeb380d32eaa6367"
     },
     {
       "id": "22",
       "name": "22_GRID_STALE_EVENT",
-      "status": "REVIEWED_UNCHANGED",
-      "reason": "CP26: Diagrammzweig außerhalb direkter Battery-Care-Policy-/Event-/Statusänderungen. Ursprüngliches V17.1.3-Review bleibt nur historische Basis; CP26-Releasefreigabe ausstehend.",
+      "status": "UPDATED",
+      "reason": "CP26: Diagrammzweig außerhalb direkter Battery-Care-Policy-/Event-/Statusänderungen. Ursprüngliches V17.1.3-Review bleibt nur historische Basis; CP26-Releasefreigabe ausstehend.; V18.0.1: labels/notes reconciled with current release candidate and field-evidence limits.",
       "source_symbols": [
         "operational_events.py",
         "state.py"
@@ -451,10 +452,10 @@
       "plantuml_validation": "NOT_PRESENT",
       "rendered_svg": "rendered/22_GRID_STALE_EVENT.svg",
       "rendered_png": "rendered/22_GRID_STALE_EVENT.png",
-      "diagram_semantic_status": "DEVELOPMENT_SOURCE_REVIEW_PENDING",
-      "source_sha256": "7a1ff5e050201973d618e231c47a08fd282a474b51948f1f9619c9fd1616fa6c",
-      "rendered_svg_sha256": "a9342d817b4932b70e36a902fb140077b157cddb56040ce1bddd2fedddc9dc7d",
-      "rendered_png_sha256": "14ad323f7e075f6d8c866650bed0ee46a4e03a71795f9c6b17dc57290a7e8373"
+      "diagram_semantic_status": "SOURCE_REVIEW_PASS",
+      "source_sha256": "e5a7930fc776abce131b63469f3dfcbfad2e28cad73c2962fa1cb5df8d550780",
+      "rendered_svg_sha256": "5185c20661348593518144f107edcd9cf36e5015f1ab4b81bea9326588a81ec9",
+      "rendered_png_sha256": "062cfe2f7cc4c58882ef72610a60d60ffc64cf4644d689274577377b4206950f"
     }
   ],
   "dev_checkpoint": "CP26_DOC_UML_RECONCILIATION_20261027",

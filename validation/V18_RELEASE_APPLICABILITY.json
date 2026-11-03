@@ -1,6 +1,6 @@
 {
   "schema": "ZEC_V18_RELEASE_TEST_APPLICABILITY_V1",
-  "reason": "Historical version-specific / non-installable staging-contract assertions remain preserved and proven under CP42; not applicable to installable V18 root. New installer-specific smoke added.",
+  "reason": "Historical version-specific / non-installable staging-contract assertions remain preserved and proven under CP42; not applicable to installable V18 root. New installer-specific smoke added. Additional two pre-V18.0.0 installable-only failures reconciled: prior staging-only assertions require BLOCKED status, original installable V18 release has validated PASS; preserved as historical source tests.",
   "excluded": [
     {
       "source": "test_batcare_cp36_test_context.CP36TestContextSafety.test_actual_context_is_exactly_known_v17_or_blocked_v18",
@@ -225,7 +225,15 @@
     {
       "source": "test_v18_draft_provenance.V18DraftProvenanceTests.test_intact_draft_passes_without_becoming_installable",
       "test": "test_intact_draft_passes_without_becoming_installable"
+    },
+    {
+      "source": "test_batcare_v18_candidate_contract.TestCandidateV18.test_identity_gate_still_blocks_unready_release",
+      "test": "test_identity_gate_still_blocks_unready_release"
+    },
+    {
+      "source": "test_batcare_v18_staging_freeze.V18StagingFreezeTests.test_build_evidence_never_claims_pass",
+      "test": "test_build_evidence_never_claims_pass"
     }
   ],
-  "excluded_count": 56
+  "excluded_count": 58
 }

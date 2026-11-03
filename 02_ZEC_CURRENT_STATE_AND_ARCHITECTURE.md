@@ -1,5 +1,52 @@
 # ZEC – Current State & Architecture
 
+## AKTUELL – 02.11.2026: V18.0.1 gebündelter Korrektur-Entwicklungsstand (NOCH KEIN RELEASE)
+
+**Quellstand/Arbeitsbasis:** V18.0.1-Kandidat Build `v18.0.1-20261102`, abgeleitet vom byteverifizierten produktiven Original V18.0.0 (`db1e33d7fbe247e602f86534edfbf22affddbc146a83318632e0b7e47d6f13c7`). Die produktive Hardware bleibt unverändert V18.0.0. Diese additive Quellenfortschreibung liefert keinen Installations-PASS oder geschlossenen Feldnachweis.
+
+**Fachlicher Scope und Befunde:** Der Nacht-/Care-Reservezustand kann nach behobenem SOC-Stale nur bei tatsächlicher SOC-/Grid-Frische, neutralem Readback und gültiger 0-W-Istleistung `SAFE_STATE → HOLD` wechseln, ohne Entladung freizugeben (`ZEC-BL-CTRL-SOC-STALE-RECOVERY-001`). Die sechs zuvor beschlossenen Next-Release-UX-/Diagnosepunkte sind im Entwicklungsbaum implementiert: Settings-API-validiertes Laden mit begrenztem Retry und verständlichem Fehlerzustand; lokalisierte TT.MM.-Saisoneingabe bei unverändertem MM-DD-Backend; rein darstellungsbezogene Primärspeicher-SOC-Obergrenze; Care-Shield + Karteninformation; dedupliziertes Reserve-Journal mit getrennter Auftrags-/Istbestätigung; Nachtreserve-Tooltip.
+
+Der PV-Care-Differentialtest bestätigt keinen eigenständigen Defekt, sodass seine Live-Arbitration unverändert bleibt (`ZEC-BL-BATCARE-PV-STABILITY-001` OPEN / DIFFERENTIAL_TESTED / FIELD_OBSERVATION_PENDING). Das externe 7D-Analyzer-Tool wurde mit begrenztem V4-Scan, Zeitselektion, Gültigkeitsprüfungen und V4-Fallback korrigiert (`ZEC-BL-DIAG-BATCARE-7D-TOOL-001` DEVELOPED / TOOL_REGRESSION_PASS / REAL_PI_REUSE_PENDING). Netzpflege und Notladung bleiben `NOT_EVALUABLE` ohne Naturtrigger.
+
+**QA- und Freigabegrenze:** Vollständiger Kandidaten-Regressionstest nach versionsspezifischer, offen inventarisierter Historien-Applikabilität: 1.153 Tests + 1.219 Subtests regulär und streng auf CP12 PASS; 85 historische V17-/V18.0.0-Assertions bleiben im Quellbaum erhalten, sind aber nicht auf den V18.0.1-Kandidaten anwendbar. 22 UML-Source-/Bildprüfungen versioniert und fachlich abgenommen; frische finale Release-QA, Build-Evidence/Manifest-/Installer-/Paketgates und tatsächliches Update/Feldnachweis stehen bis zu eigenen Belegen aus. `RELEASE_HOLD` Exit 78 gilt bis dahin.
+
+**No-Drop:** Ältere Einträge und IDs unverändert, alle zuvor vereinbarten Next-Release-MUST-Punkte behalten dieselbe ID; nur additive Status-/Provenienzfortschreibung. `05` bleibt Master-Ledger, `07` reale Feldautorität, der Snapshot unter `docs/` ist nicht selbst kanonisch.
+
+
+## NEUESTE ERGÄNZUNG – 02.11.2026: konkrete V18-Sourcepfad-Rekonstruktion
+
+Das gesicherte Release **V18.0.0 bleibt unverändert**. `controller_logic.py::run_once` Z.978–985 neutralisiert bei stale Nacht-SOC im SAFE_STATE. Nach neuer Frische, bei `night_active`, `care_soc<=care_floor`, neutralem Altkommando und `grid_power>=-DEADBAND_W` beendet der Branch Z.1047–1050 den Zyklus mit `add_limiter("BATTERY_CARE_RESERVE")` und `return`, **ohne vorherigen SAFE_STATE in HOLD zu überführen**. Das erklärt die natürliche Episode 02.11. 04:36:39–05:29:57 und das Ende genau um 05:30. V4 SOC-Freshness basiert in `measurement_v4.py` und `state.py` auf demselben `last_soc_update_epoch` wie `soc_is_fresh`, allerdings mit potenzieller zeitlicher Zyklusabweichung; rund 53 Minuten unveränderten Mode erklärt diese Abweichung allein nicht. Kontrollneutralität war real beobachtet, ein Hardware-Safety-Bruch nicht. **Korrekturscope erst nach ausdrücklicher Freigabe; Fail-closed, no redundant 0W, kein Nacht-Entlade-Reopen.** Die 18 Care-PV-Stufeneintritte/Exits korrelieren exakt mit CHARGE/HOLD; die 33 Inputlimit-Sends erfordern vor möglicher Optimierung einen isolierten Differentialtest. Analysewerkzeug separat, nicht Product DB. Siehe `05` und den neuen Investigation-Bericht; ältere datierte Kapitel sind historisch.
+
+
+## AKTUELL – 02.11.2026: V18 Battery-Care-7-Tage-Review (read-only; kein neuer As-built-Release)
+
+Der verifizierte produktive Source-Tree V18.0.0 ist unverändert. Neue Naturevidenz bestätigt die Reserve-Nullneutralisierung sowohl bei R17 am 29.10. (~6,1 s) als auch bei R20 am 30.10. (~9,2 s). Die PV-Priority-Episode 02.11. 07:58–08:06 zeigt 18 Care-Stage-Anforderungen mit gleichzeitig positiver AC-Ladung und 33 `input_limit`-Publishes; Kausalmehrertrag und oszillatorischer Controllerdefekt sind nicht belegt. N/E-Pfade weiterhin `NOT_EVALUABLE`. Die wirksame individuelle Konfiguration wurde laut Timeline ab 29.10. 23:47:50 auf R20/N15/E12 geändert; keine Defaultänderung.
+
+**Sourceabgleich:** `controller_logic.py::run_once` prüft für die aktive Nacht vor `handle_night_mode` die interne `soc_is_fresh`, basierend auf `state.last_soc_update_epoch`. Das V4-Feld `zendure_soc_fresh` ist nicht automatisch äquivalent. Die 53,36-minütige SAFE_STATE-Episode 02.11. ist deshalb ein offener Quellen-/Recovery-Abgleich (`ZEC-BL-CTRL-SOC-STALE-RECOVERY-001`), kein bereits bestätigter stuck latch. Die V18-PV-Policy (`battery_care_pv_allocation.py`) schützt frische, voneinander unabhängige Samples und Rate/Import; `battery_care_stage_events.py` loggt tatsächliche Control-Stage-Anforderungen, jedoch keine neue Hardwarewirkung. Das häufige PV-Stage-/Kommandovolumen bleibt unter `ZEC-BL-BATCARE-PV-STABILITY-001` ohne automatische Codeänderung zu prüfen. Der externe 7-Tage-Analyzer ist wegen leerer SQLite-Nutzspalten/900-Dateien-Auswahl gesondert unter `ZEC-BL-DIAG-BATCARE-7D-TOOL-001` erfasst. Belege im ergänzenden Source-Review und Master-Ledger `05`; Safetyvertrag `03` unverändert.
+
+
+
+## AKTUELL – 29.10.2026: V18 Battery-Care-Reserve – bestätigte reale Wirkung
+
+Die bestehende V18.0.0-Battery-Care-Policy ist in einer **natürlichen** Episode erfolgreich von der SOC-Schutzentscheidung zur gemessenen 0-W-Neutralisierung gelangt: 29.10.2026 um 04:50:29, R=17 %, Soll -697 W -> 0 W, Ist zu diesem Zeitpunkt noch -675 W; um 04:50:35 Ist=0 W mit `COMMAND_NEUTRALIZATION_CONFIRMED`. Bis 05:04:58 blieben SOC und Leistung bei 17 %/0 W. Die AUTO-/HOLD-Wechsel 04:40 und 04:45 waren bei SOC 20–18 % Teil des normalen Totband-/Sollwerttracking-Verhaltens; `HOLD` im AUTO-Kontext ist **nicht** generell physische 0 W. Die konkrete 0-W-Neutralisierung erfolgte erst bei der Schutzgrenze. Diagnose-Pipeline: historische Graph-V3-Messung, SOC-Validity/Power-Validity, Command-Episode/Lifecycle; **Betriebsjournal** besitzt dafür bislang keinen eigenen nutzerseitigen `Reserve erreicht`-Eintrag. Die bestehende Command-/Controller-Logik wird nicht verändert; das neue Journalereignis ist ein gesonderter nächster Release-Scope. Physischer Care-Netzpflege-/Notlade-/PV-Vorrang nicht belegt.
+
+B2 (`ZEC-BL-CTRL-USABLE-SOC-001`) bleibt **diagnostischer** Primärspeicher-usable-SOC ohne strategische Wirkung: aus gültigem Roh-SOC und frischem geräteseitigem Entladefloor abgeleitet, **kein** Lade-Headroom und kein Ersatz für Roh-SOC-/BMS-Grenzen. Die neue reine Primärspeicher-Anzeigeobergrenze im UI darf diese technische B2-Semantik ebenfalls nicht ändern. Weitere B2-Analyse benötigt konkrete kausal wirksame Allokationsfälle, sonst keine Codefreigabe. C1 separat. Historische As-built-Texte darunter sind in ihrem damaligen Versionskontext zu lesen.
+
+
+## AKTUELL – Architektur-/Releaseabgleich V18.0.0, 28.10.2026
+
+Die tatsächlich auf dem Pi installierte Version ist jetzt V18.0.0 (`v18.0.0-20261027`) nach erfolgreichem `SUPPORTED_UPDATE`; V17.1.3 ist die reale Vorgänger-/Rollback-Provenienz. Das byteverifizierte V18-Releasesourcearchiv (`db1e33d7fbe247e602f86534edfbf22affddbc146a83318632e0b7e47d6f13c7`) mit `docs/architecture/` ist aktuelle Implementierungsautorität. Battery Care ist in V18 als saisonale Zusatzpolicy innerhalb der vorhandenen Controller-/Command-/Safety-Prioritäten implementiert, **kein eigener MANUAL_MODE**, und wurde vom Nutzer am 28.10. aktiviert. Aktuelle Statuskarten und SOC-Graph-Care-Details sind real sichtbar; physische Netzpflege-/Notlade- und Rollback-Feldepisoden bleiben getrennt zu verifizieren. Keine normative Safety-/Controlleränderung aus der hier dokumentierten UX-Follow-up-Planung ableiten. Ältere V17-Architekturstatements darunter sind historische Zeitstände.
+
+## AKTUELL – Release-/Architekturstand 23.10.2026
+
+V17.1.3 (`v17.1.3-20261022`) ist nach erfolgreichem Update **tatsächlich auf dem produktiven Raspberry Pi installiert** und besitzt eine vollständig bestandene allgemeine Realfeldabnahme vom 23.10.2026; `07` führt die aktuelle Feldidentität. Diese Aussage überstimmt alte V17.1.2-/V17.1.1-Runtimeangaben weiter unten, die als historische Provenienz erhalten bleiben.
+
+- Kanonische aktuelle Code-/Architekturbasis: byteverifiziertes `zendure_controller_v17_1_3.zip`, SHA256 `54b3aa6ee6063bdbf91f428258baca38f6bbdd4a6c5a4c0741159fb7dd5a6d8e` (Bibliothek `Releases/`); `docs/architecture/ZEC_V17_1_3_As_Built.md` ist die versionsrichtige As-built-Dokumentation.
+- Verbindlicher Atlas: `docs/architecture/uml/` mit 22 quell-/visuell geprüften Diagrammen, editierbaren DOT-Quellen, offline lesbaren SVG/PNG, Source-Traceability und `DOC_UML_RELEASE_GATE`; beim nächsten relevanten Release fortschreiben. Historische Originale bleiben indiziert und unverändert.
+- Der Reglerkern `controller_logic.py` bleibt SHA256 `8bf439456e773aa84097e54059b3da1065deac5200d9304c0dc5960a5e24b1d7`. V17.1.3 brachte keine neue Controller-/Command-/Safetyregelung. Battery Care (`ZEC-BL-BATCARE-001`), B2, C1 und Adaptive sind **nicht** implementiert; die fachliche Priorisierung steht im Master-Ledger `05`.
+- Keine neue reale Clean-Fresh-Install-Abnahme; Funktions-/Naturepisoden (u. a. S3, Fast Capture FULL_IDLE, Grid-Stale, Nacht/MIN_SOC) haben separate Evidenzgrenzen, ohne das allgemeine V17.1.3-Feld-PASS aufzuheben.
+
+
 **Stand:** 21.10.2026 – neuester Feld-/UX-Nachtrag; historische Architekturkapitel erhalten  
 **Status:** kanonischer aktueller Architekturstand (V17.1.0-Nachtrag 20.10.2026); ältere kapitelbezogene Versionshinweise sind historische As-built-Stände. Feldidentität siehe `07_ZEC_CURRENT_RELEASE_AND_FIELD_STATUS.md`
 

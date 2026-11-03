@@ -13,6 +13,7 @@ WHEN = MappingProxyType({
 'DEVICE_ID': 'Bei der Zuordnung der MQTT-Nachrichten zu der einen tatsächlich gesteuerten Zendure-Headunit. Stimmt die Kennung nicht zum Gerät, können aktuelle Messungen oder sichere Befehle fehlen.',
 # Primary storage: read-only integration; source-specific keys only in that source profile.
 'SECOND_BATTERY_STALE_TIMEOUT_SECONDS': 'Nur bei eingeschalteter Primärspeicher-Integration und eingehenden Daten. Nach Ablauf gelten alte Werte nicht mehr als verlässliche Grundlage für Ladeverteilung und Gegenladeschutz.',
+'SECOND_BATTERY_DISPLAY_MAX_SOC_PERCENT': 'Nur bei aktivierter Primärspeicher-Anzeige. Die obere SOC-Grenze dient ausschließlich der Darstellung und Restenergie-Schätzung; sie schaltet niemals zusätzliche Hardware-Ladung oder einen Reglerbefehl frei.',
 'SECOND_BATTERY_DISPLAY_NAME': 'Nur für den angezeigten Namen, nicht für Messwerte oder Ladeentscheidungen. Ein selbst vergebener Name hat Vorrang vor dem Gerätenamen des Profils.',
 'SECOND_BATTERY_SOURCE_PROFILE': 'Nur bei eingeschalteter Primärspeicher-Integration. EVCC, eigenes MQTT und direktes Modbus haben jeweils andere Anschlussfelder; die Auswahl sendet keine Primärspeicher-Steuerbefehle.',
 'SECOND_BATTERY_MODBUS_TEMPLATE': 'Nur bei gewählter direkter Modbus-Anbindung. Das Geräteprofil bestimmt die tatsächlich lesbaren Register und deren Bedeutung; es führt keine Schreibbefehle aus.',

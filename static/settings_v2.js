@@ -57,6 +57,21 @@
     return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
   function same(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+  const CARE_SEASON_KEYS = new Set(['BATTERY_CARE_SEASON_START_MM_DD','BATTERY_CARE_SEASON_END_MM_DD']);
+  function careSeasonDisplay(value) {
+    const m = /^(\d{2})-(\d{2})$/.exec(String(value ?? ''));
+    return m ? `${m[2]}.${m[1]}.` : String(value ?? '');
+  }
+  function careSeasonParse(raw) {
+    const value = String(raw ?? '').trim();
+    if (!value) return null;
+    const m = /^(\d{2})\.(\d{2})\.$/.exec(value);
+    if (!m) return undefined;
+    const day = Number(m[1]), month = Number(m[2]);
+    const date = new Date(Date.UTC(2000, month - 1, day));
+    if (date.getUTCDate() !== day || date.getUTCMonth() + 1 !== month) return undefined;
+    return `${m[2]}-${m[1]}`;
+  }
 
   const NIGHT_COMPOUNDS = {
     start: {hour:'NIGHT_START_HOUR', minute:'NIGHT_START_MINUTE', label:'Startzeit des Nachtmodus', description:'Beginn des festen Nachtfensters im Format HH:MM.'},
@@ -372,6 +387,11 @@
         if (spec.maximum !== null && value > spec.maximum) fail('VALUE_ABOVE_MAX', `${spec.label}: Der Wert darf höchstens ${spec.maximum}${spec.unit?` ${spec.unit}`:''} betragen.`);
       }
     }
+    if (CARE_SEASON_KEYS.has(spec.key) && value !== null && (
+      typeof value !== 'string' || !/^(\d{2})-(\d{2})$/.test(value) ||
+      careSeasonParse(careSeasonDisplay(value)) !== value)) {
+      fail('CARE_SEASON_FORMAT_INVALID', `${spec.label}: Bitte ein gültiges Datum TT.MM. eingeben, z. B. 15.10.`);
+    }
     if (spec.value_type === 'enum' && !spec.options.some(option => same(option.value, value))) fail('ENUM_INVALID', `${spec.label}: Der gewählte Wert ist nicht zulässig.`);
     if (spec.codec_id === 'optional_int_zero_none') {
       const raw = String(rawValue ?? value ?? '').trim();
@@ -414,7 +434,8 @@
     } else {
       const type = ['int','optional_int','float'].includes(s.value_type) ? 'number' : 'text';
       const step = s.value_type === 'float' ? 'any' : '1';
-      control = `<input type="${type}" data-key="${esc(s.key)}" value="${esc(value ?? '')}" ${type==='number'?`step="${step}" `:''}${s.minimum!==null?`min="${s.minimum}" `:''}${s.maximum!==null?`max="${s.maximum}" `:''}${dis}>`;
+      const season = CARE_SEASON_KEYS.has(s.key);
+      control = `<input type="${type}" data-key="${esc(s.key)}" value="${esc(season ? careSeasonDisplay(value) : (value ?? ''))}" ${season?'inputmode="numeric" maxlength="6" placeholder="TT.MM." autocomplete="off" ':''}${type==='number'?`step="${step}" `:''}${s.minimum!==null?`min="${s.minimum}" `:''}${s.maximum!==null?`max="${s.maximum}" `:''}${dis}>`;
     }
     return `<div class="setting-control">${control}${s.unit?`<span class="unit">${esc(s.unit)}</span>`:''}</div>`;
   }
@@ -902,6 +923,10 @@
         else if (s.value_type === 'int') value = el.value === '' ? '' : Number(el.value);
         else if (s.value_type === 'optional_int') value = el.value === '' ? null : Number(el.value);
         else if (s.value_type === 'float') value = el.value === '' ? '' : Number(el.value);
+        else if (CARE_SEASON_KEYS.has(s.key)) {
+          value = careSeasonParse(el.value);
+          if (value === undefined) value = el.value; // invalid draft remains visible and fail-closed
+        }
         else value = el.value;
         if (same(value, s.configured)) app.draft.delete(s.key); else app.draft.set(s.key, value);
         app.preview = null;
@@ -1474,15 +1499,36 @@
     const clock = $('#localClock');
     if (clock) setInterval(() => { clock.textContent = new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); }, 1000);
   }
+  function validSettingsModel(model) {
+    return !!(model && typeof model === 'object' && !Array.isArray(model)
+      && typeof model.controller_version === 'string'
+      && typeof model.base_revision === 'string'
+      && model.status && typeof model.status === 'object'
+      && model.capabilities && typeof model.capabilities === 'object'
+      && Array.isArray(model.categories) && model.categories.length > 0
+      && model.categories.every(c => c && typeof c.name === 'string' && Array.isArray(c.sections)
+        && c.sections.every(section => section && typeof section.name === 'string'
+          && Array.isArray(section.settings)
+          && section.settings.every(setting => setting && typeof setting.key === 'string'))));
+  }
   async function load() {
-    try {
-      app.model = await api('/settings/model');
-      app.category = app.category && app.model.categories.some(c=>c.name===app.category) ? app.category : app.model.categories[0]?.name;
-      $('#sidebarVersion').textContent = `Controller: ${app.model.controller_version}`;
-      render();
-    } catch (error) {
-      $('#settingsContent').innerHTML = `<div class="notice error">Settings-Modell konnte nicht geladen werden: ${esc(error.message)}</div>`;
+    let error;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const next = await api('/settings/model');
+        if (!validSettingsModel(next)) throw new Error('Unvollständige oder ungültige Serverantwort');
+        app.model = next; // Atomic replacement only after structural validation.
+        app.category = app.category && next.categories.some(c=>c.name===app.category) ? app.category : next.categories[0].name;
+        $('#sidebarVersion').textContent = `Controller: ${next.controller_version}`;
+        render();
+        return;
+      } catch (caught) {
+        error = caught;
+        if (caught.status && caught.status >= 400 && caught.status < 500) break;
+      }
     }
+    $('#settingsContent').innerHTML = `<div class="notice error" role="alert">Einstellungen konnten nicht geladen werden. Es wurde nichts gespeichert. ${esc(error?.message || 'Verbindungsfehler')} <button type="button" id="settingsLoadRetry">Erneut laden</button></div>`;
+    $('#settingsLoadRetry').onclick = load;
   }
 
   window.addEventListener('DOMContentLoaded', () => {

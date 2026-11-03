@@ -25,7 +25,7 @@ class StorageSocLimitCardTests(unittest.TestCase):
                 payload=build_status_view_payload(self.config(),self.sample(signed))
                 self.assertEqual("Lade-/Entladegrenze",payload['zendure']['soc_limit_label'])
                 self.assertEqual("99 % / 10 %",payload['zendure']['soc_limit_text'])
-                self.assertEqual("— / 25 %",payload['primary']['soc_limit_text'])
+                self.assertEqual("100 % / 25 %",payload['primary']['soc_limit_text'])
                 html=render_status_page_v2(self.config(),payload,analysis_available=False,analysis_port=8081)
                 self.assertIn('data-zec-row="zendure.soc_limit"><span',html)
                 self.assertIn('data-zec-row="primary.soc_limit"><span',html)
@@ -40,8 +40,8 @@ class StorageSocLimitCardTests(unittest.TestCase):
         self.assertEqual("29 % · 4,35 kWh",value['remaining_text'])
         sample['primary_storage_charge_upper_soc_fresh']=False
         value=build_status_view_payload(self.config(),sample)['primary']
-        self.assertEqual("— / 25 %",value['soc_limit_text'])
-        self.assertEqual("—",value['remaining_text'])
+        self.assertEqual("100 % / 25 %",value['soc_limit_text'])
+        self.assertEqual("35 % · 5,25 kWh",value['remaining_text'])
 
     def test_care_reserve_not_fake_when_only_setting_enabled(self):
         cfg=self.config()
@@ -56,7 +56,7 @@ class StorageSocLimitCardTests(unittest.TestCase):
         snap=self.sample()
         snap['primary_storage_current_discharge_floor_fresh']=False
         payload=build_status_view_payload(self.config(),snap)
-        self.assertEqual("— / —",payload['primary']['soc_limit_text'])
-        self.assertEqual("—",payload['primary']['remaining_text'])
+        self.assertEqual("100 % / —",payload['primary']['soc_limit_text'])
+        self.assertEqual("35 % · 5,25 kWh",payload['primary']['remaining_text'])
 
 if __name__ == '__main__':unittest.main()

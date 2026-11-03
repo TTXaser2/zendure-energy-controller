@@ -1,5 +1,10 @@
 # ZEC – Release & Handover Process
 
+## Quellen-/Feldnachtrag 29.10.2026 – Prozess unverändert
+
+Dokumentations- und Backlogfortschreibung nach realem V18-Battery-Care-Reserve-Feld-PASS sowie den sechs ausdrücklich freigegebenen nächsten UX-/Diagnosepunkten ist **kein** neues Produktrelease, keine Installer-/Pi-Mutation und kein Sourceentwicklungsblock. Die Pflicht zu separatem physischem Wirkungsnachweis je Care-Pfad sowie `CHECKPOINT_LIBRARY_GATE`, `BACKLOG_NO_DROP_GATE` vor historischer Quellenentfernung und Release-/UML-/Safetygates bleibt vollständig bestehen. Das entstehende kanonische Quellenpaket ist nur nach unabhängigem Library-Readback extern gesichert; der Nutzer muss die gewünschten Dateien bei Bedarf selbst als aktuelle Projektquellen ersetzen.
+
+
 Stand: 19.10.2026
 Status: kanonisch – inklusive dauerhaftem Datenblatt-, Release-Hygiene- und Build-Evidence-Vertrag
 

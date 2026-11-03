@@ -216,7 +216,7 @@
       careBox.hidden=!care.visible;
       careBox.classList.remove('is-ok','is-warn','is-bad','is-unknown');
       careBox.classList.add(['ok','warn','bad'].includes(care.tone)?`is-${care.tone}`:'is-unknown');
-      text('zendure.care.title',`Battery Care · ${care.title||''}`);
+      text('zendure.care.title',`${care.tone==='warn'||care.tone==='bad'?'⚠ ':'🛡 '}${care.title==='Schutz aktiv'?'Battery Care · ':''}${care.title||''}`);
       text('zendure.care.detail',care.detail||'');
     }
     text('zendure.system_soc_text', p.zendure?.system_soc_text);
@@ -649,7 +649,7 @@
       ctx.strokeStyle=css('--zec-card-border');ctx.lineWidth=1;ctx.fillStyle=css('--zec-muted');ctx.font='10px sans-serif';
       for(let v=0;v<=100;v+=20){const py=y(v);ctx.beginPath();ctx.moveTo(pad.l,py);ctx.lineTo(w-pad.r,py);ctx.stroke();ctx.textAlign='right';ctx.fillText(`${v} %`,pad.l-7,py+3);}
       [0,360,720,1080,1440].forEach(m=>{const px=x(m);ctx.beginPath();ctx.moveTo(px,pad.t);ctx.lineTo(px,h-pad.b);ctx.stroke();ctx.textAlign=m===0?'left':m===1440?'right':'center';ctx.fillText(`${String(Math.floor(m/60)).padStart(2,'0')}:00`,px,h-8);});ctx.textAlign='left';
-      configSegments.filter(s=>s.known!==false).forEach(seg=>{[['min_soc','Min-SOC'],['max_soc','Max-SOC'],['reserve_soc','Reserve']].forEach(([key,label])=>{const v=number(seg[key]);if(v===null)return;ctx.strokeStyle=key==='reserve_soc'?css('--zec-amber'):css('--zec-subtle');ctx.setLineDash([5,4]);ctx.beginPath();ctx.moveTo(x(Math.max(0,Number(seg.start_minute||0))),y(v));ctx.lineTo(x(Math.min(1440,Number(seg.end_minute??1440))),y(v));ctx.stroke();ctx.setLineDash([]);});});
+      configSegments.filter(s=>s.known!==false).forEach(seg=>{[['min_soc','Min-SOC'],['max_soc','Max-SOC'],['reserve_soc','Nachtreserve']].forEach(([key,label])=>{const v=number(seg[key]);if(v===null)return;ctx.strokeStyle=key==='reserve_soc'?css('--zec-amber'):css('--zec-subtle');ctx.setLineDash([5,4]);ctx.beginPath();ctx.moveTo(x(Math.max(0,Number(seg.start_minute||0))),y(v));ctx.lineTo(x(Math.min(1440,Number(seg.end_minute??1440))),y(v));ctx.stroke();ctx.setLineDash([]);});});
       // Policy thresholds are observationally distinct from real SOC samples.
       // Draw only the historical, season-valid config intervals from the server.
       const care=this.careLines();
@@ -682,7 +682,7 @@
         const markers=this.careMarkers().filter(item=>Math.abs(Number(item.minute)-Number(nearest.minute))<=2);
         const stageLabels={PV_PRIORITY_REQUESTED:'PV-Umlenkung angefordert',GRID_REQUESTED:'Netzpflege angefordert',EMERGENCY_REQUESTED:'Notladung angefordert',RESERVE_POLICY:'Reserve-Policy gültig',STOP_HOLD:'STOP-HOLD beobachtet',NONE:'Care-Anforderung beendet'};
         const eventRow=markers.map(item=>`<div class="zec-chart-tooltip-row"><span>Gespeichertes Ereignis #${escapeHtml(item.event_id)}</span><b>${item.kind==='stage_transition'?`Care: ${escapeHtml(stageLabels[item.stage_from]||item.stage_from)} → ${escapeHtml(stageLabels[item.stage_to]||item.stage_to)} (keine physische Wirkungsbestätigung)`:(item.kind==='failure_confirmed'?'Notladung nicht wirksam':'Reserve wiederhergestellt')}</b></div>`).join('');
-        const cfgRow=cfgSeg&&cfgSeg.known!==false?`<div class="zec-chart-tooltip-row"><span>Grenzen</span><b>${escapeHtml(`Min ${fmtSoc(cfgSeg.min_soc)} · Max ${fmtSoc(cfgSeg.max_soc)} · Reserve ${fmtSoc(cfgSeg.reserve_soc)}`)}</b></div><div class="zec-chart-tooltip-row"><span>Nachtfenster</span><b>${escapeHtml(`${cfgSeg.night_start||'—'}–${cfgSeg.night_end||'—'}`)}</b></div>`:`<div class="zec-chart-tooltip-row"><span>Historische Konfiguration</span><b>nicht verfügbar</b></div>`;this.showSocDetails(`<strong>${escapeHtml(p.date||'')} ${escapeHtml(nearest.time||'')}</strong>${rows}<div class="zec-chart-tooltip-row"><span>Zendure-Leistung</span><b>${escapeHtml(fmtPower(nearest.zendure_power_w))}</b></div>${primaryPowerRow}${cfgRow}${careRow}${eventRow}<div class="zec-chart-tooltip-row"><span>Modus</span><b>${escapeHtml(nearest.mode||'—')}</b></div>${reasonRow}`,px,pad.t+ph*.55);}
+        const cfgRow=cfgSeg&&cfgSeg.known!==false?`<div class="zec-chart-tooltip-row"><span>Grenzen</span><b>${escapeHtml(`Min ${fmtSoc(cfgSeg.min_soc)} · Max ${fmtSoc(cfgSeg.max_soc)} · Nachtreserve ${fmtSoc(cfgSeg.reserve_soc)}`)}</b></div><div class="zec-chart-tooltip-row"><span>Nachtfenster</span><b>${escapeHtml(`${cfgSeg.night_start||'—'}–${cfgSeg.night_end||'—'}`)}</b></div>`:`<div class="zec-chart-tooltip-row"><span>Historische Konfiguration</span><b>nicht verfügbar</b></div>`;this.showSocDetails(`<strong>${escapeHtml(p.date||'')} ${escapeHtml(nearest.time||'')}</strong>${rows}<div class="zec-chart-tooltip-row"><span>Zendure-Leistung</span><b>${escapeHtml(fmtPower(nearest.zendure_power_w))}</b></div>${primaryPowerRow}${cfgRow}${careRow}${eventRow}<div class="zec-chart-tooltip-row"><span>Modus</span><b>${escapeHtml(nearest.mode||'—')}</b></div>${reasonRow}`,px,pad.t+ph*.55);}
     }
   }
 

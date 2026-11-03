@@ -241,9 +241,9 @@
 <polygon fill="#eaf4ec" stroke="black" points="702,-340 0,-340 0,-298 708,-298 708,-334 702,-340"/>
 <polyline fill="none" stroke="black" points="702,-340 702,-334 "/>
 <polyline fill="none" stroke="black" points="708,-334 702,-334 "/>
-<text text-anchor="middle" x="354" y="-326.8" font-family="DejaVu Sans" font-size="9.00" fill="#193b2d">BATTERY CARE · CP26 (Entwicklungs&#45;As&#45;built)</text>
+<text text-anchor="middle" x="354" y="-326.8" font-family="DejaVu Sans" font-size="9.00" fill="#193b2d">BATTERY CARE · V18.0.1 (Korrekturkandidat)</text>
 <text text-anchor="middle" x="354" y="-316.8" font-family="DejaVu Sans" font-size="9.00" fill="#193b2d">Battery&#45;Care&#45;PV&#45;Absolutziel und Fast&#45;Capture&#45;Overlay dürfen denselben Export NICHT doppelt allokieren. Normaler Baselinepfad nach Care&#45;Exit erhalten.</text>
-<text text-anchor="middle" x="354" y="-306.8" font-family="DejaVu Sans" font-size="9.00" fill="#193b2d">Keine physische Wirksamkeits&#45; oder Releasefreigabe</text>
+<text text-anchor="middle" x="354" y="-306.8" font-family="DejaVu Sans" font-size="9.00" fill="#193b2d">Reserve&#45;Nullneutralisierung 2x real beobachtet; PV teilbelegt; Netzpflege/Notladung noch nicht evaluiert; kein Release&#45;PASS</text>
 </g>
 </g>
 </svg>

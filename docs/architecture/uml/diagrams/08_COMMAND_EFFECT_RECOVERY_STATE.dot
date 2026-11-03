@@ -56,5 +56,5 @@ digraph Effect {
   careRetry -> careWrite [style=dashed, label="retry gleiche Event-ID"];
   careWarn -> careRecover [style=dashed, label="unabhängige SOC-Recovery"];
 
-  cp26_care_08 [shape=note, style="filled", fillcolor="#eaf4ec", fontcolor="#193b2d", fontsize=9, label="BATTERY CARE · CP26 (Entwicklungs-As-built)\nCare-Notlade-Command-Mismatch: synchroner SQLite-Commit pro eindeutiger Failure-ID und ursprünglicher Reserve R; parallele offene Vorfälle unabhängig recoverbar.\nKeine physische Wirksamkeits- oder Releasefreigabe"];
+  cp26_care_08 [shape=note, style="filled", fillcolor="#eaf4ec", fontcolor="#193b2d", fontsize=9, label="BATTERY CARE · V18.0.1 (Korrekturkandidat)\nCare-Notlade-Command-Mismatch: synchroner SQLite-Commit pro eindeutiger Failure-ID und ursprünglicher Reserve R; parallele offene Vorfälle unabhängig recoverbar.\nReserve-Nullneutralisierung 2x real beobachtet; PV teilbelegt; Netzpflege/Notladung noch nicht evaluiert; kein Release-PASS"];
 }

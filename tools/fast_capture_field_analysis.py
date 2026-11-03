@@ -22,7 +22,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 FORMAT = "ZEC_FAST_CAPTURE_FIELD_ANALYSIS_V1"
 EXPECTED_SCHEMA_VERSION = "4"
 EXPECTED_CONTROLLER_VERSION = "17.1.3"
-SUPPORTED_CONTROLLER_VERSIONS = frozenset({"17.0.2", "17.1.0", "17.1.1", "17.1.2", "17.1.3"})
+SUPPORTED_CONTROLLER_VERSIONS = frozenset({"17.0.2", "17.1.0", "17.1.1", "17.1.2", "17.1.3", "18.0.0", "18.0.1"})
 ATTACK_W_PER_S = 400.0
 RELEASE_W_PER_S = 100.0
 FULL_IDLE_CONFIRM_S = 15.0
@@ -61,6 +61,7 @@ def describe_contract() -> Dict[str, Any]:
         "configuration_mutations": 0,
         "expected_schema_version": EXPECTED_SCHEMA_VERSION,
         "expected_controller_version": EXPECTED_CONTROLLER_VERSION,
+        "supported_controller_versions": sorted(SUPPORTED_CONTROLLER_VERSIONS),
         "strategy": "A400_R100",
         "attack_w_per_s": ATTACK_W_PER_S,
         "release_w_per_s": RELEASE_W_PER_S,

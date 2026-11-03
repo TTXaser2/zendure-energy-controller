@@ -62,3 +62,23 @@ Ausgang CP25: 22/22 Renderartefakte vorhanden, aber `CONTROLLER_SOURCE_MISMATCH`
 | 20 | REVIEWED_UNCHANGED | keine unmittelbare Care-Diagrammpflicht im entsprechenden Altpfad; Source-Trace im Manifest weiterhin vorhanden | `DEVELOPMENT_SOURCE_REVIEW_PENDING` |
 | 21 | UPDATED | Care-Status und historische Graph-Marker verwenden belegte abgeschlossene Reglerzyklen und persistierte Events; 1-s-Browserpoll ist KEIN 1-s-Physiksample. | `DEVELOPMENT_SOURCE_REVIEW_PENDING` |
 | 22 | REVIEWED_UNCHANGED | keine unmittelbare Care-Diagrammpflicht im entsprechenden Altpfad; Source-Trace im Manifest weiterhin vorhanden | `DEVELOPMENT_SOURCE_REVIEW_PENDING` |
+
+## V18.0.1 Korrekturscope – Quelländerungen, fachliche Nachprüfung OFFEN
+
+01 und 02: `controller_logic.py` Nacht-SOC-Stale-Battery-Care-Reserve SAFE_STATE→HOLD neu nur nach neutralem Ist/Readback. 07/08/09 (je nach Atlasbelegung) Command-/Safety-Readback auf geänderten Pfad prüfen; `operational_events.py` Schutzreserve-Journal als eigener Diagnosepfad, keine Hardwareänderung. Status/Settings/Diagnose mit dem Realstand V18.0.1 abgleichen. Die übrigen 22 Blätter bleiben bis zur tatsächlichen individuellen fachlichen Prüfung Entwicklungsstände, nicht `SOURCE_REVIEW_PASS`.
+
+## V18.0.1 – CP12 versioned diagram refresh (release expert review STILL PENDING)
+
+Exact release candidate `v18.0.1-20261102`: updated diagram IDs 01, 02, 03, 04, 05, 06, 08, 09, 10, 13, 14, 15, 16, 18, 19, 20, 21, 22. Version labels, stale CP26 pre-field caveats and 2 confirmed reserve episodes now distinguish `RESERVE_NEUTRALIZATION_FIELD_PASS` from PV partial and N/E unknown.
+
+- 01: explicit SAFE_STATE→HOLD recovery gate after independent 0-W readback/effect in Care R night window, no fresh discharge authorization.
+- 02: nighttime Care-R/import branch and guarded SAFE_STATE→HOLD/0-W early return.
+- 09: episode-scoped reserve journal with request vs physical confirmation, no second command owner.
+- 10: Night/Care-R vs global MIN_SOC and conditional stale recovery.
+- All other modified DOTs: source-version/field-evidence provenance updated; no behavior claim beyond their branch.
+
+22/22 current source tracers and render hashes checked by technical gate. **Full semantic manual review, final README/datasheet/docs consistency and installer release gate are not passed by this refresh.**
+
+## V18.0.1 – fachlicher Quellen-/Bildreview 22/22
+
+22 individuelle Diagrammentscheidungen mit aktuellen Source- und Asset-Hashes sind in `SOURCE_REVIEW_V18_0_1_20261102.md` dokumentiert. Dies erlaubt ausschließlich den UML-As-built-Reviewstatus, nicht das Produktrelease oder den Pi-Feld-PASS.

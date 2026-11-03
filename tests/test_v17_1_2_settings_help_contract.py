@@ -11,9 +11,9 @@ class TestV1712OperationalHelp(unittest.TestCase):
         cls.by_key={x.key:x for x in cls.settings}
 
     def test_complete_unique_operational_inventory(self):
-        self.assertEqual(len(self.settings),197)
-        self.assertEqual(len(self.by_key),197)
-        self.assertEqual(len(WHEN),113)
+        self.assertEqual(len(self.settings),198)
+        self.assertEqual(len(self.by_key),198)
+        self.assertEqual(len(WHEN),114)
         self.assertEqual(set(WHEN),{x.key for x in self.settings if x.key in WHEN})
 
     def test_every_operational_setting_explains_when_it_acts(self):

@@ -1,4 +1,20 @@
-**V18.0.0 / v18.0.0-20261027 – Installation zur kontrollierten Feldabnahme**
+# Zendure Energy Controller V18.0.1
+
+**Release:** V18.0.1 · **Build-ID:** `v18.0.1-20261102` · **Updatequelle:** V18.0.0 / `v18.0.0-20261027`.
+
+V18.0.1 korrigiert die Nacht-/Care-Reserve-Recovery nach SOC-Stale mit fail-closed 0-W-Readback-/Istprüfung, ergänzt robuste Settings-Model-Validierung/Retry, deutsches TT.MM.-Saisonformat (intern MM-DD), rein angezeigte Primär-SOC-Obergrenze, Shield-Status, episodisches Schutzreserve-Journal mit getrenntem realem Effekt und den eindeutigen Nachtreserve-Tooltip. Die produktive PV-Care-Arbitration bleibt unverändert; ein neuer Grid-/Emergency-Feldwirkungspass ist nicht behauptet.
+
+**Installation:** Nur das getrennt veröffentlichte, gegen SHA256 und technische Releasegates geprüfte `zendure_controller_v18_0_1.zip` verwenden; zunächst `--preflight-only`, niemals ein Entwicklungscheckpoint-ZIP installieren. Neue Quellen dürfen die bestehende V18.0.0-Konfiguration nicht automatisch ändern. Technischer Release-PASS und Pi-Feld-PASS sind getrennt.
+
+- [Installation](README_INSTALLATION_V18_0_1.md)
+- [Aktuelles As-built](docs/architecture/ZEC_V18_0_1_As_Built.md)
+- [UML-Atlas](docs/architecture/uml/INDEX.md)
+- [Release-Informationen](docs/releases/v18.0.1/RELEASE_INFO_V18_0_1.md)
+- [Technisches Datenblatt](docs/ZEC_Technisches_Datenblatt.pdf)
+
+---
+
+## Historische Releasehinweise (V18.0.0 und älter; nicht aktuelle Produktversion)
 
 # Zendure Energy Controller V17.1.3
 

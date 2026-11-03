@@ -1,0 +1,28 @@
+{
+  "format": "ZEC_BUILD_EVIDENCE_V1",
+  "release": {
+    "version": "18.0.1",
+    "label": "V18.0.1",
+    "build_id": "v18.0.1-20261102"
+  },
+  "status": "PASS",
+  "scope": "V18_0_1_FINAL_SOURCE_QA_MUST_BE_VERIFIED_BEFORE_RELEASE",
+  "test_file_count": 207,
+  "full_regression": {
+    "status": "PASS",
+    "tests": 1157,
+    "subtests": 1219
+  },
+  "resourcewarning_regression": {
+    "status": "PASS",
+    "tests": 1157,
+    "subtests": 1219,
+    "warnings_mode": "error::ResourceWarning"
+  },
+  "excluded_historical_assertions": 85,
+  "exclusions": "validation/V18_0_1_RELEASE_APPLICABILITY.json",
+  "provenance": {
+    "cp20_checkpoint_sha256": "318aed8b525432394846a7f0c97f4f70579ea5b57fe39f5203d109b9e669e6f4",
+    "note": "CP20 source has new no-runtime-SQLite manifest regression (11 targeted tests PASS), inherited CP18 strict full suite 1156 tests/1219 subtests plus CP19 fresh regular 1156 PASS. CP21 final archive exact-byte regular+strict 1157 tests MUST independently pass prior to release."
+  }
+}

@@ -1047,6 +1047,34 @@ class ZendureController:
         if (night_active and care_floor is not None and care_soc is not None
                 and care_soc <= care_floor and grid_power >= -float(cfg["DEADBAND_W"])):
             self.state.add_limiter("BATTERY_CARE_RESERVE")
+            # A SOC-stale episode may have entered SAFE_STATE in an earlier
+            # cycle. Once the SOC and grid have recovered, this early-return
+            # branch must not leave an obsolete stale fault latched until the
+            # night window ends. Recover status ONLY after independent neutral
+            # command/readback and fresh physical 0-W evidence; never publish a
+            # new command or reopen discharge to effect the state transition.
+            with self.state.lock:
+                recoverable_stale = (
+                    self.state.current_mode == "SAFE_STATE"
+                    and str(self.state.control_reason or "").startswith(
+                        "Nachtmodus blockiert: Zendure SOC fehlt oder ist veraltet"
+                    )
+                    and int(self.state.last_output_power or 0) == 0
+                    and int(self.state.last_input_power or 0) == 0
+                    and int(self.state.command_desired_signed_target_w or 0) == 0
+                    and bool(self.state.command_readback_matches_desired)
+                    and not self.state.command_neutralization_active
+                    and bool(self.state.actual_zendure_power_valid)
+                    and abs(int(self.state.actual_zendure_system_signed_power or 0)) <= 30
+                )
+                if recoverable_stale:
+                    self.state.control_reason = "Battery Care: Schutzreserve erreicht; Nachtentladung bleibt gesperrt"
+                    self.state.technical_control_path = "NIGHT_MODE -> BATTERY_CARE_RESERVE -> HOLD"
+                    self.state.last_control_action = "SOC_STALE_RECOVERED -> HOLD 0 W"
+                    self.state.current_target_power = 0
+                    self.state.target_power_limit_reason = "BATTERY_CARE_RESERVE"
+            if recoverable_stale:
+                self.state.set_mode("HOLD")
             return
         self.update_rest_surplus_harvest_state(cfg, grid_power)
 

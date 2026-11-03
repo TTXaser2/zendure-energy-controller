@@ -225,7 +225,7 @@
 <polyline fill="none" stroke="black" points="1326,-880 1326,-874 "/>
 <polyline fill="none" stroke="black" points="1332,-874 1326,-874 "/>
 <text text-anchor="middle" x="1078.5" y="-864.8" font-family="DejaVu Sans" font-size="9.00" fill="#162e4d">S3&#45;SMA&#45;Priorität unterdrückt bei Anwendbarkeit strategischen Share, nicht real nutzbare Exportaufnahme.</text>
-<text text-anchor="middle" x="1078.5" y="-854.8" font-family="DejaVu Sans" font-size="9.00" fill="#162e4d">Sourceabgleich: V17.1.3; keine Feldwirkungsbehauptung</text>
+<text text-anchor="middle" x="1078.5" y="-854.8" font-family="DejaVu Sans" font-size="9.00" fill="#162e4d">Quellbezug: V18.0.1 Kandidat; physische Wirkung nur episodenspezifisch</text>
 </g>
 </g>
 </svg>

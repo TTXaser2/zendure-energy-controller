@@ -114,6 +114,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "CROSS_CHARGE_ENABLED": False,
     "SECOND_BATTERY_INTEGRATION_ENABLED": False,
     "SECOND_BATTERY_DISPLAY_NAME": "",
+    "SECOND_BATTERY_DISPLAY_MAX_SOC_PERCENT": 100,  # Anzeige ausschließlich, keine Gerätegrenze
     "SECOND_BATTERY_SOURCE_PROFILE": "evcc_standard",
     "SECOND_BATTERY_MODBUS_TEMPLATE": "sma_sunny_island",
     "SECOND_BATTERY_MODBUS_HOST": "",
@@ -323,6 +324,7 @@ CONFIG_SCHEMA: Dict[str, Dict[str, Any]] = {
     "CROSS_CHARGE_ENABLED": {"group": "Zweitbatterie", "subgroup": "Cross-Charge-Schutz", "label": "Cross-Charge-Schutz aktiv", "type": "bool", "description": "Aktiviert das Einlesen einer externen Zusatzbatterie per MQTT und verhindert unerwünschtes Batterie-zu-Batterie-Laden."},
     "SECOND_BATTERY_INTEGRATION_ENABLED": {"group": "Primärspeicher", "subgroup": "Integration & Identität", "label": "Primärspeicher-Integration aktiv", "type": "bool", "description": "Aktiviert die Primärspeicher-Datenquelle unabhängig davon, ob Cross-Charge oder Harvest verwendet werden."},
     "SECOND_BATTERY_DISPLAY_NAME": {"group": "Primärspeicher", "subgroup": "Integration & Identität", "label": "Primärspeicher-Anzeigename", "type": "str", "description": "Freier Anzeigename des Primärspeichers für Status, Graph, Inspector und Diagnose."},
+    "SECOND_BATTERY_DISPLAY_MAX_SOC_PERCENT": {"group": "Primärspeicher", "subgroup": "Integration & Status", "label": "Obere SOC-Anzeigegrenze", "type": "int", "min": 0, "max": 100, "unit": "%", "description": "Nur eine Berechnungs- und Anzeigegrenze für die verbleibende Ladeenergie; keine Geräte-, BMS- oder Reglergrenze."},
     "SECOND_BATTERY_SOURCE_PROFILE": {"group": "Primärspeicher", "subgroup": "Anbindung", "label": "Primärspeicher-Anbindung", "type": "select", "options": {"evcc_standard": "EVCC", "custom": "Benutzerdefiniertes MQTT", "modbus_template": "Direkt per Modbus"}, "description": "Wählt genau eine Primärspeicherquelle. Quellenwechsel sind restartpflichtig."},
     "SECOND_BATTERY_MODBUS_TEMPLATE": {"group": "Primärspeicher", "subgroup": "Modbus-Datenquelle", "label": "Gerät / Template", "type": "select", "options": {"sma_sunny_island": "SMA Sunny Island"}, "description": "Versioniertes read-only Modbus-Template."},
     "SECOND_BATTERY_MODBUS_HOST": {"group": "Primärspeicher", "subgroup": "Modbus-Datenquelle", "label": "Host / IP-Adresse", "type": "str", "description": "Host oder IP-Adresse des Primärspeichers für Modbus TCP."},

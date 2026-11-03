@@ -32,5 +32,5 @@ digraph CrossCharge {
   pub -> end;
   clamp -> note [style=dashed, arrowhead=none];
 
-  cp26_care_06 [shape=note, style="filled", fillcolor="#eaf4ec", fontcolor="#193b2d", fontsize=9, label="BATTERY CARE · CP26 (Entwicklungs-As-built)\nEinzige begrenzte Ausnahme: bestaetigte Care-NOTLADUNG umgeht wirtschaftliches Cross-Charge-Veto, nie Hardware-, BMS-, STOP-, SmartMode- oder Command-Safety.\nKeine physische Wirksamkeits- oder Releasefreigabe"];
+  cp26_care_06 [shape=note, style="filled", fillcolor="#eaf4ec", fontcolor="#193b2d", fontsize=9, label="BATTERY CARE · V18.0.1 (Korrekturkandidat)\nEinzige begrenzte Ausnahme: bestaetigte Care-NOTLADUNG umgeht wirtschaftliches Cross-Charge-Veto, nie Hardware-, BMS-, STOP-, SmartMode- oder Command-Safety.\nReserve-Nullneutralisierung 2x real beobachtet; PV teilbelegt; Netzpflege/Notladung noch nicht evaluiert; kein Release-PASS"];
 }

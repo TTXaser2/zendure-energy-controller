@@ -109,7 +109,7 @@ def _care_compact(zendure: Dict[str, Any]) -> str:
     return (
         f'<div class="zec-care-compact is-{tone}" data-zec-care="status" '
         f'role="group" aria-label="Battery-Care-Status"{ "" if visible else " hidden" }>'
-        f'<strong data-zec="zendure.care.title">Battery Care · {_e(care.get("title"))}</strong>'
+        f'<strong data-zec="zendure.care.title"><span aria-hidden="true">{("⚠ " if tone in ("warn", "bad") else "🛡 ")}</span>{"Battery Care · " if care.get("title") == "Schutz aktiv" else ""}{_e(care.get("title"))}</strong>'
         f'<span data-zec="zendure.care.detail">{_e(care.get("detail"))}</span>'
         f'</div>'
     )
@@ -386,7 +386,7 @@ def render_status_page_v2(
       </article>
 
       <article class="zec-card zec-zendure-card" data-card="zendure">
-        <header class="zec-card-header"><div class="zec-card-title">{_icon('battery')}<h2>{'Zendure-System' if len(units)>1 else 'Zendure / Batterie'}</h2></div><div class="zec-card-actions"><button type="button" class="zec-warning-chip" data-zec-warning="zendure" data-info-title="{_e(payload['zendure'].get('command_warning_title') or 'Zendure-Warnung')}" data-info-text="{_e(payload['zendure'].get('command_warning'))}" aria-haspopup="dialog" aria-controls="zecInfoPopover" aria-label="Aktive Zendure-Warnung anzeigen" {'hidden' if not payload['zendure'].get('command_warning') else ''}><span class="zec-warning-dot" aria-hidden="true"></span><span data-zec-warning-label="zendure">Ladeannahme</span></button>{_info_button('Zendure / Batterie','Diese Karte zeigt SOC und tatsächliche Leistung des Zendure-Speichers. Bei zwei Headunits werden beide Units separat dargestellt; beide folgen weiterhin dem gemeinsamen systemischen Operating Mode.')}</div></header>
+        <header class="zec-card-header"><div class="zec-card-title">{_icon('battery')}<h2>{'Zendure-System' if len(units)>1 else 'Zendure / Batterie'}</h2></div><div class="zec-card-actions"><button type="button" class="zec-warning-chip" data-zec-warning="zendure" data-info-title="{_e(payload['zendure'].get('command_warning_title') or 'Zendure-Warnung')}" data-info-text="{_e(payload['zendure'].get('command_warning'))}" aria-haspopup="dialog" aria-controls="zecInfoPopover" aria-label="Aktive Zendure-Warnung anzeigen" {'hidden' if not payload['zendure'].get('command_warning') else ''}><span class="zec-warning-dot" aria-hidden="true"></span><span data-zec-warning-label="zendure">Ladeannahme</span></button>{_info_button('Zendure / Batterie','Diese Karte zeigt SOC und tatsächliche Leistung des Zendure-Speichers. Bei zwei Headunits werden beide Units separat dargestellt; beide folgen weiterhin dem gemeinsamen systemischen Operating Mode. Battery Care: Der saisonale Reserveschutz wird nur bei gültiger Konfiguration, frischem SOC und automatischer Regelung aktiv. Eine angeforderte PV-, Netzpflege- oder Notladung ist keine gemessene Wirkung. STOP/HOLD setzt die Care-Regelung aus.',extra_attrs='data-zec-care-help="zendure"')}</div></header>
         {zendure_body}
         <footer class="zec-card-footer"><span class="zec-status-dot { _e(payload['zendure'].get('tone','ok')) }"></span><span>Telemetrie: <b data-zec="zendure.source">{_e(payload['zendure'].get('source'))}</b></span></footer>
       </article>

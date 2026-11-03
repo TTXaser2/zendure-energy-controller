@@ -278,7 +278,7 @@
 <polyline fill="none" stroke="black" points="629,-442 629,-436 "/>
 <polyline fill="none" stroke="black" points="635,-436 629,-436 "/>
 <text text-anchor="middle" x="376.5" y="-426.8" font-family="DejaVu Sans" font-size="9.00" fill="#162e4d">Zeitgrenzen: vier HARVEST_HIGH_SMA_SOC_PROFILE_*&#45;TIME&#45;Settings; 09:30/11:30/14:30/18:00 nur Defaults.</text>
-<text text-anchor="middle" x="376.5" y="-416.8" font-family="DejaVu Sans" font-size="9.00" fill="#162e4d">Sourceabgleich: V17.1.3; keine Feldwirkungsbehauptung</text>
+<text text-anchor="middle" x="376.5" y="-416.8" font-family="DejaVu Sans" font-size="9.00" fill="#162e4d">Quellbezug: V18.0.1 Kandidat; physische Wirkung nur episodenspezifisch</text>
 </g>
 <!-- cp26_care_16 -->
 <g id="node21" class="node">
@@ -286,9 +286,9 @@
 <polygon fill="#eaf4ec" stroke="black" points="747,-514 0,-514 0,-472 753,-472 753,-508 747,-514"/>
 <polyline fill="none" stroke="black" points="747,-514 747,-508 "/>
 <polyline fill="none" stroke="black" points="753,-508 747,-508 "/>
-<text text-anchor="middle" x="376.5" y="-500.8" font-family="DejaVu Sans" font-size="9.00" fill="#193b2d">BATTERY CARE · CP26 (Entwicklungs&#45;As&#45;built)</text>
+<text text-anchor="middle" x="376.5" y="-500.8" font-family="DejaVu Sans" font-size="9.00" fill="#193b2d">BATTERY CARE · V18.0.1 (Korrekturkandidat)</text>
 <text text-anchor="middle" x="376.5" y="-490.8" font-family="DejaVu Sans" font-size="9.00" fill="#193b2d">Persistierte Care&#45;Stufenmarker erst nach ZWEI unterschiedlichen abgeschlossenen Controllerzyklen. Ein einzelnes Statuspoll/SOC&#45;Rauschen erzeugt kein Ereignis.</text>
-<text text-anchor="middle" x="376.5" y="-480.8" font-family="DejaVu Sans" font-size="9.00" fill="#193b2d">Keine physische Wirksamkeits&#45; oder Releasefreigabe</text>
+<text text-anchor="middle" x="376.5" y="-480.8" font-family="DejaVu Sans" font-size="9.00" fill="#193b2d">Reserve&#45;Nullneutralisierung 2x real beobachtet; PV teilbelegt; Netzpflege/Notladung noch nicht evaluiert; kein Release&#45;PASS</text>
 </g>
 </g>
 </svg>

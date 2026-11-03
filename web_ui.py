@@ -4741,6 +4741,13 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
             and s.get("primary_storage_charge_upper_soc_fresh") is True
             and primary_upper_soc is not None and 0 <= primary_upper_soc <= 100):
         primary_upper_soc = None
+    # The configurable display-only ceiling must not enter any control,
+    # cross-charge or safety decision. A fresh real device ceiling, where
+    # available, remains authoritative if it is more restrictive.
+    configured_display_max = _safe_float(cfg.get("SECOND_BATTERY_DISPLAY_MAX_SOC_PERCENT", 100))
+    if configured_display_max is None or not 0 <= configured_display_max <= 100:
+        configured_display_max = 100.0
+    primary_upper_soc = min(primary_upper_soc, configured_display_max) if primary_upper_soc is not None else configured_display_max
     primary_limit_pair = f"{_zec_num(primary_upper_soc, '%')} / {_zec_num(primary_lower_soc, '%')}"
     primary_remaining = _remaining_energy_view(
         soc_percent=primary_soc,
@@ -5022,7 +5029,7 @@ def build_status_view_payload(cfg: Dict[str, Any], s: Dict[str, Any], *, events:
     elif care_dispatched == "PV_PRIORITY_REQUESTED":
         care_title, care_tone, care_detail = "PV-Vorrang angefordert", "ok", "Wirkung noch nicht bestätigt"
     elif care_active:
-        care_title, care_tone = "Reserve geschützt", "ok"
+        care_title, care_tone = "Schutz aktiv", "ok"
         care_detail = "ZEC-Entladegrenze aktiv"
     elif care_calendar_active:
         care_title, care_tone = "Derzeit ausgesetzt", "warn"

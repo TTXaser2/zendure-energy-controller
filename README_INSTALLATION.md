@@ -1,17 +1,18 @@
-# ZEC V18.0.0 – Installation und Feldabnahme
+> **Nur das gesondert SHA256-verifizierte technische Releasepaket installieren.** Ein Entwicklungscheckpoint-ZIP ist kein freigegebenes Installationspaket.
 
-**Build:** `v18.0.0-20261027`  · **Ziel:** V17.1.3 (`v17.1.3-20261022`) → V18.0.0
+# ZEC V18.0.1 – Installation und Feldabnahme
 
-**Paket:** `zendure_controller_v18_0_0.zip`. Enthält Battery Care und vollständige Produkt-Sources, technische Dokumentation sowie Validierung. Nur mit vorangehendem Preflight installieren.
+**Build:** `v18.0.1-20261102`  · **Ziel:** V18.0.0 (`v18.0.0-20261027`) → V18.0.1
+
+**Paket:** `zendure_controller_v18_0_1.zip`. Enthält Battery Care und vollständige Produkt-Sources, technische Dokumentation sowie Validierung. Der reguläre Installer führt den vollständigen Preflight selbst vor jeder Mutation aus.
 
 ## Update via Termius (SSH als Benutzer `pi`)
 
-1. Das unveränderte Release-ZIP nach `/home/pi/Downloads/zendure_controller_v18_0_0.zip` übertragen.
+1. Das unveränderte Release-ZIP nach `/home/pi/Downloads/zendure_controller_v18_0_1.zip` übertragen.
 2. Die separat mitgeteilte SHA256 gegen das übertragene ZIP verifizieren.
-3. Das ZIP entpacken (`unzip -q`) und in `zendure_controller_v18_0_0` wechseln.
-4. Zuerst `bash tools/install_zendure_controller.sh v18_0_0 --preflight-only` ausführen und nur bei `PREFLIGHT_RESULT=PASS`, `INSTALL_MODE=SUPPORTED_UPDATE` und `SAFE_TO_INSTALL=yes` fortfahren.
-5. Erst danach mit ausdrücklicher Benutzerentscheidung: `bash tools/install_zendure_controller.sh v18_0_0`.
-6. Installerbericht, `/health`, `/ready`, Settings/Status und V18-Feldabnahme prüfen. Realen Battery-Care-Effekt getrennt beobachten.
+3. Das ZIP entpacken (`unzip -q`) und in `zendure_controller_v18_0_1` wechseln.
+4. Den normalen Installer einmal starten: `bash tools/install_zendure_controller.sh v18_0_1`. Dieser führt **vor** Dienststopp/Backup/Kopie seinen vollständigen Preflight aus. Bei `PREFLIGHT_RESULT=FAIL` bricht er ohne Produktivmutation ab. Ein separater `--preflight-only`-Lauf ist ausschließlich für gezielte Diagnose optional.
+5. Installerbericht, `/health`, `/ready`, Settings/Status und die versionsrichtige `tools/v18_field_acceptance.py` prüfen. Realen Battery-Care-Effekt getrennt beobachten.
 
 ## Sicherheits- und Recovery-Vertrag
 

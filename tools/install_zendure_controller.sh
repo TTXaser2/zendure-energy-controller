@@ -1,23 +1,21 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# CANDIDATE ZEC V18 installer (NOT RELEASED): supported update + clean fresh install.
+# ZEC V18.0.1 update installer: supported V18.0.0 upgrade + explicit clean fresh.
+# Safety contract: no product mutation before preflight, build proof, manifest,
+# platform dependency checks and verified backup; on failure support+rollback.
 set -Eeuo pipefail
-# CP28 candidate: unconditional, non-overridable release hold. There is no
-# enable flag, environment bypass or hidden installation path. Only the
-# future verified release freeze may remove this guard after ALL gates.
-# V18.0.0 field deployment build: genuine preflight is mandatory; no release hold.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck source=root_artifact_transaction.sh
 source "$SCRIPT_DIR/root_artifact_transaction.sh"
 
-EXPECTED_VERSION_ARG="v18_0_0"
-EXPECTED_SOURCE_VERSION="17.1.3"
-EXPECTED_SOURCE_BUILD_ID="v17.1.3-20261022"
-EXPECTED_TARGET_VERSION="18.0.0"
-EXPECTED_TARGET_BUILD_ID="v18.0.0-20261027"
-SOURCE_MANIFEST="V18_0_0_SOURCE_MANIFEST.sha256"
+EXPECTED_VERSION_ARG="v18_0_1"
+EXPECTED_SOURCE_VERSION="18.0.0"
+EXPECTED_SOURCE_BUILD_ID="v18.0.0-20261027"
+EXPECTED_TARGET_VERSION="18.0.1"
+EXPECTED_TARGET_BUILD_ID="v18.0.1-20261102"
+SOURCE_MANIFEST="V18_0_1_SOURCE_MANIFEST.sha256"
 TARGET="/opt/zendure-controller"
 BOOTSTRAP="$TARGET/.zec_first_install_bootstrap.json"
 DOWNLOAD_DIR="/home/pi/Downloads"
@@ -75,8 +73,8 @@ ROLLBACK_STARTED=0
 SUPPORT_WORK=""
 SUPPORT_ZIP=""
 BACKUP="$DOWNLOAD_DIR/zendure-controller-backup-${STAMP}.tar.gz"
-CONFIG_BACKUP="$DOWNLOAD_DIR/config.pre-v18.0.0.${STAMP}.json"
-ROOT_ARTIFACT_BACKUP="/var/backups/zec-v18.0.0-root-artifacts-${STAMP}"
+CONFIG_BACKUP="$DOWNLOAD_DIR/config.pre-v18.0.1.${STAMP}.json"
+ROOT_ARTIFACT_BACKUP="/var/backups/zec-v18.0.1-root-artifacts-${STAMP}"
 INSTALL_REPORT="$DOWNLOAD_DIR/zec_${VERSION}_install_report_${STAMP}.json"
 INSTALL_REPORT_COMPAT="/tmp/zec_${VERSION}_install_report.json"
 BACKUP_SHA256=""
@@ -101,7 +99,7 @@ start_support_capture() {
   local tool="$SCRIPT_DIR/zec_support_bundle.py"
   [ -f "$tool" ] || return 0
   SUPPORT_WORK="$(python3 "$tool" collect \
-    --label "v18.0.0-installer-failure" --output-dir "$DOWNLOAD_DIR" \
+    --label "v18.0.1-installer-failure" --output-dir "$DOWNLOAD_DIR" \
     --target "$TARGET" --config "$TARGET/config.json" --install-log "$INSTALL_LOG" \
     --since-epoch "$INSTALL_START_EPOCH" --stage "$stage" --error-code "$code" \
     --package-sha256 "$PACKAGE_SHA256" --source-version "$EXPECTED_SOURCE_VERSION" \
@@ -164,7 +162,7 @@ on_error() {
   trap - ERR EXIT
   set +e
   echo
-  echo "FEHLER: V18.0.0 Installer abgebrochen (rc=$code, line=$line, mode=$INSTALL_MODE)."
+  echo "FEHLER: V18.0.1 Installer abgebrochen (rc=$code, line=$line, mode=$INSTALL_MODE)."
   start_support_capture "pre_rollback" "RC_${code}_LINE_${line}"
   local rollback_result="not_required_preflight"
   if [ "$INSTALLATION_STARTED" -eq 1 ]; then
@@ -208,10 +206,10 @@ verify_release_tree_hygiene_at() {
 verify_build_evidence_at() {
   local root="$1"
   PYTHONDONTWRITEBYTECODE=1 python3 "$root/tools/deployment_contract.py" verify-build-evidence \
-    --root "$root" --evidence "validation/V18_0_0_BUILD_EVIDENCE.json" \
-    --expected-version "$EXPECTED_TARGET_VERSION" --expected-label "V18.0.0" \
+    --root "$root" --evidence "validation/V18_0_1_BUILD_EVIDENCE.json" \
+    --expected-version "$EXPECTED_TARGET_VERSION" --expected-label "V18.0.1" \
     --expected-build "$EXPECTED_TARGET_BUILD_ID" --json >/dev/null
-  echo "Build-Testevidenz für V18.0.0 verifiziert."
+  echo "Build-Testevidenz für V18.0.1 verifiziert."
 }
 
 verify_js_at() {
@@ -378,7 +376,7 @@ if [ "$INSTALL_MODE" = "SUPPORTED_UPDATE" ]; then
   python3 "$STAGED_ROOT/tools/deployment_contract.py" cleanup-obsolete-caches \
     --target "$TARGET" --staged-root "$STAGED_ROOT" --apply --json \
     >"$STAGE_BASE/obsolete_cache_cleanup.json"
-  echo "Kopiere V18.0.0-Dateien; Benutzerdaten bleiben erhalten..."
+  echo "Kopiere V18.0.1-Dateien; Benutzerdaten bleiben erhalten..."
   rsync -a --delete \
     --exclude 'config.json' --exclude 'config.json.last-good*' --exclude 'logs/' \
     --exclude 'config-states/' --exclude '*.sqlite3' --exclude 'zec_config_snapshots.json' \
@@ -503,7 +501,7 @@ else
     echo "WARNUNG: Controller ist noch nicht global ready=true, aber der Produktivstart ist sicher bestätigt."
     [ -s "$READY_JSON" ] && cat "$READY_JSON"
   else
-    echo "FEHLER: V18.0.0 erreichte weder ready=true noch einen stabilen sicheren Übergangszustand."
+    echo "FEHLER: V18.0.1 erreichte weder ready=true noch einen stabilen sicheren Übergangszustand."
     [ -s "$READY_JSON" ] && cat "$READY_JSON"
     false
   fi

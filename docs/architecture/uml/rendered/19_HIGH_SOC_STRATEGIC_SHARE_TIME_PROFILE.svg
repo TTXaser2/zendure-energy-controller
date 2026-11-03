@@ -161,7 +161,7 @@
 <polygon fill="#fff7df" stroke="black" points="1553.5,-647.5 1070.5,-647.5 1070.5,-591.5 1559.5,-591.5 1559.5,-641.5 1553.5,-647.5"/>
 <polyline fill="none" stroke="black" points="1553.5,-647.5 1553.5,-641.5 "/>
 <polyline fill="none" stroke="black" points="1559.5,-641.5 1553.5,-641.5 "/>
-<text text-anchor="middle" x="1315" y="-633.42" font-family="DejaVu Sans" font-size="10.10">Aktueller V17.1.3&#45;Runtimevertrag:</text>
+<text text-anchor="middle" x="1315" y="-633.42" font-family="DejaVu Sans" font-size="10.10">Aktueller V18.0.1&#45;Runtimevertrag:</text>
 <text text-anchor="middle" x="1315" y="-622.42" font-family="DejaVu Sans" font-size="10.10">Vier freigegebene HARVEST_HIGH_SMA_SOC_PROFILE_*&#45;TIME&#45;Settings</text>
 <text text-anchor="middle" x="1315" y="-611.42" font-family="DejaVu Sans" font-size="10.10">steuern die Zeitfenster in _harvest_time_profile(); Standardwerte 09:30/11:30/14:30/18:00.</text>
 <text text-anchor="middle" x="1315" y="-600.42" font-family="DejaVu Sans" font-size="10.10">Bei ungültiger Reihenfolge fallen alle vier Grenzen sicher auf die Standardwerte zurück.</text>
@@ -369,7 +369,7 @@
 <polyline fill="none" stroke="black" points="807.5,-1037 807.5,-1031 "/>
 <polyline fill="none" stroke="black" points="813.5,-1031 807.5,-1031 "/>
 <text text-anchor="middle" x="530" y="-1021.8" font-family="DejaVu Sans" font-size="9.00" fill="#162e4d">HARVEST_SEASON_POLICY_ENABLED=false =&gt; legacy_parallel, auch wenn requested=sma_priority; Kalender nur opt&#45;in.</text>
-<text text-anchor="middle" x="530" y="-1011.8" font-family="DejaVu Sans" font-size="9.00" fill="#162e4d">Sourceabgleich: V17.1.3; keine Feldwirkungsbehauptung</text>
+<text text-anchor="middle" x="530" y="-1011.8" font-family="DejaVu Sans" font-size="9.00" fill="#162e4d">Quellbezug: V18.0.1 Kandidat; physische Wirkung nur episodenspezifisch</text>
 </g>
 </g>
 </svg>

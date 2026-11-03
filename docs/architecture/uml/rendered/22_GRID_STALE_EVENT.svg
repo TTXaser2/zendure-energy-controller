@@ -9,7 +9,7 @@
 <g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 427)">
 <title>Stale</title>
 <polygon fill="white" stroke="transparent" points="-4,4 -4,-427 754,-427 754,4 -4,4"/>
-<text text-anchor="middle" x="375" y="-407.8" font-family="DejaVu Sans" font-size="14.00">22 — Grid&#45;Stale: Diagnoseereignis ≠ Regelmodus (V17.1.3)</text>
+<text text-anchor="middle" x="375" y="-407.8" font-family="DejaVu Sans" font-size="14.00">22 — Grid&#45;Stale: Diagnoseereignis ≠ Regelmodus (V18.0.1)</text>
 <!-- snap -->
 <g id="node1" class="node">
 <title>snap</title>

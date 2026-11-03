@@ -1,5 +1,10 @@
 # ZEC – Control & Safety Invariants
 
+## Feldvalidierung 29.10.2026 – unveränderte Invarianten
+
+Die bei Battery-Care-Reserve R=17 % ausgeführte 0-W-Neutralisierung wurde im V18-Realbetrieb mit frischer/valider Isttelemetrie binnen sechs Sekunden bestätigt. **Einzel-Episoden-PASS**, kein allgemeines Worst-Case-Latenzversprechen. `STOP_HOLD`-/Safety-Priorität, Unterscheidung Command-Publish / Command-Wirkung, keine implizite Netzladung und Cross-Charge-Ausnahme ausschließlich bei wirksamer Notladeepisode aus §3a bleiben unverändert. Das zusätzliche Journalereignis ist ausschließlich beobachtend und darf keine neuen Regler- oder MQTT-Commands publizieren. Battery-Care-Netzpflege/Notladung/Recovery bleiben eigens feld-evidenzpflichtig.
+
+
 **Stand:** 17.09.2026  
 **Status:** kanonisch und normativ
 

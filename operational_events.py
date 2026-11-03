@@ -659,7 +659,79 @@ class OperationalEventJournal:
                             changed_at=excluded.changed_at,floor_soc=excluded.floor_soc""",
                          (stage, int(cur.lastrowid), now, floor))
 
+    def _observe_care_reserve_reached(self, conn: sqlite3.Connection, s: Dict[str, Any]) -> None:
+        """Journal one natural Care-reserve episode, not every controller poll.
+
+        This is deliberately diagnostic and runs on the background observer.
+        Request (0 W target) and independent neutral confirmation are distinct.
+        SQLite cursor makes dedupe survive web worker restarts. No commands.
+        """
+        soc = s.get("battery_soc")
+        floor = s.get("care_effective_discharge_floor_soc")
+        valid = (s.get("care_policy_valid") is True
+                 and type(soc) in (int, float) and type(floor) in (int, float)
+                 and math.isfinite(soc) and math.isfinite(floor)
+                 and float(soc) <= float(floor)
+                 and str(s.get("current_mode") or "") != "SAFE_STATE"
+                 and int(s.get("command_desired_signed_target_w") or 0) == 0
+                 and (str(s.get("target_power_limit_reason") or "") == "BATTERY_CARE_RESERVE"
+                      or "BATTERY_CARE_RESERVE" in (s.get("active_limiters") or [])))
+        conn.execute("""CREATE TABLE IF NOT EXISTS battery_care_reserve_cursor (
+                     id INTEGER PRIMARY KEY CHECK(id=1), active INTEGER NOT NULL,
+                     event_id INTEGER, confirmed INTEGER NOT NULL DEFAULT 0,
+                     last_cycle INTEGER NOT NULL DEFAULT 0)""")
+        cursor = conn.execute("SELECT active,event_id,confirmed,last_cycle FROM battery_care_reserve_cursor WHERE id=1").fetchone()
+        active, event_id, confirmed, last_cycle = cursor if cursor else (0, None, 0, 0)
+        cycle = int(s.get("care_completed_cycle_id") or 0)
+        # The observer is polled more often than the control loop. Never treat
+        # repeated snapshots of one cycle as independent events.
+        if cycle <= 0 or (valid and not active and cycle <= last_cycle):
+            return
+        if not valid:
+            if active:
+                with conn:
+                    if not confirmed and event_id is not None:
+                        conn.execute("UPDATE operational_events SET detail=?,ended_at=?,status='resolved' WHERE id=?",
+                                     ("Reserve-Policy beendet; neutrale Gerätewirkung im Beobachtungsfenster nicht bestätigt.",time.time(),event_id))
+                    conn.execute("UPDATE battery_care_reserve_cursor SET active=0,confirmed=0,last_cycle=? WHERE id=1",(cycle,))
+            return
+        actual_w = s.get("actual_zendure_system_signed_power")
+        physically_neutral = (
+            s.get("command_readback_matches_desired") is True
+            and s.get("actual_zendure_power_valid") is True
+            and type(actual_w) in (int, float) and math.isfinite(actual_w)
+            and abs(float(actual_w)) <= 30
+            and (str(s.get("command_effect_category") or "") == "COMMAND_NEUTRALIZATION_CONFIRMED"
+                 or s.get("command_effect_confirmed") is True)
+        )
+        now = time.time()
+        if not active:
+            with conn:
+                cur = conn.execute("""INSERT INTO operational_events(
+                    event_type,severity,title,detail,started_at,status,dedupe_key,detail_json)
+                    VALUES (?,?,?,?,?,?,?,?)""",
+                    ("battery_care_reserve_reached", "info", "Battery Care: Schutzreserve erreicht",
+                     "0-W-Reservebegrenzung angefordert; physische Neutralisierung noch nicht bestätigt.",
+                     now,"open","",json.dumps({"soc":soc,"reserve_soc":floor,
+                     "requested_target_w":0,"physical_effect_confirmed":False,"cycle_id":cycle})))
+                event_id=int(cur.lastrowid)
+                conn.execute("""INSERT INTO battery_care_reserve_cursor(id,active,event_id,confirmed,last_cycle)
+                         VALUES (1,1,?,0,?) ON CONFLICT(id) DO UPDATE SET
+                         active=1,event_id=excluded.event_id,confirmed=0,last_cycle=excluded.last_cycle""",
+                         (event_id,cycle))
+            confirmed = 0
+        if physically_neutral and not confirmed and event_id is not None:
+            with conn:
+                conn.execute("""UPDATE operational_events SET detail=?,detail_json=?,ended_at=?,status='resolved'
+                                 WHERE id=? AND status='open'""",
+                             ("Geräteleistung 0 W und Command-Readback bestätigt.",
+                              json.dumps({"soc":soc,"reserve_soc":floor,"requested_target_w":0,
+                                          "physical_effect_confirmed":True,"measured_power_w":actual_w,
+                                          "cycle_id":cycle}), now,event_id))
+                conn.execute("UPDATE battery_care_reserve_cursor SET confirmed=1,last_cycle=? WHERE id=1",(cycle,))
+
     def _observe(self, conn: sqlite3.Connection, s: Dict[str, Any]) -> None:
+        self._observe_care_reserve_reached(conn, s)
         self._observe_battery_care_incident(conn, s)
         self._observe_battery_care_stage(conn, s)
         mode = str(s.get("current_mode") or "")

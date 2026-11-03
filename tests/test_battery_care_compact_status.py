@@ -33,7 +33,7 @@ class CareCompactCardTests(unittest.TestCase):
     def test_valid_active_policy_is_only_protected_reserve(self):
         care = self.payload(care_in_season=True, care_policy_valid=True)["zendure"]["care"]
         self.assertTrue(care["visible"])
-        self.assertEqual("Reserve geschützt", care["title"])
+        self.assertEqual("Schutz aktiv", care["title"])
         self.assertNotIn("wirksam", care["detail"].lower())
 
     def test_calendar_visible_but_not_misreported_as_effective_in_stop(self):
@@ -91,7 +91,7 @@ class CareCompactCardTests(unittest.TestCase):
         self.assertIn('data-zec-care="status" role="group" aria-label="Battery-Care-Status" hidden', html)
         p["zendure"]["care"] = dict(visible=True, title="<danger>", detail="& no effect", tone="bad")
         html = render_status_page_v2(self.cfg, p, analysis_available=False, analysis_port=8081)
-        self.assertIn("Battery Care · &lt;danger&gt;", html)
+        self.assertIn("⚠ </span>&lt;danger&gt;", html)
         self.assertNotIn("Battery Care · <danger>", html)
         self.assertIn("&amp; no effect", html)
 

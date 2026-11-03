@@ -70,7 +70,7 @@ def test_directional_remaining_energy_and_power_bars_charge():
     assert z["power_meter_percent"] == pytest.approx(50.0)
     assert z["power_meter_text"] == "1,20 kW / 2,40 kW max"
     assert p["remaining_label"] == "Noch ladbar"
-    assert p["remaining_text"] == "—"
+    assert p["remaining_text"] == "40 % · 5,20 kWh"
     assert p["power_meter_direction"] == "charge"
     assert p["power_meter_percent"] == pytest.approx(50.0)
     assert p["power_meter_text"] == "2,30 kW / 4,60 kW max"
@@ -90,7 +90,7 @@ def test_directional_remaining_energy_and_power_bars_discharge():
     assert p["remaining_label"] == "Noch entladbar"
     assert p["remaining_text"] == "40 % · 5,20 kWh"
     assert p["soc_limit_label"] == "Lade-/Entladegrenze"
-    assert p["soc_limit_text"] == "— / 20 %"
+    assert p["soc_limit_text"] == "100 % / 20 %"
     assert p["power_meter_direction"] == "discharge"
     assert p["power_meter_percent"] == pytest.approx(50.0)
     assert p["power_meter_text"] == "2,30 kW / 4,60 kW max"
@@ -115,7 +115,7 @@ def test_primary_runtime_capacity_precedes_manual_fallback():
     snap["second_battery_capacity_kwh"] = 10.0
     payload = build_status_view_payload(_cfg(SECOND_BATTERY_CAPACITY_WH=13000), snap)["primary"]
     assert payload["capacity_kwh"] == 10.0
-    assert payload["remaining_text"] == "—"
+    assert payload["remaining_text"] == "40 % · 4,00 kWh"
 
 
 def test_new_primary_technical_settings_are_optional_and_diagnostic():

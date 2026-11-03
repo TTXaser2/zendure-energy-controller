@@ -76,7 +76,7 @@ class V1302ConfigArtifactHotfixTests(unittest.TestCase):
         state = self.store.create(self.manager, name="Portable local", scope_mode="portable_profile")
         self.assertEqual("valid", state["status"])
         self.assertEqual("portable_profile", state["scope_mode"])
-        self.assertEqual(64, state["scope_key_count"])
+        self.assertEqual(65, state["scope_key_count"])
         bundle = parse_bundle(self.store.export_bytes(state["state_id"], expected_revision=state["state_revision"]))
         self.assertEqual("named_state", bundle.payload["artifact_kind"])
         self.assertEqual("portable_profile", bundle.scope["mode"])

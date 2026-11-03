@@ -1,8 +1,8 @@
 {
-  "release_version": "18.0.0",
-  "release_label": "V18.0.0",
-  "build_id": "v18.0.0-20261027",
-  "document_status": "FIELD_INSTALLATION_READY_HARDWARE_EVIDENCE_PENDING",
-  "docx_sha256": "b2ca5509c65dfa73830a63187aa7ffd2b9eddb3637006b86e11b8cf429b08fa6",
-  "pdf_sha256": "a6ccf1df6ba620af90d840336eed5511a8678818a50cc947e816fb429ce71754"
+  "release_version": "18.0.1",
+  "release_label": "V18.0.1",
+  "build_id": "v18.0.1-20261102",
+  "document_status": "DEVELOPMENT_DRAFT_RELEASE_HOLD",
+  "docx_sha256": "5db1807191dd8ad7f27b1b8dffbbf633d26f2c8f76f2dff3469399901daa5824",
+  "pdf_sha256": "33ce087f7cf245442a31440fd9a5f2e7f743c81031b03024c1dc88eeddd320e7"
 }
